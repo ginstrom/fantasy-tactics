@@ -21,10 +21,20 @@ fantasy-tactics/
 ├── docs/plans/         # Design and implementation plans
 ├── scenes/             # Godot scenes (boot, UI, game)
 ├── scripts/            # GDScript (autoload, UI, game logic)
+├── tests/              # GUT unit tests
+├── addons/gut/         # GUT test framework
 └── assets/             # Sprites, audio, fonts
     ├── sprites/
     ├── audio/
     └── fonts/
+```
+
+## Tests
+
+Uses [GUT](https://github.com/bitwes/Gut) 9.7.1. With Godot 4.7.1 on your `PATH` as `godot`:
+
+```bash
+godot --headless -s addons/gut/gut_cmdln.gd -gexit
 ```
 
 ## License
