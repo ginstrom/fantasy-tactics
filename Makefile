@@ -10,7 +10,7 @@ editor:
 	godot --editor project.godot
 
 play:
-	godot --path . --editor
+	godot --path .
 
 test:
 	godot --headless -s addons/gut/gut_cmdln.gd -gexit

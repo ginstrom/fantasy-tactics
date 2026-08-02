@@ -1,17 +1,36 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/game.gd" id="1_game"]
+[ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_battle"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_game")
 
 [node name="Battlefield" type="Node2D" parent="."]
+position = Vector2(448, 168)
+script = ExtResource("2_battle")
+
+[node name="Tiles" type="Node2D" parent="Battlefield"]
+
+[node name="Highlights" type="Node2D" parent="Battlefield"]
+
+[node name="Units" type="Node2D" parent="Battlefield"]
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Hint" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 480.0
+offset_right = 640.0
 offset_bottom = 48.0
-text = "Game stub — Esc returns to menu"
+text = "Click a unit to select it. Esc: main menu."
+
+[node name="EndTurnButton" type="Button" parent="HUD"]
+offset_left = 1104.0
+offset_top = 16.0
+offset_right = 1264.0
+offset_bottom = 48.0
+text = "End Turn"
+
+[connection signal="pressed" from="HUD/EndTurnButton" to="Battlefield" method="end_turn"]
+[connection signal="board_changed" from="Battlefield" to="." method="_on_board_changed"]
