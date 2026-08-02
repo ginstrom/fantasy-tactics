@@ -12,6 +12,18 @@ Lean Godot 4 starter for a 2D turn-based tactics game — scene flow and folder 
 2. Open Godot → **Import** → select `project.godot` in this repo.
 3. Press **Import & Edit** to open the project.
 
+## Development commands
+
+With Godot 4.7.1 available on your `PATH` as `godot`, use the included Makefile:
+
+```bash
+make help    # List available commands
+make editor  # Open the project in Godot
+make play    # Run the project
+make test    # Run the GUT test suite headlessly
+make check   # Run the current validation suite
+```
+
 ## Folder map
 
 ```
@@ -31,10 +43,10 @@ fantasy-tactics/
 
 ## Tests
 
-Uses [GUT](https://github.com/bitwes/Gut) 9.7.1. With Godot 4.7.1 on your `PATH` as `godot`:
+Uses [GUT](https://github.com/bitwes/Gut) 9.7.1. Run it with:
 
 ```bash
-godot --headless -s addons/gut/gut_cmdln.gd -gexit
+make test
 ```
 
 ## License
