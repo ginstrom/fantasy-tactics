@@ -9,6 +9,7 @@ func go_to_main_menu() -> Error:
 
 
 func go_to_game() -> Error:
+	GameSession.start_new_game()
 	return _change_scene(GAME_SCENE)
 
 
