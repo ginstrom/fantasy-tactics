@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
+
+[node name="WorldMap" type="Node2D"]
+script = ExtResource("1_world_map")
+
+[node name="Tiles" type="Node2D" parent="."]
+
+[node name="Highlights" type="Node2D" parent="."]
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Hint" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 640.0
+offset_bottom = 48.0
+text = "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Esc: main menu."
+
+[connection signal="encounter_activated" from="." to="." method="_on_encounter_activated"]

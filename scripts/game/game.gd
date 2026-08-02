@@ -16,6 +16,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameManager.go_to_main_menu()
 
 
+func _on_complete_battle_pressed() -> void:
+	GameManager.complete_battle()
+
+
 func _on_board_changed() -> void:
 	var side_name: String = SIDE_NAMES[battlefield.active_side]
 	var selected_unit = battlefield.selected_unit
