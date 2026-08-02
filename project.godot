@@ -31,3 +31,7 @@ renderer/rendering_method="forward_plus"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[internationalization]
+
+locale/fallback="en"

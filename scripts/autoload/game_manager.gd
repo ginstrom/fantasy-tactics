@@ -4,6 +4,12 @@ const MAIN_MENU_SCENE := "res://scenes/ui/main_menu.tscn"
 const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const GAME_SCENE := "res://scenes/game/game.tscn"
 
+const EN_TRANSLATION := preload("res://translations/en.tres")
+
+
+func _ready() -> void:
+	TranslationServer.add_translation(EN_TRANSLATION)
+
 
 func go_to_main_menu() -> Error:
 	return _change_scene(MAIN_MENU_SCENE)

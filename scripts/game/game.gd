@@ -1,6 +1,6 @@
 extends Node2D
 
-const SIDE_NAMES := {0: "Player", 1: "Enemy"}
+const SIDE_NAME_KEYS := {0: "battle.side.player", 1: "battle.side.enemy"}
 
 @onready var hint: Label = $HUD/Hint
 @onready var battlefield: Node2D = $Battlefield
@@ -21,12 +21,12 @@ func _on_complete_battle_pressed() -> void:
 
 
 func _on_board_changed() -> void:
-	var side_name: String = SIDE_NAMES[battlefield.active_side]
+	var side_name: String = tr(SIDE_NAME_KEYS[battlefield.active_side])
 	var selected_unit = battlefield.selected_unit
 
 	if selected_unit == null:
-		hint.text = "%s turn. Click a unit to select it. Esc: main menu." % side_name
+		hint.text = tr("battle.hint.select_unit") % side_name
 	elif selected_unit.has_moved:
-		hint.text = "%s turn. This unit has already moved. Select another unit." % side_name
+		hint.text = tr("battle.hint.already_moved") % side_name
 	else:
-		hint.text = "%s turn. Click a highlighted tile to move, or select another unit." % side_name
+		hint.text = tr("battle.hint.select_destination") % side_name

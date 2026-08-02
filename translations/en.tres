@@ -1,0 +1,17 @@
+[gd_resource type="Translation" format=3]
+
+[resource]
+locale = "en"
+messages = {
+"menu.title": "Fantasy Tactics",
+"menu.new_game": "New Game",
+"menu.quit": "Quit",
+"battle.end_turn": "End Turn",
+"battle.complete_battle": "Complete Battle",
+"battle.side.player": "Player",
+"battle.side.enemy": "Enemy",
+"battle.hint.select_unit": "%s turn. Click a unit to select it. Esc: main menu.",
+"battle.hint.already_moved": "%s turn. This unit has already moved. Select another unit.",
+"battle.hint.select_destination": "%s turn. Click a highlighted tile to move, or select another unit.",
+"world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Esc: main menu."
+}

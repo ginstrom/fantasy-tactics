@@ -23,21 +23,21 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = 640.0
 offset_bottom = 48.0
-text = "Click a unit to select it. Esc: main menu."
+text = "battle.hint.select_unit"
 
 [node name="EndTurnButton" type="Button" parent="HUD"]
 offset_left = 1104.0
 offset_top = 16.0
 offset_right = 1264.0
 offset_bottom = 48.0
-text = "End Turn"
+text = "battle.end_turn"
 
 [node name="CompleteBattleButton" type="Button" parent="HUD"]
 offset_left = 1104.0
 offset_top = 56.0
 offset_right = 1264.0
 offset_bottom = 88.0
-text = "Complete Battle"
+text = "battle.complete_battle"
 
 [connection signal="pressed" from="HUD/EndTurnButton" to="Battlefield" method="end_turn"]
 [connection signal="pressed" from="HUD/CompleteBattleButton" to="." method="_on_complete_battle_pressed"]

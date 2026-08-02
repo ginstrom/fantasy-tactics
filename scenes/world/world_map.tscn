@@ -18,6 +18,6 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = 640.0
 offset_bottom = 48.0
-text = "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Esc: main menu."
+text = "world_map.hint"
 
 [connection signal="encounter_activated" from="." to="." method="_on_encounter_activated"]
