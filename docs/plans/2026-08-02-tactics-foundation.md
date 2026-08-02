@@ -1,6 +1,6 @@
 # Tactics Foundation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. See `AGENTS.md` for this project's workflow conventions — in particular, use a branch off `main` for each task, not a worktree.
 
 **Goal:** Build a small, playable square-grid battle, then connect it to a minimal world-map loop while keeping the project ready for localization.
 
