@@ -34,3 +34,26 @@ func test_adjacent_tiles_are_clipped_to_grid_bounds() -> void:
 	assert_eq(corner_adjacent.size(), 2, "A corner tile only has two in-bounds neighbors")
 	assert_true(corner_adjacent.has(Vector2i(1, 0)))
 	assert_true(corner_adjacent.has(Vector2i(0, 1)))
+
+
+func test_tiles_in_range_includes_tiles_up_to_the_move_range() -> void:
+	var grid = GridScript.new(6, 6)
+	var is_blocked := func(_pos: Vector2i) -> bool: return false
+
+	var reachable: Array[Vector2i] = grid.get_tiles_in_range(Vector2i(2, 2), 2, is_blocked)
+
+	assert_true(reachable.has(Vector2i(3, 2)), "One tile away is reachable")
+	assert_true(reachable.has(Vector2i(2, 0)), "Two tiles away is reachable")
+	assert_false(reachable.has(Vector2i(2, 2)), "The starting tile is not its own destination")
+	assert_false(reachable.has(Vector2i(2, 5)), "Three tiles away exceeds the move range")
+
+
+func test_tiles_in_range_cannot_pass_through_blocked_tiles() -> void:
+	var grid = GridScript.new(6, 6)
+	var is_blocked := func(pos: Vector2i) -> bool: return pos == Vector2i(3, 2)
+
+	var reachable: Array[Vector2i] = grid.get_tiles_in_range(Vector2i(2, 2), 3, is_blocked)
+
+	assert_false(reachable.has(Vector2i(3, 2)), "A blocked tile is not itself reachable")
+	assert_false(reachable.has(Vector2i(4, 2)), "Movement cannot pass through a blocked tile")
+	assert_true(reachable.has(Vector2i(2, 4)), "An unblocked direction is unaffected")

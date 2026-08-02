@@ -14,9 +14,14 @@ const TILE_COLOR_DARK := Color(0.18, 0.18, 0.21)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 
+enum Side { PLAYER, ENEMY }
+
+const UNIT_MOVE_RANGE := 3
+
 var grid
 var units: Array = []
 var selected_unit = null
+var active_side: int = Side.PLAYER
 
 @onready var tile_container: Node2D = $Tiles
 @onready var unit_container: Node2D = $Units
@@ -26,8 +31,8 @@ var selected_unit = null
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	units = [
-		UnitScript.new(Vector2i(1, 1), Color(0.3, 0.5, 0.9)),
-		UnitScript.new(Vector2i(4, 4), Color(0.9, 0.4, 0.3)),
+		UnitScript.new(Vector2i(1, 1), Color(0.3, 0.5, 0.9), Side.PLAYER, UNIT_MOVE_RANGE),
+		UnitScript.new(Vector2i(4, 4), Color(0.9, 0.4, 0.3), Side.ENEMY, UNIT_MOVE_RANGE),
 	]
 	_draw_tiles()
 	_draw_units()
@@ -56,31 +61,38 @@ func get_unit_at(pos: Vector2i):
 
 
 func get_legal_moves(unit) -> Array[Vector2i]:
-	var moves: Array[Vector2i] = []
-	for candidate in grid.get_adjacent(unit.grid_position):
-		if get_unit_at(candidate) == null:
-			moves.append(candidate)
-	return moves
+	if unit.has_moved:
+		return []
+	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+	return grid.get_tiles_in_range(unit.grid_position, unit.move_range, is_blocked)
 
 
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if selected_unit == null:
 		return false
+	if selected_unit.side != active_side:
+		return false
 	if not target in get_legal_moves(selected_unit):
 		return false
 
 	selected_unit.grid_position = target
+	selected_unit.has_moved = true
 	return true
 
 
 func end_turn() -> void:
+	active_side = Side.ENEMY if active_side == Side.PLAYER else Side.PLAYER
+	for unit in units:
+		if unit.side == active_side:
+			unit.has_moved = false
 	_select_unit(null)
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
 	var clicked_unit = get_unit_at(tile_pos)
 	if clicked_unit != null:
-		_select_unit(clicked_unit)
+		if clicked_unit.side == active_side:
+			_select_unit(clicked_unit)
 		return
 
 	if try_move_selected_unit(tile_pos):
@@ -127,6 +139,9 @@ func _draw_units() -> void:
 
 
 func _update_highlights() -> void:
+	if not is_inside_tree():
+		return
+
 	for child in highlight_container.get_children():
 		child.queue_free()
 
