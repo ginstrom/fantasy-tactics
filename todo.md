@@ -17,3 +17,15 @@ of the local battle map's turn counter.
 
 - Naming: call world map turns "turns" and local (battle) map turns "rounds"
   to keep the two concepts distinct.
+
+## Multiple parties and location state
+
+The current `GameSession.current_location` is unused. Do not treat it as a
+single global party location when multiple player parties are introduced.
+
+- Give each party its own `world_position` and, when needed, a `location_id`
+  for a named location or encounter.
+- Add an `active_party_id` to `GameSession` for the party currently selected
+  by the player.
+- Keep scene-specific state separate, using identifiers such as
+  `active_encounter_id` rather than a global `current_location`.
