@@ -14,3 +14,6 @@ while it's on that tile.
 
 Add turn-based play to the world map, with its own turn counter independent
 of the local battle map's turn counter.
+
+- Naming: call world map turns "turns" and local (battle) map turns "rounds"
+  to keep the two concepts distinct.
