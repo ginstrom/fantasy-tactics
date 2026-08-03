@@ -12,6 +12,8 @@ the manager to perform actions.
 
 **Tech Stack:** Godot 4.7, GDScript, GUT, Make.
 
+**Learning Tool:** Because this is a learning project, keep good documentation including code comments and readmes. Don't go overboard but document the code such that a newcomer to godot and game development can follow.
+
 ---
 
 ## Goal
