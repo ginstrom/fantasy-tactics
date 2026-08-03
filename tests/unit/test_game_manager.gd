@@ -19,6 +19,24 @@ func test_party_manager_and_encampment_routes_are_available() -> void:
 	assert_string_contains(source, "res://scenes/ui/encampment.tscn")
 
 
+func test_new_game_routes_to_starting_settlement() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/local/starting_settlement.tscn")
+
+
+func test_depart_selected_party_deploys_before_changing_scene() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.depart_selected_party()
+
+	assert_true(GameSession.has_deployed_party())
+
+
 func test_change_scene_reports_error_for_missing_scene() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

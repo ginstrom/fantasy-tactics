@@ -3,6 +3,7 @@ extends Node
 const MAIN_MENU_SCENE := "res://scenes/ui/main_menu.tscn"
 const PARTY_MANAGER_SCENE := "res://scenes/ui/party_manager.tscn"
 const ENCAMPMENT_SCENE := "res://scenes/ui/encampment.tscn"
+const STARTING_SETTLEMENT_SCENE := "res://scenes/local/starting_settlement.tscn"
 const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 
@@ -19,7 +20,7 @@ func go_to_main_menu() -> Error:
 
 func go_to_game() -> Error:
 	GameSession.start_new_game()
-	return _change_scene(WORLD_MAP_SCENE)
+	return _change_scene(STARTING_SETTLEMENT_SCENE)
 
 
 func open_party_manager() -> Error:
@@ -31,6 +32,12 @@ func go_to_encampment() -> Error:
 
 
 func go_to_world_map() -> Error:
+	return _change_scene(WORLD_MAP_SCENE)
+
+
+func depart_selected_party() -> Error:
+	if not GameSession.depart_selected_party():
+		return ERR_INVALID_DATA
 	return _change_scene(WORLD_MAP_SCENE)
 
 

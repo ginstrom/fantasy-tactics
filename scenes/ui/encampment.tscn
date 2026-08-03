@@ -32,4 +32,14 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "encampment.manage_party"
 
+[node name="Status" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "encampment.status.no_party"
+horizontal_alignment = 1
+
+[node name="DepartButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "encampment.depart"
+
 [connection signal="pressed" from="Center/VBox/ManagePartyButton" to="." method="_on_manage_party_pressed"]
+[connection signal="pressed" from="Center/VBox/DepartButton" to="." method="_on_depart_pressed"]
