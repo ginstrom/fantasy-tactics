@@ -22,7 +22,7 @@ Workflow for each task:
 If a skill's default instructions call for setting up an isolated
 worktree, use a plain branch in place of that step instead.
 
-# Writing implementation plans
+## Writing implementation plans
 
 * Put the plan in its own dirctory under @docs/plans
 * Create an index.md which describes the overall plan and coordinates the steps

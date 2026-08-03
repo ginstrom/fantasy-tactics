@@ -9,7 +9,7 @@ setup without loading a scene.
 ## Setup
 
 [Campaign State](../../settlement-first-party-implementation/01-campaign-state.md)
-must be merged into `main`. Preserve unrelated edits, especially `AGENTS.md`.
+must be merged into `main`. 
 
 ```bash
 git status --short

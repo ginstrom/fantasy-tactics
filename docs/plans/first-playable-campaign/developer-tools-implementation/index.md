@@ -40,7 +40,7 @@ The helper can merge after campaign state. The menu waits until all its real sce
 
 ## Shared workflow
 
-Each numbered document is one mergeable feature branch. Preserve unrelated edits, especially the user-owned `AGENTS.md` change. Follow [AGENTS.md](../../../AGENTS.md): branch from updated `main`, use red/green TDD, run `make check`, obtain specified `make play` verification, commit, and merge locally only after user signoff. Do not push unless asked.
+Each numbered document is one mergeable feature branch. Follow [AGENTS.md](../../../AGENTS.md): branch from updated `main`, use red/green TDD, run `make check`, obtain specified `make play` verification, commit, and merge locally only after user signoff. Do not push unless asked.
 
 ## Overall Definition of Done
 

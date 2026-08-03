@@ -8,8 +8,7 @@ settlement tile, persist its movement position, and return it to settlement.
 
 ## Setup
 
-This step has no feature prerequisite. Preserve any user-owned working-tree
-changes, especially `AGENTS.md`.
+This step has no feature prerequisite. 
 
 ```bash
 git status --short

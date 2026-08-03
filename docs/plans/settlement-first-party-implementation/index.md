@@ -50,10 +50,7 @@ perform actions.
 
 ## Shared workflow
 
-Each numbered document is one mergeable feature branch. Before beginning it,
-confirm no unrelated work is present; this repository currently may have a
-user-owned `AGENTS.md` edit, which must never be staged or overwritten by an
-implementation branch. Follow [AGENTS.md](../../../AGENTS.md): branch from
+Each numbered document is one mergeable feature branch. Follow [AGENTS.md](../../../AGENTS.md): branch from
 updated `main`, use red/green TDD, run `make check`, obtain the specified user
 verification through `make play`, commit, merge locally into `main` only after
 the user signs off, and delete the branch. Do not push unless asked.
