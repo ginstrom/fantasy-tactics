@@ -39,6 +39,15 @@ unassigned Warrior, a player-created party, deployment to the existing world
 map, and return to the settlement. It is specified in
 [Settlement and First Party Design](settlement-and-first-party-design.md).
 
+Developer verification is a supporting part of that slice, not a player
+feature. Before building the settlement and party-management screens, add a
+development-only scenario menu that can reset the campaign and open a valid
+encampment, party-management, world-map, or battle setup. The menu must use
+the same `GameSession` state APIs and `GameManager` transitions as normal play;
+it accelerates checking a destination but does not replace manually testing
+the complete player route. The staged implementation is in
+[Developer Tools Implementation](developer-tools-implementation/index.md).
+
 ## Design principles
 
 - **A connected loop before system depth.** A thin but complete expedition,
