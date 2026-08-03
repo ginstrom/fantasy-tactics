@@ -7,6 +7,9 @@ const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 
 func before_each() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
 
 
 func _make_world_map() -> Node2D:
@@ -111,7 +114,7 @@ func test_activating_the_encounter_tile_does_not_require_selecting_first() -> vo
 
 
 func test_ready_resumes_the_party_position_saved_in_the_session() -> void:
-	GameSession.party_position = Vector2i(2, 3)
+	GameSession.set_deployed_party_position(Vector2i(2, 3))
 
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
@@ -129,5 +132,5 @@ func test_moving_the_party_persists_the_new_position_to_the_session() -> void:
 	world_map._handle_tile_click(Vector2i(1, 0))
 
 	assert_eq(
-		GameSession.party_position, Vector2i(1, 0), "Moving the party should persist its new position"
+		GameSession.get_deployed_party_position(), Vector2i(1, 0), "Moving the party should persist its new position"
 	)

@@ -3,57 +3,82 @@ extends GutTest
 const GameSessionScript := preload("res://scripts/autoload/game_session.gd")
 
 
-func test_new_session_has_default_party_and_location() -> void:
+func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.party, GameSessionScript.DEFAULT_PARTY, "New session starts with the default party")
-	assert_eq(
-		session.current_location,
-		GameSessionScript.DEFAULT_LOCATION,
-		"New session starts at the default location"
-	)
+	assert_eq(session.adventurers, [GameSessionScript.DEFAULT_WARRIOR])
+	assert_eq(session.parties, [])
+	assert_eq(session.selected_party_id, "")
 
 
-func test_reset_restores_defaults_after_state_changes() -> void:
+func test_create_party_then_add_and_remove_warrior() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	session.party = ["someone_else"] as Array[String]
-	session.current_location = "a_different_place"
-	session.reset()
-
-	assert_eq(session.party, GameSessionScript.DEFAULT_PARTY, "reset() restores the default party")
-	assert_eq(
-		session.current_location,
-		GameSessionScript.DEFAULT_LOCATION,
-		"reset() restores the default location"
-	)
+	assert_true(session.create_party())
+	assert_true(session.assign_adventurer_to_selected_party("warrior_001"))
+	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
+	assert_true(session.remove_adventurer_from_selected_party("warrior_001"))
+	assert_false(session.can_depart_selected_party())
 
 
-func test_start_new_game_replaces_prior_session_state() -> void:
+func test_deploy_and_return_change_only_the_selected_party_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	session.party = ["someone_else"] as Array[String]
-	session.current_location = "a_different_place"
-	session.start_new_game()
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	assert_true(session.depart_selected_party())
+	assert_true(session.has_deployed_party())
+	assert_eq(session.get_deployed_party_position(), Vector2i(0, 0))
+	session.set_deployed_party_position(Vector2i(1, 0))
+	session.return_deployed_party_to_settlement()
+	assert_false(session.has_deployed_party())
+	assert_eq(session.get_selected_party().location_id, "starting_settlement")
 
-	assert_eq(session.party, GameSessionScript.DEFAULT_PARTY)
-	assert_eq(session.current_location, GameSessionScript.DEFAULT_LOCATION)
-
-
-func test_default_party_constant_is_not_mutated_by_instances() -> void:
+func test_cannot_create_a_second_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	session.party.append("extra_member")
+	assert_true(session.create_party())
+	assert_false(session.create_party())
 
-	assert_eq(
-		GameSessionScript.DEFAULT_PARTY.size(),
-		1,
-		"Mutating a session's party must not mutate the shared default"
-	)
+
+func test_cannot_assign_an_unknown_or_already_assigned_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.create_party()
+	assert_false(session.assign_adventurer_to_selected_party("unknown"))
+	assert_true(session.assign_adventurer_to_selected_party("warrior_001"))
+	assert_false(session.assign_adventurer_to_selected_party("warrior_001"))
+
+
+func test_available_adventurers_excludes_assigned_warrior() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_available_adventurers(), [GameSessionScript.DEFAULT_WARRIOR])
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	assert_eq(session.get_available_adventurers(), [])
+
+
+func test_empty_party_cannot_depart() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.create_party()
+
+	assert_false(session.depart_selected_party())
+
+
+func test_cannot_write_position_without_a_deployed_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.set_deployed_party_position(Vector2i(1, 0)))
 
 
 func test_entering_an_encounter_records_it_as_selected() -> void:
@@ -91,22 +116,11 @@ func test_reset_clears_encounter_state() -> void:
 	assert_eq(session.selected_encounter, "", "reset() clears the selected encounter")
 
 
-func test_new_session_has_the_default_party_position() -> void:
+func test_reset_restores_a_deep_duplicated_default_warrior() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.party_position, GameSessionScript.DEFAULT_PARTY_POSITION)
-
-
-func test_reset_restores_the_default_party_position() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.party_position = Vector2i(3, 3)
-
+	session.adventurers[0].name = "Changed"
 	session.reset()
 
-	assert_eq(
-		session.party_position,
-		GameSessionScript.DEFAULT_PARTY_POSITION,
-		"reset() restores the default party position"
-	)
+	assert_eq(session.adventurers, [GameSessionScript.DEFAULT_WARRIOR])

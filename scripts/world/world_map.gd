@@ -33,7 +33,7 @@ var party_selected: bool = false
 
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
-	party_position = GameSession.party_position
+	party_position = GameSession.get_deployed_party_position()
 	_draw_tiles()
 	_draw_markers()
 	_update_highlights()
@@ -93,7 +93,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 	if party_selected and try_move_party(tile_pos):
 		party_selected = false
-		GameSession.party_position = party_position
+		GameSession.set_deployed_party_position(party_position)
 		_draw_markers()
 		_update_highlights()
 		board_changed.emit()
