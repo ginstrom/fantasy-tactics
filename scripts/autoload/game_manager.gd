@@ -68,6 +68,7 @@ func complete_battle() -> Error:
 
 
 func open_game_menu() -> void:
+	_game_menu.refresh()
 	_game_menu.visible = true
 	get_tree().paused = true
 

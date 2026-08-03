@@ -9,7 +9,14 @@ func _ready() -> void:
 	# it) receiving input even while GameManager pauses the tree to open it.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
+	refresh()
+
+
+func refresh() -> void:
+	# Reset transient state so the overlay starts clean every time it opens,
+	# regardless of what happened the last time it was shown.
 	load_button.disabled = not GameManager.has_saved_game
+	status_label.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:

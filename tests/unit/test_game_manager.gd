@@ -1,6 +1,12 @@
 extends GutTest
 
 
+func after_each() -> void:
+	# A failed assertion in an open_game_menu test can skip its manual
+	# close_game_menu() cleanup, leaving the tree paused for later tests.
+	get_tree().paused = false
+
+
 func test_battle_route_uses_battlefield_scene() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
 
