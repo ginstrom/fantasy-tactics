@@ -37,6 +37,19 @@ func test_depart_selected_party_deploys_before_changing_scene() -> void:
 	assert_true(GameSession.has_deployed_party())
 
 
+func test_enter_starting_settlement_returns_party_before_changing_scene() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.enter_starting_settlement()
+
+	assert_false(GameSession.has_deployed_party())
+
+
 func test_change_scene_reports_error_for_missing_scene() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

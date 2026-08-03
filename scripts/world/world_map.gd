@@ -2,6 +2,7 @@ extends Node2D
 
 signal board_changed
 signal encounter_activated(encounter_id: String)
+signal settlement_activated(location_id: String)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 
@@ -11,12 +12,15 @@ const TILE_SIZE := 64
 const PARTY_MOVE_RANGE := 1
 
 const ENCOUNTER_ID := "goblin_camp"
-const PARTY_START := Vector2i(0, 0)
+const SETTLEMENT_ID := "starting_settlement"
+const SETTLEMENT_POSITION := Vector2i(0, 0)
+const PARTY_START := SETTLEMENT_POSITION
 const ENCOUNTER_POSITION := Vector2i(4, 4)
 
 const TILE_COLOR_LIGHT := Color(0.2, 0.3, 0.2)
 const TILE_COLOR_DARK := Color(0.15, 0.22, 0.15)
 const PARTY_COLOR := Color(0.3, 0.5, 0.9)
+const SETTLEMENT_COLOR := Color(0.5, 0.7, 0.4)
 const ENCOUNTER_COLOR := Color(0.9, 0.6, 0.2)
 const ENCOUNTER_COMPLETE_COLOR := Color(0.5, 0.5, 0.5)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
@@ -59,11 +63,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func get_legal_moves() -> Array[Vector2i]:
+	if not GameSession.has_deployed_party():
+		return []
+
 	var is_blocked := func(_pos: Vector2i) -> bool: return false
 	return grid.get_tiles_in_range(party_position, PARTY_MOVE_RANGE, is_blocked)
 
 
 func try_move_party(target: Vector2i) -> bool:
+	if not GameSession.has_deployed_party():
+		return false
+
 	if not target in get_legal_moves():
 		return false
 
@@ -72,7 +82,7 @@ func try_move_party(target: Vector2i) -> bool:
 
 
 func try_activate_current_tile() -> bool:
-	if party_position != ENCOUNTER_POSITION:
+	if not GameSession.has_deployed_party() or party_position != ENCOUNTER_POSITION:
 		return false
 
 	encounter_activated.emit(ENCOUNTER_ID)
@@ -80,6 +90,18 @@ func try_activate_current_tile() -> bool:
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
+	if not GameSession.has_deployed_party():
+		return
+
+	if tile_pos == SETTLEMENT_POSITION and party_position == SETTLEMENT_POSITION:
+		if party_selected:
+			settlement_activated.emit(SETTLEMENT_ID)
+			return
+
+		party_selected = true
+		_update_highlights()
+		return
+
 	if tile_pos == party_position:
 		if try_activate_current_tile():
 			party_selected = false
@@ -101,6 +123,10 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 func _on_encounter_activated(encounter_id: String) -> void:
 	GameManager.enter_battle(encounter_id)
+
+
+func _on_settlement_activated(_location_id: String) -> void:
+	GameManager.enter_starting_settlement()
 
 
 func _to_grid_position(local_pos: Vector2) -> Vector2i:
@@ -141,6 +167,16 @@ func _draw_markers() -> void:
 	encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker_container.add_child(encounter)
 
+	var settlement := ColorRect.new()
+	settlement.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
+	settlement.position = Vector2(SETTLEMENT_POSITION) * TILE_SIZE + Vector2(margin, margin)
+	settlement.color = SETTLEMENT_COLOR
+	settlement.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker_container.add_child(settlement)
+
+	if not GameSession.has_deployed_party():
+		return
+
 	var party := ColorRect.new()
 	party.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
 	party.position = Vector2(party_position) * TILE_SIZE + Vector2(margin, margin)
@@ -156,7 +192,7 @@ func _update_highlights() -> void:
 	for child in highlight_container.get_children():
 		child.queue_free()
 
-	if not party_selected:
+	if not GameSession.has_deployed_party() or not party_selected:
 		return
 
 	var ring_margin := TILE_SIZE * 0.05

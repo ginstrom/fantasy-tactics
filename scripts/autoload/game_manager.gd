@@ -41,6 +41,11 @@ func depart_selected_party() -> Error:
 	return _change_scene(WORLD_MAP_SCENE)
 
 
+func enter_starting_settlement() -> Error:
+	GameSession.return_deployed_party_to_settlement()
+	return _change_scene(STARTING_SETTLEMENT_SCENE)
+
+
 func enter_battle(encounter_id: String) -> Error:
 	GameSession.enter_encounter(encounter_id)
 	return _change_scene(BATTLEFIELD_SCENE)

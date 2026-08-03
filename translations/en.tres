@@ -30,5 +30,5 @@ messages = {
 "battle.hint.select_unit": "%s turn. Click a unit to select it. Esc: main menu.",
 "battle.hint.already_moved": "%s turn. This unit has already moved. Select another unit.",
 "battle.hint.select_destination": "%s turn. Click a highlighted tile to move, or select another unit.",
-"world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Esc: main menu."
+"world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Return to the settlement by clicking a selected party there. Esc: main menu."
 }

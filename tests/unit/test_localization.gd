@@ -32,7 +32,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		tr("world_map.hint"),
 		(
 			"World Map. Click the party to select it, then click a highlighted tile to move. "
-			+ "Click the marked location to enter battle. Esc: main menu."
+			+ "Click the marked location to enter battle. Return to the settlement by clicking a selected party there. "
+			+ "Esc: main menu."
 		)
 	)
 	assert_eq(tr("party.title"), "Party Manager")

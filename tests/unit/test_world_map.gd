@@ -7,6 +7,10 @@ const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 
 func before_each() -> void:
 	GameSession.reset()
+	_deploy_warrior_party()
+
+
+func _deploy_warrior_party() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
@@ -70,6 +74,7 @@ func test_clicking_the_party_marker_selects_it() -> void:
 
 func test_clicking_the_selected_party_marker_again_deselects_it() -> void:
 	var world_map := _make_world_map()
+	world_map.party_position = Vector2i(1, 0)
 	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._handle_tile_click(world_map.party_position)
@@ -134,3 +139,39 @@ func test_moving_the_party_persists_the_new_position_to_the_session() -> void:
 	assert_eq(
 		GameSession.get_deployed_party_position(), Vector2i(1, 0), "Moving the party should persist its new position"
 	)
+
+
+func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> void:
+	GameSession.reset()
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.get_node("Markers").get_child_count(), 2)
+	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
+
+
+func test_clicking_deployed_party_at_settlement_selects_it_before_entry() -> void:
+	var world_map := _make_world_map()
+
+	world_map._handle_tile_click(Vector2i(0, 0))
+
+	assert_true(world_map.party_selected)
+
+
+func test_clicking_selected_party_at_settlement_emits_settlement_activated() -> void:
+	var world_map := _make_world_map()
+	watch_signals(world_map)
+
+	world_map._handle_tile_click(Vector2i(0, 0))
+	world_map._handle_tile_click(Vector2i(0, 0))
+
+	assert_signal_emitted_with_parameters(
+		world_map, "settlement_activated", ["starting_settlement"]
+	)
+
+
+func _markers_include_color(world_map: Node2D, color: Color) -> bool:
+	for marker in world_map.get_node("Markers").get_children():
+		if marker.color == color:
+			return true
+	return false
