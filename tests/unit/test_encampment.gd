@@ -3,6 +3,10 @@ extends GutTest
 const EncampmentScene := preload("res://scenes/ui/encampment.tscn")
 
 
+func after_each() -> void:
+	GameManager.close_game_menu()
+
+
 func test_encampment_has_a_manage_party_action() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
@@ -22,6 +26,15 @@ func test_encampment_disables_depart_until_party_has_a_member() -> void:
 	assert_false(screen.get_node("Center/VBox/DepartButton").disabled)
 
 
-func test_escape_opens_the_game_menu() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
-	assert_string_contains(source, "GameManager.open_game_menu()")
+func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	screen._unhandled_input(escape_event)
+
+	assert_true(screen.get_viewport().is_input_handled())
+	assert_true(GameManager.is_game_menu_open())
+	assert_true(get_tree().paused)

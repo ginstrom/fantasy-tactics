@@ -10,6 +10,10 @@ func before_each() -> void:
 	_deploy_warrior_party()
 
 
+func after_each() -> void:
+	GameManager.close_game_menu()
+
+
 func _deploy_warrior_party() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
@@ -170,9 +174,21 @@ func test_clicking_selected_party_at_settlement_emits_settlement_activated() -> 
 	)
 
 
-func test_escape_opens_the_game_menu() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/world/world_map.gd")
-	assert_string_contains(source, "GameManager.open_game_menu()")
+func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	world_map._unhandled_input(escape_event)
+
+	assert_true(
+		world_map.get_viewport().is_input_handled(),
+		"World map must mark Escape input as handled before opening the overlay"
+	)
+	assert_true(GameManager.is_game_menu_open())
+	assert_true(get_tree().paused)
 
 
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:

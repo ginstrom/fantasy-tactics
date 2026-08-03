@@ -78,6 +78,10 @@ func close_game_menu() -> void:
 	get_tree().paused = false
 
 
+func is_game_menu_open() -> bool:
+	return _game_menu.visible
+
+
 func quit_game() -> void:
 	get_tree().quit()
 

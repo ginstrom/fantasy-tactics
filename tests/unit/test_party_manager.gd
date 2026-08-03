@@ -7,6 +7,10 @@ func before_each() -> void:
 	GameSession.reset()
 
 
+func after_each() -> void:
+	GameManager.close_game_menu()
+
+
 func test_new_party_manager_shows_unassigned_warrior_and_create_action() -> void:
 	var screen: Control = PartyManagerScene.instantiate()
 	add_child_autofree(screen)
@@ -53,6 +57,15 @@ func test_buttons_create_assign_and_remove_the_warrior() -> void:
 	assert_true(screen.get_node("Center/VBox/AddWarriorButton").visible)
 
 
-func test_escape_opens_the_game_menu() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/party_manager.gd")
-	assert_string_contains(source, "GameManager.open_game_menu()")
+func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+	var screen: Control = PartyManagerScene.instantiate()
+	add_child_autofree(screen)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	screen._unhandled_input(escape_event)
+
+	assert_true(screen.get_viewport().is_input_handled())
+	assert_true(GameManager.is_game_menu_open())
+	assert_true(get_tree().paused)

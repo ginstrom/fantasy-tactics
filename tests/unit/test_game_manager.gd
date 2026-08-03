@@ -82,7 +82,7 @@ func test_open_game_menu_shows_the_overlay_and_pauses_the_tree() -> void:
 
 	manager.open_game_menu()
 
-	assert_true(manager._game_menu.visible)
+	assert_true(manager.is_game_menu_open())
 	assert_true(get_tree().paused)
 
 	manager.close_game_menu()
@@ -95,5 +95,5 @@ func test_close_game_menu_hides_the_overlay_and_unpauses_the_tree() -> void:
 
 	manager.close_game_menu()
 
-	assert_false(manager._game_menu.visible)
+	assert_false(manager.is_game_menu_open())
 	assert_false(get_tree().paused)
