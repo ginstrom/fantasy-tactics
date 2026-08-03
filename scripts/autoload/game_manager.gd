@@ -1,6 +1,6 @@
 extends Node
 
-const MAIN_MENU_SCENE := "res://scenes/ui/main_menu.tscn"
+const START_MENU_SCENE := "res://scenes/ui/start_menu.tscn"
 const PARTY_MANAGER_SCENE := "res://scenes/ui/party_manager.tscn"
 const ENCAMPMENT_SCENE := "res://scenes/ui/encampment.tscn"
 const STARTING_SETTLEMENT_SCENE := "res://scenes/local/starting_settlement.tscn"
@@ -9,13 +9,17 @@ const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
+# Hardcoded until a real save system exists; both menus read this to decide
+# whether Continue/Load are available.
+var has_saved_game: bool = false
+
 
 func _ready() -> void:
 	TranslationServer.add_translation(EN_TRANSLATION)
 
 
-func go_to_main_menu() -> Error:
-	return _change_scene(MAIN_MENU_SCENE)
+func go_to_start_menu() -> Error:
+	return _change_scene(START_MENU_SCENE)
 
 
 func go_to_game() -> Error:

@@ -6,6 +6,8 @@ messages = {
 "menu.title": "Fantasy Tactics",
 "menu.new_game": "New Game",
 "menu.quit": "Quit",
+"menu.continue": "Continue",
+"menu.load": "Load",
 "party.title": "Party Manager",
 "party.warrior.summary": "Warrior — warrior, sword",
 "party.status.empty": "Your party has no adventurers.",

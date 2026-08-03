@@ -19,6 +19,13 @@ func test_party_manager_and_encampment_routes_are_available() -> void:
 	assert_string_contains(source, "res://scenes/ui/encampment.tscn")
 
 
+func test_start_menu_route_uses_start_menu_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/start_menu.tscn")
+	assert_string_contains(source, "go_to_start_menu()")
+
+
 func test_new_game_routes_to_starting_settlement() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
 

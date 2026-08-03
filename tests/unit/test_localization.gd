@@ -1,6 +1,6 @@
 extends GutTest
 
-const MainMenuScene := preload("res://scenes/ui/main_menu.tscn")
+const StartMenuScene := preload("res://scenes/ui/start_menu.tscn")
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 const PartyManagerScene := preload("res://scenes/ui/party_manager.tscn")
@@ -12,6 +12,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.title"), "Fantasy Tactics")
 	assert_eq(tr("menu.new_game"), "New Game")
 	assert_eq(tr("menu.quit"), "Quit")
+	assert_eq(tr("menu.continue"), "Continue")
+	assert_eq(tr("menu.load"), "Load")
 	assert_eq(tr("battle.end_turn"), "End Turn")
 	assert_eq(tr("battle.complete_battle"), "Complete Battle")
 	assert_eq(tr("battle.side.player"), "Player")
@@ -55,13 +57,15 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("settlement.encampment"), "Enter Encampment")
 
 
-func test_main_menu_uses_translation_keys_not_literal_copy() -> void:
-	var main_menu: Control = MainMenuScene.instantiate()
-	add_child_autofree(main_menu)
+func test_start_menu_uses_translation_keys_not_literal_copy() -> void:
+	var start_menu: Control = StartMenuScene.instantiate()
+	add_child_autofree(start_menu)
 
-	assert_eq(main_menu.get_node("Center/VBox/Title").text, "menu.title")
-	assert_eq(main_menu.get_node("Center/VBox/NewGameButton").text, "menu.new_game")
-	assert_eq(main_menu.get_node("Center/VBox/QuitButton").text, "menu.quit")
+	assert_eq(start_menu.get_node("Center/VBox/Title").text, "menu.title")
+	assert_eq(start_menu.get_node("Center/VBox/ContinueButton").text, "menu.continue")
+	assert_eq(start_menu.get_node("Center/VBox/NewGameButton").text, "menu.new_game")
+	assert_eq(start_menu.get_node("Center/VBox/LoadButton").text, "menu.load")
+	assert_eq(start_menu.get_node("Center/VBox/QuitButton").text, "menu.quit")
 
 
 func test_battlefield_hud_buttons_use_translation_keys_not_literal_copy() -> void:
