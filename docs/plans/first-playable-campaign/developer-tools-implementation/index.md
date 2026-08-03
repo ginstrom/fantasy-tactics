@@ -12,7 +12,10 @@
 
 ## Scope and timing
 
-Implement this after [Campaign State](../../settlement-first-party-implementation/01-campaign-state.md) is merged and before [Party Manager UI](../../settlement-first-party-implementation/02-party-manager-ui.md). It depends on the new public party APIs rather than mutating dictionaries itself.
+Implement this after the completed settlement and first-party prototype slice,
+described in [the campaign design](../game-design.md), and before extending
+campaign systems further. It depends on the public party APIs rather than
+mutating dictionaries itself.
 
 This is not a gameplay screen, save/load system, console, cheat framework, or release-export filter. It is available only when `OS.is_debug_build()` is true.
 
@@ -33,8 +36,8 @@ Each scenario calls `GameSession.start_new_game()` before setup. A failed mutati
 
 | Step | Outcome | Prerequisite | Manual check |
 | --- | --- | --- | --- |
-| [01](01-debug-scenarios.md) | Repeatable, unit-tested named scenario state. | Campaign State | No |
-| [02](02-debug-menu-and-routing.md) | `F9` debug overlay invokes scenarios through `GameManager`. | 01; Party Manager UI; Starting Settlement | Yes |
+| [01](01-debug-scenarios.md) | Repeatable, unit-tested named scenario state. | Completed settlement/party slice | No |
+| [02](02-debug-menu-and-routing.md) | `F9` debug overlay invokes scenarios through `GameManager`. | 01; completed scene destinations | Yes |
 
 The helper can merge after campaign state. The menu waits until all its real scene destinations exist.
 

@@ -36,8 +36,57 @@ feel different.
 
 The first implementation slice is smaller: a starting settlement, one
 unassigned Warrior, a player-created party, deployment to the existing world
-map, and return to the settlement. It is specified in
+map, and return to the settlement. That slice is now complete.
+
+## Implemented prototype slice
+
+The current prototype delivers a small, manually playable route:
+
+```text
+Start Menu
+  -> New Game
+  -> Starting Settlement
+  -> Encampment
+  -> Party Manager
+  -> create a party and assign the Warrior
+  -> depart to the World Map
+  -> move the deployed party or enter the existing encounter
+  -> return the party to the settlement
+```
+
+`GameSession` owns the one-Warrior roster, the single player-created party,
+its deployment state, and its world position. `GameManager` owns the named
+scene transitions. The party is visible and movable only while deployed; on
+the settlement tile, selecting it and clicking again returns it home.
+
+The player-facing shell is also in place: New Game begins at the settlement;
+Continue and Load are intentionally disabled until a save system exists; and
+Escape opens a pause-menu overlay from the settlement, encampment, party
+manager, world map, and battlefield. The overlay can return to the unchanged
+scene, show the current "Not implemented yet" Save status, or quit.
+
+The completed implementation plans have been retired. The enduring design
+reference for the settlement/party boundaries is
 [Settlement and First Party Design](settlement-and-first-party-design.md).
+
+## Next work
+
+The prototype establishes the campaign's entry and return path, but it is not
+yet a repeatable campaign. The next implementation work should focus on the
+unfinished outcomes below, in milestone order:
+
+1. Replace the battlefield's developer-only completion control with a real
+   win/lose combat result: health, attacks, damage, defeat, victory, and a
+   clear outcome screen.
+2. Make those results matter in campaign state: rewards or setbacks, then at
+   least two distinct expedition choices whose risks or rewards differ.
+3. Expand the roster from one Warrior to the planned initial party of four,
+   and add one deliberately small, player-visible party or settlement
+   improvement funded by gold.
+4. Add save/load only after the repeatable expedition, reward, and upgrade
+   loop works; then enable the existing Continue and Load UI.
+5. Add durable presentation assets only when their associated gameplay choices
+   have been playtested, following the asset policy below.
 
 Developer verification is a supporting part of that slice, not a player
 feature. Before building the settlement and party-management screens, add a
@@ -89,9 +138,10 @@ sites have changed.
 
 ### Completion criteria
 
-- The existing world-map TODOs are resolved in player-visible behavior.
-- The player can always understand the current map state and return safely to
-  the main menu.
+- The first settlement, party formation, deployment, world-map movement, and
+  settlement-return route is playable.
+- The player can understand the current map state and pause or quit safely
+  from each gameplay scene.
 - The campaign state clearly separates world turns, battle rounds, parties,
   and encounters.
 

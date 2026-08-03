@@ -8,9 +8,10 @@ overlay is absent in non-debug builds.
 
 ## Setup
 
-Steps [01](01-debug-scenarios.md), [Party Manager UI](../../settlement-first-party-implementation/02-party-manager-ui.md),
-and [Starting Settlement and Encampment](../../settlement-first-party-implementation/03-settlement-and-encampment.md)
-must be merged into `main`. Preserve unrelated edits.
+Step [01](01-debug-scenarios.md) and the completed settlement, encampment,
+and party-manager scene destinations described in
+[the campaign design](../game-design.md) must be merged into `main`. Preserve
+unrelated edits.
 
 ```bash
 git status --short
