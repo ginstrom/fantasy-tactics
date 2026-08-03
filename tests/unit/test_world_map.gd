@@ -170,6 +170,11 @@ func test_clicking_selected_party_at_settlement_emits_settlement_activated() -> 
 	)
 
 
+func test_escape_opens_the_game_menu() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/world/world_map.gd")
+	assert_string_contains(source, "GameManager.open_game_menu()")
+
+
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 	for marker in world_map.get_node("Markers").get_children():
 		if marker.color == color:

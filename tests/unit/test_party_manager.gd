@@ -51,3 +51,8 @@ func test_buttons_create_assign_and_remove_the_warrior() -> void:
 
 	screen.get_node("Center/VBox/RemoveWarriorButton").emit_signal("pressed")
 	assert_true(screen.get_node("Center/VBox/AddWarriorButton").visible)
+
+
+func test_escape_opens_the_game_menu() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/party_manager.gd")
+	assert_string_contains(source, "GameManager.open_game_menu()")

@@ -20,3 +20,8 @@ func test_encampment_disables_depart_until_party_has_a_member() -> void:
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	screen.refresh()
 	assert_false(screen.get_node("Center/VBox/DepartButton").disabled)
+
+
+func test_escape_opens_the_game_menu() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
+	assert_string_contains(source, "GameManager.open_game_menu()")

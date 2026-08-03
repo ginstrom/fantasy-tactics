@@ -8,6 +8,12 @@ func _ready() -> void:
 	refresh()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		GameManager.open_game_menu()
+
+
 func refresh() -> void:
 	var can_depart := GameSession.can_depart_selected_party()
 	depart_button.disabled = not can_depart

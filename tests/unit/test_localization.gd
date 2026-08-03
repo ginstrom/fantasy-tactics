@@ -14,13 +14,16 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.quit"), "Quit")
 	assert_eq(tr("menu.continue"), "Continue")
 	assert_eq(tr("menu.load"), "Load")
+	assert_eq(tr("menu.return"), "Return")
+	assert_eq(tr("menu.save"), "Save")
+	assert_eq(tr("menu.not_implemented"), "Not implemented yet")
 	assert_eq(tr("battle.end_turn"), "End Turn")
 	assert_eq(tr("battle.complete_battle"), "Complete Battle")
 	assert_eq(tr("battle.side.player"), "Player")
 	assert_eq(tr("battle.side.enemy"), "Enemy")
 	assert_eq(
 		tr("battle.hint.select_unit") % "Player",
-		"Player turn. Click a unit to select it. Esc: main menu."
+		"Player turn. Click a unit to select it. Esc: menu."
 	)
 	assert_eq(
 		tr("battle.hint.already_moved") % "Player",
@@ -35,7 +38,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		(
 			"World Map. Click the party to select it, then click a highlighted tile to move. "
 			+ "Click the marked location to enter battle. Return to the settlement by clicking a selected party there. "
-			+ "Esc: main menu."
+			+ "Esc: menu."
 		)
 	)
 	assert_eq(tr("party.title"), "Party Manager")
@@ -81,7 +84,7 @@ func test_battlefield_hint_is_built_from_translated_copy() -> void:
 	add_child_autofree(battlefield)
 
 	assert_eq(
-		battlefield.get_node("HUD/Hint").text, "Player turn. Click a unit to select it. Esc: main menu."
+		battlefield.get_node("HUD/Hint").text, "Player turn. Click a unit to select it. Esc: menu."
 	)
 
 

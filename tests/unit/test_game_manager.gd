@@ -68,3 +68,26 @@ func test_change_scene_reports_error_for_missing_scene() -> void:
 	# Missing resources also emit engine load errors; those are expected here.
 	for tracked in get_errors():
 		tracked.handled = true
+
+
+func test_open_game_menu_shows_the_overlay_and_pauses_the_tree() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.open_game_menu()
+
+	assert_true(manager._game_menu.visible)
+	assert_true(get_tree().paused)
+
+	manager.close_game_menu()
+
+
+func test_close_game_menu_hides_the_overlay_and_unpauses_the_tree() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.open_game_menu()
+
+	manager.close_game_menu()
+
+	assert_false(manager._game_menu.visible)
+	assert_false(get_tree().paused)

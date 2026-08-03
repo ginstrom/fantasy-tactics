@@ -6,6 +6,7 @@ const ENCAMPMENT_SCENE := "res://scenes/ui/encampment.tscn"
 const STARTING_SETTLEMENT_SCENE := "res://scenes/local/starting_settlement.tscn"
 const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
+const GAME_MENU_SCENE := "res://scenes/ui/game_menu.tscn"
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
@@ -13,9 +14,15 @@ const EN_TRANSLATION := preload("res://translations/en.tres")
 # whether Continue/Load are available.
 var has_saved_game: bool = false
 
+var _game_menu: CanvasLayer
+
 
 func _ready() -> void:
 	TranslationServer.add_translation(EN_TRANSLATION)
+	# Added as our own child (instead of per-scene) so one instance persists
+	# across every scene change.
+	_game_menu = preload(GAME_MENU_SCENE).instantiate()
+	add_child(_game_menu)
 
 
 func go_to_start_menu() -> Error:
@@ -58,6 +65,16 @@ func enter_battle(encounter_id: String) -> Error:
 func complete_battle() -> Error:
 	GameSession.complete_current_encounter()
 	return go_to_world_map()
+
+
+func open_game_menu() -> void:
+	_game_menu.visible = true
+	get_tree().paused = true
+
+
+func close_game_menu() -> void:
+	_game_menu.visible = false
+	get_tree().paused = false
 
 
 func quit_game() -> void:
