@@ -46,8 +46,8 @@ perform actions.
 | Step | Outcome | Prerequisite | Manual check |
 | --- | --- | --- | --- |
 | [01](01-campaign-state.md) | Roster, empty party list, party formation, deployment, and return are durable and unit-tested. | None | No |
-| [02](02-party-manager-ui.md) | A Party Manager visibly creates the party and assigns/removes the Warrior. | 01 | Yes |
-| [03](03-settlement-and-encampment.md) | A new game opens the settlement; encampment links to management and departs a valid party. | 01, 02 | Yes |
+| [02](02-party-manager-ui.md) | A Party Manager visibly creates the party and assigns/removes the Warrior, then returns to a minimal encampment. | 01 | Yes |
+| [03](03-settlement-and-encampment.md) | A new game opens the settlement; it enters the existing encampment, which gains valid-party departure. | 01, 02 | Yes |
 | [04](04-world-map-deployment-and-return.md) | Only a deployed party appears and moves on the world map; it can return to the settlement. | 01, 03 | Yes |
 
 ## Shared workflow

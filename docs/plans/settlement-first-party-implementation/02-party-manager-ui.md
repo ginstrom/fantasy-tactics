@@ -3,8 +3,8 @@
 ## Milestone
 
 The player can see the Warrior's name, class, and sword; create the one party;
-assign or remove the Warrior; and return to encampment. The screen derives all
-state from `GameSession`.
+assign or remove the Warrior; and return to a minimal encampment. The Party
+Manager derives all party state from `GameSession`.
 
 ## Setup
 
@@ -21,7 +21,11 @@ git checkout -b feat/party-manager-ui
 - Create: `scenes/ui/party_manager.tscn`
 - Create: `scripts/ui/party_manager.gd`
 - Create: `scripts/ui/party_manager.gd.uid`
+- Create: `scenes/ui/encampment.tscn`
+- Create: `scripts/ui/encampment.gd`
+- Create: `scripts/ui/encampment.gd.uid`
 - Create: `tests/unit/test_party_manager.gd`
+- Create: `tests/unit/test_encampment.gd`
 - Modify: `scripts/autoload/game_manager.gd`
 - Modify: `translations/en.tres`
 - Modify: `tests/unit/test_game_manager.gd`
@@ -50,14 +54,15 @@ func test_refresh_shows_remove_after_assignment() -> void:
     assert_true(screen.get_node("Center/VBox/RemoveWarriorButton").visible)
 ```
 
-In `test_game_manager.gd`, assert the source includes `open_party_manager()`
-and `go_to_encampment()`. Extend localization tests with expected English
-labels. Run `make test`; it must fail because the scene, routes, and keys do
-not yet exist.
+Add an encampment scene test which asserts its Manage Party action uses a
+translation key. In `test_game_manager.gd`, assert the source includes
+`open_party_manager()`, `go_to_encampment()`, and the UI encampment path.
+Extend localization tests with expected English labels. Run `make test`; it
+must fail because the scene, routes, and keys do not yet exist.
 
 ### 2. Add the screen, script, translations, and routes
 
-Use the existing main-menu `Control` pattern:
+Use the existing main-menu `Control` pattern for the Party Manager:
 
 ```text
 PartyManager
@@ -77,15 +82,19 @@ for an unassigned Warrior after creation; Remove is visible only when assigned.
 Handlers call the Step 01 state methods then `refresh()`. Back calls
 `GameManager.go_to_encampment()`.
 
-Add `PARTY_MANAGER_SCENE`, `ENCAMPMENT_SCENE`, `open_party_manager()`, and
-`go_to_encampment()` to `GameManager`. Step 03 creates the encampment scene, so
-do not manually use Back before that step. Add translation keys:
+Create a minimal encampment `Control` screen with title and
+`ManagePartyButton`; its handler calls `GameManager.open_party_manager()`. Add
+`PARTY_MANAGER_SCENE`, `ENCAMPMENT_SCENE`, `open_party_manager()`, and
+`go_to_encampment()` to `GameManager`, with `ENCAMPMENT_SCENE` set to
+`res://scenes/ui/encampment.tscn`. Add translation keys:
 
 ```text
 party.title, party.warrior.summary, party.status.empty,
 party.status.unassigned, party.status.assigned, party.create,
 party.add_warrior, party.remove_warrior, ui.back
 ```
+
+Also add `encampment.title` and `encampment.manage_party`.
 
 ### 3. Verify green
 
@@ -97,15 +106,16 @@ Expected: all tests pass, including party-manager and localization tests.
 
 ### 4. Manual verification
 
-Run `make play`. Until Step 03 makes the screen reachable, use the Godot editor
-to run `party_manager.tscn` directly. Confirm Warrior / warrior / sword is
-visible; Create works once; Add and Remove update the screen; and a second
-party cannot be created. Close without committing generated files.
+Run `make editor`, then run `party_manager.tscn` directly. Confirm Warrior /
+warrior / sword is visible; Create works once; Add and Remove update the
+screen; a second party cannot be created; and Back opens the minimal
+encampment. Use Manage Party there to return to Party Manager. Close without
+committing generated files.
 
 ## Commit and handoff
 
 ```bash
-git add scenes/ui/party_manager.tscn scripts/ui/party_manager.gd scripts/ui/party_manager.gd.uid scripts/autoload/game_manager.gd translations/en.tres tests/unit/test_party_manager.gd tests/unit/test_game_manager.gd tests/unit/test_localization.gd
+git add docs/plans/settlement-first-party-implementation/index.md docs/plans/settlement-first-party-implementation/02-party-manager-ui.md docs/plans/settlement-first-party-implementation/03-settlement-and-encampment.md scenes/ui/party_manager.tscn scripts/ui/party_manager.gd scripts/ui/party_manager.gd.uid scenes/ui/encampment.tscn scripts/ui/encampment.gd scripts/ui/encampment.gd.uid scripts/autoload/game_manager.gd translations/en.tres tests/unit/test_party_manager.gd tests/unit/test_encampment.gd tests/unit/test_game_manager.gd tests/unit/test_localization.gd
 git commit -m "feat: add party manager UI"
 ```
 

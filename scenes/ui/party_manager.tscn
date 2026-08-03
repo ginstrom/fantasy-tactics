@@ -1,0 +1,60 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/party_manager.gd" id="1_party_manager"]
+
+[node name="PartyManager" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_party_manager")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "party.title"
+horizontal_alignment = 1
+
+[node name="WarriorSummary" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "party.warrior.summary"
+horizontal_alignment = 1
+
+[node name="PartyStatus" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "party.status.unassigned"
+horizontal_alignment = 1
+
+[node name="CreatePartyButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "party.create"
+
+[node name="AddWarriorButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "party.add_warrior"
+
+[node name="RemoveWarriorButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "party.remove_warrior"
+
+[node name="BackButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[connection signal="pressed" from="Center/VBox/CreatePartyButton" to="." method="_on_create_party_pressed"]
+[connection signal="pressed" from="Center/VBox/AddWarriorButton" to="." method="_on_add_warrior_pressed"]
+[connection signal="pressed" from="Center/VBox/RemoveWarriorButton" to="." method="_on_remove_warrior_pressed"]
+[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

@@ -2,10 +2,9 @@
 
 ## Milestone
 
-New Game opens the starting settlement. Its Encampment action opens an
-encampment screen; that screen opens party management and enables Depart only
-for a formed, non-empty party. Depart updates state before opening the world
-map.
+New Game opens the starting settlement. Its Encampment action opens the
+existing encampment screen, which gains a Depart action enabled only for a
+formed, non-empty party. Depart updates state before opening the world map.
 
 ## Setup
 
@@ -22,11 +21,7 @@ git checkout -b feat/starting-settlement
 - Create: `scenes/local/starting_settlement.tscn`
 - Create: `scripts/local/starting_settlement.gd`
 - Create: `scripts/local/starting_settlement.gd.uid`
-- Create: `scenes/ui/encampment.tscn`
-- Create: `scripts/ui/encampment.gd`
-- Create: `scripts/ui/encampment.gd.uid`
 - Create: `tests/unit/test_starting_settlement.gd`
-- Create: `tests/unit/test_encampment.gd`
 - Modify: `scripts/autoload/game_manager.gd`
 - Modify: `translations/en.tres`
 - Modify: `tests/unit/test_game_manager.gd`
@@ -79,11 +74,11 @@ func depart_selected_party() -> Error:
 
 Create a simple settlement `Control` local-map scene with title, description,
 and `EncampmentButton`; its handler calls `GameManager.go_to_encampment()`.
-Create encampment with title, status, `ManagePartyButton`, and `DepartButton`.
-Its `_ready()` calls `refresh()`, which uses
-`GameSession.can_depart_selected_party()` to set `DepartButton.disabled`.
-Manage Party calls `open_party_manager`; Depart calls
-`depart_selected_party` and performs no local scene change.
+Extend the existing encampment with status and `DepartButton`. Its `_ready()`
+calls `refresh()`, which uses `GameSession.can_depart_selected_party()` to set
+`DepartButton.disabled`. The existing Manage Party action continues to call
+`open_party_manager`; Depart calls `depart_selected_party` and performs no
+local scene change.
 
 Add translation keys and localization expectations for all new text.
 
