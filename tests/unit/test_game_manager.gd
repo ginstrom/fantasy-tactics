@@ -1,6 +1,16 @@
 extends GutTest
 
 
+func test_battle_route_uses_battlefield_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(
+		source,
+		"res://scenes/battle/battlefield.tscn",
+		"The tactical route must use the battle-domain scene"
+	)
+
+
 func test_change_scene_reports_error_for_missing_scene() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

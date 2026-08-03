@@ -1,7 +1,7 @@
 extends GutTest
 
 const MainMenuScene := preload("res://scenes/ui/main_menu.tscn")
-const GameScene := preload("res://scenes/game/game.tscn")
+const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 
 
@@ -43,20 +43,20 @@ func test_main_menu_uses_translation_keys_not_literal_copy() -> void:
 	assert_eq(main_menu.get_node("Center/VBox/QuitButton").text, "menu.quit")
 
 
-func test_game_hud_buttons_use_translation_keys_not_literal_copy() -> void:
-	var game: Node2D = GameScene.instantiate()
-	add_child_autofree(game)
+func test_battlefield_hud_buttons_use_translation_keys_not_literal_copy() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
 
-	assert_eq(game.get_node("HUD/EndTurnButton").text, "battle.end_turn")
-	assert_eq(game.get_node("HUD/CompleteBattleButton").text, "battle.complete_battle")
+	assert_eq(battlefield.get_node("HUD/EndTurnButton").text, "battle.end_turn")
+	assert_eq(battlefield.get_node("HUD/CompleteBattleButton").text, "battle.complete_battle")
 
 
-func test_game_hint_is_built_from_translated_copy() -> void:
-	var game: Node2D = GameScene.instantiate()
-	add_child_autofree(game)
+func test_battlefield_hint_is_built_from_translated_copy() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
 
 	assert_eq(
-		game.get_node("HUD/Hint").text, "Player turn. Click a unit to select it. Esc: main menu."
+		battlefield.get_node("HUD/Hint").text, "Player turn. Click a unit to select it. Esc: main menu."
 	)
 
 
