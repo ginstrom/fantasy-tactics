@@ -28,11 +28,16 @@ Encampment
   -> choose the next expedition
 ```
 
-The initial version has one party of four, a small local area, several
-encounters, gold as its first economy currency, and a small number of visible
-upgrades. Its purpose is to prove that tactical victories make the strategic
-game more interesting and that strategic choices make the next battle feel
-different.
+The full first campaign target has one party of four, a small local area,
+several encounters, gold as its first economy currency, and a small number of
+visible upgrades. Its purpose is to prove that tactical victories make the
+strategic game more interesting and that strategic choices make the next battle
+feel different.
+
+The first implementation slice is smaller: a starting settlement, one
+unassigned Warrior, a player-created party, deployment to the existing world
+map, and return to the settlement. It is specified in
+[Settlement and First Party Design](settlement-and-first-party-design.md).
 
 ## Design principles
 
@@ -70,7 +75,8 @@ sites have changed.
   have a named location. The currently selected party is explicit. Scene-only
   selections, such as the active encounter, are not treated as global party
   location.
-- The game begins with one party, while the model leaves room for more.
+- The game begins at the settlement with one available adventurer and no
+  formed or deployed party. The model leaves room for more parties later.
 
 ### Completion criteria
 
