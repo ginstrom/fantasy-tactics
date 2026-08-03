@@ -2,7 +2,7 @@ extends Node
 
 const MAIN_MENU_SCENE := "res://scenes/ui/main_menu.tscn"
 const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
-const GAME_SCENE := "res://scenes/game/game.tscn"
+const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
@@ -26,7 +26,7 @@ func go_to_world_map() -> Error:
 
 func enter_battle(encounter_id: String) -> Error:
 	GameSession.enter_encounter(encounter_id)
-	return _change_scene(GAME_SCENE)
+	return _change_scene(BATTLEFIELD_SCENE)
 
 
 func complete_battle() -> Error:

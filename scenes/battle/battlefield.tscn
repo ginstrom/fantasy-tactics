@@ -1,20 +1,20 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/game/game.gd" id="1_game"]
+[ext_resource type="Script" path="res://scripts/battle/battlefield.gd" id="1_battlefield"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_battle"]
 
-[node name="Game" type="Node2D"]
-script = ExtResource("1_game")
+[node name="Battlefield" type="Node2D"]
+script = ExtResource("1_battlefield")
 
-[node name="Battlefield" type="Node2D" parent="."]
+[node name="Grid" type="Node2D" parent="."]
 position = Vector2(448, 168)
 script = ExtResource("2_battle")
 
-[node name="Tiles" type="Node2D" parent="Battlefield"]
+[node name="Tiles" type="Node2D" parent="Grid"]
 
-[node name="Highlights" type="Node2D" parent="Battlefield"]
+[node name="Highlights" type="Node2D" parent="Grid"]
 
-[node name="Units" type="Node2D" parent="Battlefield"]
+[node name="Units" type="Node2D" parent="Grid"]
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
@@ -39,6 +39,6 @@ offset_right = 1264.0
 offset_bottom = 88.0
 text = "battle.complete_battle"
 
-[connection signal="pressed" from="HUD/EndTurnButton" to="Battlefield" method="end_turn"]
+[connection signal="pressed" from="HUD/EndTurnButton" to="Grid" method="end_turn"]
 [connection signal="pressed" from="HUD/CompleteBattleButton" to="." method="_on_complete_battle_pressed"]
-[connection signal="board_changed" from="Battlefield" to="." method="_on_board_changed"]
+[connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

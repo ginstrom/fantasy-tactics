@@ -31,8 +31,8 @@ fantasy-tactics/
 ├── project.godot       # Godot project settings
 ├── icon.svg            # Project icon
 ├── docs/plans/         # Design and implementation plans
-├── scenes/             # Godot scenes (boot, UI, game)
-├── scripts/            # GDScript (autoload, UI, game logic)
+├── scenes/             # Godot scenes (boot, UI, world, local, battle)
+├── scripts/            # GDScript (autoload, UI, world, local, battle logic)
 ├── tests/              # GUT unit tests
 ├── addons/gut/         # GUT test framework
 ├── translations/       # Translation resources (one per locale)
