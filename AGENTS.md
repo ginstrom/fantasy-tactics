@@ -6,13 +6,6 @@ This is a one-person learning project. Do development on a regular
 **branch off `main`** in the existing working copy — do not create a git
 worktree for it.
 
-Worktrees exist to let multiple agents or a human and an agent work on
-separate checkouts at once without interfering with each other. That
-concern doesn't apply here: there is one person and one active line of
-work at a time, so a second checkout is just overhead (extra directories
-to track, extra cleanup steps, extra chances for a stray uncommitted diff
-to get stuck in the wrong place) with no corresponding benefit.
-
 Workflow for each task:
 
 1. `git checkout main && git pull`
@@ -28,3 +21,13 @@ Workflow for each task:
 
 If a skill's default instructions call for setting up an isolated
 worktree, use a plain branch in place of that step instead.
+
+# Writing implementation plans
+
+* Put the plan in its own dirctory under @docs/plans
+* Create an index.md which describes the overall plan and coordinates the steps
+* Put each step in its own file
+* Each step should be self contained, including setup, verification, and merging feature branch back to main (after user signoff)
+* Use red/green TDD
+* Give a concrete verifiable milestone for each step
+* Include instructions for manual verification (this could be screen shots or data output as appropriate)
