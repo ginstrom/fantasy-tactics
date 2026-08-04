@@ -11,7 +11,7 @@ const GRID_HEIGHT := 5
 const TILE_SIZE := 64
 const PARTY_MOVE_RANGE := 1
 
-const ENCOUNTER_ID := "goblin_camp"
+const ENCOUNTER_ID := GameSession.GOBLIN_CAMP_ID
 const SETTLEMENT_ID := "starting_settlement"
 const SETTLEMENT_POSITION := Vector2i(0, 0)
 const PARTY_START := SETTLEMENT_POSITION

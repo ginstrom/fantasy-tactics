@@ -7,8 +7,6 @@ extends Node
 ## taken, so actions can be anything from a scene change to a state mutation
 ## that only changes what's already on screen (e.g. opening a submenu).
 
-const ENCOUNTER_ID := "goblin_camp"
-
 const FRAMES_TO_SETTLE := 2
 
 var _out_dir: String
@@ -54,8 +52,11 @@ func _build_steps() -> Array[Dictionary]:
 		{"name": "world_map", "action": func() -> void:
 			GameManager.depart_selected_party()},
 		{"name": "battlefield", "action": func() -> void:
-			GameManager.enter_battle(ENCOUNTER_ID)},
+			GameManager.enter_battle(GameSession.GOBLIN_CAMP_ID)},
+		{"name": "debug_menu", "action": func() -> void:
+			GameManager.toggle_debug_menu()},
 		{"name": "game_menu_overlay", "action": func() -> void:
+			GameManager.toggle_debug_menu()
 			GameManager.open_game_menu()},
 		{"name": "world_map_encounter_complete", "action": func() -> void:
 			GameManager.close_game_menu()

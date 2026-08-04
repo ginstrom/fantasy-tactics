@@ -70,6 +70,14 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("settlement.title"), "Starting Settlement")
 	assert_eq(tr("settlement.description"), "Prepare your party before setting out.")
 	assert_eq(tr("settlement.encampment"), "Enter Encampment")
+	assert_eq(tr("debug.title"), "Developer Scenarios")
+	assert_eq(tr("debug.close_hint"), "F9: close")
+	assert_eq(tr("debug.new_campaign"), "New Campaign")
+	assert_eq(tr("debug.encampment"), "Encampment")
+	assert_eq(tr("debug.party_manager"), "Party Manager")
+	assert_eq(tr("debug.party_ready"), "Party Ready to Depart")
+	assert_eq(tr("debug.world_map"), "Party on World Map")
+	assert_eq(tr("debug.goblin_camp"), "Goblin Camp Battle")
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:

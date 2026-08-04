@@ -44,5 +44,13 @@ messages = {
 "battle.status.enemy_turn": "Enemy turn.",
 "battle.result.victory": "Victory! The goblin camp is cleared.",
 "battle.result.defeat": "Defeat. The party returns to the settlement.",
-"world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Return to the settlement by clicking a selected party there. Esc: menu."
+"world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click the marked location to enter battle. Return to the settlement by clicking a selected party there. Esc: menu.",
+"debug.title": "Developer Scenarios",
+"debug.close_hint": "F9: close",
+"debug.new_campaign": "New Campaign",
+"debug.encampment": "Encampment",
+"debug.party_manager": "Party Manager",
+"debug.party_ready": "Party Ready to Depart",
+"debug.world_map": "Party on World Map",
+"debug.goblin_camp": "Goblin Camp Battle"
 }

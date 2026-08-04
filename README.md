@@ -1,6 +1,7 @@
 # Fantasy Tactics
 
-Lean Godot 4 starter for a 2D turn-based tactics game — scene flow and folder conventions only, no gameplay systems yet.
+Lean Godot 4 starter for a 2D turn-based tactics game with a first playable
+settlement-to-goblin-camp campaign loop.
 
 ## Requirements
 
@@ -24,6 +25,11 @@ make test         # Run the GUT test suite headlessly
 make check        # Run the current validation suite
 make screenshots  # Capture a screenshot of every scene/state into ./screenshots
 ```
+
+`make play` runs a debug build. Press `F9` from a campaign screen to open the
+development-only scenario menu, which can jump to New Campaign, Encampment,
+Party Manager, Party Ready to Depart, Party on World Map, or Goblin Camp
+Battle. The menu is not created in non-debug exports.
 
 ## Screenshots
 

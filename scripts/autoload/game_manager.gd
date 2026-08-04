@@ -7,6 +7,7 @@ const STARTING_SETTLEMENT_SCENE := "res://scenes/local/starting_settlement.tscn"
 const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 const GAME_MENU_SCENE := "res://scenes/ui/game_menu.tscn"
+const DEBUG_MENU_SCENE := "res://scenes/debug/debug_menu.tscn"
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
@@ -15,6 +16,9 @@ const EN_TRANSLATION := preload("res://translations/en.tres")
 var has_saved_game: bool = false
 
 var _game_menu: CanvasLayer
+var _debug_menu: CanvasLayer
+
+enum DebugTarget { NONE, SETTLEMENT, ENCAMPMENT, PARTY_MANAGER, WORLD_MAP, BATTLEFIELD }
 
 
 func _ready() -> void:
@@ -23,6 +27,9 @@ func _ready() -> void:
 	# across every scene change.
 	_game_menu = preload(GAME_MENU_SCENE).instantiate()
 	add_child(_game_menu)
+	if OS.is_debug_build():
+		_debug_menu = preload(DEBUG_MENU_SCENE).instantiate()
+		add_child(_debug_menu)
 
 
 func go_to_start_menu() -> Error:
@@ -31,6 +38,10 @@ func go_to_start_menu() -> Error:
 
 func go_to_game() -> Error:
 	GameSession.start_new_game()
+	return go_to_starting_settlement()
+
+
+func go_to_starting_settlement() -> Error:
 	return _change_scene(STARTING_SETTLEMENT_SCENE)
 
 
@@ -85,6 +96,48 @@ func close_game_menu() -> void:
 
 func is_game_menu_open() -> bool:
 	return _game_menu.visible
+
+
+static func debug_scenario_target(scenario_id: String) -> DebugTarget:
+	match scenario_id:
+		"new_campaign":
+			return DebugTarget.SETTLEMENT
+		"encampment", "party_ready":
+			return DebugTarget.ENCAMPMENT
+		"party_manager":
+			return DebugTarget.PARTY_MANAGER
+		"world_map":
+			return DebugTarget.WORLD_MAP
+		"goblin_camp":
+			return DebugTarget.BATTLEFIELD
+	return DebugTarget.NONE
+
+
+func run_debug_scenario(scenario_id: String) -> Error:
+	if not OS.is_debug_build():
+		return ERR_UNAVAILABLE
+	if not DebugScenarios.apply(scenario_id):
+		return ERR_INVALID_DATA
+
+	match debug_scenario_target(scenario_id):
+		DebugTarget.SETTLEMENT:
+			return go_to_starting_settlement()
+		DebugTarget.ENCAMPMENT:
+			return go_to_encampment()
+		DebugTarget.PARTY_MANAGER:
+			return open_party_manager()
+		DebugTarget.WORLD_MAP:
+			return go_to_world_map()
+		DebugTarget.BATTLEFIELD:
+			return enter_battle(GameSession.GOBLIN_CAMP_ID)
+	return ERR_INVALID_DATA
+
+
+func toggle_debug_menu() -> Error:
+	if not OS.is_debug_build() or _debug_menu == null:
+		return ERR_UNAVAILABLE
+	_debug_menu.visible = not _debug_menu.visible
+	return OK
 
 
 func quit_game() -> void:

@@ -2,6 +2,7 @@ extends Node
 
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(0, 0)
+const GOBLIN_CAMP_ID := "goblin_camp"
 const WARRIOR_ID := "warrior_001"
 const DEFAULT_WARRIOR := {
 	"id": WARRIOR_ID,

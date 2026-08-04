@@ -38,6 +38,23 @@ func test_new_game_routes_to_starting_settlement() -> void:
 	assert_string_contains(source, "res://scenes/local/starting_settlement.tscn")
 
 
+func test_debug_scenario_target_maps_known_ids() -> void:
+	assert_eq(GameManager.debug_scenario_target("encampment"), GameManager.DebugTarget.ENCAMPMENT)
+	assert_eq(GameManager.debug_scenario_target("party_manager"), GameManager.DebugTarget.PARTY_MANAGER)
+	assert_eq(GameManager.debug_scenario_target("world_map"), GameManager.DebugTarget.WORLD_MAP)
+	assert_eq(GameManager.debug_scenario_target("goblin_camp"), GameManager.DebugTarget.BATTLEFIELD)
+	assert_eq(GameManager.debug_scenario_target("unknown"), GameManager.DebugTarget.NONE)
+
+
+func test_running_goblin_camp_scenario_selects_the_encounter_before_battle_route() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(manager.run_debug_scenario("goblin_camp"), OK)
+	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
+
+
 func test_depart_selected_party_deploys_before_changing_scene() -> void:
 	GameSession.reset()
 	GameSession.create_party()

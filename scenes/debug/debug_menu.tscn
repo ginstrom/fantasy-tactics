@@ -1,0 +1,58 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/debug/debug_menu.gd" id="1_debug_menu"]
+
+[node name="DebugMenu" type="CanvasLayer"]
+layer = 101
+script = ExtResource("1_debug_menu")
+
+[node name="Panel" type="PanelContainer" parent="."]
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 324.0
+offset_bottom = 382.0
+
+[node name="Rows" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.title"
+horizontal_alignment = 1
+
+[node name="CloseHint" type="Label" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.close_hint"
+horizontal_alignment = 1
+
+[node name="NewCampaignButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.new_campaign"
+
+[node name="EncampmentButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.encampment"
+
+[node name="PartyManagerButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.party_manager"
+
+[node name="PartyReadyButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.party_ready"
+
+[node name="WorldMapButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.world_map"
+
+[node name="GoblinCampButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.goblin_camp"
+
+[connection signal="pressed" from="Panel/Rows/NewCampaignButton" to="." method="_on_new_campaign_pressed"]
+[connection signal="pressed" from="Panel/Rows/EncampmentButton" to="." method="_on_encampment_pressed"]
+[connection signal="pressed" from="Panel/Rows/PartyManagerButton" to="." method="_on_party_manager_pressed"]
+[connection signal="pressed" from="Panel/Rows/PartyReadyButton" to="." method="_on_party_ready_pressed"]
+[connection signal="pressed" from="Panel/Rows/WorldMapButton" to="." method="_on_world_map_pressed"]
+[connection signal="pressed" from="Panel/Rows/GoblinCampButton" to="." method="_on_goblin_camp_pressed"]

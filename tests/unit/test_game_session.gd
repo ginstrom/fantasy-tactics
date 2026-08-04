@@ -85,10 +85,10 @@ func test_entering_an_encounter_records_it_as_selected() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	session.enter_encounter("goblin_camp")
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
-	assert_eq(session.selected_encounter, "goblin_camp")
-	assert_false(session.is_encounter_complete("goblin_camp"), "Entering does not itself complete an encounter")
+	assert_eq(session.selected_encounter, GameSessionScript.GOBLIN_CAMP_ID)
+	assert_false(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID), "Entering does not itself complete an encounter")
 
 
 func test_completing_the_current_encounter_marks_it_complete() -> void:
