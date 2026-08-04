@@ -17,6 +17,8 @@ const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 enum Side { PLAYER, ENEMY }
 
 const UNIT_MOVE_RANGE := 3
+const ENEMY_STEP_MOVE := "move"
+const ENEMY_STEP_ATTACK := "attack"
 const WARRIOR_START := Vector2i(1, 1)
 const WARRIOR_COLOR := Color(0.3, 0.5, 0.9)
 const WARRIOR_MAX_HEALTH := 3
@@ -156,6 +158,79 @@ func is_battle_lost() -> bool:
 		if unit.side == Side.PLAYER and unit.is_alive():
 			return false
 	return true
+
+
+func run_enemy_turn() -> Array:
+	var steps: Array = []
+	for unit in units.duplicate():
+		if not unit.is_alive() or unit.side != Side.ENEMY:
+			continue
+		steps.append_array(_take_enemy_unit_actions(unit))
+	selected_unit = null
+	return steps
+
+
+func _take_enemy_unit_actions(unit) -> Array:
+	var steps: Array = []
+	var target = _nearest_living_unit(unit.grid_position, Side.PLAYER)
+	if target == null:
+		return steps
+
+	selected_unit = unit
+	if not target.grid_position in grid.get_adjacent(unit.grid_position):
+		var destination := _best_move_toward(unit, target.grid_position)
+		var from: Vector2i = unit.grid_position
+		if destination != from and try_move_selected_unit(destination):
+			steps.append({"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination})
+
+	if not unit.has_acted and target.is_alive() and target.grid_position in grid.get_adjacent(unit.grid_position):
+		if try_attack_selected_unit(target.grid_position):
+			steps.append(last_attack_result)
+	return steps
+
+
+func _nearest_living_unit(from_pos: Vector2i, side: int):
+	var nearest = null
+	var nearest_distance := -1
+	for unit in units:
+		if unit.side != side or not unit.is_alive():
+			continue
+		var distance := _grid_distance(from_pos, unit.grid_position)
+		if (
+			nearest == null
+			or distance < nearest_distance
+			or (distance == nearest_distance and _reading_order_is_earlier(unit.grid_position, nearest.grid_position))
+		):
+			nearest = unit
+			nearest_distance = distance
+	return nearest
+
+
+func _best_move_toward(unit, target_pos: Vector2i) -> Vector2i:
+	var best: Vector2i = unit.grid_position
+	var best_distance := _grid_distance(unit.grid_position, target_pos)
+	var has_candidate := false
+	for candidate in get_legal_moves(unit):
+		var candidate_distance := _grid_distance(candidate, target_pos)
+		if (
+			not has_candidate
+			or candidate_distance < best_distance
+			or (candidate_distance == best_distance and _reading_order_is_earlier(candidate, best))
+		):
+			best = candidate
+			best_distance = candidate_distance
+			has_candidate = true
+	return best
+
+
+func _grid_distance(a: Vector2i, b: Vector2i) -> int:
+	return abs(a.x - b.x) + abs(a.y - b.y)
+
+
+func _reading_order_is_earlier(a: Vector2i, b: Vector2i) -> bool:
+	if a.y != b.y:
+		return a.y < b.y
+	return a.x < b.x
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:

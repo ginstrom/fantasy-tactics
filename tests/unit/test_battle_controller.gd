@@ -313,3 +313,97 @@ func test_is_battle_lost_when_no_living_player_units_remain() -> void:
 
 	assert_true(controller.is_battle_lost())
 	assert_false(controller.is_battle_won())
+
+
+func test_run_enemy_turn_moves_the_goblin_toward_the_nearest_player_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1)
+	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps.size(), 1)
+	assert_eq(steps[0].type, "move")
+	assert_eq(
+		goblin.grid_position,
+		Vector2i(4, 3),
+		"Of the four adjacent tiles, (4,3) and (3,4) tie for closest to (1,1); reading order picks the smaller y"
+	)
+
+
+func test_run_enemy_turn_attacks_without_moving_when_already_adjacent() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+	)
+	var player_unit = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps.size(), 1)
+	assert_eq(steps[0].type, "attack")
+	assert_true(steps[0].hit)
+	assert_eq(steps[0].damage, 1)
+	assert_eq(player_unit.health, 2)
+	assert_eq(goblin.grid_position, Vector2i(1, 2), "An already-adjacent goblin should not move")
+
+
+func test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+	)
+	var player_unit = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps.size(), 2)
+	assert_eq(steps[0].type, "move")
+	assert_eq(
+		goblin.grid_position,
+		Vector2i(1, 0),
+		"The goblin uses its full move range to reach the closest legal tile, then attacks from adjacent range"
+	)
+	assert_eq(steps[1].type, "attack")
+	assert_eq(player_unit.health, 2)
+
+
+func test_run_enemy_turn_breaks_target_ties_using_reading_order() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(Vector2i(3, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1)
+	var player_a = UnitScript.new(Vector2i(0, 3), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	var player_b = UnitScript.new(Vector2i(3, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	controller.units = [goblin, player_a, player_b]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+
+	controller.run_enemy_turn()
+
+	assert_eq(
+		goblin.grid_position,
+		Vector2i(3, 2),
+		"Both player units are 3 tiles away; reading order (top-to-bottom) must pick player_b at (3, 0)"
+	)
+
+
+func test_run_enemy_turn_returns_no_steps_when_no_living_player_units_remain() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [goblin]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps, [])
+	assert_eq(goblin.grid_position, Vector2i(4, 4))
