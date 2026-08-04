@@ -84,6 +84,8 @@ func try_move_party(target: Vector2i) -> bool:
 func try_activate_current_tile() -> bool:
 	if not GameSession.has_deployed_party() or party_position != ENCOUNTER_POSITION:
 		return false
+	if GameSession.is_encounter_complete(ENCOUNTER_ID):
+		return false
 
 	encounter_activated.emit(ENCOUNTER_ID)
 	return true
@@ -93,23 +95,23 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if not GameSession.has_deployed_party():
 		return
 
-	if tile_pos == SETTLEMENT_POSITION and party_position == SETTLEMENT_POSITION:
-		if party_selected:
+	if tile_pos == party_position:
+		if not party_selected:
+			party_selected = true
+			_update_highlights()
+			return
+
+		if tile_pos == SETTLEMENT_POSITION:
 			settlement_activated.emit(SETTLEMENT_ID)
 			return
 
-		party_selected = true
-		_update_highlights()
-		return
-
-	if tile_pos == party_position:
 		if try_activate_current_tile():
 			party_selected = false
 			_draw_markers()
 			_update_highlights()
 			return
 
-		party_selected = not party_selected
+		party_selected = false
 		_update_highlights()
 		return
 

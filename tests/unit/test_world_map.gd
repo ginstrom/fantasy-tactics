@@ -110,16 +110,61 @@ func test_clicking_an_adjacent_tile_after_selecting_moves_the_party() -> void:
 	assert_false(world_map.party_selected, "Moving should clear the selection")
 
 
-func test_activating_the_encounter_tile_does_not_require_selecting_first() -> void:
+func test_clicking_deployed_party_on_goblin_camp_selects_it_before_entry() -> void:
+	var world_map := _make_world_map()
+	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(world_map.party_selected, "First click on the goblin camp must select, not enter")
+
+
+func test_clicking_selected_party_on_goblin_camp_emits_encounter_activated() -> void:
 	var world_map := _make_world_map()
 	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
 	watch_signals(world_map)
 
 	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
 
 	assert_signal_emitted_with_parameters(
 		world_map, "encounter_activated", [WorldMapScript.ENCOUNTER_ID]
 	)
+
+
+func test_selected_party_on_goblin_camp_can_move_away_instead_of_entering() -> void:
+	var world_map := _make_world_map()
+	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	world_map._handle_tile_click(world_map.party_position)
+	watch_signals(world_map)
+
+	world_map._handle_tile_click(Vector2i(3, 4))
+
+	assert_signal_not_emitted(world_map, "encounter_activated")
+	assert_eq(world_map.party_position, Vector2i(3, 4), "A selected party on the camp must be able to move away")
+
+
+func test_activating_a_completed_encounter_tile_does_nothing() -> void:
+	var world_map := _make_world_map()
+	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	GameSession.completed_encounters.append(WorldMapScript.ENCOUNTER_ID)
+	watch_signals(world_map)
+
+	var activated: bool = world_map.try_activate_current_tile()
+
+	assert_false(activated, "A completed encounter must reject entry")
+	assert_signal_not_emitted(world_map, "encounter_activated")
+
+
+func test_clicking_a_completed_encounter_after_selecting_deselects_instead_of_entering() -> void:
+	var world_map := _make_world_map()
+	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	GameSession.completed_encounters.append(WorldMapScript.ENCOUNTER_ID)
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_false(world_map.party_selected, "A completed encounter must not stay selected forever")
 
 
 func test_ready_resumes_the_party_position_saved_in_the_session() -> void:
