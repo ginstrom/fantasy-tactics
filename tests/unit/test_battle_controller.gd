@@ -3,6 +3,7 @@ extends GutTest
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 
 
 func _make_controller(width: int, height: int) -> Node2D:
@@ -131,3 +132,184 @@ func test_end_turn_switches_the_active_side_and_resets_movement() -> void:
 
 	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER, "End turn returns control to the first side")
 	assert_false(player_unit.has_moved, "The player's unit regains its movement on its next turn")
+
+
+func test_ready_spawns_the_documented_warrior_and_goblin() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_eq(controller.units.size(), 2)
+	var warrior = controller.get_unit_at(Vector2i(1, 1))
+	var goblin = controller.get_unit_at(Vector2i(4, 4))
+	assert_not_null(warrior, "Warrior should spawn at (1, 1)")
+	assert_not_null(goblin, "Goblin should spawn at (4, 4)")
+	assert_eq(warrior.side, BattleControllerScript.Side.PLAYER)
+	assert_eq(warrior.max_health, 3)
+	assert_eq(warrior.move_range, 3)
+	assert_eq(warrior.attack_damage, 2)
+	assert_eq(warrior.hit_chance, 0.6)
+	assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
+	assert_eq(goblin.max_health, 3)
+	assert_eq(goblin.move_range, 3)
+	assert_eq(goblin.attack_damage, 1)
+	assert_eq(goblin.hit_chance, 0.3)
+
+
+func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(defender.health, 1, "A hit applies the attacker's fixed damage")
+	assert_true(attacker.has_acted)
+
+
+func test_attack_misses_and_deals_no_damage_when_the_roll_is_at_or_above_hit_chance() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(defender.health, 3, "A miss must not change the defender's health")
+
+
+func test_attack_defeats_and_removes_the_target_when_health_reaches_zero() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 1, 1, 0.3, "Short Sword"
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(defender.is_alive())
+	assert_eq(controller.units, [attacker], "A defeated unit is removed from the board")
+	assert_null(controller.get_unit_at(defender.grid_position))
+
+
+func test_attack_is_rejected_against_a_non_adjacent_target() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var defender = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked)
+	assert_eq(defender.health, defender.max_health)
+
+
+func test_attack_is_rejected_a_second_time_in_the_same_turn() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 5)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.try_attack_selected_unit(defender.grid_position)
+	controller.selected_unit = attacker
+
+	var attacked_again: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked_again, "A unit that already attacked this turn cannot attack again")
+
+
+func test_attack_is_rejected_for_a_unit_on_the_inactive_side() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.active_side = BattleControllerScript.Side.PLAYER
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked)
+
+
+func test_unit_can_move_then_attack_in_the_same_turn() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var defender = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	var moved: bool = controller.try_move_selected_unit(Vector2i(2, 1))
+	controller.selected_unit = attacker
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(moved)
+	assert_true(attacked)
+
+
+func test_unit_can_attack_then_move_in_the_same_turn() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+	controller.selected_unit = attacker
+	var moved: bool = controller.try_move_selected_unit(Vector2i(2, 1))
+
+	assert_true(attacked, "Attacking first must still be legal")
+	assert_true(moved, "Moving after attacking must still be legal - order does not matter")
+
+
+func test_end_turn_resets_has_acted_for_the_newly_active_side() -> void:
+	var controller := _make_controller(6, 6)
+	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy_unit = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [player_unit, enemy_unit]
+	controller.active_side = BattleControllerScript.Side.PLAYER
+	controller.selected_unit = player_unit
+	controller.try_attack_selected_unit(enemy_unit.grid_position)
+
+	controller.end_turn()
+	controller.end_turn()
+
+	assert_false(player_unit.has_acted, "The player's unit regains its attack on its next turn")
+
+
+func test_is_battle_won_when_no_living_enemies_remain() -> void:
+	var controller := _make_controller(6, 6)
+	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [player_unit]
+
+	assert_true(controller.is_battle_won())
+	assert_false(controller.is_battle_lost())
+
+
+func test_is_battle_lost_when_no_living_player_units_remain() -> void:
+	var controller := _make_controller(6, 6)
+	var enemy_unit = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [enemy_unit]
+
+	assert_true(controller.is_battle_lost())
+	assert_false(controller.is_battle_won())

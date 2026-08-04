@@ -17,11 +17,25 @@ const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 enum Side { PLAYER, ENEMY }
 
 const UNIT_MOVE_RANGE := 3
+const WARRIOR_START := Vector2i(1, 1)
+const WARRIOR_COLOR := Color(0.3, 0.5, 0.9)
+const WARRIOR_MAX_HEALTH := 3
+const WARRIOR_ATTACK_DAMAGE := 2
+const WARRIOR_HIT_CHANCE := 0.6
+const WARRIOR_ATTACK_NAME := "Sword"
+const GOBLIN_START := Vector2i(4, 4)
+const GOBLIN_COLOR := Color(0.9, 0.4, 0.3)
+const GOBLIN_MAX_HEALTH := 3
+const GOBLIN_ATTACK_DAMAGE := 1
+const GOBLIN_HIT_CHANCE := 0.3
+const GOBLIN_ATTACK_NAME := "Short Sword"
 
 var grid
 var units: Array = []
 var selected_unit = null
 var active_side: int = Side.PLAYER
+var hit_roll: Callable = func() -> float: return randf()
+var last_attack_result: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
 @onready var unit_container: Node2D = $Units
@@ -31,8 +45,14 @@ var active_side: int = Side.PLAYER
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	units = [
-		UnitScript.new(Vector2i(1, 1), Color(0.3, 0.5, 0.9), Side.PLAYER, UNIT_MOVE_RANGE),
-		UnitScript.new(Vector2i(4, 4), Color(0.9, 0.4, 0.3), Side.ENEMY, UNIT_MOVE_RANGE),
+		UnitScript.new(
+			WARRIOR_START, WARRIOR_COLOR, Side.PLAYER, UNIT_MOVE_RANGE,
+			WARRIOR_MAX_HEALTH, WARRIOR_ATTACK_DAMAGE, WARRIOR_HIT_CHANCE, WARRIOR_ATTACK_NAME
+		),
+		UnitScript.new(
+			GOBLIN_START, GOBLIN_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
+			GOBLIN_MAX_HEALTH, GOBLIN_ATTACK_DAMAGE, GOBLIN_HIT_CHANCE, GOBLIN_ATTACK_NAME
+		),
 	]
 	_draw_tiles()
 	_draw_units()
@@ -77,6 +97,41 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 
 	selected_unit.grid_position = target
 	selected_unit.has_moved = true
+	last_attack_result = {}
+	return true
+
+
+func try_attack_selected_unit(target_pos: Vector2i) -> bool:
+	if selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != active_side:
+		return false
+	if selected_unit.has_acted:
+		return false
+	if not target_pos in grid.get_adjacent(selected_unit.grid_position):
+		return false
+
+	var target = get_unit_at(target_pos)
+	if target == null or target.side == selected_unit.side or not target.is_alive():
+		return false
+
+	selected_unit.has_acted = true
+	var hit: bool = hit_roll.call() < selected_unit.hit_chance
+	var damage: int = selected_unit.attack_damage if hit else 0
+	if hit:
+		target.take_damage(damage)
+	var defeated: bool = hit and not target.is_alive()
+	if defeated:
+		units.erase(target)
+
+	last_attack_result = {
+		"type": "attack",
+		"attacker": selected_unit,
+		"defender": target,
+		"hit": hit,
+		"damage": damage,
+		"defeated": defeated,
+	}
 	return true
 
 
@@ -85,7 +140,22 @@ func end_turn() -> void:
 	for unit in units:
 		if unit.side == active_side:
 			unit.has_moved = false
+			unit.has_acted = false
 	_select_unit(null)
+
+
+func is_battle_won() -> bool:
+	for unit in units:
+		if unit.side == Side.ENEMY and unit.is_alive():
+			return false
+	return true
+
+
+func is_battle_lost() -> bool:
+	for unit in units:
+		if unit.side == Side.PLAYER and unit.is_alive():
+			return false
+	return true
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
@@ -93,11 +163,26 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if clicked_unit != null:
 		if clicked_unit.side == active_side:
 			_select_unit(clicked_unit)
+			return
+
+		if selected_unit != null and try_attack_selected_unit(tile_pos):
+			_draw_units()
+			_select_unit_after_action()
 		return
 
 	if try_move_selected_unit(tile_pos):
 		_draw_units()
+		_select_unit_after_action()
+
+
+func _select_unit_after_action() -> void:
+	if selected_unit == null or not selected_unit.is_alive():
 		_select_unit(null)
+		return
+	if selected_unit.has_moved and selected_unit.has_acted:
+		_select_unit(null)
+		return
+	_select_unit(selected_unit)
 
 
 func _select_unit(unit) -> void:
