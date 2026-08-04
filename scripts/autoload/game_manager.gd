@@ -67,6 +67,11 @@ func complete_battle() -> Error:
 	return go_to_world_map()
 
 
+func fail_battle() -> Error:
+	GameSession.abandon_current_encounter()
+	return enter_starting_settlement()
+
+
 func open_game_menu() -> void:
 	_game_menu.refresh()
 	_game_menu.visible = true

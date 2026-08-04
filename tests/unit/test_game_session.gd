@@ -102,6 +102,17 @@ func test_completing_the_current_encounter_marks_it_complete() -> void:
 	assert_eq(session.selected_encounter, "", "Completing clears the selected encounter")
 
 
+func test_abandoning_the_current_encounter_clears_selection_without_completing_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter("goblin_camp")
+
+	session.abandon_current_encounter()
+
+	assert_eq(session.selected_encounter, "")
+	assert_false(session.is_encounter_complete("goblin_camp"))
+
+
 func test_reset_clears_encounter_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

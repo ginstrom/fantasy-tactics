@@ -25,6 +25,25 @@ offset_right = 640.0
 offset_bottom = 48.0
 text = "battle.hint.select_unit"
 
+[node name="Status" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 56.0
+offset_right = 640.0
+offset_bottom = 88.0
+text = "battle.status.awaiting_action"
+
+[node name="PlayerHealth" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 96.0
+offset_right = 400.0
+offset_bottom = 128.0
+
+[node name="EnemyHealth" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 128.0
+offset_right = 400.0
+offset_bottom = 160.0
+
 [node name="EndTurnButton" type="Button" parent="HUD"]
 offset_left = 1104.0
 offset_top = 16.0
@@ -32,13 +51,5 @@ offset_right = 1264.0
 offset_bottom = 48.0
 text = "battle.end_turn"
 
-[node name="CompleteBattleButton" type="Button" parent="HUD"]
-offset_left = 1104.0
-offset_top = 56.0
-offset_right = 1264.0
-offset_bottom = 88.0
-text = "battle.complete_battle"
-
-[connection signal="pressed" from="HUD/EndTurnButton" to="Grid" method="end_turn"]
-[connection signal="pressed" from="HUD/CompleteBattleButton" to="." method="_on_complete_battle_pressed"]
+[connection signal="pressed" from="HUD/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

@@ -36,6 +36,7 @@ var grid
 var units: Array = []
 var selected_unit = null
 var active_side: int = Side.PLAYER
+var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
 var last_attack_result: Dictionary = {}
 
@@ -234,6 +235,9 @@ func _reading_order_is_earlier(a: Vector2i, b: Vector2i) -> bool:
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
+	if input_locked:
+		return
+
 	var clicked_unit = get_unit_at(tile_pos)
 	if clicked_unit != null:
 		if clicked_unit.side == active_side:

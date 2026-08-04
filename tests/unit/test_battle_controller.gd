@@ -407,3 +407,14 @@ func test_run_enemy_turn_returns_no_steps_when_no_living_player_units_remain() -
 
 	assert_eq(steps, [])
 	assert_eq(goblin.grid_position, Vector2i(4, 4))
+
+
+func test_locked_input_is_ignored_by_handle_tile_click() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.input_locked = true
+
+	controller._handle_tile_click(Vector2i(1, 1))
+
+	assert_null(controller.selected_unit, "A locked board must ignore clicks")

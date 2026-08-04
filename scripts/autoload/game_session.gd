@@ -166,5 +166,9 @@ func complete_current_encounter() -> void:
 	selected_encounter = ""
 
 
+func abandon_current_encounter() -> void:
+	selected_encounter = ""
+
+
 func is_encounter_complete(encounter_id: String) -> bool:
 	return completed_encounters.has(encounter_id)

@@ -18,7 +18,6 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.save"), "Save")
 	assert_eq(tr("menu.not_implemented"), "Not implemented yet")
 	assert_eq(tr("battle.end_turn"), "End Turn")
-	assert_eq(tr("battle.complete_battle"), "Complete Battle")
 	assert_eq(tr("battle.side.player"), "Player")
 	assert_eq(tr("battle.side.enemy"), "Enemy")
 	assert_eq(
@@ -27,12 +26,25 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	)
 	assert_eq(
 		tr("battle.hint.already_moved") % "Player",
-		"Player turn. This unit has already moved. Select another unit."
+		"Player turn. This unit has already moved. Attack an adjacent enemy or select another unit."
+	)
+	assert_eq(
+		tr("battle.hint.turn_complete") % "Player",
+		"Player turn. This unit has moved and attacked. Select another unit."
 	)
 	assert_eq(
 		tr("battle.hint.select_destination") % "Player",
 		"Player turn. Click a highlighted tile to move, or select another unit."
 	)
+	assert_eq(tr("battle.status.awaiting_action"), "No actions yet.")
+	assert_eq(tr("battle.status.health") % ["Warrior", 3, 3], "Warrior: 3/3 HP")
+	assert_eq(tr("battle.status.defeated") % "Goblin", "Goblin: defeated")
+	assert_eq(tr("battle.status.hit") % ["Warrior", 2], "Warrior hits for 2 damage.")
+	assert_eq(tr("battle.status.miss") % "Goblin", "Goblin misses.")
+	assert_eq(tr("battle.status.enemy_move") % "Goblin", "Goblin moves closer.")
+	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
+	assert_eq(tr("battle.result.victory"), "Victory! The goblin camp is cleared.")
+	assert_eq(tr("battle.result.defeat"), "Defeat. The party returns to the settlement.")
 	assert_eq(
 		tr("world_map.hint"),
 		(
@@ -76,7 +88,7 @@ func test_battlefield_hud_buttons_use_translation_keys_not_literal_copy() -> voi
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.get_node("HUD/EndTurnButton").text, "battle.end_turn")
-	assert_eq(battlefield.get_node("HUD/CompleteBattleButton").text, "battle.complete_battle")
+	assert_eq(battlefield.get_node("HUD/Status").text, "battle.status.awaiting_action")
 
 
 func test_battlefield_hint_is_built_from_translated_copy() -> void:
