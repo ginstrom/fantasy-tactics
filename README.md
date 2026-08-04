@@ -17,12 +17,25 @@ Lean Godot 4 starter for a 2D turn-based tactics game — scene flow and folder 
 With Godot 4.7.1 available on your `PATH` as `godot`, use the included Makefile:
 
 ```bash
-make help    # List available commands
-make editor  # Open the project in Godot
-make play    # Run the project
-make test    # Run the GUT test suite headlessly
-make check   # Run the current validation suite
+make help         # List available commands
+make editor       # Open the project in Godot
+make play         # Run the project
+make test         # Run the GUT test suite headlessly
+make check        # Run the current validation suite
+make screenshots  # Capture a screenshot of every scene/state into ./screenshots
 ```
+
+## Screenshots
+
+`make screenshots` drives the game through every known scene and notable UI
+state, saving a numbered PNG per state to `./screenshots`. It's a real render
+(not headless), so it needs an available display; the window is positioned
+off-screen so it doesn't interrupt you.
+
+The tour is a plain list of steps in
+`scripts/tools/screenshot_tour.gd` — as new scenes or UI states are added to
+the game, add a step for them there. Each step is just a name and a
+`Callable` that leaves the game showing whatever should be captured.
 
 ## Folder map
 
