@@ -3,6 +3,34 @@ extends GutTest
 const GameSessionScript := preload("res://scripts/autoload/game_session.gd")
 
 
+func _party(party_id: String, member_ids: Array[String], location_id: String, deployed: bool) -> Dictionary:
+	return {
+		"id": party_id,
+		"member_ids": member_ids,
+		"location_id": location_id,
+		"world_position": Vector2i(0, 0),
+		"deployed": deployed,
+		"travel_route": [] as Array[Vector2i],
+		"movement_spent": false,
+		"name": "Test Party",
+		"progression": {},
+		"metadata": {},
+	}
+
+
+func _adventurer(adventurer_id: String, availability_status: String) -> Dictionary:
+	return {
+		"id": adventurer_id,
+		"name": "Extra",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": availability_status,
+		"stats": {},
+		"progression": {},
+	}
+
+
 func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -489,3 +517,167 @@ func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward
 	assert_eq(session.gold, 0)
 	assert_eq(session.pending_reward, 0)
 	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")
+
+
+func test_default_warrior_has_level_availability_and_placeholder_progression() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.adventurers[0]
+
+	assert_eq(warrior.name, "Warrior")
+	assert_eq(warrior["class"], "warrior")
+	assert_eq(warrior.level, 1, "A fresh Warrior starts at level 1")
+	assert_eq(warrior.availability_status, "available", "A fresh Warrior starts available for a party")
+	assert_eq(warrior.stats, {}, "Stats are a TBD placeholder that must not affect combat")
+	assert_eq(warrior.progression, {}, "Progression is a TBD placeholder that must not affect combat")
+
+
+func test_create_party_sets_name_encampment_location_and_placeholder_metadata() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.create_party()
+	var party: Dictionary = session.get_selected_party()
+
+	assert_eq(party.name, "Party 1")
+	assert_eq(party.location_id, GameSessionScript.STARTING_SETTLEMENT_ID)
+	assert_eq(party.progression, {})
+	assert_eq(party.metadata, {})
+	assert_eq(party.member_ids, [] as Array[String], "Existing route/member fields must survive the new metadata")
+	assert_false(party.deployed)
+	assert_eq(party.travel_route, [] as Array[Vector2i])
+	assert_false(party.movement_spent)
+
+
+func test_get_party_returns_a_safe_copy_and_empty_dictionary_for_an_unknown_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	var party: Dictionary = session.get_party(GameSessionScript.FIRST_PARTY_ID)
+	assert_eq(party.id, GameSessionScript.FIRST_PARTY_ID)
+
+	party.name = "Mutated"
+	assert_eq(
+		session.get_selected_party().name,
+		"Party 1",
+		"Mutating a returned party copy must not affect session state"
+	)
+	assert_eq(session.get_party("missing"), {})
+
+
+func test_get_adventurer_returns_a_safe_copy_and_empty_dictionary_for_an_unknown_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+	assert_eq(warrior.id, GameSessionScript.WARRIOR_ID)
+
+	warrior.name = "Mutated"
+	assert_eq(
+		session.adventurers[0].name,
+		"Warrior",
+		"Mutating a returned adventurer copy must not affect session state"
+	)
+	assert_eq(session.get_adventurer("missing"), {})
+
+
+func test_get_deployable_encamped_parties_excludes_an_empty_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("empty_party", [] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	assert_eq(session.get_deployable_encamped_parties(), [])
+
+
+func test_get_deployable_encamped_parties_excludes_a_deployed_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("deployed_party", ["warrior_001"], GameSessionScript.STARTING_SETTLEMENT_ID, true)
+	)
+
+	assert_eq(session.get_deployable_encamped_parties(), [])
+
+
+func test_get_deployable_encamped_parties_excludes_a_party_outside_the_starting_encampment() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("away_party", ["warrior_001"], GameSessionScript.GOBLIN_CAMP_ID, false)
+	)
+
+	assert_eq(session.get_deployable_encamped_parties(), [])
+
+
+func test_get_deployable_encamped_parties_excludes_a_party_with_no_available_members() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.adventurers.append(_adventurer("scout_001", "on_expedition"))
+	session.parties.append(
+		_party("busy_party", ["scout_001"], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	assert_eq(session.get_deployable_encamped_parties(), [])
+
+
+func test_get_deployable_encamped_parties_includes_a_party_with_an_available_member() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("ready_party", ["warrior_001"], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	var deployable: Array[Dictionary] = session.get_deployable_encamped_parties()
+
+	assert_eq(deployable.size(), 1)
+	assert_eq(deployable[0].id, "ready_party")
+
+
+func test_deploy_party_rejects_an_unknown_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.deploy_party("does_not_exist"))
+	assert_eq(session.selected_party_id, "")
+
+
+func test_deploy_party_rejects_an_ineligible_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("empty_party", [] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	assert_false(session.deploy_party("empty_party"))
+	assert_eq(session.selected_party_id, "")
+
+
+func test_deploy_party_deploys_an_eligible_party_and_leaves_others_untouched() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("ready_party", ["warrior_001"], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+	session.parties.append(
+		_party("other_party", ["warrior_001"], GameSessionScript.GOBLIN_CAMP_ID, false)
+	)
+
+	assert_true(session.deploy_party("ready_party"))
+
+	assert_eq(session.selected_party_id, "ready_party")
+	var deployed_party: Dictionary = session.get_party("ready_party")
+	assert_true(deployed_party.deployed)
+	assert_eq(deployed_party.location_id, GameSessionScript.STARTING_SETTLEMENT_ID)
+	assert_eq(deployed_party.world_position, GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION)
+
+	var other_party: Dictionary = session.get_party("other_party")
+	assert_false(other_party.deployed, "Deploying one party must not affect another")
+	assert_eq(
+		other_party.location_id,
+		GameSessionScript.GOBLIN_CAMP_ID,
+		"Deploying one party must not affect another"
+	)

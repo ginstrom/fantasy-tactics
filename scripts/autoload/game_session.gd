@@ -38,6 +38,12 @@ const DEFAULT_WARRIOR := {
 	"name": "Warrior",
 	"class": "warrior",
 	"weapon": "sword",
+	"level": 1,
+	"availability_status": "available",
+	# TBD: stat block. Placeholder only; does not affect combat yet.
+	"stats": {},
+	# TBD: leveling/progression data. Placeholder only; does not affect combat yet.
+	"progression": {},
 }
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
@@ -87,6 +93,11 @@ func create_party() -> bool:
 		"deployed": false,
 		"travel_route": [] as Array[Vector2i],
 		"movement_spent": false,
+		"name": "Party 1",
+		# TBD: party-level progression data. Placeholder only.
+		"progression": {},
+		# TBD: free-form party metadata. Placeholder only.
+		"metadata": {},
 	})
 	selected_party_id = FIRST_PARTY_ID
 	return true
@@ -97,6 +108,40 @@ func get_selected_party() -> Dictionary:
 	if party_index == -1:
 		return {}
 	return parties[party_index]
+
+
+func get_party(party_id: String) -> Dictionary:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return {}
+	return parties[party_index].duplicate(true)
+
+
+func get_adventurer(adventurer_id: String) -> Dictionary:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return {}
+	return adventurers[adventurer_index].duplicate(true)
+
+
+func get_deployable_encamped_parties() -> Array[Dictionary]:
+	var deployable: Array[Dictionary] = []
+	for party in parties:
+		if _is_party_eligible_for_deployment(party):
+			deployable.append(party.duplicate(true))
+	return deployable
+
+
+func deploy_party(party_id: String) -> bool:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1 or not _is_party_eligible_for_deployment(parties[party_index]):
+		return false
+
+	selected_party_id = party_id
+	parties[party_index].deployed = true
+	parties[party_index].location_id = STARTING_SETTLEMENT_ID
+	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
+	return true
 
 
 func get_available_adventurers() -> Array[Dictionary]:
@@ -233,17 +278,40 @@ func return_deployed_party_to_settlement() -> bool:
 
 
 func _get_selected_party_index() -> int:
+	return _get_party_index(selected_party_id)
+
+
+func _get_party_index(party_id: String) -> int:
 	for party_index in parties.size():
-		if parties[party_index].id == selected_party_id:
+		if parties[party_index].id == party_id:
 			return party_index
 	return -1
 
 
+func _get_adventurer_index(adventurer_id: String) -> int:
+	for adventurer_index in adventurers.size():
+		if adventurers[adventurer_index].id == adventurer_id:
+			return adventurer_index
+	return -1
+
+
 func _has_adventurer(adventurer_id: String) -> bool:
+	return _get_adventurer_index(adventurer_id) != -1
+
+
+func _party_has_available_member(party: Dictionary) -> bool:
 	for adventurer in adventurers:
-		if adventurer.id == adventurer_id:
+		if adventurer.id in party.member_ids and adventurer.availability_status == "available":
 			return true
 	return false
+
+
+func _is_party_eligible_for_deployment(party: Dictionary) -> bool:
+	return (
+		party.location_id == STARTING_SETTLEMENT_ID
+		and not party.deployed
+		and _party_has_available_member(party)
+	)
 
 
 func _is_adventurer_assigned(adventurer_id: String) -> bool:
