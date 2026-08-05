@@ -3,9 +3,9 @@ extends Control
 ## Shows the roster of a single party (read from GameManager.route_context_id)
 ## and mirrors the selected member into the shared InformationPanel, the same
 ## selection pattern Parties uses for parties (see parties.gd). Add Member is
-## a disabled placeholder for an encamped party (membership changes are out
-## of scope for this slice) and hidden entirely for a deployed one, since you
-## can't add a member to a party that's out in the field.
+## hidden entirely for a deployed party, since you can't add a member to a
+## party that's out in the field, and disabled for an encamped party with no
+## available adventurer left to add.
 
 @onready var party_name_label: Label = $Center/VBox/PartyNameLabel
 @onready var member_list: VBoxContainer = $Center/VBox/MemberList
@@ -37,10 +37,12 @@ func refresh() -> void:
 	else:
 		party_name_label.text = party.name
 		_rebuild_member_rows(party.member_ids)
-	# A deployed party is out in the field; Add Member (already a disabled
-	# placeholder for an encamped party) doesn't even make sense to offer,
-	# so it disappears entirely rather than merely staying disabled.
+	# A deployed party is out in the field; Add Member doesn't even make
+	# sense to offer, so it disappears entirely rather than merely staying
+	# disabled. An encamped party with nobody left to recruit keeps the
+	# button visible but disabled, so its presence isn't a mystery.
 	add_member_button.visible = not party.get("deployed", false)
+	add_member_button.disabled = GameSession.get_available_adventurers().is_empty()
 	_refresh_selection()
 
 
@@ -90,6 +92,10 @@ func _refresh_selection() -> void:
 
 func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
 	GameManager.go_to_unit_details(adventurer_id)
+
+
+func _on_add_member_pressed() -> void:
+	GameManager.go_to_add_member(party_id)
 
 
 ## Reachable from both Parties (an encamped party) and, since World Map's

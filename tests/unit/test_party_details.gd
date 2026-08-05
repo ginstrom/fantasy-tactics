@@ -27,14 +27,33 @@ func test_party_details_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
-func test_add_member_is_present_but_disabled_and_labelled_with_its_own_name() -> void:
+func test_add_member_is_enabled_for_an_encamped_party_with_an_available_adventurer() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
-	assert_true(add_button.visible, "Add Member must still be offered for an encamped party")
-	assert_true(add_button.disabled, "Add Member must not be functional in this slice")
+	assert_true(add_button.visible, "Add Member must be offered for an encamped party")
+	assert_false(add_button.disabled, "An available adventurer exists, so Add Member must be usable")
 	assert_eq(add_button.text, "party_details.add_member")
+
+
+func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	assert_true(add_button.visible)
+	assert_true(add_button.disabled, "The only adventurer is already a member of this party")
+
+
+func test_pressing_add_member_routes_to_the_add_member_screen_with_this_partys_id() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	screen.get_node("Center/VBox/AddMemberButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 
 
 func test_add_member_is_hidden_entirely_for_a_deployed_party() -> void:
