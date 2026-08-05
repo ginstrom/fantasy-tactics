@@ -155,6 +155,8 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	battlefield._apply_battle_outcome(true)
 
 	assert_true(GameSession.is_encounter_complete("goblin_camp"))
+	assert_eq(GameSession.pending_reward, 10, "Victory should queue the goblin camp's fixed reward")
+	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 
 func test_apply_battle_outcome_false_returns_the_party_home_without_completing() -> void:
@@ -170,3 +172,5 @@ func test_apply_battle_outcome_false_returns_the_party_home_without_completing()
 
 	assert_false(GameSession.has_deployed_party())
 	assert_false(GameSession.is_encounter_complete("goblin_camp"))
+	assert_eq(GameSession.gold, 0, "Defeat must not queue or bank any gold")
+	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue or bank any gold")

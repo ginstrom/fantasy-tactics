@@ -80,6 +80,24 @@ func test_enter_starting_settlement_returns_party_before_changing_scene() -> voi
 	assert_false(GameSession.has_deployed_party())
 
 
+func test_go_to_encampment_deposits_pending_gold_once() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.go_to_encampment()
+
+	assert_eq(GameSession.gold, 10, "Entering the encampment must bank the queued reward")
+	assert_eq(GameSession.pending_reward, 0)
+
+	manager.go_to_encampment()
+
+	assert_eq(GameSession.gold, 10, "A second visit must not pay the reward again")
+	assert_eq(GameSession.pending_reward, 0)
+
+
 func test_fail_battle_abandons_the_encounter_and_returns_the_party_home() -> void:
 	GameSession.reset()
 	GameSession.create_party()

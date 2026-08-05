@@ -346,3 +346,65 @@ func test_get_expedition_returns_a_record_that_can_be_mutated_without_affecting_
 		3,
 		"Mutating a nested dictionary in a returned record must not affect the catalog"
 	)
+
+
+func test_new_session_has_zero_gold_and_pending_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.gold, 0)
+	assert_eq(session.pending_reward, 0)
+
+
+func test_reset_clears_gold_and_pending_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 5
+	session.pending_reward = 5
+
+	session.reset()
+
+	assert_eq(session.gold, 0)
+	assert_eq(session.pending_reward, 0)
+
+
+func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(session.pending_reward, 10, "Victory should queue the goblin camp's fixed reward")
+	assert_eq(session.gold, 0, "Completing an encounter must not bank gold directly")
+	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
+
+
+func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	var deposited: int = session.deposit_pending_reward()
+
+	assert_eq(deposited, 10)
+	assert_eq(session.gold, 10)
+	assert_eq(session.pending_reward, 0)
+
+	var second_deposit: int = session.deposit_pending_reward()
+
+	assert_eq(second_deposit, 0, "A second deposit must not pay again")
+	assert_eq(session.gold, 10, "Gold must not change on a second deposit")
+
+
+func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.abandon_current_encounter()
+
+	assert_eq(session.gold, 0)
+	assert_eq(session.pending_reward, 0)
+	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")

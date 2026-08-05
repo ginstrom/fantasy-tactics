@@ -45,6 +45,8 @@ var selected_party_id: String = ""
 var selected_encounter: String = ""
 var completed_encounters: Array[String] = []
 var world_turn: int = 1
+var gold: int = 0
+var pending_reward: int = 0
 
 
 func _init() -> void:
@@ -63,6 +65,8 @@ func reset() -> void:
 	selected_encounter = ""
 	completed_encounters = []
 	world_turn = 1
+	gold = 0
+	pending_reward = 0
 
 
 func create_party() -> bool:
@@ -252,13 +256,24 @@ func enter_encounter(encounter_id: String) -> void:
 
 
 func complete_current_encounter() -> void:
-	if selected_encounter != "" and not completed_encounters.has(selected_encounter):
+	if selected_encounter == "":
+		return
+	var expedition := get_expedition(selected_encounter)
+	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
+	pending_reward = expedition.get("reward", 0)
 	selected_encounter = ""
 
 
 func abandon_current_encounter() -> void:
 	selected_encounter = ""
+
+
+func deposit_pending_reward() -> int:
+	var deposited := pending_reward
+	gold += deposited
+	pending_reward = 0
+	return deposited
 
 
 func is_encounter_complete(encounter_id: String) -> bool:
