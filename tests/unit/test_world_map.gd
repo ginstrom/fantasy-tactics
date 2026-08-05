@@ -120,36 +120,33 @@ func test_clicking_the_committed_destination_again_takes_one_manual_step() -> vo
 	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(2, 0)])
 
 
-func test_clicking_the_party_with_a_route_enters_retargeting_without_moving() -> void:
+func test_clicking_the_party_with_a_route_again_cancels_it() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
 
 	world_map._handle_tile_click(world_map.party_position)
 
-	assert_true(world_map.is_setting_route)
-	assert_eq(world_map.party_position, Vector2i(0, 0))
-	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)])
+	assert_eq(world_map.party_position, Vector2i(0, 0), "Canceling a route must not move the party")
+	assert_eq(GameSession.get_deployed_party_route(), [] as Array[Vector2i])
+	assert_true(world_map.party_selected, "Party should remain selected after canceling its route")
 
 
-func test_choosing_a_new_destination_while_retargeting_replaces_the_route() -> void:
+func test_choosing_a_new_destination_after_a_route_is_set_replaces_it() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
-	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._handle_tile_click(Vector2i(0, 2))
 
-	assert_false(world_map.is_setting_route)
 	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(0, 1), Vector2i(0, 2)])
 
 
-func test_right_click_cancels_retargeting_and_preserves_the_route() -> void:
+func test_right_click_cancels_the_hover_preview_and_preserves_the_route() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
-	world_map._handle_tile_click(world_map.party_position)
 	world_map._update_hover_route(Vector2i(0, 2))
 	var right_click := InputEventMouseButton.new()
 	right_click.button_index = MOUSE_BUTTON_RIGHT
@@ -157,7 +154,6 @@ func test_right_click_cancels_retargeting_and_preserves_the_route() -> void:
 
 	world_map._unhandled_input(right_click)
 
-	assert_false(world_map.is_setting_route)
 	assert_eq(world_map.hover_route, [] as Array[Vector2i])
 	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)])
 	assert_false(
@@ -194,14 +190,14 @@ func test_get_route_destination_returns_the_final_route_point() -> void:
 	assert_eq(world_map.get_route_destination(), Vector2i(2, 0))
 
 
-func test_cancel_route_setting_clears_only_the_transient_flag() -> void:
+func test_cancel_route_setting_clears_only_the_transient_hover_preview() -> void:
 	var world_map := _make_world_map()
 	GameSession.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i])
-	world_map.is_setting_route = true
+	world_map.hover_route = [Vector2i(2, 0)] as Array[Vector2i]
 
 	world_map.cancel_route_setting()
 
-	assert_false(world_map.is_setting_route)
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
 	assert_eq(
 		GameSession.get_deployed_party_route(),
 		[Vector2i(1, 0)],
@@ -380,7 +376,6 @@ func test_hover_route_preview_does_not_touch_the_committed_route() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
-	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._update_hover_route(Vector2i(0, 2))
 
@@ -392,7 +387,7 @@ func test_hover_route_preview_does_not_touch_the_committed_route() -> void:
 	)
 
 
-func test_hover_preview_does_not_update_after_a_route_is_committed() -> void:
+func test_hover_preview_updates_immediately_after_a_route_is_committed() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(1, 0))
@@ -401,8 +396,8 @@ func test_hover_preview_does_not_update_after_a_route_is_committed() -> void:
 
 	assert_eq(
 		world_map.hover_route,
-		[] as Array[Vector2i],
-		"Hover preview must stay off after a commit until the party is reselected"
+		[Vector2i(1, 0), Vector2i(2, 0)],
+		"The party stays selected after a commit, so hovering keeps previewing new routes"
 	)
 
 
@@ -438,32 +433,47 @@ func test_deselecting_the_party_clears_the_hover_preview() -> void:
 	assert_eq(world_map.hover_route, [] as Array[Vector2i])
 
 
-func test_route_line_is_hidden_after_a_route_is_committed() -> void:
+func test_route_line_remains_visible_after_a_route_is_committed() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._handle_tile_click(Vector2i(1, 0))
-
-	assert_eq(
-		world_map.get_node("Routes").get_child_count(),
-		0,
-		"The route affordance must disappear once a route is committed"
-	)
-
-
-func test_route_line_reappears_when_the_party_is_reselected() -> void:
-	var world_map: Node2D = WorldMapScene.instantiate()
-	add_child_autofree(world_map)
-	world_map._handle_tile_click(world_map.party_position)
-	world_map._handle_tile_click(Vector2i(1, 0))
-
-	world_map._handle_tile_click(world_map.party_position)
 
 	assert_true(
 		world_map.get_node("Routes").get_child_count() > 0,
-		"Reselecting the party must show the existing route again"
+		"A finalized route must remain visible on the map"
 	)
+
+
+func test_route_line_remains_visible_after_deselecting_with_right_click() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+
+	world_map._unhandled_input(right_click)
+
+	assert_false(world_map.party_selected)
+	assert_true(
+		world_map.get_node("Routes").get_child_count() > 0,
+		"An existing route must stay visible even after the party is deselected"
+	)
+
+
+func test_route_line_disappears_after_canceling_it_with_a_zero_step_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+
+	world_map._handle_tile_click(world_map.party_position)
+	await get_tree().process_frame
+
+	assert_eq(world_map.get_node("Routes").get_child_count(), 0)
 
 
 func test_pressing_end_turn_advances_the_turn_without_a_route() -> void:

@@ -31,7 +31,6 @@ const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
 var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
-var is_setting_route: bool = false
 var hover_route: Array[Vector2i] = []
 
 @onready var tile_container: Node2D = $Tiles
@@ -138,14 +137,11 @@ func get_route_destination() -> Vector2i:
 
 
 func cancel_route_setting() -> void:
-	is_setting_route = false
 	hover_route = []
 
 
 func _has_route_affordance() -> bool:
-	if not party_selected or not GameSession.has_deployed_party():
-		return false
-	return is_setting_route or GameSession.get_deployed_party_route().is_empty()
+	return party_selected and GameSession.has_deployed_party()
 
 
 func _update_hover_route(tile_pos: Vector2i) -> void:
@@ -177,7 +173,8 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
-			is_setting_route = true
+			GameSession.clear_deployed_party_route()
+			hover_route = []
 			_draw_routes()
 			_update_highlights()
 			return
@@ -203,7 +200,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if not party_selected:
 		return
 
-	if tile_pos == get_route_destination() and not is_setting_route:
+	if tile_pos == get_route_destination():
 		if GameSession.take_next_route_step():
 			party_position = GameSession.get_deployed_party_position()
 			hover_route = []
@@ -213,14 +210,12 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			board_changed.emit()
 		return
 
-	if is_setting_route or GameSession.get_deployed_party_route().is_empty():
-		var route := build_route(party_position, tile_pos)
-		if not route.is_empty() and GameSession.set_deployed_party_route(route):
-			is_setting_route = false
-			hover_route = []
-			_draw_markers()
-			_draw_routes()
-			_update_highlights()
+	var route := build_route(party_position, tile_pos)
+	if not route.is_empty() and GameSession.set_deployed_party_route(route):
+		hover_route = []
+		_draw_markers()
+		_draw_routes()
+		_update_highlights()
 
 
 func _on_encounter_activated(encounter_id: String) -> void:
@@ -294,11 +289,10 @@ func _draw_routes() -> void:
 	for child in route_container.get_children():
 		child.queue_free()
 
-	if not _has_route_affordance():
-		return
-
 	var route: Array[Vector2i] = (
-		hover_route if not hover_route.is_empty() else GameSession.get_deployed_party_route()
+		hover_route
+		if _has_route_affordance() and not hover_route.is_empty()
+		else GameSession.get_deployed_party_route()
 	)
 	if route.is_empty():
 		return
