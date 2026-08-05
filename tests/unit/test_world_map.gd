@@ -426,6 +426,15 @@ func test_clicking_selected_party_at_settlement_emits_settlement_activated() -> 
 	)
 
 
+func test_world_map_contains_the_information_panel_showing_the_current_gold_total() -> void:
+	GameSession.gold = 25
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

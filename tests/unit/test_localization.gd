@@ -6,6 +6,7 @@ const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 const PartyManagerScene := preload("res://scenes/ui/party_manager.tscn")
 const EncampmentScene := preload("res://scenes/ui/encampment.tscn")
 const StartingSettlementScene := preload("res://scenes/local/starting_settlement.tscn")
+const InformationPanelScene := preload("res://scenes/ui/information_panel.tscn")
 
 
 func test_translation_keys_resolve_to_expected_english_copy() -> void:
@@ -81,6 +82,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("encampment.status.no_party"), "Create a party before departing.")
 	assert_eq(tr("encampment.status.ready"), "Your party is ready to depart.")
 	assert_eq(tr("encampment.depart"), "Depart")
+	assert_eq(tr("information.title"), "Information")
+	assert_eq(tr("information.gold") % 25, "Gold: 25")
 	assert_eq(tr("settlement.title"), "Starting Settlement")
 	assert_eq(tr("settlement.description"), "Prepare your party before setting out.")
 	assert_eq(tr("settlement.encampment"), "Enter Encampment")
@@ -185,6 +188,13 @@ func test_encampment_uses_translation_keys_not_literal_copy() -> void:
 		encampment.get_node("Center/VBox/ManagePartyButton").text, "encampment.manage_party"
 	)
 	assert_eq(encampment.get_node("Center/VBox/DepartButton").text, "encampment.depart")
+
+
+func test_information_panel_uses_translation_keys_not_literal_copy() -> void:
+	var panel: Control = InformationPanelScene.instantiate()
+	add_child_autofree(panel)
+
+	assert_eq(panel.get_node("Content/Title").text, "information.title")
 
 
 func test_starting_settlement_uses_translation_keys_not_literal_copy() -> void:

@@ -26,6 +26,18 @@ func test_encampment_disables_depart_until_party_has_a_member() -> void:
 	assert_false(screen.get_node("Center/VBox/DepartButton").disabled)
 
 
+func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total() -> void:
+	GameSession.reset()
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var panel: Control = screen.get_node("InformationPanel")
+
+	GameSession.gold = 25
+	screen.refresh()
+
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)

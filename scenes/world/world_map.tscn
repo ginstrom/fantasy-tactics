@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
+[ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 
 [node name="WorldMap" type="Node2D"]
 script = ExtResource("1_world_map")
@@ -36,6 +37,12 @@ offset_top = 56.0
 offset_right = 1264.0
 offset_bottom = 88.0
 text = "world_map.end_turn"
+
+[node name="InformationPanel" parent="HUD" instance=ExtResource("2_information_panel")]
+offset_left = 984.0
+offset_top = 96.0
+offset_right = 1264.0
+offset_bottom = 176.0
 
 [connection signal="encounter_activated" from="." to="." method="_on_encounter_activated"]
 [connection signal="settlement_activated" from="." to="." method="_on_settlement_activated"]

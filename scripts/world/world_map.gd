@@ -38,6 +38,7 @@ var hover_route: Array[Vector2i] = []
 @onready var marker_container: Node2D = $Markers
 @onready var route_container: Node2D = $Routes
 @onready var turn_label: Label = $HUD/TurnLabel
+@onready var information_panel: PanelContainer = $HUD/InformationPanel
 
 
 func _ready() -> void:
@@ -48,6 +49,7 @@ func _ready() -> void:
 	_draw_routes()
 	_update_highlights()
 	_update_turn_label()
+	information_panel.refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -2,6 +2,7 @@ extends Control
 
 @onready var status: Label = $Center/VBox/Status
 @onready var depart_button: Button = $Center/VBox/DepartButton
+@onready var information_panel: PanelContainer = $InformationPanel
 
 
 func _ready() -> void:
@@ -18,6 +19,7 @@ func refresh() -> void:
 	var can_depart := GameSession.can_depart_selected_party()
 	depart_button.disabled = not can_depart
 	status.text = "encampment.status.ready" if can_depart else "encampment.status.no_party"
+	information_panel.refresh()
 
 
 func _on_manage_party_pressed() -> void:

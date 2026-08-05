@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/information_panel.gd" id="1_information_panel"]
+
+[node name="InformationPanel" type="PanelContainer"]
+layout_mode = 3
+anchors_preset = 0
+custom_minimum_size = Vector2(200, 0)
+script = ExtResource("1_information_panel")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Content"]
+layout_mode = 2
+text = "information.title"
+horizontal_alignment = 1
+
+[node name="Gold" type="Label" parent="Content"]
+layout_mode = 2
+text = "information.gold"
+horizontal_alignment = 1
