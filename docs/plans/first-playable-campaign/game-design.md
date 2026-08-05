@@ -60,12 +60,10 @@ Start Menu
 
 Party creation and Warrior assignment, previously reachable from an
 Encampment "Party Manager" screen, are superseded by the Milestone 4
-encampment UI shell below: Party Manager now only redirects to Parties, so an
-ordinary New Game currently has no in-game way to create or assign a party.
-Reaching the Deploy Party step above with a real party still requires seeding
-one first through the debug F9 menu's Party Ready to Depart scenario or the
-automated tests, until Milestone 4's deferred Add Member work restores that
-step to ordinary play.
+encampment UI shell below. Party Details now offers Add Member for an
+encamped party, restoring the ordinary in-game assignment path. The next
+encampment work adds the complementary roster-first path and recruitment so a
+new campaign can grow beyond its starting Warrior without debug tooling.
 
 `GameSession` owns the one-Warrior roster, the single player-created party,
 its deployment state, world position, committed travel route, movement spent,
@@ -260,16 +258,15 @@ language rather than creating bespoke art for every prototype variation.
 
 ## Milestone 4: Encampment and party management
 
-**Status: encampment UI shell and party browsing/deployment completed;
-decision layer next.** The prototype already has a roster, an encampment UI
-shell (Units, Buildings, Trade, Deploy Party), and Units -> Parties -> Party
-Details -> Unit Details browsing with deliberate party deployment. Party
-creation and Warrior assignment, previously available from ordinary play via
-a Party Manager screen, are not currently reachable from ordinary play; they
-exist only through debug tooling and tests until the Roster/Add Member work
-below lands. The milestone does not yet offer a four-member starting party,
-gold spending, development, equipment, recruitment, or a settlement
-investment.
+**Status: encampment UI shell, party browsing/deployment, and party-first Add
+Member completed; roster and recruitment next.** The prototype already has an
+encampment UI shell (Units, Buildings, Trade, Deploy Party) and Units ->
+Parties -> Party Details -> Unit Details browsing with deliberate party
+deployment. An encamped party can use Add Member to assign an existing
+available adventurer. The next slice activates Roster and Recruitment: it
+adds a roster-first assignment path and a small gold-costed, finite candidate
+list. It does not yet offer a four-member starting party, development,
+equipment, buildings, trade, or a settlement investment.
 
 ### Player outcome
 
@@ -278,8 +275,18 @@ encampment investment that changes future expeditions.
 
 ### Design scope
 
-- Provide a clear roster and party-formation view for the initial four
-  characters.
+- Provide a clear roster and party-formation view. Roster lists each
+  adventurer's name, class, level, availability, and current party (or
+  Unassigned), and routes to Unit Details.
+- From Unit Details opened through Roster, let an available unassigned unit be
+  assigned to a chosen encamped party. On success return to Roster, whose
+  Party column shows the new assignment. Keep the existing Party Details ->
+  Add Member route as the complementary party-first path.
+- Add Recruitment as a fixed first candidate catalogue: three individually
+  identified Warrior candidates, each costing 10 gold. A successful purchase
+  deducts gold once, removes that candidate, adds the adventurer to Roster,
+  and returns there. Future town size and buildings may add or filter
+  candidates, but are not implemented in this slice.
 - Establish the encampment's strategic UI shell before adding those systems:
   Units, Buildings, Trade, and Deploy Party. The information panel always
   shows player name and banked gold; selecting a party or unit adds that
@@ -324,20 +331,14 @@ that do not exist yet.
   one gold-funded improvement has a proven expedition-facing benefit.
 - **Trade:** buy/sell inventory, prices, stock, and equipment ownership are
   TBD. Do not invent an item economy before the first improvement loop.
-- **Roster:** the full cross-party roster table, filtering, sorting, and party
-  assignment controls are TBD. The unit-detail data model is introduced now
-  so this screen can be added without changing identifiers or ownership.
-- **Recruitment:** recruit catalogue, costs, availability, and recruitment
-  outcomes are TBD. It follows the reward/improvement loop, not precedes it.
-- **Add Member:** eligibility filtering, capacity rules, assignment UI, and
-  removal UI are TBD. Unlike the other deferred surfaces, this one is a
-  regression, not just an absence: the one-Warrior create/assign flow that
-  used to run through the Party Manager screen was removed when Party
-  Manager became a redirect to Parties, and nothing replaced it for ordinary
-  play. Debug scenarios and tests still call the underlying `GameSession`
-  APIs directly, so a party can only exist in ordinary play today if one was
-  seeded through those paths. Restoring an in-game path to a real party is
-  part of this deferred work, not an optional follow-up.
+- **Roster and Recruitment growth:** this slice intentionally has no search,
+  pagination, random offers, town-size rules, building prerequisites, or
+  class-specific combat behavior. Later town growth can expand or filter the
+  fixed recruitment catalogue without changing ownership or screen routing.
+- **Party management limits:** party capacity, removal, reassignment between
+  parties, injuries, and availability rules beyond the current available
+  status remain TBD. The existing Add Member flow is the party-first
+  assignment path; Roster's Unit Details action is the unit-first path.
 
 The durable model direction is deliberately modest. Parties keep stable IDs,
 display names, member IDs, location/deployment state, and placeholder fields

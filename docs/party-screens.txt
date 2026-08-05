@@ -30,9 +30,9 @@ Units
 
                          Units
 
-                         [Roster] (TBD, disabled)
+                         [Roster]
                          [Parties]
-                         [Recruitment] (TBD, disabled)
+                         [Recruitment]
 
                          [Back]
 
@@ -93,13 +93,15 @@ Party Details
                                       Level: 1
                                       [View]
 
-                         [Add Member] (TBD, disabled for encamped parties)
+                         [Add Member]
                          [Back]
 
                          Empty state: This party has no members.
 
-                         For a deployed party, [Add Member] is hidden and
-                         [Back] returns to World Map rather than Parties.
+                         For an encamped party with no unassigned unit, [Add
+                         Member] is disabled. For a deployed party, it is
+                         hidden and [Back] returns to World Map rather than
+                         Parties.
 
 
 Unit Details
@@ -124,7 +126,68 @@ Unit Details
                          HP: 3
                          Move: 3
 
+                         Party
+                         [Party 1 v]
+                         [Add to Party]
+
                          [Back]
+
+                         When opened from Roster, an available, unassigned
+                         unit can be assigned to an encamped party. Successful
+                         assignment returns to Roster, where the Party column
+                         shows the new party. The party picker and action are
+                         hidden for assigned or unavailable units.
+
+
+Roster
+======
+
+                                      Player: Player
+                                      Gold: 10
+
+                         Roster
+
+                         TableView
+                         +----------------------+-----------+-------+------------+------------+
+                         | Name                 | Class     | Level | Status     | Party      |
+                         +----------------------+-----------+-------+------------+------------+
+                         | Warrior              | Warrior   |     1 | Available  | Unassigned |
+                         | Warrior 2            | Warrior   |     1 | Available  | Party 1    |
+                         +----------------------+-----------+-------+------------+------------+
+
+                         Select a unit to show its details at right.
+                         Double-click a unit, or use [View], to open it.
+
+                         [Back]
+
+                         Empty state: No adventurers are in the roster.
+
+
+Recruitment
+===========
+
+                                      Player: Player
+                                      Gold: 10
+
+                         Recruitment
+
+                         TableView
+                         +----------------------+-----------+-------+----------+
+                         | Name                 | Class     | Level | Cost     |
+                         +----------------------+-----------+-------+----------+
+                         | Warrior 2            | Warrior   |     1 | 10 gold  |
+                         | Warrior 3            | Warrior   |     1 | 10 gold  |
+                         | Warrior 4            | Warrior   |     1 | 10 gold  |
+                         +----------------------+-----------+-------+----------+
+
+                         Select a candidate to show its cost at right.
+                         [Recruit for 10 gold]
+
+                         The action is disabled when gold is insufficient.
+                         Recruiting removes that candidate, adds the unit to
+                         Roster, and returns there.
+
+                         Empty state: No recruits are currently available.
 
 
 Deploy Party
@@ -158,13 +221,16 @@ TableView conventions
 
 * Column titles are visible and sortable unless a screen marks a column as
   non-sortable.
-* In Parties and Party Details, the first click selects a row and updates the
+* In Roster, Parties, Party Details, and Recruitment, the first click selects
+  a row and updates the
   information panel; activation or the panel action opens the selected party
-  or unit. In Deploy Party, selecting an eligible row deploys it immediately.
+  or unit. Recruitment's panel action hires a selected affordable candidate.
+  In Deploy Party, selecting an eligible row deploys it immediately.
 * Screen controllers provide stable row IDs and resolve them through
   `GameSession`; `TreeItem` objects never hold authoritative game state.
 * Search fields, pagination, multi-selection, and inline editing are not part
-  of these encampment screens yet.
+  of these encampment screens yet. Recruitment candidates are a fixed initial
+  set; future town size and buildings may change who is available.
 
 
 Deployment eligibility
