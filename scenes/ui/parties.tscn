@@ -1,16 +1,16 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/ui/encampment.gd" id="1_encampment"]
+[ext_resource type="Script" path="res://scripts/ui/parties.gd" id="1_parties"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 
-[node name="Encampment" type="Control"]
+[node name="Parties" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_encampment")
+script = ExtResource("1_parties")
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -26,26 +26,22 @@ theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="Center/VBox"]
 layout_mode = 2
-text = "encampment.title"
+text = "parties.title"
 horizontal_alignment = 1
 
-[node name="UnitsButton" type="Button" parent="Center/VBox"]
+[node name="PartyList" type="VBoxContainer" parent="Center/VBox"]
 layout_mode = 2
-text = "encampment.units"
+theme_override_constants/separation = 8
 
-[node name="BuildingsButton" type="Button" parent="Center/VBox"]
+[node name="EmptyLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
-disabled = true
-text = "encampment.buildings"
+visible = false
+text = "parties.empty"
+horizontal_alignment = 1
 
-[node name="TradeButton" type="Button" parent="Center/VBox"]
+[node name="BackButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
-disabled = true
-text = "encampment.trade"
-
-[node name="DeployPartyButton" type="Button" parent="Center/VBox"]
-layout_mode = 2
-text = "encampment.deploy_party"
+text = "ui.back"
 
 [node name="InformationPanel" parent="." instance=ExtResource("2_information_panel")]
 layout_mode = 1
@@ -55,8 +51,7 @@ anchor_right = 1.0
 offset_left = -240.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = 96.0
+offset_bottom = 160.0
 grow_horizontal = 0
 
-[connection signal="pressed" from="Center/VBox/UnitsButton" to="." method="_on_units_button_pressed"]
-[connection signal="pressed" from="Center/VBox/DeployPartyButton" to="." method="_on_deploy_party_button_pressed"]
+[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

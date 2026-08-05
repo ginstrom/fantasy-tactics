@@ -3,8 +3,9 @@ extends GutTest
 const StartMenuScene := preload("res://scenes/ui/start_menu.tscn")
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const WorldMapScene := preload("res://scenes/world/world_map.tscn")
-const PartyManagerScene := preload("res://scenes/ui/party_manager.tscn")
 const EncampmentScene := preload("res://scenes/ui/encampment.tscn")
+const UnitsScene := preload("res://scenes/ui/units.tscn")
+const PartiesScene := preload("res://scenes/ui/parties.tscn")
 const StartingSettlementScene := preload("res://scenes/local/starting_settlement.tscn")
 const InformationPanelScene := preload("res://scenes/ui/information_panel.tscn")
 
@@ -80,10 +81,15 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("party.remove_warrior"), "Remove Warrior")
 	assert_eq(tr("ui.back"), "Back")
 	assert_eq(tr("encampment.title"), "Encampment")
-	assert_eq(tr("encampment.manage_party"), "Manage Party")
-	assert_eq(tr("encampment.status.no_party"), "Create a party before departing.")
-	assert_eq(tr("encampment.status.ready"), "Your party is ready to depart.")
-	assert_eq(tr("encampment.depart"), "Depart")
+	assert_eq(tr("encampment.units"), "Units")
+	assert_eq(tr("encampment.buildings"), "Buildings")
+	assert_eq(tr("encampment.trade"), "Trade")
+	assert_eq(tr("encampment.deploy_party"), "Deploy Party")
+	assert_eq(tr("units.title"), "Units")
+	assert_eq(tr("units.parties"), "Parties")
+	assert_eq(tr("parties.title"), "Parties")
+	assert_eq(tr("parties.empty"), "No parties yet.")
+	assert_eq(tr("ui.tbd"), "TBD")
 	assert_eq(tr("information.title"), "Information")
 	assert_eq(tr("information.player") % "Aria", "Player: Aria")
 	assert_eq(tr("information.party") % "Party 1", "Party: Party 1")
@@ -174,27 +180,31 @@ func test_world_map_turn_label_is_built_from_translated_copy() -> void:
 	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 1)
 
 
-func test_party_manager_uses_translation_keys_not_literal_copy() -> void:
-	var party_manager: Control = PartyManagerScene.instantiate()
-	add_child_autofree(party_manager)
-
-	assert_eq(party_manager.get_node("Center/VBox/Title").text, "party.title")
-	assert_eq(party_manager.get_node("Center/VBox/WarriorSummary").text, "party.warrior.summary")
-	assert_eq(party_manager.get_node("Center/VBox/CreatePartyButton").text, "party.create")
-	assert_eq(party_manager.get_node("Center/VBox/AddWarriorButton").text, "party.add_warrior")
-	assert_eq(party_manager.get_node("Center/VBox/RemoveWarriorButton").text, "party.remove_warrior")
-	assert_eq(party_manager.get_node("Center/VBox/BackButton").text, "ui.back")
-
-
 func test_encampment_uses_translation_keys_not_literal_copy() -> void:
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
 
 	assert_eq(encampment.get_node("Center/VBox/Title").text, "encampment.title")
+	assert_eq(encampment.get_node("Center/VBox/UnitsButton").text, "encampment.units")
+	assert_eq(encampment.get_node("Center/VBox/BuildingsButton").text, "encampment.buildings")
+	assert_eq(encampment.get_node("Center/VBox/TradeButton").text, "encampment.trade")
 	assert_eq(
-		encampment.get_node("Center/VBox/ManagePartyButton").text, "encampment.manage_party"
+		encampment.get_node("Center/VBox/DeployPartyButton").text, "encampment.deploy_party"
 	)
-	assert_eq(encampment.get_node("Center/VBox/DepartButton").text, "encampment.depart")
+
+
+func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:
+	var units: Control = UnitsScene.instantiate()
+	add_child_autofree(units)
+	var parties: Control = PartiesScene.instantiate()
+	add_child_autofree(parties)
+
+	assert_eq(units.get_node("Center/VBox/Title").text, "units.title")
+	assert_eq(units.get_node("Center/VBox/PartiesButton").text, "units.parties")
+	assert_eq(units.get_node("Center/VBox/RosterButton").text, "ui.tbd")
+	assert_eq(units.get_node("Center/VBox/RecruitmentButton").text, "ui.tbd")
+	assert_eq(parties.get_node("Center/VBox/Title").text, "parties.title")
+	assert_eq(parties.get_node("Center/VBox/EmptyLabel").text, "parties.empty")
 
 
 func test_information_panel_uses_translation_keys_not_literal_copy() -> void:

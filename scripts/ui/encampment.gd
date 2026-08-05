@@ -1,7 +1,6 @@
 extends Control
 
-@onready var status: Label = $Center/VBox/Status
-@onready var depart_button: Button = $Center/VBox/DepartButton
+@onready var deploy_party_button: Button = $Center/VBox/DeployPartyButton
 @onready var information_panel: PanelContainer = $InformationPanel
 
 
@@ -16,15 +15,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
-	var can_depart := GameSession.can_depart_selected_party()
-	depart_button.disabled = not can_depart
-	status.text = "encampment.status.ready" if can_depart else "encampment.status.no_party"
+	deploy_party_button.disabled = GameSession.get_deployable_encamped_parties().is_empty()
 	information_panel.refresh()
 
 
-func _on_manage_party_pressed() -> void:
-	GameManager.open_party_manager()
+func _on_units_button_pressed() -> void:
+	GameManager.go_to_units()
 
 
-func _on_depart_pressed() -> void:
-	GameManager.depart_selected_party()
+func _on_deploy_party_button_pressed() -> void:
+	GameManager.go_to_deploy_party()
