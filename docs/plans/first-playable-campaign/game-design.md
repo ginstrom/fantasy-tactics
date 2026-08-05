@@ -266,6 +266,14 @@ encampment investment that changes future expeditions.
 
 - Provide a clear roster and party-formation view for the initial four
   characters.
+- Establish the encampment's strategic UI shell before adding those systems:
+  Units, Buildings, Trade, and Deploy Party. The information panel always
+  shows player name and banked gold; selecting a party or unit adds that
+  entity's compact summary and an explicit View action.
+- Make party deployment a deliberate selection: Deploy Party lists only
+  encamped parties with at least one deployable member, then deploys the
+  chosen party to the World Map. This intentionally excludes empty parties
+  and future parties whose members are all dead or incapacitated.
 - Add an intentionally small development choice, such as one recruit,
   training option, skill point, or equipment improvement.
 - Present town growth as card-like buildings and services. Start with one or
@@ -288,6 +296,37 @@ Add portrait, equipment, building-card, and NPC/service art only for choices
 that have survived playtesting. Use the same UI language established in the
 campaign foundation. This is the first point where a small number of
 characterful, durable assets are justified.
+
+### Deferred encampment surfaces and data
+
+The encampment UI shell may show these destinations early to establish the
+campaign's shape, but this first UI slice implements only Units -> Parties ->
+Party Details -> Unit Details and Deploy Party. The remaining destinations
+must remain visibly unavailable or labelled TBD; they must not simulate
+systems that do not exist yet.
+
+- **Buildings:** building cards, construction prerequisites and costs,
+  service effects, upgrade levels, and associated art are TBD. Implement after
+  one gold-funded improvement has a proven expedition-facing benefit.
+- **Trade:** buy/sell inventory, prices, stock, and equipment ownership are
+  TBD. Do not invent an item economy before the first improvement loop.
+- **Roster:** the full cross-party roster table, filtering, sorting, and party
+  assignment controls are TBD. The unit-detail data model is introduced now
+  so this screen can be added without changing identifiers or ownership.
+- **Recruitment:** recruit catalogue, costs, availability, and recruitment
+  outcomes are TBD. It follows the reward/improvement loop, not precedes it.
+- **Add Member:** eligibility filtering, capacity rules, assignment UI, and
+  removal UI are TBD. Existing one-Warrior assignment remains the temporary
+  implementation until roster work begins.
+
+The durable model direction is deliberately modest. Parties keep stable IDs,
+display names, member IDs, location/deployment state, and placeholder fields
+for party-level progression. Adventurers keep stable IDs, display name, class,
+level, availability status, and placeholder combat/progression fields. A
+deployability query—not a UI-specific special case—decides whether an
+encamped party is shown for deployment. This supports future dead,
+incapacitated, and otherwise unavailable members while keeping the current
+prototype's single Warrior immediately usable.
 
 ## Milestone 5: First campaign slice
 
