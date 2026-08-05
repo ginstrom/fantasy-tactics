@@ -5,6 +5,13 @@ extends VBoxContainer
 ## column descriptors and row dictionaries; this control keeps its own copies
 ## so filtering and sorting never change caller-owned data.
 
+signal row_selected(row_id: Variant)
+signal row_activated(row_id: Variant)
+signal selection_changed(row_ids: Array)
+signal cell_edited(row_id: Variant, column_key: StringName, value: Variant)
+signal action_pressed(row_id: Variant, column_key: StringName)
+signal sort_changed(column_key: StringName, ascending: bool)
+
 var row_id_key: StringName = &"id"
 var _show_column_titles: bool = true
 var show_column_titles: bool:
@@ -34,6 +41,10 @@ func _ready() -> void:
 	_tree.column_titles_visible = show_column_titles
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tree.column_title_clicked.connect(_on_column_title_clicked)
+	_tree.item_selected.connect(_on_item_selected)
+	_tree.item_activated.connect(_on_item_activated)
+	_tree.item_edited.connect(_on_item_edited)
+	_tree.button_clicked.connect(_on_button_clicked)
 	add_child(_tree)
 	refresh()
 
@@ -68,6 +79,26 @@ func set_filter(filter_text: String) -> void:
 func clear_filter() -> void:
 	_filter_text = ""
 	refresh()
+
+
+func get_selected_row_ids() -> Array:
+	if not is_instance_valid(_tree):
+		return []
+	var selected_item := _tree.get_selected()
+	if selected_item == null:
+		return []
+	var row_id: Variant = selected_item.get_metadata(0)
+	return [] if row_id == null else [row_id]
+
+
+func get_selected_rows() -> Array[Dictionary]:
+	var selected_rows: Array[Dictionary] = []
+	for row_id in get_selected_row_ids():
+		for source_row in _source_rows:
+			if source_row.get(row_id_key, null) == row_id:
+				selected_rows.append(source_row.duplicate(true))
+				break
+	return selected_rows
 
 
 func refresh() -> void:
@@ -168,6 +199,10 @@ func _render() -> void:
 			var column := _columns[column_index]
 			item.set_text(tree_column_index, _format_cell_value(column, row.get(column.key, null), row))
 			item.set_text_alignment(tree_column_index, column.alignment)
+			item.set_editable(tree_column_index, column.editable and column.type != TableColumn.Type.BUTTON)
+			if column.type == TableColumn.Type.BOOLEAN and column.editable:
+				item.set_cell_mode(tree_column_index, TreeItem.CELL_MODE_CHECK)
+				item.set_checked(tree_column_index, bool(row.get(column.key, false)))
 			if column.type == TableColumn.Type.BUTTON:
 				item.add_button(tree_column_index, _button_icon, column_index, false, column.title)
 		item.set_metadata(0, row.get(row_id_key, null))
@@ -231,3 +266,70 @@ func _on_column_title_clicked(column_index: int, mouse_button_index: int) -> voi
 		_sort_column_index = column_index
 		_sort_ascending = true
 	refresh()
+	sort_changed.emit(_columns[column_index].key, _sort_ascending)
+
+
+func _on_item_selected() -> void:
+	var row_ids := get_selected_row_ids()
+	if row_ids.is_empty():
+		return
+	row_selected.emit(row_ids[0])
+	selection_changed.emit(row_ids)
+
+
+func _on_item_activated() -> void:
+	var row_ids := get_selected_row_ids()
+	if not row_ids.is_empty():
+		row_activated.emit(row_ids[0])
+
+
+func _on_item_edited() -> void:
+	var item := _tree.get_edited()
+	var tree_column_index := _tree.get_edited_column()
+	if item == null or tree_column_index < 0:
+		return
+	_emit_cell_edited(item, tree_column_index)
+
+
+func _emit_cell_edited(item: TreeItem, tree_column_index: int) -> void:
+	var visible_column_indices := _visible_column_indices()
+	if tree_column_index < 0 or tree_column_index >= visible_column_indices.size():
+		return
+	var column := _columns[visible_column_indices[tree_column_index]]
+	if not column.editable:
+		return
+	var row_id: Variant = item.get_metadata(0)
+	if row_id == null:
+		return
+	var parsed_value: Variant = _parse_cell_value(column, item, tree_column_index)
+	if parsed_value == null:
+		return
+	cell_edited.emit(row_id, column.key, parsed_value)
+
+
+func _parse_cell_value(column: TableColumn, item: TreeItem, tree_column_index: int) -> Variant:
+	var text := item.get_text(tree_column_index).strip_edges()
+	match column.type:
+		TableColumn.Type.INTEGER:
+			return text.to_int() if text.is_valid_int() else null
+		TableColumn.Type.FLOAT:
+			return text.to_float() if text.is_valid_float() else null
+		TableColumn.Type.BOOLEAN:
+			return item.is_checked(tree_column_index)
+		TableColumn.Type.TEXT:
+			return text
+	return null
+
+
+func _on_button_clicked(item: TreeItem, tree_column_index: int, button_id: int, _mouse_button_index: int) -> void:
+	if item == null or button_id < 0 or button_id >= _columns.size():
+		return
+	var visible_column_indices := _visible_column_indices()
+	if tree_column_index < 0 or tree_column_index >= visible_column_indices.size():
+		return
+	var column := _columns[button_id]
+	if column.type != TableColumn.Type.BUTTON:
+		return
+	var row_id: Variant = item.get_metadata(0)
+	if row_id != null:
+		action_pressed.emit(row_id, column.key)

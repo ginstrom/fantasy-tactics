@@ -160,3 +160,183 @@ func test_rendered_item_metadata_keeps_the_configured_stable_row_id() -> void:
 
 	var item := (table.get_node("Tree") as Tree).get_root().get_first_child()
 	assert_eq(item.get_metadata(0), "party_001")
+
+
+func test_selecting_a_rendered_row_emits_its_id_and_resolves_its_source_row() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	table.set_columns([name_column])
+	table.set_rows([
+		{"id": "alin", "name": "Alin"},
+		{"id": "borin", "name": "Borin"},
+	])
+	var tree: Tree = table.get_node("Tree")
+	var borin_item := tree.get_root().get_first_child().get_next()
+	watch_signals(table)
+
+	borin_item.select(0)
+	tree.emit_signal("item_selected")
+
+	assert_signal_emitted_with_parameters(table, "row_selected", ["borin"])
+	assert_signal_emitted_with_parameters(table, "selection_changed", [["borin"]])
+	assert_eq(table.get_selected_row_ids(), ["borin"])
+	assert_eq(table.get_selected_rows(), [{"id": "borin", "name": "Borin"}])
+
+
+func test_activating_a_rendered_row_emits_its_stable_id() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	table.set_columns([name_column])
+	table.set_rows([{"id": "alin", "name": "Alin"}])
+	var tree: Tree = table.get_node("Tree")
+	watch_signals(table)
+
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	assert_signal_emitted_with_parameters(table, "row_activated", ["alin"])
+
+
+func test_editing_an_integer_cell_emits_parsed_value_without_mutating_input_rows() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	var level_column := TableColumnDescriptor.new(&"level", "Level", TableColumnDescriptor.Type.INTEGER)
+	level_column.editable = true
+	var rows: Array[Dictionary] = [{"id": "alin", "name": "Alin", "level": 4}]
+	table.set_columns([name_column, level_column])
+	table.set_rows(rows)
+	var tree: Tree = table.get_node("Tree")
+	var item := tree.get_root().get_first_child()
+	watch_signals(table)
+
+	item.set_text(1, "19")
+	table._emit_cell_edited(item, 1)
+
+	assert_signal_emitted_with_parameters(table, "cell_edited", ["alin", &"level", 19])
+	assert_eq(rows, [{"id": "alin", "name": "Alin", "level": 4}])
+
+
+func test_editing_text_float_and_boolean_cells_emits_typed_values() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	name_column.editable = true
+	var rating_column := TableColumnDescriptor.new(&"rating", "Rating", TableColumnDescriptor.Type.FLOAT)
+	rating_column.editable = true
+	var active_column := TableColumnDescriptor.new(&"active", "Active", TableColumnDescriptor.Type.BOOLEAN)
+	active_column.editable = true
+	table.set_columns([name_column, rating_column, active_column])
+	table.set_rows([{"id": "alin", "name": "Alin", "rating": 1.25, "active": false}])
+	var item := (table.get_node("Tree") as Tree).get_root().get_first_child()
+	watch_signals(table)
+
+	item.set_text(0, "Aline")
+	table._emit_cell_edited(item, 0)
+	item.set_text(1, "2.50")
+	table._emit_cell_edited(item, 1)
+	item.set_checked(2, true)
+	table._emit_cell_edited(item, 2)
+
+	assert_signal_emitted_with_parameters(table, "cell_edited", ["alin", &"name", "Aline"], 0)
+	assert_signal_emitted_with_parameters(table, "cell_edited", ["alin", &"rating", 2.5], 1)
+	assert_signal_emitted_with_parameters(table, "cell_edited", ["alin", &"active", true], 2)
+
+
+func test_malformed_editable_numeric_values_emit_no_intent() -> void:
+	var table: Variant = await _make_table()
+	var level_column := TableColumnDescriptor.new(&"level", "Level", TableColumnDescriptor.Type.INTEGER)
+	level_column.editable = true
+	var rating_column := TableColumnDescriptor.new(&"rating", "Rating", TableColumnDescriptor.Type.FLOAT)
+	rating_column.editable = true
+	table.set_columns([level_column, rating_column])
+	table.set_rows([{"id": "alin", "level": 4, "rating": 1.25}])
+	var item := (table.get_node("Tree") as Tree).get_root().get_first_child()
+	watch_signals(table)
+
+	item.set_text(0, "four")
+	table._emit_cell_edited(item, 0)
+	item.set_text(1, "two point five")
+	table._emit_cell_edited(item, 1)
+
+	assert_signal_not_emitted(table, "cell_edited")
+
+
+func test_non_editable_or_invalid_cell_edits_are_ignored() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	table.set_columns([name_column])
+	table.set_rows([{"id": "alin", "name": "Alin"}])
+	var tree: Tree = table.get_node("Tree")
+	var item := tree.get_root().get_first_child()
+	watch_signals(table)
+
+	item.set_text(0, "Changed")
+	table._emit_cell_edited(item, 0)
+	table._emit_cell_edited(item, -1)
+
+	assert_signal_not_emitted(table, "cell_edited")
+
+
+func test_button_click_emits_action_intent_without_changing_rows() -> void:
+	var table: Variant = await _make_table()
+	var action_column := TableColumnDescriptor.new(&"action", "Action", TableColumnDescriptor.Type.BUTTON)
+	action_column.button_text = func(_row: Dictionary) -> String: return "View"
+	var rows: Array[Dictionary] = [{"id": "alin", "action": ""}]
+	table.set_columns([action_column])
+	table.set_rows(rows)
+	var tree: Tree = table.get_node("Tree")
+	var item := tree.get_root().get_first_child()
+	watch_signals(table)
+
+	tree.emit_signal("button_clicked", item, 0, item.get_button_id(0, 0), MOUSE_BUTTON_LEFT)
+
+	assert_signal_emitted_with_parameters(table, "action_pressed", ["alin", &"action"])
+	assert_eq(rows, [{"id": "alin", "action": ""}])
+
+
+func test_button_click_uses_source_descriptor_id_when_a_hidden_column_precedes_it() -> void:
+	var table: Variant = await _make_table()
+	var hidden_column := TableColumnDescriptor.new(&"internal", "Internal")
+	hidden_column.visible = false
+	var action_column := TableColumnDescriptor.new(&"action", "Action", TableColumnDescriptor.Type.BUTTON)
+	action_column.button_text = func(_row: Dictionary) -> String: return "View"
+	table.set_columns([hidden_column, action_column])
+	table.set_rows([{"id": "alin", "internal": "hidden", "action": ""}])
+	var tree: Tree = table.get_node("Tree")
+	var item := tree.get_root().get_first_child()
+	watch_signals(table)
+
+	assert_eq(item.get_button_id(0, 0), 1)
+	tree.emit_signal("button_clicked", item, 0, item.get_button_id(0, 0), MOUSE_BUTTON_LEFT)
+
+	assert_signal_emitted_with_parameters(table, "action_pressed", ["alin", &"action"])
+
+
+func test_sorting_emits_the_column_key_and_direction() -> void:
+	var table: Variant = await _make_table()
+	var name_column := TableColumnDescriptor.new(&"name", "Name")
+	table.set_columns([name_column])
+	table.set_rows([{"id": "alin", "name": "Alin"}])
+	var tree: Tree = table.get_node("Tree")
+	watch_signals(table)
+
+	tree.emit_signal("column_title_clicked", 0, MOUSE_BUTTON_LEFT)
+	tree.emit_signal("column_title_clicked", 0, MOUSE_BUTTON_LEFT)
+
+	assert_signal_emitted_with_parameters(table, "sort_changed", [&"name", true], 0)
+	assert_signal_emitted_with_parameters(table, "sort_changed", [&"name", false], 1)
+
+
+func test_native_tree_edit_signal_is_connected_but_has_no_settable_headless_edit_context() -> void:
+	var table: Variant = await _make_table()
+	var level_column := TableColumnDescriptor.new(&"level", "Level", TableColumnDescriptor.Type.INTEGER)
+	level_column.editable = true
+	table.set_columns([level_column])
+	table.set_rows([{"id": "alin", "level": 4}])
+	var tree: Tree = table.get_node("Tree")
+	watch_signals(table)
+
+	# Tree exposes no setter for get_edited()/get_edited_column(), so headless
+	# tests use _emit_cell_edited above for the typed edit contract.
+	assert_true(tree.item_edited.is_connected(table._on_item_edited))
+	tree.emit_signal("item_edited")
+	assert_signal_not_emitted(table, "cell_edited")
