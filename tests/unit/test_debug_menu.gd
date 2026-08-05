@@ -7,7 +7,7 @@ func before_each() -> void:
 	GameSession.reset()
 
 
-func test_debug_menu_starts_hidden_with_seven_stable_scenario_buttons() -> void:
+func test_debug_menu_starts_hidden_with_eight_stable_scenario_buttons() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 
@@ -19,6 +19,7 @@ func test_debug_menu_starts_hidden_with_seven_stable_scenario_buttons() -> void:
 	assert_eq(menu.get_node("Panel/Rows/WorldMapButton").text, "debug.world_map")
 	assert_eq(menu.get_node("Panel/Rows/GoblinCampButton").text, "debug.goblin_camp")
 	assert_eq(menu.get_node("Panel/Rows/OrcOutpostButton").text, "debug.orc_outpost")
+	assert_eq(menu.get_node("Panel/Rows/SuperPowerButton").text, "debug.super_power")
 
 
 func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
@@ -34,3 +35,30 @@ func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
 		"The button must drive the same run_debug_scenario('orc_outpost') path as the scenario menu"
 	)
 	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
+
+
+func test_super_power_button_stays_open_without_an_active_battlefield() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_super_power_pressed()
+
+	assert_true(menu.visible, "There is nothing to apply Super Power to outside of a battle")
+
+
+func test_super_power_button_maxes_the_party_and_closes_the_menu_during_a_battle() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_super_power_pressed()
+
+	assert_false(menu.visible)
+	assert_eq(warrior.move_range, 100)
+	assert_eq(warrior.attack_damage, 100)
+	assert_eq(warrior.hit_chance, 1.0)

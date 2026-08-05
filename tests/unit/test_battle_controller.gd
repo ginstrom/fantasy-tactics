@@ -453,3 +453,23 @@ func test_locked_input_is_ignored_by_handle_tile_click() -> void:
 	controller._handle_tile_click(Vector2i(1, 1))
 
 	assert_null(controller.selected_unit, "A locked board must ignore clicks")
+
+
+func test_apply_super_power_maxes_out_player_units_only() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6
+	)
+	var goblin = UnitScript.new(
+		Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3
+	)
+	controller.units = [warrior, goblin]
+
+	controller.apply_super_power()
+
+	assert_eq(warrior.move_range, BattleControllerScript.SUPER_POWER_MOVE_RANGE)
+	assert_eq(warrior.attack_damage, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
+	assert_eq(warrior.hit_chance, BattleControllerScript.SUPER_POWER_HIT_CHANCE)
+	assert_eq(goblin.move_range, 3, "Super Power must not affect enemy units")
+	assert_eq(goblin.attack_damage, 1, "Super Power must not affect enemy units")
+	assert_eq(goblin.hit_chance, 0.3, "Super Power must not affect enemy units")

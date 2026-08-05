@@ -96,6 +96,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("debug.party_ready"), "Party Ready to Depart")
 	assert_eq(tr("debug.world_map"), "Party on World Map")
 	assert_eq(tr("debug.goblin_camp"), "Goblin Camp Battle")
+	assert_eq(tr("debug.super_power"), "Super Power")
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:

@@ -8,6 +8,7 @@ const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 const GAME_MENU_SCENE := "res://scenes/ui/game_menu.tscn"
 const DEBUG_MENU_SCENE := "res://scenes/debug/debug_menu.tscn"
+const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
@@ -132,6 +133,16 @@ func run_debug_scenario(scenario_id: String) -> Error:
 		DebugTarget.BATTLEFIELD:
 			return enter_battle(scenario_id)
 	return ERR_INVALID_DATA
+
+
+func apply_super_power() -> Error:
+	if not OS.is_debug_build():
+		return ERR_UNAVAILABLE
+	var controller := get_tree().get_first_node_in_group(BattleControllerScript.GROUP)
+	if controller == null:
+		return ERR_UNAVAILABLE
+	controller.apply_super_power()
+	return OK
 
 
 func toggle_debug_menu() -> Error:

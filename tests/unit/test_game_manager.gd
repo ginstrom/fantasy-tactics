@@ -126,6 +126,23 @@ func test_fail_battle_abandons_the_encounter_and_returns_the_party_home() -> voi
 	assert_false(GameSession.is_encounter_complete("goblin_camp"))
 
 
+func test_apply_super_power_reports_unavailable_without_an_active_battlefield() -> void:
+	assert_eq(GameManager.apply_super_power(), ERR_UNAVAILABLE)
+
+
+func test_apply_super_power_maxes_out_player_units_on_the_active_battlefield() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+
+	assert_eq(GameManager.apply_super_power(), OK)
+
+	assert_eq(warrior.move_range, 100)
+	assert_eq(warrior.attack_damage, 100)
+	assert_eq(warrior.hit_chance, 1.0)
+
+
 func test_change_scene_reports_error_for_missing_scene() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

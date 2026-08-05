@@ -42,3 +42,8 @@ func _on_goblin_camp_pressed() -> void:
 
 func _on_orc_outpost_pressed() -> void:
 	_run("orc_outpost")
+
+
+func _on_super_power_pressed() -> void:
+	if GameManager.apply_super_power() == OK:
+		visible = false

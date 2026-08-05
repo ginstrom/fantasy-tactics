@@ -16,7 +16,12 @@ const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 
 enum Side { PLAYER, ENEMY }
 
+const GROUP := "battle_controller"
+
 const UNIT_MOVE_RANGE := 3
+const SUPER_POWER_MOVE_RANGE := 100
+const SUPER_POWER_ATTACK_DAMAGE := 100
+const SUPER_POWER_HIT_CHANCE := 1.0
 const ENEMY_STEP_MOVE := "move"
 const ENEMY_STEP_ATTACK := "attack"
 const WARRIOR_START := Vector2i(1, 1)
@@ -42,6 +47,7 @@ var last_attack_result: Dictionary = {}
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	var enemy_stats := _get_enemy_stats()
 	units = [
@@ -143,6 +149,16 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"defeated": defeated,
 	}
 	return true
+
+
+func apply_super_power() -> void:
+	for unit in units:
+		if unit.side == Side.PLAYER:
+			unit.move_range = SUPER_POWER_MOVE_RANGE
+			unit.attack_damage = SUPER_POWER_ATTACK_DAMAGE
+			unit.hit_chance = SUPER_POWER_HIT_CHANCE
+	_update_highlights()
+	board_changed.emit()
 
 
 func end_turn() -> void:

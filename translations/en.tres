@@ -69,5 +69,6 @@ messages = {
 "debug.party_ready": "Party Ready to Depart",
 "debug.world_map": "Party on World Map",
 "debug.goblin_camp": "Goblin Camp Battle",
-"debug.orc_outpost": "Orc Outpost Battle"
+"debug.orc_outpost": "Orc Outpost Battle",
+"debug.super_power": "Super Power"
 }
