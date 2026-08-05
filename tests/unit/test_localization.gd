@@ -50,13 +50,23 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		tr("world_map.hint"),
 		(
 			"World Map. Click the party to select it, then click a highlighted tile to move. "
-			+ "Click the marked location to enter battle. Return to the settlement by clicking a selected party there. "
+			+ "Click a marked location to enter battle. Return to the settlement by clicking a selected party there. "
 			+ "Esc: menu."
 		)
 	)
 	assert_eq(tr("world_map.end_turn"), "End Turn")
 	assert_eq(tr("world_map.turn") % 3, "Turn 3")
 	assert_eq(tr("world_map.arrival_turns") % 8, "8 turns to arrival")
+	assert_eq(
+		tr("world_map.expedition.label") % ["Goblin Camp", "Low danger", 10],
+		"Goblin Camp — Low danger — 10 gold"
+	)
+	assert_eq(tr("expedition.goblin_camp.name"), "Goblin Camp")
+	assert_eq(tr("expedition.orc_outpost.name"), "Orc Outpost")
+	assert_eq(tr("expedition.danger.low"), "Low danger")
+	assert_eq(tr("expedition.danger.high"), "High danger")
+	assert_eq(tr("battle.enemy.goblin"), "Goblin")
+	assert_eq(tr("battle.enemy.orc"), "Orc")
 	assert_eq(tr("party.title"), "Party Manager")
 	assert_eq(tr("party.warrior.summary"), "Warrior — warrior, sword")
 	assert_eq(tr("party.status.empty"), "Your party has no adventurers.")

@@ -27,10 +27,6 @@ const WARRIOR_HIT_CHANCE := 0.6
 const WARRIOR_ATTACK_NAME := "Sword"
 const GOBLIN_START := Vector2i(4, 4)
 const GOBLIN_COLOR := Color(0.9, 0.4, 0.3)
-const GOBLIN_MAX_HEALTH := 3
-const GOBLIN_ATTACK_DAMAGE := 1
-const GOBLIN_HIT_CHANCE := 0.3
-const GOBLIN_ATTACK_NAME := "Short Sword"
 
 var grid
 var units: Array = []
@@ -47,6 +43,7 @@ var last_attack_result: Dictionary = {}
 
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
+	var enemy_stats := _get_enemy_stats()
 	units = [
 		UnitScript.new(
 			WARRIOR_START, WARRIOR_COLOR, Side.PLAYER, UNIT_MOVE_RANGE,
@@ -54,12 +51,22 @@ func _ready() -> void:
 		),
 		UnitScript.new(
 			GOBLIN_START, GOBLIN_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
-			GOBLIN_MAX_HEALTH, GOBLIN_ATTACK_DAMAGE, GOBLIN_HIT_CHANCE, GOBLIN_ATTACK_NAME
+			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.hit_chance,
+			tr(enemy_stats.name_key)
 		),
 	]
 	_draw_tiles()
 	_draw_units()
 	_update_highlights()
+
+
+func _get_enemy_stats() -> Dictionary:
+	var expedition: Dictionary = GameSession.get_expedition(GameSession.selected_encounter)
+	if expedition.is_empty():
+		# Scene-isolated tests instantiate the battlefield with no selected encounter;
+		# fall back to the Goblin Camp enemy so those scenarios keep working.
+		expedition = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	return expedition.enemy
 
 
 func _unhandled_input(event: InputEvent) -> void:

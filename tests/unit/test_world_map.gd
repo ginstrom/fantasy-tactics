@@ -47,14 +47,14 @@ func test_party_cannot_move_to_a_non_adjacent_tile() -> void:
 
 func test_activating_the_encounter_tile_emits_encounter_activated() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
 	watch_signals(world_map)
 
 	var activated: bool = world_map.try_activate_current_tile()
 
 	assert_true(activated, "Standing on the encounter tile should activate it")
 	assert_signal_emitted_with_parameters(
-		world_map, "encounter_activated", [WorldMapScript.ENCOUNTER_ID]
+		world_map, "encounter_activated", [GameSession.GOBLIN_CAMP_ID]
 	)
 
 
@@ -243,7 +243,7 @@ func test_build_route_rejects_the_current_tile() -> void:
 
 func test_clicking_deployed_party_on_goblin_camp_selects_it_before_entry() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
 
 	world_map._handle_tile_click(world_map.party_position)
 
@@ -252,21 +252,22 @@ func test_clicking_deployed_party_on_goblin_camp_selects_it_before_entry() -> vo
 
 func test_clicking_selected_party_on_goblin_camp_emits_encounter_activated() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
 	watch_signals(world_map)
 
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(world_map.party_position)
 
 	assert_signal_emitted_with_parameters(
-		world_map, "encounter_activated", [WorldMapScript.ENCOUNTER_ID]
+		world_map, "encounter_activated", [GameSession.GOBLIN_CAMP_ID]
 	)
 
 
 func test_selected_party_on_goblin_camp_can_move_away_instead_of_entering() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
-	GameSession.set_deployed_party_position(WorldMapScript.ENCOUNTER_POSITION)
+	var camp_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	world_map.party_position = camp_position
+	GameSession.set_deployed_party_position(camp_position)
 	world_map._handle_tile_click(world_map.party_position)
 	watch_signals(world_map)
 
@@ -279,8 +280,8 @@ func test_selected_party_on_goblin_camp_can_move_away_instead_of_entering() -> v
 
 func test_activating_a_completed_encounter_tile_does_nothing() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
-	GameSession.completed_encounters.append(WorldMapScript.ENCOUNTER_ID)
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.completed_encounters.append(GameSession.GOBLIN_CAMP_ID)
 	watch_signals(world_map)
 
 	var activated: bool = world_map.try_activate_current_tile()
@@ -291,13 +292,83 @@ func test_activating_a_completed_encounter_tile_does_nothing() -> void:
 
 func test_clicking_a_completed_encounter_after_selecting_deselects_instead_of_entering() -> void:
 	var world_map := _make_world_map()
-	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
-	GameSession.completed_encounters.append(WorldMapScript.ENCOUNTER_ID)
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.completed_encounters.append(GameSession.GOBLIN_CAMP_ID)
 	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._handle_tile_click(world_map.party_position)
 
 	assert_false(world_map.party_selected, "A completed encounter must not stay selected forever")
+
+
+func test_party_selects_then_activates_each_catalog_expedition_marker() -> void:
+	for encounter_id in GameSession.EXPEDITIONS.keys():
+		GameSession.reset()
+		_deploy_warrior_party()
+		var record: Dictionary = GameSession.get_expedition(encounter_id)
+		GameSession.set_deployed_party_position(record.position)
+		var world_map := _make_world_map()
+		world_map.party_position = record.position
+		watch_signals(world_map)
+
+		world_map._handle_tile_click(world_map.party_position)
+		assert_true(
+			world_map.party_selected,
+			"First click on %s must select, not enter" % encounter_id
+		)
+
+		world_map._handle_tile_click(world_map.party_position)
+		assert_signal_emitted_with_parameters(
+			world_map, "encounter_activated", [encounter_id]
+		)
+
+
+func test_selected_party_can_route_away_from_each_catalog_expedition_marker() -> void:
+	for encounter_id in GameSession.EXPEDITIONS.keys():
+		GameSession.reset()
+		_deploy_warrior_party()
+		var record: Dictionary = GameSession.get_expedition(encounter_id)
+		GameSession.set_deployed_party_position(record.position)
+		var world_map := _make_world_map()
+		world_map.party_position = record.position
+		world_map._handle_tile_click(world_map.party_position)
+		watch_signals(world_map)
+		var destination := _adjacent_tile_within_bounds(record.position)
+
+		world_map._handle_tile_click(destination)
+		world_map._handle_tile_click(destination)
+
+		assert_signal_not_emitted(world_map, "encounter_activated")
+		assert_eq(
+			world_map.party_position,
+			destination,
+			"A selected party on %s must be able to move away instead of entering" % encounter_id
+		)
+
+
+func test_completing_goblin_camp_rejects_only_goblin_camp_while_orc_outpost_remains_activatable() -> void:
+	GameSession.completed_encounters.append(GameSession.GOBLIN_CAMP_ID)
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+
+	var goblin_map := _make_world_map()
+	goblin_map.party_position = goblin_record.position
+	assert_false(
+		goblin_map.try_activate_current_tile(), "A completed Goblin Camp must reject entry"
+	)
+
+	var orc_map := _make_world_map()
+	orc_map.party_position = orc_record.position
+	assert_true(
+		orc_map.try_activate_current_tile(),
+		"Orc Outpost must remain activatable while only Goblin Camp is completed"
+	)
+
+
+func _adjacent_tile_within_bounds(pos: Vector2i) -> Vector2i:
+	if pos.x > 0:
+		return Vector2i(pos.x - 1, pos.y)
+	return Vector2i(pos.x + 1, pos.y)
 
 
 func test_ready_resumes_the_party_position_saved_in_the_session() -> void:
@@ -329,7 +400,9 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	assert_eq(world_map.get_node("Markers").get_child_count(), 2)
+	# One ColorRect + one Label per catalog expedition, plus one settlement ColorRect.
+	var expected_marker_count := GameSession.EXPEDITIONS.size() * 2 + 1
+	assert_eq(world_map.get_node("Markers").get_child_count(), expected_marker_count)
 	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
 
 
@@ -552,6 +625,6 @@ func test_end_turn_updates_the_turn_label() -> void:
 
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 	for marker in world_map.get_node("Markers").get_children():
-		if marker.color == color:
+		if marker is ColorRect and marker.color == color:
 			return true
 	return false

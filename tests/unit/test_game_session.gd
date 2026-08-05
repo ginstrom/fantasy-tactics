@@ -292,3 +292,57 @@ func test_reset_restores_a_deep_duplicated_default_warrior() -> void:
 	session.reset()
 
 	assert_eq(session.adventurers, [GameSessionScript.DEFAULT_WARRIOR])
+
+
+func test_orc_outpost_id_constant_is_orc_outpost() -> void:
+	assert_eq(GameSessionScript.ORC_OUTPOST_ID, "orc_outpost")
+
+
+func test_get_expedition_returns_the_documented_goblin_camp_record() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+
+	assert_eq(record.position, Vector2i(4, 4))
+	assert_eq(record.reward, 10)
+	assert_eq(record.enemy.max_health, 3)
+	assert_eq(record.enemy.attack_damage, 1)
+	assert_eq(record.enemy.hit_chance, 0.3)
+
+
+func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
+
+	assert_eq(record.position, Vector2i(4, 0))
+	assert_eq(record.reward, 25)
+	assert_eq(record.enemy.max_health, 5)
+	assert_eq(record.enemy.attack_damage, 2)
+	assert_eq(record.enemy.hit_chance, 0.5)
+
+
+func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_expedition("missing"), {})
+
+
+func test_get_expedition_returns_a_record_that_can_be_mutated_without_affecting_the_catalog() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+	record.reward = 999
+	record.enemy.max_health = 999
+
+	var second_record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+	assert_eq(second_record.reward, 10, "Mutating a returned record must not affect the catalog")
+	assert_eq(
+		second_record.enemy.max_health,
+		3,
+		"Mutating a nested dictionary in a returned record must not affect the catalog"
+	)

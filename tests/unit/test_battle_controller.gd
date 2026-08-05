@@ -6,6 +6,10 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 
 
+func before_each() -> void:
+	GameSession.reset()
+
+
 func _make_controller(width: int, height: int) -> Node2D:
 	var controller: Node2D = BattleControllerScript.new()
 	controller.grid = GridScript.new(width, height)
@@ -154,6 +158,34 @@ func test_ready_spawns_the_documented_warrior_and_goblin() -> void:
 	assert_eq(goblin.move_range, 3)
 	assert_eq(goblin.attack_damage, 1)
 	assert_eq(goblin.hit_chance, 0.3)
+
+
+func test_ready_builds_the_orc_outpost_enemy_when_orc_outpost_is_selected() -> void:
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+	var enemy = controller.get_unit_at(BattleControllerScript.GOBLIN_START)
+
+	assert_not_null(enemy, "The orc should spawn at the documented enemy start position")
+	assert_eq(enemy.side, BattleControllerScript.Side.ENEMY)
+	assert_eq(enemy.max_health, 5)
+	assert_eq(enemy.attack_damage, 2)
+	assert_eq(enemy.hit_chance, 0.5)
+
+
+func test_ready_builds_the_goblin_camp_enemy_when_goblin_camp_is_selected() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+	var enemy = controller.get_unit_at(BattleControllerScript.GOBLIN_START)
+
+	assert_not_null(enemy, "The goblin should spawn at the documented enemy start position")
+	assert_eq(enemy.side, BattleControllerScript.Side.ENEMY)
+	assert_eq(enemy.max_health, 3)
+	assert_eq(enemy.attack_damage, 1)
+	assert_eq(enemy.hit_chance, 0.3)
 
 
 func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:

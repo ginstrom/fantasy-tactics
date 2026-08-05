@@ -11,11 +11,9 @@ const GRID_HEIGHT := 5
 const TILE_SIZE := 64
 const PARTY_MOVE_RANGE := 1
 
-const ENCOUNTER_ID := GameSession.GOBLIN_CAMP_ID
 const SETTLEMENT_ID := "starting_settlement"
 const SETTLEMENT_POSITION := Vector2i(0, 0)
 const PARTY_START := SETTLEMENT_POSITION
-const ENCOUNTER_POSITION := Vector2i(4, 4)
 
 const TILE_COLOR_LIGHT := Color(0.2, 0.3, 0.2)
 const TILE_COLOR_DARK := Color(0.15, 0.22, 0.15)
@@ -105,13 +103,22 @@ func try_move_party(target: Vector2i) -> bool:
 
 
 func try_activate_current_tile() -> bool:
-	if not GameSession.has_deployed_party() or party_position != ENCOUNTER_POSITION:
-		return false
-	if GameSession.is_encounter_complete(ENCOUNTER_ID):
+	if not GameSession.has_deployed_party():
 		return false
 
-	encounter_activated.emit(ENCOUNTER_ID)
+	var encounter_id := _expedition_id_at(party_position)
+	if encounter_id == "" or GameSession.is_encounter_complete(encounter_id):
+		return false
+
+	encounter_activated.emit(encounter_id)
 	return true
+
+
+func _expedition_id_at(pos: Vector2i) -> String:
+	for encounter_id in GameSession.EXPEDITIONS.keys():
+		if GameSession.EXPEDITIONS[encounter_id].position == pos:
+			return encounter_id
+	return ""
 
 
 func build_route(from: Vector2i, destination: Vector2i) -> Array[Vector2i]:
@@ -259,16 +266,27 @@ func _draw_markers() -> void:
 
 	var margin := TILE_SIZE * 0.2
 
-	var encounter := ColorRect.new()
-	encounter.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
-	encounter.position = Vector2(ENCOUNTER_POSITION) * TILE_SIZE + Vector2(margin, margin)
-	encounter.color = (
-		ENCOUNTER_COMPLETE_COLOR
-		if GameSession.is_encounter_complete(ENCOUNTER_ID)
-		else ENCOUNTER_COLOR
-	)
-	encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	marker_container.add_child(encounter)
+	for encounter_id in GameSession.EXPEDITIONS.keys():
+		var record: Dictionary = GameSession.get_expedition(encounter_id)
+
+		var encounter := ColorRect.new()
+		encounter.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
+		encounter.position = Vector2(record.position) * TILE_SIZE + Vector2(margin, margin)
+		encounter.color = (
+			ENCOUNTER_COMPLETE_COLOR
+			if GameSession.is_encounter_complete(encounter_id)
+			else ENCOUNTER_COLOR
+		)
+		encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		marker_container.add_child(encounter)
+
+		var label := Label.new()
+		label.text = tr("world_map.expedition.label") % [
+			tr(record.name_key), tr(record.danger_key), record.reward
+		]
+		label.position = Vector2(record.position) * TILE_SIZE + Vector2(TILE_SIZE * 0.1, -TILE_SIZE * 0.6)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		marker_container.add_child(label)
 
 	var settlement := ColorRect.new()
 	settlement.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2

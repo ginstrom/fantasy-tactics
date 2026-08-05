@@ -3,6 +3,33 @@ extends Node
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(0, 0)
 const GOBLIN_CAMP_ID := "goblin_camp"
+const ORC_OUTPOST_ID := "orc_outpost"
+const EXPEDITIONS: Dictionary = {
+	"goblin_camp": {
+		"position": Vector2i(4, 4),
+		"name_key": "expedition.goblin_camp.name",
+		"danger_key": "expedition.danger.low",
+		"reward": 10,
+		"enemy": {
+			"name_key": "battle.enemy.goblin",
+			"max_health": 3,
+			"attack_damage": 1,
+			"hit_chance": 0.3,
+		},
+	},
+	"orc_outpost": {
+		"position": Vector2i(4, 0),
+		"name_key": "expedition.orc_outpost.name",
+		"danger_key": "expedition.danger.high",
+		"reward": 25,
+		"enemy": {
+			"name_key": "battle.enemy.orc",
+			"max_health": 5,
+			"attack_damage": 2,
+			"hit_chance": 0.5,
+		},
+	},
+}
 const WARRIOR_ID := "warrior_001"
 const DEFAULT_WARRIOR := {
 	"id": WARRIOR_ID,
@@ -236,3 +263,9 @@ func abandon_current_encounter() -> void:
 
 func is_encounter_complete(encounter_id: String) -> bool:
 	return completed_encounters.has(encounter_id)
+
+
+func get_expedition(encounter_id: String) -> Dictionary:
+	if not EXPEDITIONS.has(encounter_id):
+		return {}
+	return EXPEDITIONS[encounter_id].duplicate(true)
