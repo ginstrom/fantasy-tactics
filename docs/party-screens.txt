@@ -1,0 +1,175 @@
+Encampment UI
+=============
+
+This document shows the encampment route in text form. Bracketed labels are
+buttons. `TableView` is used whenever the player is choosing from a tabular
+collection. It owns display, sorting, filtering, selection, and interaction
+signals; `GameSession` remains the source of party and unit data.
+
+
+Encampment
+==========
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Encampment
+
+                         [Units]
+                         [Buildings] (TBD, disabled)
+                         [Trade] (TBD, disabled)
+
+                         [Deploy Party]
+
+
+Units
+=====
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Units
+
+                         [Roster] (TBD, disabled)
+                         [Parties]
+                         [Recruitment] (TBD, disabled)
+
+                         [Back]
+
+
+Parties
+=======
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Parties
+
+                         TableView
+                         +----------------------+---------+------------+
+                         | Party                | Members | Status     |
+                         +----------------------+---------+------------+
+                         | Party 1              |       1 | Encamped   |
+                         | Party 2              |       2 | Deployed   |
+                         +----------------------+---------+------------+
+
+                         Select a party to show its details at right.
+                         Double-click a party, or use [View], to open it.
+
+                                      Party: Party 1
+                                      Members: 1
+                                      Status: Encamped
+                                      [View]
+
+                         [Back]
+
+                         Empty state: No parties yet.
+
+
+Party Details
+=============
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Party 1
+                         Status: Encamped
+
+                         Members
+
+                         TableView
+                         +----------------------+-----------+-------+
+                         | Name                 | Class     | Level |
+                         +----------------------+-----------+-------+
+                         | Bob                  | Warrior   |     1 |
+                         | Alice                | Mage      |     1 |
+                         +----------------------+-----------+-------+
+
+                         Select a member to show their summary at right.
+                         Double-click a member, or use [View], to open it.
+
+                                      Name: Bob
+                                      Class: Warrior
+                                      Level: 1
+                                      [View]
+
+                         [Add Member] (TBD, disabled for encamped parties)
+                         [Back]
+
+                         Empty state: This party has no members.
+
+                         For a deployed party, [Add Member] is hidden and
+                         [Back] returns to World Map rather than Parties.
+
+
+Unit Details
+============
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Bob
+
+                         Class: Warrior
+                         Level: 1
+                         Status: Available
+
+                         Skills
+                         (none yet)
+
+                         Perks
+                         (none yet)
+
+                         Stats
+                         HP: 3
+                         Move: 3
+
+                         [Back]
+
+
+Deploy Party
+============
+
+                                      Player: Player
+                                      Gold: 0
+
+                         Deploy Party
+
+                         TableView
+                         +----------------------+---------+------------+
+                         | Party                | Members | Status     |
+                         +----------------------+---------+------------+
+                         | Party 1              |       1 | Encamped   |
+                         | Party 2              |       2 | Encamped   |
+                         +----------------------+---------+------------+
+
+                         Select a party to deploy it to the world map.
+                         A stale or no-longer-eligible row refreshes the table
+                         without leaving this screen.
+
+                         [Back]
+
+                         Empty state: No eligible parties are available to
+                         deploy.
+
+
+TableView conventions
+=====================
+
+* Column titles are visible and sortable unless a screen marks a column as
+  non-sortable.
+* In Parties and Party Details, the first click selects a row and updates the
+  information panel; activation or the panel action opens the selected party
+  or unit. In Deploy Party, selecting an eligible row deploys it immediately.
+* Screen controllers provide stable row IDs and resolve them through
+  `GameSession`; `TreeItem` objects never hold authoritative game state.
+* Search fields, pagination, multi-selection, and inline editing are not part
+  of these encampment screens yet.
+
+
+Deployment eligibility
+======================
+
+Only encamped parties with at least one available member appear in the Deploy
+Party table. Empty parties, deployed parties, and parties whose members are
+all killed or incapacitated do not appear.
