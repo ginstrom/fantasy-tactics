@@ -12,7 +12,7 @@
 
 ## Approved design
 
-Read [the approved design](../2026-08-05-world-map-route-movement-design.md) before implementing. It defines the click priority: the first destination click sets/replaces a route, clicking that movement target again takes one manual route step, and End Turn consumes only unused movement before advancing the counter.
+Read [the approved design](../2026-08-05-world-map-route-movement-design.md) before implementing. The completed input contract is: the first destination click sets a route; clicking its movement target again takes one manual route step; clicking the unit with a route enters route-retargeting mode; a new destination replaces the existing route; right-click cancels retargeting and preserves that existing route; and End Turn consumes only unused movement before advancing the counter.
 
 ## Plan order
 
@@ -32,7 +32,7 @@ For every step, branch from updated `main`, write the stated failing test, demon
 
 ## Definition of done
 
-- A destination click saves/replaces an in-bounds deterministic route without moving.
+- A destination click saves/replaces an in-bounds deterministic route without moving; route retargeting can be canceled with right-click without losing the prior route.
 - A second click on the committed movement target and End Turn can consume only one route step per World Map turn.
 - Position, remaining route, world turn, and movement availability persist across a new World Map instance.
 - Selected hover shows the path and turns-to-arrival; End Turn and current World Map turn are visible.

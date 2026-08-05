@@ -20,10 +20,11 @@ Branch: `chore/verify-world-route-movement` from current `main`; requires steps 
    1. Selecting the party still shows one-turn legal moves.
    2. Hovering to camp shows stable horizontal-then-vertical route and 8 turns.
    3. Destination click commits without movement.
-   4. A second click on the committed camp target manually moves one tile; clicking the party does not. End Turn increments without an extra move.
-   5. Seven more End Turns advance exactly one tile each, reduce the estimate, and clear route on arrival.
-   6. Camp entry still uses selection then second click; battle displays Round text while retaining End Turn.
-   7. Returning/resolving without a route does not cause stale automatic movement; settlement return still works.
+   4. A second click on the committed camp target manually moves one tile. Clicking the party enters retargeting without movement.
+   5. Right-click retargeting: the original route remains. Retarget and choose a different destination: the old route is replaced without movement.
+   6. End Turn increments without an extra move after the manual step; subsequent End Turns advance exactly one tile, reduce the estimate, and clear route on arrival.
+   7. Camp entry still uses selection then second click; battle displays Round text while retaining End Turn.
+   8. Returning/resolving without a route does not cause stale automatic movement; settlement return still works.
 
 3. If a defect appears, write the smallest failing GUT regression test first, demonstrate red with `make test`, fix it, then restart this verification. Do not expand scope to waypoints or animation.
 
