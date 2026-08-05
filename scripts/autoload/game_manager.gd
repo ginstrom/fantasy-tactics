@@ -127,6 +127,17 @@ func go_to_deploy_party() -> Error:
 	return _change_scene(DEPLOY_PARTY_SCENE)
 
 
+## Deploys the named encamped party (see GameSession.deploy_party for the
+## eligibility rules) and only then routes to the World Map, mirroring
+## depart_selected_party()'s deploy-before-scene-change order. An ineligible
+## or unknown id deploys nothing and never changes the scene, so a stale
+## Deploy Party selection is safe to retry.
+func deploy_party(party_id: String) -> Error:
+	if not GameSession.deploy_party(party_id):
+		return ERR_INVALID_DATA
+	return go_to_world_map()
+
+
 func open_game_menu() -> void:
 	_game_menu.refresh()
 	_game_menu.visible = true

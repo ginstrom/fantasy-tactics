@@ -1,0 +1,70 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/party_details.gd" id="1_party_details"]
+[ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+
+[node name="PartyDetails" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_party_details")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "party_details.title"
+horizontal_alignment = 1
+
+[node name="PartyNameLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="MembersLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "party_details.members"
+
+[node name="MemberList" type="VBoxContainer" parent="Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EmptyLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "party_details.no_members"
+horizontal_alignment = 1
+
+[node name="AddMemberButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+disabled = true
+text = "ui.tbd"
+
+[node name="BackButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[node name="InformationPanel" parent="." instance=ExtResource("2_information_panel")]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -240.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 160.0
+grow_horizontal = 0
+
+[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

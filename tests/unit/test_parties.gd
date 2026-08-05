@@ -74,11 +74,6 @@ func test_the_panels_view_button_asks_game_manager_to_open_party_details() -> vo
 		GameSession.FIRST_PARTY_ID,
 		"Pressing View must ask GameManager to route to that party's details"
 	)
-	assert_push_error("party_details.tscn")
-	# The details scene does not exist until a later step; the resulting engine
-	# load errors are expected here and are not the behavior under test.
-	for tracked in get_errors():
-		tracked.handled = true
 
 
 func test_a_refresh_that_invalidates_the_selection_clears_it_and_falls_back_to_the_empty_state() -> void:

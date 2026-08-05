@@ -1,0 +1,73 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/unit_details.gd" id="1_unit_details"]
+
+[node name="UnitDetails" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_unit_details")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "unit_details.title"
+horizontal_alignment = 1
+
+[node name="NameLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+horizontal_alignment = 1
+
+[node name="ClassLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="LevelLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="StatusLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="SkillsLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.skills"
+
+[node name="PerksLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.perks"
+
+[node name="StatsLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.stats"
+
+[node name="NotFoundLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.not_found"
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

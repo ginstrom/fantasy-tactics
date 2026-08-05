@@ -395,6 +395,30 @@ func test_moving_the_party_persists_the_new_position_to_the_session() -> void:
 	)
 
 
+func test_world_map_renders_a_party_deployed_via_the_deploy_party_action() -> void:
+	# Regression coverage: has_deployed_party()/position/marker/selection must
+	# keep working for a party GameSession.deploy_party() selected directly,
+	# not only for one that departed via the older depart_selected_party() path.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	assert_true(GameSession.deploy_party(GameSession.FIRST_PARTY_ID))
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_true(GameSession.has_deployed_party())
+	assert_eq(world_map.party_position, GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
+	assert_true(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(world_map.party_selected, "The deployed party's marker must remain selectable")
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	assert_true(panel.get_node("Content/PartyName").visible)
+	assert_eq(panel.get_node("Content/PartyName").text, tr("information.party") % "Party 1")
+
+
 func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> void:
 	GameSession.reset()
 	var world_map: Node2D = WorldMapScene.instantiate()

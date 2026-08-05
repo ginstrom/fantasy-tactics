@@ -215,6 +215,38 @@ func test_going_to_unit_details_with_an_unknown_id_is_invalid_and_leaves_the_rou
 	assert_eq(GameManager.route_context_id, "")
 
 
+func test_deploy_party_route_reuses_the_world_map_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "func deploy_party(")
+	assert_string_contains(source, "GameSession.deploy_party(")
+
+
+func test_deploy_party_reports_invalid_data_for_an_ineligible_party_and_does_not_deploy_it() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.deploy_party("no_such_party")
+
+	assert_ne(err, OK, "An ineligible party id must not be treated as a valid deployment")
+	assert_false(GameSession.has_deployed_party())
+
+
+func test_deploy_party_deploys_the_selected_party_before_routing_to_the_world_map() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.deploy_party(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(err, OK)
+	assert_true(GameSession.has_deployed_party())
+	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
+
+
 func test_open_game_menu_shows_the_overlay_and_pauses_the_tree() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

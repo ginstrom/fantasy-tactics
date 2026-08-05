@@ -1,0 +1,149 @@
+extends GutTest
+
+const PartyDetailsScene := preload("res://scenes/ui/party_details.tscn")
+
+
+func before_each() -> void:
+	GameSession.reset()
+
+
+func after_each() -> void:
+	GameManager.close_game_menu()
+	GameManager.route_context_id = ""
+
+
+func _open_party_details(party_id: String) -> Control:
+	GameManager.route_context_id = party_id
+	var screen: Control = PartyDetailsScene.instantiate()
+	add_child_autofree(screen)
+	return screen
+
+
+func test_party_details_shows_the_title_and_the_back_action() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.get_node("Center/VBox/Title").text, "party_details.title")
+	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+
+
+func test_add_member_is_present_but_disabled_and_labelled_tbd() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	assert_true(add_button.disabled, "Add Member must not be functional in this slice")
+	assert_eq(add_button.text, "ui.tbd")
+
+
+func test_reads_the_party_id_from_route_context() -> void:
+	GameSession.create_party()
+
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.party_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "party_details.no_members")
+	assert_eq(screen.get_node("Center/VBox/MemberList").get_child_count(), 0)
+
+
+func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
+	var row: Button = screen.get_node("Center/VBox/MemberList").get_child(0)
+	assert_eq(row.text, tr("party_details.member_row") % ["Warrior", "warrior", 1])
+
+
+func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("InformationPanel")
+	var row: Button = screen.get_node("Center/VBox/MemberList").get_child(0)
+
+	row.emit_signal("pressed")
+
+	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
+	assert_true(panel.get_node("Content/AdventurerName").visible)
+	assert_eq(panel.get_node("Content/AdventurerName").text, "Warrior")
+	assert_true(panel.get_node("Content/AdventurerViewButton").visible)
+
+
+func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that_exact_id() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("InformationPanel")
+	screen.get_node("Center/VBox/MemberList").get_child(0).emit_signal("pressed")
+
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	assert_eq(
+		GameManager.route_context_id,
+		GameSession.WARRIOR_ID,
+		"Pressing View must ask GameManager to route to that exact unit's details"
+	)
+
+
+func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("InformationPanel")
+	screen.get_node("Center/VBox/MemberList").get_child(0).emit_signal("pressed")
+	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
+
+	GameSession.reset()
+	screen.refresh()
+
+	assert_eq(screen.selected_adventurer_id, "")
+	assert_false(panel.get_node("Content/AdventurerName").visible)
+
+
+func test_an_unknown_party_id_does_not_crash_and_shows_no_members() -> void:
+	var screen := _open_party_details("no_such_party")
+
+	assert_eq(screen.get_node("Center/VBox/MemberList").get_child_count(), 0)
+
+
+func test_back_button_returns_to_parties_and_leaves_the_party_untouched() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var source := FileAccess.get_file_as_string("res://scripts/ui/party_details.gd")
+
+	assert_string_contains(source, "GameManager.go_to_parties()")
+
+
+func test_back_button_clears_only_the_ui_route_context() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, "")
+	assert_false(GameSession.has_deployed_party(), "Back must never deploy or otherwise mutate the party")
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
+
+
+func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	screen._unhandled_input(escape_event)
+
+	assert_true(screen.get_viewport().is_input_handled())
+	assert_true(GameManager.is_game_menu_open())
+	assert_true(get_tree().paused)
