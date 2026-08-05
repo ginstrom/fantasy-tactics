@@ -8,10 +8,12 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var status: Label = $HUD/Status
 @onready var player_health: Label = $HUD/PlayerHealth
 @onready var enemy_health: Label = $HUD/EnemyHealth
+@onready var round_label: Label = $HUD/RoundLabel
 @onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var grid: Node2D = $Grid
 
 var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
+var round_number: int = 1
 var _enemy_turn_in_progress: bool = false
 var _battle_resolved: bool = false
 
@@ -48,6 +50,7 @@ func _play_enemy_turn() -> void:
 		return
 
 	grid.end_turn()
+	round_number += 1
 	_set_enemy_turn_in_progress(false)
 	_on_board_changed()
 
@@ -67,6 +70,7 @@ func _on_board_changed() -> void:
 	else:
 		hint.text = tr("battle.hint.select_destination") % side_name
 
+	round_label.text = tr("battle.round") % round_number
 	_update_health_labels()
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)

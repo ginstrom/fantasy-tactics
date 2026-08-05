@@ -44,11 +44,18 @@ offset_top = 128.0
 offset_right = 400.0
 offset_bottom = 160.0
 
-[node name="EndTurnButton" type="Button" parent="HUD"]
+[node name="RoundLabel" type="Label" parent="HUD"]
 offset_left = 1104.0
 offset_top = 16.0
 offset_right = 1264.0
 offset_bottom = 48.0
+text = "battle.round"
+
+[node name="EndTurnButton" type="Button" parent="HUD"]
+offset_left = 1104.0
+offset_top = 56.0
+offset_right = 1264.0
+offset_bottom = 88.0
 text = "battle.end_turn"
 
 [connection signal="pressed" from="HUD/EndTurnButton" to="." method="_on_end_turn_pressed"]

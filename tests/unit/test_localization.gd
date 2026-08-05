@@ -18,23 +18,24 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.save"), "Save")
 	assert_eq(tr("menu.not_implemented"), "Not implemented yet")
 	assert_eq(tr("battle.end_turn"), "End Turn")
+	assert_eq(tr("battle.round") % 1, "Round 1")
 	assert_eq(tr("battle.side.player"), "Player")
 	assert_eq(tr("battle.side.enemy"), "Enemy")
 	assert_eq(
 		tr("battle.hint.select_unit") % "Player",
-		"Player turn. Click a unit to select it. Esc: menu."
+		"Player's move. Click a unit to select it. Esc: menu."
 	)
 	assert_eq(
 		tr("battle.hint.already_moved") % "Player",
-		"Player turn. This unit has already moved. Attack an adjacent enemy or select another unit."
+		"Player's move. This unit has already moved. Attack an adjacent enemy or select another unit."
 	)
 	assert_eq(
 		tr("battle.hint.turn_complete") % "Player",
-		"Player turn. This unit has moved and attacked. Select another unit."
+		"Player's move. This unit has moved and attacked. Select another unit."
 	)
 	assert_eq(
 		tr("battle.hint.select_destination") % "Player",
-		"Player turn. Click a highlighted tile to move, or select another unit."
+		"Player's move. Click a highlighted tile to move, or select another unit."
 	)
 	assert_eq(tr("battle.status.awaiting_action"), "No actions yet.")
 	assert_eq(tr("battle.status.health") % ["Warrior", 3, 3], "Warrior: 3/3 HP")
@@ -107,8 +108,29 @@ func test_battlefield_hint_is_built_from_translated_copy() -> void:
 	add_child_autofree(battlefield)
 
 	assert_eq(
-		battlefield.get_node("HUD/Hint").text, "Player turn. Click a unit to select it. Esc: menu."
+		battlefield.get_node("HUD/Hint").text, "Player's move. Click a unit to select it. Esc: menu."
 	)
+
+
+func test_battle_hints_no_longer_call_the_action_cycle_a_turn() -> void:
+	var hint_keys := [
+		"battle.hint.select_unit",
+		"battle.hint.already_moved",
+		"battle.hint.turn_complete",
+		"battle.hint.select_destination",
+	]
+	for key in hint_keys:
+		assert_false(
+			(tr(key) % "Player").to_lower().contains("turn"),
+			"%s must not call the player/enemy action cycle a turn" % key
+		)
+
+
+func test_battlefield_round_label_uses_translation_key_not_literal_copy() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.get_node("HUD/RoundLabel").text, tr("battle.round") % 1)
 
 
 func test_world_map_hint_uses_translation_key_not_literal_copy() -> void:

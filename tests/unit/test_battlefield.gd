@@ -24,6 +24,27 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(get_tree().paused)
 
 
+func test_battlefield_starts_at_round_one() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.round_number, 1)
+
+
+func test_round_increments_only_after_the_enemy_turn_returns_control_to_the_player() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+
+	battlefield._on_end_turn_pressed()
+	assert_eq(battlefield.round_number, 1, "Round must not increment while the enemy is still acting")
+
+	while battlefield._enemy_turn_in_progress:
+		await get_tree().process_frame
+
+	assert_eq(battlefield.round_number, 2, "Round increments once control returns to the player")
+
+
 func test_set_enemy_turn_in_progress_locks_and_unlocks_input() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
