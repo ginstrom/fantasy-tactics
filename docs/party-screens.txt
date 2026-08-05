@@ -1,0 +1,100 @@
+Encampment screen
+```
+[Units]
+[Buildings]
+[Trade]
+```
+
+Buildings screen
+```
+(TBD)
+[Back]
+```
+
+Trade screen
+```
+Trade
+
+(TBD)
+[Back]
+```
+
+
+Units screen
+```
+Units
+
+[Roster]
+[Parties]
+[Recruitment]
+[Back]
+```
+
+Roster screen
+```
+Roster
+
+Name  | Class   | Lv | Party
+------+---------+----+------
+Bob   | Warrior | 1  | None
+Mary  | Mage    | 1  | Party 1
+
+[Back]
+```
+
+
+Parties screen
+```
+Parties
+
+Party 1
+Party 2
+[New]              [Back]
+```
+
+Party details screen
+```
+Party 1
+
+Members
+Name  | Class   | Lv 
+------+---------+----
+Mary  | Mage    | 1  
+
+[Add]            [Back]
+```
+
+Unit details screen
+```
+Name: Mary
+Class: Mage
+Level: 1
+Skill points to assign: 0
+Perks to assign: 0
+
+Strength: 3
+Agility: 5
+Vitality: 2
+Intelligence: 8
+Piety: 2
+```
+
+Add member screen
+```
+Add member
+
+Name  | Class   | Lv | Party
+------+---------+----+------
+Bob   | Warrior | 1  | None
+Mary  | Mage    | 1  | Party 1
+```
+
+Recruitment screen
+```
+Recruit units
+
+(TBD)
+[Back]
+```
+
+
