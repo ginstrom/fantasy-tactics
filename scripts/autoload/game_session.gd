@@ -17,6 +17,7 @@ var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
 var completed_encounters: Array[String] = []
+var world_turn: int = 1
 
 
 func _init() -> void:
@@ -34,6 +35,7 @@ func reset() -> void:
 	selected_party_id = ""
 	selected_encounter = ""
 	completed_encounters = []
+	world_turn = 1
 
 
 func create_party() -> bool:
@@ -46,6 +48,8 @@ func create_party() -> bool:
 		"location_id": STARTING_SETTLEMENT_ID,
 		"world_position": STARTING_SETTLEMENT_WORLD_POSITION,
 		"deployed": false,
+		"travel_route": [] as Array[Vector2i],
+		"movement_spent": false,
 	})
 	selected_party_id = FIRST_PARTY_ID
 	return true
@@ -125,6 +129,59 @@ func set_deployed_party_position(position: Vector2i) -> bool:
 	return true
 
 
+func get_deployed_party_route() -> Array[Vector2i]:
+	if not has_deployed_party():
+		return []
+	return get_selected_party().travel_route
+
+
+func set_deployed_party_route(route: Array[Vector2i]) -> bool:
+	if not has_deployed_party() or route.is_empty():
+		return false
+
+	var previous: Vector2i = get_selected_party().world_position
+	for step in route:
+		if _grid_distance(previous, step) != 1:
+			return false
+		previous = step
+
+	parties[_get_selected_party_index()].travel_route = route
+	return true
+
+
+func clear_deployed_party_route() -> void:
+	if not has_deployed_party():
+		return
+	parties[_get_selected_party_index()].travel_route = [] as Array[Vector2i]
+
+
+func take_next_route_step() -> bool:
+	if not has_deployed_party():
+		return false
+
+	var party_index := _get_selected_party_index()
+	var party: Dictionary = parties[party_index]
+	if party.movement_spent or party.travel_route.is_empty():
+		return false
+
+	var route: Array = party.travel_route
+	party.world_position = route[0]
+	route.remove_at(0)
+	party.movement_spent = true
+	return true
+
+
+func end_world_turn() -> bool:
+	var auto_moved := false
+	if has_deployed_party() and not get_selected_party().movement_spent:
+		auto_moved = take_next_route_step()
+
+	world_turn += 1
+	if has_deployed_party():
+		parties[_get_selected_party_index()].movement_spent = false
+	return auto_moved
+
+
 func return_deployed_party_to_settlement() -> bool:
 	if not has_deployed_party():
 		return false
@@ -133,6 +190,8 @@ func return_deployed_party_to_settlement() -> bool:
 	parties[party_index].deployed = false
 	parties[party_index].location_id = STARTING_SETTLEMENT_ID
 	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
+	parties[party_index].travel_route = [] as Array[Vector2i]
+	parties[party_index].movement_spent = false
 	return true
 
 
@@ -155,6 +214,10 @@ func _is_adventurer_assigned(adventurer_id: String) -> bool:
 		if adventurer_id in party.member_ids:
 			return true
 	return false
+
+
+func _grid_distance(a: Vector2i, b: Vector2i) -> int:
+	return abs(a.x - b.x) + abs(a.y - b.y)
 
 
 func enter_encounter(encounter_id: String) -> void:
