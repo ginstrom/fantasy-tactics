@@ -47,6 +47,9 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_parties()},
 		{"name": "party_details", "action": func() -> void:
 			GameManager.go_to_party_details(GameSession.FIRST_PARTY_ID)},
+		{"name": "add_member", "action": func() -> void:
+			GameSession.recruit_adventurer()
+			GameManager.go_to_add_member(GameSession.FIRST_PARTY_ID)},
 		{"name": "unit_details", "action": func() -> void:
 			GameManager.go_to_unit_details(GameSession.WARRIOR_ID)},
 		{"name": "deploy_party", "action": func() -> void:
