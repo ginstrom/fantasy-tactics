@@ -29,6 +29,7 @@ const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
+var is_setting_route: bool = false
 
 @onready var tile_container: Node2D = $Tiles
 @onready var highlight_container: Node2D = $Highlights
@@ -49,9 +50,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameManager.open_game_menu()
 		return
 
-	if not (event is InputEventMouseButton):
+	if not (event is InputEventMouseButton) or not event.pressed:
 		return
-	if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
+
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		if is_setting_route:
+			get_viewport().set_input_as_handled()
+			cancel_route_setting()
+			_update_highlights()
+		return
+
+	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 
 	var tile_pos := _to_grid_position(get_local_mouse_position())
@@ -91,6 +100,34 @@ func try_activate_current_tile() -> bool:
 	return true
 
 
+func build_route(from: Vector2i, destination: Vector2i) -> Array[Vector2i]:
+	if not grid.is_in_bounds(from) or not grid.is_in_bounds(destination):
+		return []
+	if from == destination:
+		return []
+
+	var route: Array[Vector2i] = []
+	var current := from
+	while current.x != destination.x:
+		current.x += 1 if destination.x > current.x else -1
+		route.append(current)
+	while current.y != destination.y:
+		current.y += 1 if destination.y > current.y else -1
+		route.append(current)
+	return route
+
+
+func get_route_destination() -> Vector2i:
+	var route := GameSession.get_deployed_party_route()
+	if route.is_empty():
+		return party_position
+	return route[route.size() - 1]
+
+
+func cancel_route_setting() -> void:
+	is_setting_route = false
+
+
 func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if not GameSession.has_deployed_party():
 		return
@@ -98,6 +135,11 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if tile_pos == party_position:
 		if not party_selected:
 			party_selected = true
+			_update_highlights()
+			return
+
+		if not GameSession.get_deployed_party_route().is_empty():
+			is_setting_route = true
 			_update_highlights()
 			return
 
@@ -115,12 +157,23 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_update_highlights()
 		return
 
-	if party_selected and try_move_party(tile_pos):
-		party_selected = false
-		GameSession.set_deployed_party_position(party_position)
-		_draw_markers()
-		_update_highlights()
-		board_changed.emit()
+	if not party_selected:
+		return
+
+	if tile_pos == get_route_destination() and not is_setting_route:
+		if GameSession.take_next_route_step():
+			party_position = GameSession.get_deployed_party_position()
+			_draw_markers()
+			_update_highlights()
+			board_changed.emit()
+		return
+
+	if is_setting_route or GameSession.get_deployed_party_route().is_empty():
+		var route := build_route(party_position, tile_pos)
+		if not route.is_empty() and GameSession.set_deployed_party_route(route):
+			is_setting_route = false
+			_draw_markers()
+			_update_highlights()
 
 
 func _on_encounter_activated(encounter_id: String) -> void:

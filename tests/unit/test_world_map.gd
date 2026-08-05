@@ -96,18 +96,117 @@ func test_clicking_an_adjacent_tile_without_selecting_does_not_move_the_party() 
 	)
 
 
-func test_clicking_an_adjacent_tile_after_selecting_moves_the_party() -> void:
+func test_clicking_an_adjacent_tile_after_selecting_sets_a_route_without_moving() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 
 	world_map._handle_tile_click(Vector2i(1, 0))
 
+	assert_eq(world_map.party_position, Vector2i(0, 0), "Setting a route must not move the party")
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0)])
+	assert_true(world_map.party_selected, "Selection should persist after committing a route")
+
+
+func test_clicking_the_committed_destination_again_takes_one_manual_step() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	world_map._handle_tile_click(Vector2i(2, 0))
+
 	assert_eq(
-		world_map.party_position,
-		Vector2i(1, 0),
-		"Selecting then clicking an adjacent tile should move the party"
+		world_map.party_position, Vector2i(1, 0), "Clicking the destination again should take one manual step"
 	)
-	assert_false(world_map.party_selected, "Moving should clear the selection")
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(2, 0)])
+
+
+func test_clicking_the_party_with_a_route_enters_retargeting_without_moving() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(world_map.is_setting_route)
+	assert_eq(world_map.party_position, Vector2i(0, 0))
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)])
+
+
+func test_choosing_a_new_destination_while_retargeting_replaces_the_route() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._handle_tile_click(Vector2i(0, 2))
+
+	assert_false(world_map.is_setting_route)
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(0, 1), Vector2i(0, 2)])
+
+
+func test_right_click_cancels_retargeting_and_preserves_the_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+	world_map._handle_tile_click(world_map.party_position)
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+
+	world_map._unhandled_input(right_click)
+
+	assert_false(world_map.is_setting_route)
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)])
+
+
+func test_get_route_destination_returns_party_position_when_no_route() -> void:
+	var world_map := _make_world_map()
+
+	assert_eq(world_map.get_route_destination(), world_map.party_position)
+
+
+func test_get_route_destination_returns_the_final_route_point() -> void:
+	var world_map := _make_world_map()
+	GameSession.set_deployed_party_route([Vector2i(1, 0), Vector2i(2, 0)] as Array[Vector2i])
+
+	assert_eq(world_map.get_route_destination(), Vector2i(2, 0))
+
+
+func test_cancel_route_setting_clears_only_the_transient_flag() -> void:
+	var world_map := _make_world_map()
+	GameSession.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i])
+	world_map.is_setting_route = true
+
+	world_map.cancel_route_setting()
+
+	assert_false(world_map.is_setting_route)
+	assert_eq(
+		GameSession.get_deployed_party_route(),
+		[Vector2i(1, 0)],
+		"cancel_route_setting must not touch the durable route"
+	)
+
+
+func test_build_route_orders_horizontal_then_vertical_steps() -> void:
+	var world_map := _make_world_map()
+
+	var route: Array = world_map.build_route(Vector2i(0, 0), Vector2i(2, 1))
+
+	assert_eq(route, [Vector2i(1, 0), Vector2i(2, 0), Vector2i(2, 1)])
+
+
+func test_build_route_rejects_an_out_of_bounds_endpoint() -> void:
+	var world_map := _make_world_map()
+
+	assert_eq(world_map.build_route(Vector2i(-1, 0), Vector2i(2, 1)), [] as Array[Vector2i])
+	assert_eq(world_map.build_route(Vector2i(0, 0), Vector2i(5, 5)), [] as Array[Vector2i])
+
+
+func test_build_route_rejects_the_current_tile() -> void:
+	var world_map := _make_world_map()
+
+	assert_eq(world_map.build_route(Vector2i(2, 2), Vector2i(2, 2)), [] as Array[Vector2i])
 
 
 func test_clicking_deployed_party_on_goblin_camp_selects_it_before_entry() -> void:
@@ -135,9 +234,11 @@ func test_clicking_selected_party_on_goblin_camp_emits_encounter_activated() -> 
 func test_selected_party_on_goblin_camp_can_move_away_instead_of_entering() -> void:
 	var world_map := _make_world_map()
 	world_map.party_position = WorldMapScript.ENCOUNTER_POSITION
+	GameSession.set_deployed_party_position(WorldMapScript.ENCOUNTER_POSITION)
 	world_map._handle_tile_click(world_map.party_position)
 	watch_signals(world_map)
 
+	world_map._handle_tile_click(Vector2i(3, 4))
 	world_map._handle_tile_click(Vector2i(3, 4))
 
 	assert_signal_not_emitted(world_map, "encounter_activated")
@@ -183,6 +284,7 @@ func test_moving_the_party_persists_the_new_position_to_the_session() -> void:
 	add_child_autofree(world_map)
 
 	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
 	world_map._handle_tile_click(Vector2i(1, 0))
 
 	assert_eq(
