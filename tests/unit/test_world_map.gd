@@ -132,6 +132,21 @@ func test_clicking_the_party_with_a_route_again_cancels_it() -> void:
 	assert_true(world_map.party_selected, "Party should remain selected after canceling its route")
 
 
+func test_canceling_a_route_reenables_the_hover_affordance() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._update_hover_route(Vector2i(1, 0))
+
+	assert_eq(
+		world_map.hover_route,
+		[Vector2i(1, 0)],
+		"Canceling the route should bring back the live hover preview"
+	)
+
+
 func test_choosing_a_new_destination_after_a_route_is_set_replaces_it() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
@@ -372,22 +387,7 @@ func test_update_hover_route_is_empty_when_not_selected() -> void:
 	assert_eq(world_map.hover_route, [] as Array[Vector2i])
 
 
-func test_hover_route_preview_does_not_touch_the_committed_route() -> void:
-	var world_map := _make_world_map()
-	world_map._handle_tile_click(world_map.party_position)
-	world_map._handle_tile_click(Vector2i(2, 0))
-
-	world_map._update_hover_route(Vector2i(0, 2))
-
-	assert_eq(world_map.hover_route, [Vector2i(0, 1), Vector2i(0, 2)])
-	assert_eq(
-		GameSession.get_deployed_party_route(),
-		[Vector2i(1, 0), Vector2i(2, 0)],
-		"Hover must not touch the committed route"
-	)
-
-
-func test_hover_preview_updates_immediately_after_a_route_is_committed() -> void:
+func test_hover_preview_does_not_update_after_a_route_is_committed() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(1, 0))
@@ -396,8 +396,8 @@ func test_hover_preview_updates_immediately_after_a_route_is_committed() -> void
 
 	assert_eq(
 		world_map.hover_route,
-		[Vector2i(1, 0), Vector2i(2, 0)],
-		"The party stays selected after a commit, so hovering keeps previewing new routes"
+		[] as Array[Vector2i],
+		"Pathing mode ends once a route is committed, so hovering must not preview a new one"
 	)
 
 
@@ -476,7 +476,7 @@ func test_route_line_disappears_after_canceling_it_with_a_zero_step_route() -> v
 	assert_eq(world_map.get_node("Routes").get_child_count(), 0)
 
 
-func test_hovering_after_a_route_is_committed_shows_both_routes_at_once() -> void:
+func test_hovering_after_a_route_is_committed_does_not_draw_a_preview() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	world_map._handle_tile_click(world_map.party_position)
@@ -485,12 +485,11 @@ func test_hovering_after_a_route_is_committed_shows_both_routes_at_once() -> voi
 	world_map._update_hover_route(Vector2i(0, 2))
 	await get_tree().process_frame
 
-	# committed route [(1,0)]: 1 segment + target + label = 3
-	# hover route [(0,1),(0,2)]: 2 segments + target + label = 4
+	# committed route [(1,0)]: 1 segment + target + label = 3, no hover overlay
 	assert_eq(
 		world_map.get_node("Routes").get_child_count(),
-		7,
-		"The committed route and the hover preview must both stay visible"
+		3,
+		"Pathing mode ends once a route is committed, so no ghost preview should be drawn"
 	)
 
 

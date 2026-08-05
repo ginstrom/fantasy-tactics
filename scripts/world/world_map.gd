@@ -66,7 +66,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event.button_index == MOUSE_BUTTON_RIGHT:
-		if _has_route_affordance():
+		if party_selected:
 			get_viewport().set_input_as_handled()
 			cancel_route_setting()
 			party_selected = false
@@ -143,7 +143,11 @@ func cancel_route_setting() -> void:
 
 
 func _has_route_affordance() -> bool:
-	return party_selected and GameSession.has_deployed_party()
+	return (
+		party_selected
+		and GameSession.has_deployed_party()
+		and GameSession.get_deployed_party_route().is_empty()
+	)
 
 
 func _update_hover_route(tile_pos: Vector2i) -> void:
