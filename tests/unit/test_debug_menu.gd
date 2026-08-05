@@ -7,7 +7,7 @@ func before_each() -> void:
 	GameSession.reset()
 
 
-func test_debug_menu_starts_hidden_with_eight_stable_scenario_buttons() -> void:
+func test_debug_menu_starts_hidden_with_ten_stable_scenario_buttons() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 
@@ -16,10 +16,12 @@ func test_debug_menu_starts_hidden_with_eight_stable_scenario_buttons() -> void:
 	assert_eq(menu.get_node("Panel/Rows/EncampmentButton").text, "debug.encampment")
 	assert_eq(menu.get_node("Panel/Rows/PartyManagerButton").text, "debug.party_manager")
 	assert_eq(menu.get_node("Panel/Rows/PartyReadyButton").text, "debug.party_ready")
+	assert_eq(menu.get_node("Panel/Rows/PartyEmptyButton").text, "debug.party_empty")
 	assert_eq(menu.get_node("Panel/Rows/WorldMapButton").text, "debug.world_map")
 	assert_eq(menu.get_node("Panel/Rows/GoblinCampButton").text, "debug.goblin_camp")
 	assert_eq(menu.get_node("Panel/Rows/OrcOutpostButton").text, "debug.orc_outpost")
 	assert_eq(menu.get_node("Panel/Rows/SuperPowerButton").text, "debug.super_power")
+	assert_eq(menu.get_node("Panel/Rows/RecruitButton").text, "debug.recruit")
 
 
 func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
@@ -62,3 +64,27 @@ func test_super_power_button_maxes_the_party_and_closes_the_menu_during_a_battle
 	assert_eq(warrior.move_range, 100)
 	assert_eq(warrior.attack_damage, 100)
 	assert_eq(warrior.hit_chance, 1.0)
+
+
+func test_party_empty_button_runs_the_party_empty_debug_scenario() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_party_empty_pressed()
+
+	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
+	assert_false(GameSession.has_deployed_party())
+	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
+
+
+func test_recruit_button_adds_an_adventurer_and_closes_the_menu() -> void:
+	GameSession.reset()
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_recruit_pressed()
+
+	assert_eq(GameSession.adventurers.size(), 2)
+	assert_false(menu.visible, "A successful recruit should close the menu, like Super Power")

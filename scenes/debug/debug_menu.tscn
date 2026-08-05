@@ -42,6 +42,10 @@ text = "debug.party_manager"
 layout_mode = 2
 text = "debug.party_ready"
 
+[node name="PartyEmptyButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.party_empty"
+
 [node name="WorldMapButton" type="Button" parent="Panel/Rows"]
 layout_mode = 2
 text = "debug.world_map"
@@ -58,11 +62,17 @@ text = "debug.orc_outpost"
 layout_mode = 2
 text = "debug.super_power"
 
+[node name="RecruitButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.recruit"
+
 [connection signal="pressed" from="Panel/Rows/NewCampaignButton" to="." method="_on_new_campaign_pressed"]
 [connection signal="pressed" from="Panel/Rows/EncampmentButton" to="." method="_on_encampment_pressed"]
 [connection signal="pressed" from="Panel/Rows/PartyManagerButton" to="." method="_on_party_manager_pressed"]
 [connection signal="pressed" from="Panel/Rows/PartyReadyButton" to="." method="_on_party_ready_pressed"]
+[connection signal="pressed" from="Panel/Rows/PartyEmptyButton" to="." method="_on_party_empty_pressed"]
 [connection signal="pressed" from="Panel/Rows/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Panel/Rows/GoblinCampButton" to="." method="_on_goblin_camp_pressed"]
 [connection signal="pressed" from="Panel/Rows/OrcOutpostButton" to="." method="_on_orc_outpost_pressed"]
 [connection signal="pressed" from="Panel/Rows/SuperPowerButton" to="." method="_on_super_power_pressed"]
+[connection signal="pressed" from="Panel/Rows/RecruitButton" to="." method="_on_recruit_pressed"]

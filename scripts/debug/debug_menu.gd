@@ -32,6 +32,10 @@ func _on_party_ready_pressed() -> void:
 	_run("party_ready")
 
 
+func _on_party_empty_pressed() -> void:
+	_run("party_empty")
+
+
 func _on_world_map_pressed() -> void:
 	_run("world_map")
 
@@ -46,4 +50,9 @@ func _on_orc_outpost_pressed() -> void:
 
 func _on_super_power_pressed() -> void:
 	if GameManager.apply_super_power() == OK:
+		visible = false
+
+
+func _on_recruit_pressed() -> void:
+	if GameManager.recruit_adventurer() == OK:
 		visible = false
