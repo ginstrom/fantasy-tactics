@@ -681,3 +681,68 @@ func test_deploy_party_deploys_an_eligible_party_and_leaves_others_untouched() -
 		GameSessionScript.GOBLIN_CAMP_ID,
 		"Deploying one party must not affect another"
 	)
+
+
+func test_assign_adventurer_to_party_targets_the_named_party_not_the_selected_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.parties.append(
+		_party("second_party", [] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	assert_true(session.assign_adventurer_to_party("second_party", "warrior_001"))
+
+	assert_eq(session.get_party("second_party").member_ids, ["warrior_001"])
+	assert_eq(
+		session.get_selected_party().member_ids,
+		[] as Array[String],
+		"Only the named party should gain the member"
+	)
+
+
+func test_assign_adventurer_to_party_rejects_unknown_party_unknown_adventurer_and_double_assignment() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	assert_false(session.assign_adventurer_to_party("no_such_party", "warrior_001"))
+	assert_false(session.assign_adventurer_to_party(GameSessionScript.FIRST_PARTY_ID, "no_such_adventurer"))
+	assert_true(session.assign_adventurer_to_party(GameSessionScript.FIRST_PARTY_ID, "warrior_001"))
+	assert_false(session.assign_adventurer_to_party(GameSessionScript.FIRST_PARTY_ID, "warrior_001"))
+
+
+func test_assign_adventurer_to_selected_party_still_works_as_a_thin_wrapper() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	assert_true(session.assign_adventurer_to_selected_party("warrior_001"))
+
+	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
+
+
+func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.recruit_adventurer()
+
+	assert_eq(session.adventurers.size(), 2)
+	var recruit: Dictionary = session.adventurers[1]
+	assert_eq(recruit.id, "warrior_002")
+	assert_eq(recruit.name, "Warrior 2")
+	assert_eq(recruit["class"], "warrior")
+	assert_eq(recruit.availability_status, "available")
+	assert_true(session.get_available_adventurers().has(recruit))
+
+
+func test_recruit_adventurer_never_collides_with_an_earlier_recruit() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruit_adventurer()
+
+	session.recruit_adventurer()
+
+	assert_eq(session.adventurers.size(), 3)
+	assert_eq(session.adventurers[2].id, "warrior_003")

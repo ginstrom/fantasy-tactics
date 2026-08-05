@@ -152,14 +152,26 @@ func get_available_adventurers() -> Array[Dictionary]:
 	return available
 
 
-func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
-	var party_index := _get_selected_party_index()
+func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool:
+	var party_index := _get_party_index(party_id)
 	if party_index == -1 or not _has_adventurer(adventurer_id) or _is_adventurer_assigned(adventurer_id):
 		return false
 
 	var member_ids: Array = parties[party_index].member_ids
 	member_ids.append(adventurer_id)
 	return true
+
+
+func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
+	return assign_adventurer_to_party(selected_party_id, adventurer_id)
+
+
+func recruit_adventurer() -> void:
+	var recruit_number := adventurers.size() + 1
+	var adventurer: Dictionary = DEFAULT_WARRIOR.duplicate(true)
+	adventurer.id = "warrior_%03d" % recruit_number
+	adventurer.name = "Warrior %d" % recruit_number
+	adventurers.append(adventurer)
 
 
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
