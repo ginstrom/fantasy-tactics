@@ -20,7 +20,7 @@ Branch: `chore/verify-world-route-movement` from current `main`; requires steps 
    1. Selecting the party still shows one-turn legal moves.
    2. Hovering to camp shows stable horizontal-then-vertical route and 8 turns.
    3. Destination click commits without movement.
-   4. Party click manually moves one tile; End Turn increments without an extra move.
+   4. A second click on the committed camp target manually moves one tile; clicking the party does not. End Turn increments without an extra move.
    5. Seven more End Turns advance exactly one tile each, reduce the estimate, and clear route on arrival.
    6. Camp entry still uses selection then second click; battle displays Round text while retaining End Turn.
    7. Returning/resolving without a route does not cause stale automatic movement; settlement return still works.
