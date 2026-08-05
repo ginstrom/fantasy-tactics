@@ -65,9 +65,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event.button_index == MOUSE_BUTTON_RIGHT:
-		if is_setting_route:
+		if _has_route_affordance():
 			get_viewport().set_input_as_handled()
 			cancel_route_setting()
+			party_selected = false
 			_draw_routes()
 			_update_highlights()
 		return
@@ -141,8 +142,14 @@ func cancel_route_setting() -> void:
 	hover_route = []
 
 
+func _has_route_affordance() -> bool:
+	if not party_selected or not GameSession.has_deployed_party():
+		return false
+	return is_setting_route or GameSession.get_deployed_party_route().is_empty()
+
+
 func _update_hover_route(tile_pos: Vector2i) -> void:
-	if not party_selected or not GameSession.has_deployed_party() or not grid.is_in_bounds(tile_pos):
+	if not _has_route_affordance() or not grid.is_in_bounds(tile_pos):
 		hover_route = []
 	else:
 		hover_route = build_route(party_position, tile_pos)
@@ -286,6 +293,9 @@ func _draw_routes() -> void:
 
 	for child in route_container.get_children():
 		child.queue_free()
+
+	if not _has_route_affordance():
+		return
 
 	var route: Array[Vector2i] = (
 		hover_route if not hover_route.is_empty() else GameSession.get_deployed_party_route()
