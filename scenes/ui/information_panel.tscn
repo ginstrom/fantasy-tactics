@@ -35,6 +35,10 @@ layout_mode = 2
 visible = false
 text = "information.members"
 
+[node name="PendingReward" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
 [node name="PartyViewButton" type="Button" parent="Content"]
 layout_mode = 2
 visible = false

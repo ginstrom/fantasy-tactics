@@ -11,6 +11,7 @@ signal adventurer_selected(adventurer_id: String)
 @onready var gold_label: Label = $Content/Gold
 @onready var party_name_label: Label = $Content/PartyName
 @onready var party_members_label: Label = $Content/PartyMembers
+@onready var pending_reward_label: Label = $Content/PendingReward
 @onready var party_view_button: Button = $Content/PartyViewButton
 @onready var adventurer_name_label: Label = $Content/AdventurerName
 @onready var adventurer_class_label: Label = $Content/AdventurerClass
@@ -39,7 +40,10 @@ func refresh() -> void:
 ## Shows the permanent rows plus the named party's name, member count, and a
 ## View action. An unknown party_id clears the optional section instead of
 ## raising an error, so a stale selection never leaves the panel broken.
-func refresh_party(party_id: String) -> void:
+## pending_reward is the caller's unbanked GameSession.pending_reward for this
+## party (World Map is the only caller that has one to show); it renders as
+## an extra row only when positive, and stays hidden otherwise.
+func refresh_party(party_id: String, pending_reward: int = 0) -> void:
 	_refresh_permanent_rows()
 	_clear_adventurer_section()
 
@@ -55,6 +59,9 @@ func refresh_party(party_id: String) -> void:
 	party_name_label.visible = true
 	party_members_label.visible = true
 	party_view_button.visible = true
+	pending_reward_label.visible = pending_reward > 0
+	if pending_reward > 0:
+		pending_reward_label.text = tr("information.pending_reward") % pending_reward
 
 
 ## Shows the permanent rows plus the named adventurer's name, class, level,
@@ -89,6 +96,7 @@ func _clear_party_section() -> void:
 	party_name_label.visible = false
 	party_members_label.visible = false
 	party_view_button.visible = false
+	pending_reward_label.visible = false
 
 
 func _clear_adventurer_section() -> void:

@@ -33,6 +33,7 @@ func test_refresh_hides_the_party_and_adventurer_sections() -> void:
 
 	assert_false(panel.get_node("Content/PartyName").visible)
 	assert_false(panel.get_node("Content/PartyMembers").visible)
+	assert_false(panel.get_node("Content/PendingReward").visible)
 	assert_false(panel.get_node("Content/PartyViewButton").visible)
 	assert_false(panel.get_node("Content/AdventurerName").visible)
 	assert_false(panel.get_node("Content/AdventurerClass").visible)
@@ -60,6 +61,38 @@ func test_refresh_party_shows_the_party_name_member_count_and_view_button() -> v
 	assert_eq(panel.get_node("Content/PartyMembers").text, tr("information.members") % 1)
 	assert_true(panel.get_node("Content/PartyViewButton").visible)
 	assert_eq(panel.get_node("Content/PartyViewButton").text, tr("information.view_party"))
+
+
+func test_refresh_party_shows_the_pending_reward_row_when_given_a_positive_amount() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID, 15)
+
+	assert_true(panel.get_node("Content/PendingReward").visible)
+	assert_eq(
+		panel.get_node("Content/PendingReward").text, tr("information.pending_reward") % 15
+	)
+
+
+func test_refresh_party_hides_the_pending_reward_row_when_the_amount_is_zero() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	assert_false(panel.get_node("Content/PendingReward").visible)
+
+
+func test_a_bare_refresh_hides_the_pending_reward_row_again() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+	panel.refresh_party(GameSession.FIRST_PARTY_ID, 15)
+	assert_true(panel.get_node("Content/PendingReward").visible)
+
+	panel.refresh()
+
+	assert_false(panel.get_node("Content/PendingReward").visible)
 
 
 func test_refresh_party_with_an_unknown_id_clears_optional_content_without_hiding_player_or_gold() -> void:

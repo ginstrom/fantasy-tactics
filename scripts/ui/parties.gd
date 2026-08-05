@@ -27,13 +27,14 @@ func refresh() -> void:
 	_refresh_selection()
 
 
-## Rebuilds the row list from scratch. Rows are freed immediately (not
-## queue_free'd) so a refresh called more than once per frame, as tests do,
-# never leaves stale rows sitting alongside new ones.
+## Rebuilds the row list from scratch. remove_child() already takes each row
+## off get_children() synchronously, so a refresh called more than once per
+## frame, as tests do, never leaves stale rows sitting alongside new ones;
+## queue_free() only defers the actual deallocation.
 func _rebuild_party_rows() -> void:
 	for child in party_list.get_children():
 		party_list.remove_child(child)
-		child.free()
+		child.queue_free()
 
 	var parties: Array[Dictionary] = GameSession.parties
 	empty_label.visible = parties.is_empty()

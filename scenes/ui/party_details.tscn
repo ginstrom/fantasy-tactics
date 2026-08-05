@@ -50,7 +50,7 @@ horizontal_alignment = 1
 [node name="AddMemberButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 disabled = true
-text = "ui.tbd"
+text = "party_details.add_member"
 
 [node name="BackButton" type="Button" parent="Center/VBox"]
 layout_mode = 2

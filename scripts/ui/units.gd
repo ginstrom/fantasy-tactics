@@ -1,8 +1,15 @@
 extends Control
 
 ## Units hub. Parties is the only branch wired to a real screen in this
-## slice; Roster and Recruitment are visible but disabled with a concise
-## "TBD" label until their systems exist.
+## slice; Roster and Recruitment are visible but disabled until their
+## systems exist, following the same disabled-with-its-own-label convention
+## Encampment uses for Buildings and Trade.
+
+@onready var information_panel: PanelContainer = $InformationPanel
+
+
+func _ready() -> void:
+	information_panel.refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:

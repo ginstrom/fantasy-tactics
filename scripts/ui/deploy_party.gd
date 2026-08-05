@@ -10,9 +10,11 @@ extends Control
 
 @onready var party_list: VBoxContainer = $Center/VBox/PartyList
 @onready var empty_label: Label = $Center/VBox/EmptyLabel
+@onready var information_panel: PanelContainer = $InformationPanel
 
 
 func _ready() -> void:
+	information_panel.refresh()
 	refresh()
 
 

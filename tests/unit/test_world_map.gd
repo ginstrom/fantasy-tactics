@@ -12,6 +12,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	GameManager.route_context_id = ""
 
 
 func _deploy_warrior_party() -> void:
@@ -489,6 +490,49 @@ func test_information_panel_hides_party_name_again_after_deselecting_with_right_
 	world_map._unhandled_input(right_click)
 
 	assert_false(panel.get_node("Content/PartyName").visible)
+
+
+## Regression test: the panel's View Party button used to be wired up with no
+## listener on the World Map, so pressing it did nothing (see parties.gd and
+## party_details.gd for the same pattern applied to their own screens).
+func test_pressing_the_panels_view_party_button_routes_to_party_details() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	world_map._handle_tile_click(world_map.party_position)
+
+	panel.get_node("Content/PartyViewButton").emit_signal("pressed")
+
+	assert_eq(
+		GameManager.route_context_id,
+		GameSession.selected_party_id,
+		"Pressing View Party on the World Map must ask GameManager to open that party's details"
+	)
+
+
+func test_information_panel_shows_the_pending_reward_for_a_selected_party_with_one() -> void:
+	GameSession.pending_reward = 15
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(panel.get_node("Content/PendingReward").visible)
+	assert_eq(
+		panel.get_node("Content/PendingReward").text, tr("information.pending_reward") % 15
+	)
+
+
+func test_information_panel_hides_the_pending_reward_row_when_there_is_none() -> void:
+	GameSession.pending_reward = 0
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_false(panel.get_node("Content/PendingReward").visible)
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:

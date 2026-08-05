@@ -14,12 +14,14 @@ extends Control
 @onready var perks_label: Label = $Center/VBox/PerksLabel
 @onready var stats_label: Label = $Center/VBox/StatsLabel
 @onready var not_found_label: Label = $Center/VBox/NotFoundLabel
+@onready var information_panel: PanelContainer = $InformationPanel
 
 var unit_id: String = ""
 
 
 func _ready() -> void:
 	unit_id = GameManager.route_context_id
+	information_panel.refresh()
 	refresh()
 
 

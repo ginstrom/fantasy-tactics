@@ -39,14 +39,18 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_game()},
 		{"name": "encampment", "action": func() -> void:
 			GameManager.go_to_encampment()},
-		{"name": "party_manager_empty", "action": func() -> void:
-			GameManager.open_party_manager()},
-		{"name": "party_manager_party_created", "action": func() -> void:
+		{"name": "units", "action": func() -> void:
+			GameManager.go_to_units()},
+		{"name": "parties", "action": func() -> void:
 			GameSession.create_party()
-			GameManager.open_party_manager()},
-		{"name": "party_manager_warrior_assigned", "action": func() -> void:
 			GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-			GameManager.open_party_manager()},
+			GameManager.go_to_parties()},
+		{"name": "party_details", "action": func() -> void:
+			GameManager.go_to_party_details(GameSession.FIRST_PARTY_ID)},
+		{"name": "unit_details", "action": func() -> void:
+			GameManager.go_to_unit_details(GameSession.WARRIOR_ID)},
+		{"name": "deploy_party", "action": func() -> void:
+			GameManager.go_to_deploy_party()},
 		{"name": "encampment_ready_to_depart", "action": func() -> void:
 			GameManager.go_to_encampment()},
 		{"name": "world_map", "action": func() -> void:

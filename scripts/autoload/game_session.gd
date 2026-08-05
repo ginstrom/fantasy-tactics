@@ -176,9 +176,12 @@ func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
 	return true
 
 
+## Shares its eligibility rule with deploy_party()/get_deployable_encamped_parties()
+## (see _is_party_eligible_for_deployment) so there is exactly one definition
+## of "ready to depart" rather than two that can silently drift apart.
 func can_depart_selected_party() -> bool:
 	var party := get_selected_party()
-	return not party.is_empty() and not party.deployed and not party.member_ids.is_empty()
+	return not party.is_empty() and _is_party_eligible_for_deployment(party)
 
 
 func depart_selected_party() -> bool:

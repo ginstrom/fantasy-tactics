@@ -27,13 +27,13 @@ func test_party_details_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
-func test_add_member_is_present_but_disabled_and_labelled_tbd() -> void:
+func test_add_member_is_present_but_disabled_and_labelled_with_its_own_name() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
 	assert_true(add_button.disabled, "Add Member must not be functional in this slice")
-	assert_eq(add_button.text, "ui.tbd")
+	assert_eq(add_button.text, "party_details.add_member")
 
 
 func test_reads_the_party_id_from_route_context() -> void:

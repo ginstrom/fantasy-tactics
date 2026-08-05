@@ -19,6 +19,19 @@ func test_units_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
+func test_shows_the_permanent_player_and_gold_rows() -> void:
+	GameSession.player_name = "Aria"
+	GameSession.gold = 25
+	var screen: Control = UnitsScene.instantiate()
+	add_child_autofree(screen)
+	var panel: Control = screen.get_node("InformationPanel")
+
+	assert_true(panel.get_node("Content/PlayerName").visible)
+	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")
+	assert_true(panel.get_node("Content/Gold").visible)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+
+
 func test_parties_is_the_only_active_branch() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
@@ -27,14 +40,14 @@ func test_parties_is_the_only_active_branch() -> void:
 	assert_eq(screen.get_node("Center/VBox/PartiesButton").text, "units.parties")
 
 
-func test_roster_and_recruitment_are_unavailable_with_a_concise_tbd_label() -> void:
+func test_roster_and_recruitment_are_unavailable_but_labelled_with_their_own_names() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
 	assert_true(screen.get_node("Center/VBox/RosterButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/RosterButton").text, "ui.tbd")
+	assert_eq(screen.get_node("Center/VBox/RosterButton").text, "units.roster")
 	assert_true(screen.get_node("Center/VBox/RecruitmentButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/RecruitmentButton").text, "ui.tbd")
+	assert_eq(screen.get_node("Center/VBox/RecruitmentButton").text, "units.recruitment")
 
 
 func test_parties_button_routes_to_the_parties_screen() -> void:

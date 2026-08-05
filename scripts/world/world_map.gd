@@ -49,6 +49,7 @@ var hover_route: Array[Vector2i] = []
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	party_position = GameSession.get_deployed_party_position()
+	information_panel.party_selected.connect(_on_information_panel_party_selected)
 	_draw_tiles()
 	_draw_markers()
 	_draw_routes()
@@ -377,9 +378,16 @@ func _refresh_information_panel() -> void:
 	# single deployed party, so its click-to-select toggle simply chooses
 	# whether the panel requests that party's contextual summary.
 	if party_selected:
-		information_panel.refresh_party(GameSession.selected_party_id)
+		information_panel.refresh_party(GameSession.selected_party_id, GameSession.pending_reward)
 	else:
 		information_panel.refresh()
+
+
+## Mirrors the same signal-forwarding pattern parties.gd and party_details.gd
+## use for their own View buttons: the panel never navigates itself, so this
+## screen decides that pressing View Party opens Party Details.
+func _on_information_panel_party_selected(party_id: String) -> void:
+	GameManager.go_to_party_details(party_id)
 
 
 func _update_highlights() -> void:

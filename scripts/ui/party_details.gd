@@ -38,13 +38,14 @@ func refresh() -> void:
 	_refresh_selection()
 
 
-## Rebuilds the row list from scratch. Rows are freed immediately (not
-## queue_free'd) so a refresh called more than once per frame, as tests do,
-## never leaves stale rows sitting alongside new ones.
+## Rebuilds the row list from scratch. remove_child() already takes each row
+## off get_children() synchronously, so a refresh called more than once per
+## frame, as tests do, never leaves stale rows sitting alongside new ones;
+## queue_free() only defers the actual deallocation.
 func _rebuild_member_rows(member_ids: Array) -> void:
 	for child in member_list.get_children():
 		member_list.remove_child(child)
-		child.free()
+		child.queue_free()
 
 	empty_label.visible = member_ids.is_empty()
 

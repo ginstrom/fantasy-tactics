@@ -63,9 +63,9 @@ Encampment "Party Manager" screen, are superseded by the Milestone 4
 encampment UI shell below: Party Manager now only redirects to Parties, so an
 ordinary New Game currently has no in-game way to create or assign a party.
 Reaching the Deploy Party step above with a real party still requires seeding
-one first through the debug F9 menu (Party Manager or Party Ready to Depart)
-or the automated tests, until Milestone 4's deferred Add Member work restores
-that step to ordinary play.
+one first through the debug F9 menu's Party Ready to Depart scenario or the
+automated tests, until Milestone 4's deferred Add Member work restores that
+step to ordinary play.
 
 `GameSession` owns the one-Warrior roster, the single player-created party,
 its deployment state, world position, committed travel route, movement spent,

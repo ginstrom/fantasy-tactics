@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/unit_details.gd" id="1_unit_details"]
+[ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 
 [node name="UnitDetails" type="Control"]
 layout_mode = 3
@@ -69,5 +70,16 @@ horizontal_alignment = 1
 [node name="BackButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 text = "ui.back"
+
+[node name="InformationPanel" parent="." instance=ExtResource("2_information_panel")]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -240.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 96.0
+grow_horizontal = 0
 
 [connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

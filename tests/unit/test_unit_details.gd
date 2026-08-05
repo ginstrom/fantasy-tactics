@@ -26,6 +26,18 @@ func test_unit_details_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
+func test_shows_the_permanent_player_and_gold_rows() -> void:
+	GameSession.player_name = "Aria"
+	GameSession.gold = 25
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var panel: Control = screen.get_node("InformationPanel")
+
+	assert_true(panel.get_node("Content/PlayerName").visible)
+	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")
+	assert_true(panel.get_node("Content/Gold").visible)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+
+
 func test_reads_the_unit_id_from_route_context() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
