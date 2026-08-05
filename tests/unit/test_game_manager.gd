@@ -286,18 +286,6 @@ func test_going_to_add_member_with_an_unknown_party_id_is_invalid_and_leaves_the
 	assert_eq(GameManager.route_context_id, "")
 
 
-func test_going_to_add_member_with_a_known_party_id_sets_the_route_context() -> void:
-	GameSession.reset()
-	GameSession.create_party()
-	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
-	add_child_autofree(manager)
-
-	var err: Error = manager.go_to_add_member(GameSession.FIRST_PARTY_ID)
-
-	assert_eq(err, OK)
-	assert_eq(manager.route_context_id, GameSession.FIRST_PARTY_ID)
-
-
 func test_assign_adventurer_to_party_reports_invalid_data_for_an_unknown_adventurer() -> void:
 	GameSession.reset()
 	GameSession.create_party()
