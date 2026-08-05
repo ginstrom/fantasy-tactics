@@ -476,6 +476,36 @@ func test_route_line_disappears_after_canceling_it_with_a_zero_step_route() -> v
 	assert_eq(world_map.get_node("Routes").get_child_count(), 0)
 
 
+func test_hovering_after_a_route_is_committed_shows_both_routes_at_once() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+
+	world_map._update_hover_route(Vector2i(0, 2))
+	await get_tree().process_frame
+
+	# committed route [(1,0)]: 1 segment + target + label = 3
+	# hover route [(0,1),(0,2)]: 2 segments + target + label = 4
+	assert_eq(
+		world_map.get_node("Routes").get_child_count(),
+		7,
+		"The committed route and the hover preview must both stay visible"
+	)
+
+
+func test_hovering_the_current_destination_does_not_duplicate_the_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+
+	world_map._update_hover_route(Vector2i(1, 0))
+	await get_tree().process_frame
+
+	assert_eq(world_map.get_node("Routes").get_child_count(), 3)
+
+
 func test_pressing_end_turn_advances_the_turn_without_a_route() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

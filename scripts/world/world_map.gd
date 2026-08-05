@@ -27,6 +27,8 @@ const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 const ROUTE_SEGMENT_COLOR := Color(0.9, 0.9, 0.3, 0.6)
 const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
+const HOVER_ROUTE_SEGMENT_COLOR := Color(0.4, 0.9, 0.9, 0.5)
+const HOVER_ROUTE_TARGET_COLOR := Color(0.4, 0.9, 0.9, 0.8)
 
 var grid
 var party_position: Vector2i = PARTY_START
@@ -289,11 +291,16 @@ func _draw_routes() -> void:
 	for child in route_container.get_children():
 		child.queue_free()
 
-	var route: Array[Vector2i] = (
-		hover_route
-		if _has_route_affordance() and not hover_route.is_empty()
-		else GameSession.get_deployed_party_route()
-	)
+	var committed_route := GameSession.get_deployed_party_route()
+	_draw_route_path(committed_route, ROUTE_SEGMENT_COLOR, ROUTE_TARGET_COLOR)
+
+	if _has_route_affordance() and not hover_route.is_empty() and hover_route != committed_route:
+		_draw_route_path(hover_route, HOVER_ROUTE_SEGMENT_COLOR, HOVER_ROUTE_TARGET_COLOR)
+
+
+func _draw_route_path(
+	route: Array[Vector2i], segment_color: Color, target_color: Color
+) -> void:
 	if route.is_empty():
 		return
 
@@ -302,7 +309,7 @@ func _draw_routes() -> void:
 		var segment := ColorRect.new()
 		segment.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(segment_margin, segment_margin) * 2
 		segment.position = Vector2(step) * TILE_SIZE + Vector2(segment_margin, segment_margin)
-		segment.color = ROUTE_SEGMENT_COLOR
+		segment.color = segment_color
 		segment.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		route_container.add_child(segment)
 
@@ -311,7 +318,7 @@ func _draw_routes() -> void:
 	var target := ColorRect.new()
 	target.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(target_margin, target_margin) * 2
 	target.position = Vector2(destination) * TILE_SIZE + Vector2(target_margin, target_margin)
-	target.color = ROUTE_TARGET_COLOR
+	target.color = target_color
 	target.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	route_container.add_child(target)
 
