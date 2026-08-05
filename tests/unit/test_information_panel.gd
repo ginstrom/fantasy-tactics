@@ -59,6 +59,7 @@ func test_refresh_party_shows_the_party_name_member_count_and_view_button() -> v
 	assert_true(panel.get_node("Content/PartyMembers").visible)
 	assert_eq(panel.get_node("Content/PartyMembers").text, tr("information.members") % 1)
 	assert_true(panel.get_node("Content/PartyViewButton").visible)
+	assert_eq(panel.get_node("Content/PartyViewButton").text, tr("information.view_party"))
 
 
 func test_refresh_party_with_an_unknown_id_clears_optional_content_without_hiding_player_or_gold() -> void:

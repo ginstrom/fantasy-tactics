@@ -38,7 +38,7 @@ text = "information.members"
 [node name="PartyViewButton" type="Button" parent="Content"]
 layout_mode = 2
 visible = false
-text = "information.view"
+text = "information.view_party"
 
 [node name="AdventurerName" type="Label" parent="Content"]
 layout_mode = 2

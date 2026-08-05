@@ -35,6 +35,7 @@ messages = {
 "information.level": "Level: %d",
 "information.gold": "Gold: %d",
 "information.view": "View",
+"information.view_party": "View Party",
 "units.title": "Units",
 "parties.title": "Parties",
 "party_details.title": "Party Details",

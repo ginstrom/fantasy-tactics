@@ -51,6 +51,7 @@ func refresh_party(party_id: String) -> void:
 	_selected_party_id = party_id
 	party_name_label.text = tr("information.party") % party["name"]
 	party_members_label.text = tr("information.members") % party["member_ids"].size()
+	party_view_button.text = tr("information.view_party")
 	party_name_label.visible = true
 	party_members_label.visible = true
 	party_view_button.visible = true
