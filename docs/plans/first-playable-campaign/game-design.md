@@ -34,13 +34,15 @@ visible upgrades. Its purpose is to prove that tactical victories make the
 strategic game more interesting and that strategic choices make the next battle
 feel different.
 
-The first implementation slice is smaller: a starting settlement, one
-unassigned Warrior, a player-created party, deployment to the existing world
-map, and return to the settlement. That slice is now complete.
+The first implemented foundation is smaller: one Warrior, one player-created
+party, one goblin-camp expedition, and a single clear-or-return outcome. It
+now proves the route from settlement preparation through tactical combat and
+back to campaign state. It deliberately does not yet provide rewards,
+upgrades, or enough expedition choices to be a repeatable campaign.
 
-## Implemented prototype slice
+## Completed first playable foundation
 
-The current prototype delivers a small, manually playable route:
+The current prototype delivers this manually playable route:
 
 ```text
 Start Menu
@@ -50,14 +52,28 @@ Start Menu
   -> Party Manager
   -> create a party and assign the Warrior
   -> depart to the World Map
-  -> move the deployed party or enter the existing encounter
-  -> return the party to the settlement
+  -> select the deployed party and plan a route
+  -> advance one world-map tile manually or with End Turn
+  -> select the party at Goblin Camp and enter battle on a second click
+  -> win: clear the camp and return to the World Map
+     or lose: return the party to the Starting Settlement; camp remains available
 ```
 
 `GameSession` owns the one-Warrior roster, the single player-created party,
-its deployment state, and its world position. `GameManager` owns the named
-scene transitions. The party is visible and movable only while deployed; on
-the settlement tile, selecting it and clicking again returns it home.
+its deployment state, world position, committed travel route, movement spent,
+world turn, and encounter completion. `GameManager` owns named scene
+transitions. The party is visible and movable only while deployed. World-map
+travel is deliberately simple: an in-bounds, empty-grid Manhattan route moves
+one tile per World Map turn; no terrain costs, obstacles, waypoints, or
+multi-party scheduling are implied yet.
+
+Site entry retains selection-before-activation. The first click selects the
+party, so it can still move away; a second click enters the settlement or
+Goblin Camp. A cleared camp rejects entry. In the battle, the Warrior and one
+Goblin each have 3 health and can move once and make one adjacent attack in
+either order. The Warrior's Sword deals 2 damage on a 60% hit chance; the
+Goblin's Short Sword deals 1 damage on a 30% hit chance. The Goblin takes a
+visible, deterministic AI decision sequence after the player ends the round.
 
 The player-facing shell is also in place: New Game begins at the settlement;
 Continue and Load are intentionally disabled until a save system exists; and
@@ -65,37 +81,39 @@ Escape opens a pause-menu overlay from the settlement, encampment, party
 manager, world map, and battlefield. The overlay can return to the unchanged
 scene, show the current "Not implemented yet" Save status, or quit.
 
-The completed implementation plans have been retired. The enduring design
-reference for the settlement/party boundaries is
+For fast development checks, a debug-only F9 scenario menu can open a fresh
+campaign at the settlement, encampment, party manager, a ready-to-depart
+party, the world map, or the Goblin Camp battle. It uses the same public
+campaign APIs and scene routes as ordinary play and is unavailable in release
+builds.
+
+The completed implementation plans are historical delivery records. The
+enduring design reference for the settlement/party boundaries is
 [Settlement and First Party Design](settlement-and-first-party-design.md).
 
 ## Next work
 
-The prototype establishes the campaign's entry and return path, but it is not
-yet a repeatable campaign. The next implementation work should focus on the
-unfinished outcomes below, in milestone order:
+The foundation establishes the campaign's entry, travel, tactical result, and
+return paths, but it is not yet a repeatable campaign. The next implementation
+work should focus on the unfinished outcomes below, in milestone order:
 
-1. Replace the battlefield's developer-only completion control with a real
-   win/lose combat result: health, attacks, damage, defeat, victory, and a
-   clear outcome screen.
-2. Make those results matter in campaign state: rewards or setbacks, then at
-   least two distinct expedition choices whose risks or rewards differ.
-3. Expand the roster from one Warrior to the planned initial party of four,
-   and add one deliberately small, player-visible party or settlement
-   improvement funded by gold.
+1. Make tactical results matter in campaign state: add a small reward or
+   setback and a second expedition whose risk, reward, or tactical setup
+   differs from the Goblin Camp.
+2. Turn the return to camp into a meaningful choice: add gold and one
+   deliberately small, player-visible party or settlement improvement funded
+   by it.
+3. Expand the roster from one Warrior toward the planned initial party of four
+   only after the first improvement makes a later expedition meaningfully
+   different.
 4. Add save/load only after the repeatable expedition, reward, and upgrade
    loop works; then enable the existing Continue and Load UI.
 5. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
-Developer verification is a supporting part of that slice, not a player
-feature. Before building the settlement and party-management screens, add a
-development-only scenario menu that can reset the campaign and open a valid
-encampment, party-management, world-map, or battle setup. The menu must use
-the same `GameSession` state APIs and `GameManager` transitions as normal play;
-it accelerates checking a destination but does not replace manually testing
-the complete player route. The staged implementation is in
-[Developer Tools Implementation](developer-tools-implementation/index.md).
+Developer verification remains a supporting concern rather than a player
+feature. The completed scenario menu accelerates checks, but it does not
+replace exercising the complete settlement-to-expedition route.
 
 ## Design principles
 
@@ -115,6 +133,11 @@ the complete player route. The staged implementation is in
   mechanics.
 
 ## Milestone 1: Campaign foundation
+
+**Status: completed.** The implemented foundation includes party formation and
+deployment, selection-first settlement and camp entry, committed single-party
+world-map routes, manual/automatic one-tile turn movement, persistent cleared
+sites, separate World Map turns and Battle Rounds, and safe pause/quit access.
 
 ### Player outcome
 
@@ -155,6 +178,11 @@ licence, including temporary assets.
 
 ## Milestone 2: Tactical encounter loop
 
+**Status: completed for the Goblin Camp.** The implemented battle has the
+narrow Warrior-versus-Goblin setup described above, real win/loss detection,
+visible enemy pacing, and campaign outcomes: victory clears the camp and
+returns to the map; defeat returns the party home without clearing the camp.
+
 ### Player outcome
 
 The player can win or lose a short tactical battle through movement, turns,
@@ -189,6 +217,9 @@ not only appearance.
 
 ## Milestone 3: Expedition and reward loop
 
+**Status: next.** The first tactical expedition exists, but it has no reward,
+resource cost, or alternative destination yet.
+
 ### Player outcome
 
 An expedition has a purpose and a consequence. The player chooses a
@@ -220,6 +251,11 @@ world-map site states, and short ambient or outcome sounds. Reuse visual
 language rather than creating bespoke art for every prototype variation.
 
 ## Milestone 4: Encampment and party management
+
+**Status: foundation completed; decision layer next.** The prototype already
+has a roster, party creation and assignment, deployment, and an encampment
+screen. It does not yet offer a four-member starting party, gold spending,
+development, equipment, recruitment, or a settlement investment.
 
 ### Player outcome
 
@@ -254,6 +290,9 @@ campaign foundation. This is the first point where a small number of
 characterful, durable assets are justified.
 
 ## Milestone 5: First campaign slice
+
+**Status: not started.** This milestone begins only after the reward and
+upgrade loop gives players a reason to choose among multiple expeditions.
 
 ### Player outcome
 
