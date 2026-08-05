@@ -156,6 +156,65 @@ func test_change_scene_reports_error_for_missing_scene() -> void:
 		tracked.handled = true
 
 
+func test_units_route_points_to_the_units_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/units.tscn")
+	assert_string_contains(source, "func go_to_units()")
+
+
+func test_parties_route_points_to_the_parties_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/parties.tscn")
+	assert_string_contains(source, "func go_to_parties()")
+
+
+func test_party_details_route_points_to_the_party_details_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/party_details.tscn")
+	assert_string_contains(source, "func go_to_party_details(")
+
+
+func test_unit_details_route_points_to_the_unit_details_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/unit_details.tscn")
+	assert_string_contains(source, "func go_to_unit_details(")
+
+
+func test_deploy_party_route_points_to_the_deploy_party_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/deploy_party.tscn")
+	assert_string_contains(source, "func go_to_deploy_party()")
+
+
+func test_route_context_id_starts_empty() -> void:
+	GameSession.reset()
+
+	assert_eq(GameManager.route_context_id, "")
+
+
+func test_going_to_party_details_with_an_unknown_id_is_invalid_and_leaves_the_route_context_empty() -> void:
+	GameSession.reset()
+
+	var err: Error = GameManager.go_to_party_details("no_such_party")
+
+	assert_ne(err, OK, "An unknown party id must not be treated as a valid route")
+	assert_eq(GameManager.route_context_id, "")
+
+
+func test_going_to_unit_details_with_an_unknown_id_is_invalid_and_leaves_the_route_context_empty() -> void:
+	GameSession.reset()
+
+	var err: Error = GameManager.go_to_unit_details("no_such_adventurer")
+
+	assert_ne(err, OK, "An unknown adventurer id must not be treated as a valid route")
+	assert_eq(GameManager.route_context_id, "")
+
+
 func test_open_game_menu_shows_the_overlay_and_pauses_the_tree() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

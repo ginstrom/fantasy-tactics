@@ -48,7 +48,8 @@ func test_encampment_never_shows_party_info_since_it_has_no_selection_concept() 
 	screen.refresh()
 
 	assert_false(panel.get_node("Content/PartyName").visible)
-	assert_false(panel.get_node("Content/PartyGoldMargin").visible)
+	assert_false(panel.get_node("Content/PartyMembers").visible)
+	assert_false(panel.get_node("Content/PartyViewButton").visible)
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:

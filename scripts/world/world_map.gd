@@ -373,7 +373,13 @@ func _update_turn_label() -> void:
 func _refresh_information_panel() -> void:
 	if not is_inside_tree():
 		return
-	information_panel.refresh(party_selected)
+	# World Map has no separate row-selection concept; "the party" is the
+	# single deployed party, so its click-to-select toggle simply chooses
+	# whether the panel requests that party's contextual summary.
+	if party_selected:
+		information_panel.refresh_party(GameSession.selected_party_id)
+	else:
+		information_panel.refresh()
 
 
 func _update_highlights() -> void:

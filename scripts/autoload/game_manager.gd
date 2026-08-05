@@ -8,6 +8,11 @@ const WORLD_MAP_SCENE := "res://scenes/world/world_map.tscn"
 const BATTLEFIELD_SCENE := "res://scenes/battle/battlefield.tscn"
 const GAME_MENU_SCENE := "res://scenes/ui/game_menu.tscn"
 const DEBUG_MENU_SCENE := "res://scenes/debug/debug_menu.tscn"
+const UNITS_SCENE := "res://scenes/ui/units.tscn"
+const PARTIES_SCENE := "res://scenes/ui/parties.tscn"
+const PARTY_DETAILS_SCENE := "res://scenes/ui/party_details.tscn"
+const UNIT_DETAILS_SCENE := "res://scenes/ui/unit_details.tscn"
+const DEPLOY_PARTY_SCENE := "res://scenes/ui/deploy_party.tscn"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -15,6 +20,12 @@ const EN_TRANSLATION := preload("res://translations/en.tres")
 # Hardcoded until a real save system exists; both menus read this to decide
 # whether Continue/Load are available.
 var has_saved_game: bool = false
+
+# Short-lived context for the detail routes below (e.g. which party Party
+# Details should read). It belongs here rather than on GameSession because
+# it is UI navigation state, not a durable session record; an invalid
+# navigation clears it instead of leaving a stale id behind.
+var route_context_id: String = ""
 
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
@@ -83,6 +94,37 @@ func complete_battle() -> Error:
 func fail_battle() -> Error:
 	GameSession.abandon_current_encounter()
 	return return_party_to_encampment()
+
+
+func go_to_units() -> Error:
+	route_context_id = ""
+	return _change_scene(UNITS_SCENE)
+
+
+func go_to_parties() -> Error:
+	route_context_id = ""
+	return _change_scene(PARTIES_SCENE)
+
+
+func go_to_party_details(party_id: String) -> Error:
+	if GameSession.get_party(party_id).is_empty():
+		route_context_id = ""
+		return ERR_INVALID_DATA
+	route_context_id = party_id
+	return _change_scene(PARTY_DETAILS_SCENE)
+
+
+func go_to_unit_details(adventurer_id: String) -> Error:
+	if GameSession.get_adventurer(adventurer_id).is_empty():
+		route_context_id = ""
+		return ERR_INVALID_DATA
+	route_context_id = adventurer_id
+	return _change_scene(UNIT_DETAILS_SCENE)
+
+
+func go_to_deploy_party() -> Error:
+	route_context_id = ""
+	return _change_scene(DEPLOY_PARTY_SCENE)
 
 
 func open_game_menu() -> void:

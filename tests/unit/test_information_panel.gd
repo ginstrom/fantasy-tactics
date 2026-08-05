@@ -7,11 +7,16 @@ func before_each() -> void:
 	GameSession.reset()
 
 
-func test_information_panel_displays_the_player_name_and_banked_gold_total() -> void:
-	GameSession.player_name = "Aria"
-	GameSession.gold = 25
+func _make_panel() -> Control:
 	var panel: Control = InformationPanelScene.instantiate()
 	add_child_autofree(panel)
+	return panel
+
+
+func test_refresh_always_shows_player_name_and_banked_gold() -> void:
+	GameSession.player_name = "Aria"
+	GameSession.gold = 25
+	var panel := _make_panel()
 
 	panel.refresh()
 
@@ -20,43 +25,124 @@ func test_information_panel_displays_the_player_name_and_banked_gold_total() -> 
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
-func test_information_panel_hides_party_name_and_gold_by_default() -> void:
+func test_refresh_hides_the_party_and_adventurer_sections() -> void:
 	GameSession.create_party()
-	var panel: Control = InformationPanelScene.instantiate()
-	add_child_autofree(panel)
+	var panel := _make_panel()
 
 	panel.refresh()
 
 	assert_false(panel.get_node("Content/PartyName").visible)
-	assert_false(panel.get_node("Content/PartyGoldMargin").visible)
+	assert_false(panel.get_node("Content/PartyMembers").visible)
+	assert_false(panel.get_node("Content/PartyViewButton").visible)
+	assert_false(panel.get_node("Content/AdventurerName").visible)
+	assert_false(panel.get_node("Content/AdventurerClass").visible)
+	assert_false(panel.get_node("Content/AdventurerLevel").visible)
+	assert_false(panel.get_node("Content/AdventurerViewButton").visible)
 
 
-func test_information_panel_shows_party_name_and_party_gold_when_active_and_a_party_is_selected() -> void:
+func test_refresh_party_shows_the_party_name_member_count_and_view_button() -> void:
 	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.gold = 25
-	GameSession.pending_reward = 10
-	var panel: Control = InformationPanelScene.instantiate()
-	add_child_autofree(panel)
+	var panel := _make_panel()
 
-	panel.refresh(true)
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
 
+	assert_eq(
+		panel.get_node("Content/PlayerName").text,
+		tr("information.player") % GameSession.player_name,
+		"The permanent player row must still render alongside the party summary"
+	)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 	assert_true(panel.get_node("Content/PartyName").visible)
 	assert_eq(panel.get_node("Content/PartyName").text, tr("information.party") % "Party 1")
-	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
-	assert_true(panel.get_node("Content/PartyGoldMargin").visible)
+	assert_true(panel.get_node("Content/PartyMembers").visible)
+	assert_eq(panel.get_node("Content/PartyMembers").text, tr("information.members") % 1)
+	assert_true(panel.get_node("Content/PartyViewButton").visible)
+
+
+func test_refresh_party_with_an_unknown_id_clears_optional_content_without_hiding_player_or_gold() -> void:
+	GameSession.gold = 25
+	var panel := _make_panel()
+
+	panel.refresh_party("no_such_party")
+
 	assert_eq(
-		panel.get_node("Content/PartyGoldMargin/PartyGold").text, tr("information.gold") % 10
+		panel.get_node("Content/PlayerName").text,
+		tr("information.player") % GameSession.player_name
 	)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+	assert_false(panel.get_node("Content/PartyName").visible)
+	assert_false(panel.get_node("Content/PartyMembers").visible)
+	assert_false(panel.get_node("Content/PartyViewButton").visible)
 
 
-func test_information_panel_hides_party_name_and_gold_when_active_but_no_party_exists() -> void:
-	var panel: Control = InformationPanelScene.instantiate()
-	add_child_autofree(panel)
+func test_refresh_adventurer_shows_the_name_class_level_and_view_button() -> void:
+	GameSession.gold = 25
+	var panel := _make_panel()
 
-	panel.refresh(true)
+	panel.refresh_adventurer(GameSession.WARRIOR_ID)
 
-	assert_false(
-		panel.get_node("Content/PartyName").visible,
-		"World Map passes true only once a party marker is selected, but a party must still exist"
+	assert_eq(
+		panel.get_node("Content/PlayerName").text,
+		tr("information.player") % GameSession.player_name,
+		"The permanent player row must still render alongside the adventurer summary"
 	)
-	assert_false(panel.get_node("Content/PartyGoldMargin").visible)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+	assert_true(panel.get_node("Content/AdventurerName").visible)
+	assert_eq(panel.get_node("Content/AdventurerName").text, "Warrior")
+	assert_true(panel.get_node("Content/AdventurerClass").visible)
+	assert_eq(panel.get_node("Content/AdventurerClass").text, tr("information.class") % "warrior")
+	assert_true(panel.get_node("Content/AdventurerLevel").visible)
+	assert_eq(panel.get_node("Content/AdventurerLevel").text, tr("information.level") % 1)
+	assert_true(panel.get_node("Content/AdventurerViewButton").visible)
+
+
+func test_refresh_adventurer_with_an_unknown_id_clears_optional_content_without_hiding_player_or_gold() -> void:
+	GameSession.gold = 25
+	var panel := _make_panel()
+
+	panel.refresh_adventurer("no_such_adventurer")
+
+	assert_eq(
+		panel.get_node("Content/PlayerName").text,
+		tr("information.player") % GameSession.player_name
+	)
+	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
+	assert_false(panel.get_node("Content/AdventurerName").visible)
+	assert_false(panel.get_node("Content/AdventurerClass").visible)
+	assert_false(panel.get_node("Content/AdventurerLevel").visible)
+	assert_false(panel.get_node("Content/AdventurerViewButton").visible)
+
+
+func test_refresh_party_then_refresh_adventurer_hides_the_stale_party_section() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	panel.refresh_adventurer(GameSession.WARRIOR_ID)
+
+	assert_false(panel.get_node("Content/PartyName").visible)
+	assert_false(panel.get_node("Content/PartyMembers").visible)
+	assert_false(panel.get_node("Content/PartyViewButton").visible)
+
+
+func test_the_party_view_button_emits_party_selected_with_the_party_id_instead_of_changing_scenes() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+	watch_signals(panel)
+
+	panel.get_node("Content/PartyViewButton").emit_signal("pressed")
+
+	assert_signal_emitted_with_parameters(panel, "party_selected", [GameSession.FIRST_PARTY_ID])
+
+
+func test_the_adventurer_view_button_emits_adventurer_selected_with_the_adventurer_id_instead_of_changing_scenes() -> void:
+	var panel := _make_panel()
+	panel.refresh_adventurer(GameSession.WARRIOR_ID)
+	watch_signals(panel)
+
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	assert_signal_emitted_with_parameters(panel, "adventurer_selected", [GameSession.WARRIOR_ID])

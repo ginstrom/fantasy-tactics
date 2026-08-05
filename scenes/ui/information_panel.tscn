@@ -27,12 +27,34 @@ text = "information.gold"
 
 [node name="PartyName" type="Label" parent="Content"]
 layout_mode = 2
+visible = false
 text = "information.party"
 
-[node name="PartyGoldMargin" type="MarginContainer" parent="Content"]
+[node name="PartyMembers" type="Label" parent="Content"]
 layout_mode = 2
-theme_override_constants/margin_left = 24
+visible = false
+text = "information.members"
 
-[node name="PartyGold" type="Label" parent="Content/PartyGoldMargin"]
+[node name="PartyViewButton" type="Button" parent="Content"]
 layout_mode = 2
-text = "information.gold"
+visible = false
+text = "information.view"
+
+[node name="AdventurerName" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="AdventurerClass" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.class"
+
+[node name="AdventurerLevel" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.level"
+
+[node name="AdventurerViewButton" type="Button" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.view"
