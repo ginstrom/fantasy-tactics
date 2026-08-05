@@ -32,8 +32,21 @@ func test_add_member_is_present_but_disabled_and_labelled_with_its_own_name() ->
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	assert_true(add_button.visible, "Add Member must still be offered for an encamped party")
 	assert_true(add_button.disabled, "Add Member must not be functional in this slice")
 	assert_eq(add_button.text, "party_details.add_member")
+
+
+func test_add_member_is_hidden_entirely_for_a_deployed_party() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_false(
+		screen.get_node("Center/VBox/AddMemberButton").visible,
+		"You can't add a member to a party that's out in the field"
+	)
 
 
 func test_reads_the_party_id_from_route_context() -> void:
@@ -132,6 +145,28 @@ func test_back_button_clears_only_the_ui_route_context() -> void:
 
 	assert_eq(GameManager.route_context_id, "")
 	assert_false(GameSession.has_deployed_party(), "Back must never deploy or otherwise mutate the party")
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
+
+
+func test_back_button_returns_to_the_world_map_for_a_deployed_party() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/party_details.gd")
+
+	assert_string_contains(source, "GameManager.go_to_world_map()")
+
+
+func test_back_button_clears_route_context_and_leaves_a_deployed_party_untouched() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, "")
+	assert_true(
+		GameSession.has_deployed_party(),
+		"Back must never undeploy the party just because it viewed its details"
+	)
 	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
 
 

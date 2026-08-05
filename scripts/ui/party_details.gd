@@ -3,12 +3,14 @@ extends Control
 ## Shows the roster of a single party (read from GameManager.route_context_id)
 ## and mirrors the selected member into the shared InformationPanel, the same
 ## selection pattern Parties uses for parties (see parties.gd). Add Member is
-## a visible-but-disabled placeholder; membership changes are out of scope
-## for this slice.
+## a disabled placeholder for an encamped party (membership changes are out
+## of scope for this slice) and hidden entirely for a deployed one, since you
+## can't add a member to a party that's out in the field.
 
 @onready var party_name_label: Label = $Center/VBox/PartyNameLabel
 @onready var member_list: VBoxContainer = $Center/VBox/MemberList
 @onready var empty_label: Label = $Center/VBox/EmptyLabel
+@onready var add_member_button: Button = $Center/VBox/AddMemberButton
 @onready var information_panel: PanelContainer = $InformationPanel
 
 var party_id: String = ""
@@ -35,6 +37,10 @@ func refresh() -> void:
 	else:
 		party_name_label.text = party.name
 		_rebuild_member_rows(party.member_ids)
+	# A deployed party is out in the field; Add Member (already a disabled
+	# placeholder for an encamped party) doesn't even make sense to offer,
+	# so it disappears entirely rather than merely staying disabled.
+	add_member_button.visible = not party.get("deployed", false)
 	_refresh_selection()
 
 
@@ -86,5 +92,17 @@ func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
 	GameManager.go_to_unit_details(adventurer_id)
 
 
+## Reachable from both Parties (an encamped party) and, since World Map's
+## View Party button was wired up, from World Map (a deployed party). Back
+## must return to whichever of those the player actually came from instead
+## of always landing on Parties — otherwise a deployed party visually
+## "teleports" back to the Encampment. route_context_id is cleared here
+## directly (rather than relying on the destination route to do it) because
+## go_to_world_map() does not clear it the way go_to_parties() does.
 func _on_back_pressed() -> void:
-	GameManager.go_to_parties()
+	var deployed: bool = GameSession.get_party(party_id).get("deployed", false)
+	GameManager.route_context_id = ""
+	if deployed:
+		GameManager.go_to_world_map()
+	else:
+		GameManager.go_to_parties()
