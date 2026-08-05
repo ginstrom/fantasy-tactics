@@ -268,3 +268,71 @@ func test_close_game_menu_hides_the_overlay_and_unpauses_the_tree() -> void:
 
 	assert_false(manager.is_game_menu_open())
 	assert_false(get_tree().paused)
+
+
+func test_add_member_route_points_to_the_add_member_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/add_member.tscn")
+	assert_string_contains(source, "func go_to_add_member(")
+
+
+func test_going_to_add_member_with_an_unknown_party_id_is_invalid_and_leaves_the_route_context_empty() -> void:
+	GameSession.reset()
+
+	var err: Error = GameManager.go_to_add_member("no_such_party")
+
+	assert_ne(err, OK, "An unknown party id must not be treated as a valid route")
+	assert_eq(GameManager.route_context_id, "")
+
+
+func test_going_to_add_member_with_a_known_party_id_sets_the_route_context() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.go_to_add_member(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_assign_adventurer_to_party_reports_invalid_data_for_an_unknown_adventurer() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.assign_adventurer_to_party(GameSession.FIRST_PARTY_ID, "no_such_adventurer")
+
+	assert_ne(err, OK)
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [] as Array[String])
+
+
+func test_assign_adventurer_to_party_assigns_the_named_adventurer_to_the_named_party() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.assign_adventurer_to_party(GameSession.FIRST_PARTY_ID, GameSession.WARRIOR_ID)
+
+	assert_eq(err, OK)
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
+
+
+func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.recruit_adventurer()
+
+	assert_eq(err, OK)
+	assert_eq(GameSession.adventurers.size(), 2)
+	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+
+
+func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
+	assert_eq(GameManager.debug_scenario_target("party_empty"), GameManager.DebugTarget.ENCAMPMENT)

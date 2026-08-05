@@ -13,6 +13,7 @@ const PARTIES_SCENE := "res://scenes/ui/parties.tscn"
 const PARTY_DETAILS_SCENE := "res://scenes/ui/party_details.tscn"
 const UNIT_DETAILS_SCENE := "res://scenes/ui/unit_details.tscn"
 const DEPLOY_PARTY_SCENE := "res://scenes/ui/deploy_party.tscn"
+const ADD_MEMBER_SCENE := "res://scenes/ui/add_member.tscn"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -127,6 +128,14 @@ func go_to_deploy_party() -> Error:
 	return _change_scene(DEPLOY_PARTY_SCENE)
 
 
+func go_to_add_member(party_id: String) -> Error:
+	if GameSession.get_party(party_id).is_empty():
+		route_context_id = ""
+		return ERR_INVALID_DATA
+	route_context_id = party_id
+	return _change_scene(ADD_MEMBER_SCENE)
+
+
 ## Deploys the named encamped party (see GameSession.deploy_party for the
 ## eligibility rules) and only then routes to the World Map, mirroring
 ## depart_selected_party()'s deploy-before-scene-change order. An ineligible
@@ -136,6 +145,12 @@ func deploy_party(party_id: String) -> Error:
 	if not GameSession.deploy_party(party_id):
 		return ERR_INVALID_DATA
 	return go_to_world_map()
+
+
+func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> Error:
+	if not GameSession.assign_adventurer_to_party(party_id, adventurer_id):
+		return ERR_INVALID_DATA
+	return OK
 
 
 func open_game_menu() -> void:
@@ -157,7 +172,7 @@ static func debug_scenario_target(scenario_id: String) -> DebugTarget:
 	match scenario_id:
 		"new_campaign":
 			return DebugTarget.SETTLEMENT
-		"encampment", "party_ready":
+		"encampment", "party_ready", "party_empty":
 			return DebugTarget.ENCAMPMENT
 		"party_manager":
 			return DebugTarget.PARTY_MANAGER
@@ -195,6 +210,13 @@ func apply_super_power() -> Error:
 	if controller == null:
 		return ERR_UNAVAILABLE
 	controller.apply_super_power()
+	return OK
+
+
+func recruit_adventurer() -> Error:
+	if not OS.is_debug_build():
+		return ERR_UNAVAILABLE
+	GameSession.recruit_adventurer()
 	return OK
 
 
