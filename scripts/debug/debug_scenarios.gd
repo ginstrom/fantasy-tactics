@@ -2,7 +2,6 @@ class_name DebugScenarios
 extends RefCounted
 
 const WORLD_MAP_POSITION := Vector2i(1, 0)
-const GOBLIN_CAMP_POSITION := Vector2i(4, 4)
 
 const SCENARIO_IDS := [
 	"new_campaign",
@@ -29,7 +28,7 @@ static func apply(scenario_id: String) -> bool:
 		"world_map":
 			return _deploy_at(WORLD_MAP_POSITION)
 		"goblin_camp":
-			return _deploy_at(GOBLIN_CAMP_POSITION)
+			return _deploy_at(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 		"orc_outpost":
 			return _deploy_at(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position)
 	return false

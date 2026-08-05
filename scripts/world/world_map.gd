@@ -355,7 +355,8 @@ func _draw_route_path(
 
 	var label := Label.new()
 	label.text = tr("world_map.arrival_turns") % route.size()
-	label.position = Vector2(destination) * TILE_SIZE + Vector2(TILE_SIZE * 0.1, -TILE_SIZE * 0.6)
+	var label_y := maxf(destination.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
+	label.position = Vector2(destination.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	route_container.add_child(label)
 

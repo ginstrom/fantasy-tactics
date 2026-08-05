@@ -23,7 +23,11 @@ func test_goblin_camp_creates_a_staffed_deployed_party_at_the_camp() -> void:
 	assert_true(DebugScenarios.apply("goblin_camp"))
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
-	assert_eq(GameSession.get_deployed_party_position(), Vector2i(4, 4))
+	assert_eq(
+		GameSession.get_deployed_party_position(),
+		GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position,
+		"The scenario must deploy to the catalog's position, not a second hardcoded source of truth"
+	)
 	assert_eq(GameSession.selected_encounter, "")
 
 

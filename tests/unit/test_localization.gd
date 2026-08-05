@@ -45,7 +45,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.status.miss") % "Goblin", "Goblin misses.")
 	assert_eq(tr("battle.status.enemy_move") % "Goblin", "Goblin moves closer.")
 	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
-	assert_eq(tr("battle.result.victory"), "Victory! The goblin camp is cleared.")
+	assert_eq(tr("battle.result.victory") % "Goblin Camp", "Victory! Goblin Camp is cleared.")
 	assert_eq(tr("battle.result.defeat"), "Defeat. The party returns to the settlement.")
 	assert_eq(
 		tr("world_map.hint"),

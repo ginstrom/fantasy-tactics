@@ -12,6 +12,7 @@ const EXPEDITIONS: Dictionary = {
 		"reward": 10,
 		"enemy": {
 			"name_key": "battle.enemy.goblin",
+			"attack_name_key": "battle.enemy.goblin.attack",
 			"max_health": 3,
 			"attack_damage": 1,
 			"hit_chance": 0.3,
@@ -24,6 +25,7 @@ const EXPEDITIONS: Dictionary = {
 		"reward": 25,
 		"enemy": {
 			"name_key": "battle.enemy.orc",
+			"attack_name_key": "battle.enemy.orc.attack",
 			"max_health": 5,
 			"attack_damage": 2,
 			"hit_chance": 0.5,
@@ -261,7 +263,7 @@ func complete_current_encounter() -> void:
 	var expedition := get_expedition(selected_encounter)
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
-	pending_reward = expedition.get("reward", 0)
+		pending_reward += expedition.get("reward", 0)
 	selected_encounter = ""
 
 

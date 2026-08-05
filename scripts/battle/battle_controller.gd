@@ -52,7 +52,7 @@ func _ready() -> void:
 		UnitScript.new(
 			GOBLIN_START, GOBLIN_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.hit_chance,
-			tr(enemy_stats.name_key)
+			tr(enemy_stats.attack_name_key)
 		),
 	]
 	_draw_tiles()

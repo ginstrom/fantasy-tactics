@@ -121,13 +121,33 @@ func test_health_label_shows_defeated_after_a_unit_dies() -> void:
 	assert_eq(battlefield.enemy_health.text, tr("battle.status.defeated") % tr("battle.side.enemy"))
 
 
-func test_show_battle_result_shows_the_victory_message_and_locks_input() -> void:
+func test_show_battle_result_names_the_won_goblin_camp_in_the_victory_message() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(true)
 
-	assert_eq(battlefield.status.text, tr("battle.result.victory"))
+	assert_eq(
+		battlefield.status.text, tr("battle.result.victory") % tr("expedition.goblin_camp.name")
+	)
+	assert_true(battlefield._battle_resolved)
+	assert_true(battlefield.end_turn_button.disabled)
+	assert_true(battlefield.grid.input_locked)
+
+
+func test_show_battle_result_names_the_won_orc_outpost_in_the_victory_message() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._show_battle_result(true)
+
+	assert_eq(
+		battlefield.status.text, tr("battle.result.victory") % tr("expedition.orc_outpost.name")
+	)
 	assert_true(battlefield._battle_resolved)
 	assert_true(battlefield.end_turn_button.disabled)
 	assert_true(battlefield.grid.input_locked)

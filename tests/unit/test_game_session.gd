@@ -309,6 +309,7 @@ func test_get_expedition_returns_the_documented_goblin_camp_record() -> void:
 	assert_eq(record.enemy.max_health, 3)
 	assert_eq(record.enemy.attack_damage, 1)
 	assert_eq(record.enemy.hit_chance, 0.3)
+	assert_eq(record.enemy.attack_name_key, "battle.enemy.goblin.attack")
 
 
 func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
@@ -322,6 +323,7 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	assert_eq(record.enemy.max_health, 5)
 	assert_eq(record.enemy.attack_damage, 2)
 	assert_eq(record.enemy.hit_chance, 0.5)
+	assert_eq(record.enemy.attack_name_key, "battle.enemy.orc.attack")
 
 
 func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:
@@ -396,6 +398,57 @@ func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() 
 
 	assert_eq(second_deposit, 0, "A second deposit must not pay again")
 	assert_eq(session.gold, 10, "Gold must not change on a second deposit")
+
+
+func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(
+		session.pending_reward,
+		35,
+		"Both rewards should accumulate when banking happens after both victories"
+	)
+	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
+	assert_true(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID))
+
+
+func test_depositing_after_chained_victories_banks_the_combined_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+	session.complete_current_encounter()
+
+	var deposited: int = session.deposit_pending_reward()
+
+	assert_eq(deposited, 35)
+	assert_eq(session.gold, 35)
+	assert_eq(session.pending_reward, 0)
+
+
+func test_completing_an_already_completed_encounter_does_not_requeue_its_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	session.deposit_pending_reward()
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(
+		session.pending_reward,
+		0,
+		"Re-completing an already-completed site must not requeue its reward"
+	)
+	assert_eq(session.gold, 10, "Gold already banked must be unaffected by re-completing a finished site")
 
 
 func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:

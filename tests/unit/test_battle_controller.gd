@@ -158,6 +158,7 @@ func test_ready_spawns_the_documented_warrior_and_goblin() -> void:
 	assert_eq(goblin.move_range, 3)
 	assert_eq(goblin.attack_damage, 1)
 	assert_eq(goblin.hit_chance, 0.3)
+	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
 
 func test_ready_builds_the_orc_outpost_enemy_when_orc_outpost_is_selected() -> void:
@@ -172,6 +173,7 @@ func test_ready_builds_the_orc_outpost_enemy_when_orc_outpost_is_selected() -> v
 	assert_eq(enemy.max_health, 5)
 	assert_eq(enemy.attack_damage, 2)
 	assert_eq(enemy.hit_chance, 0.5)
+	assert_eq(enemy.attack_name, tr("battle.enemy.orc.attack"))
 
 
 func test_ready_builds_the_goblin_camp_enemy_when_goblin_camp_is_selected() -> void:
@@ -186,6 +188,7 @@ func test_ready_builds_the_goblin_camp_enemy_when_goblin_camp_is_selected() -> v
 	assert_eq(enemy.max_health, 3)
 	assert_eq(enemy.attack_damage, 1)
 	assert_eq(enemy.hit_chance, 0.3)
+	assert_eq(enemy.attack_name, tr("battle.enemy.goblin.attack"))
 
 
 func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:

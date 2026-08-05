@@ -88,7 +88,19 @@ func _resolve_battle(victory: bool) -> void:
 func _show_battle_result(victory: bool) -> void:
 	_battle_resolved = true
 	_set_enemy_turn_in_progress(true)
-	status.text = tr("battle.result.victory") if victory else tr("battle.result.defeat")
+	status.text = _victory_message() if victory else tr("battle.result.defeat")
+
+
+func _victory_message() -> String:
+	# Captured before GameManager.complete_battle() clears selected_encounter.
+	# Scene-isolated tests instantiate the battlefield with no selected
+	# encounter; fall back to the Goblin Camp, matching
+	# BattleController._get_enemy_stats()'s fallback.
+	var encounter_id: String = GameSession.selected_encounter
+	if encounter_id == "":
+		encounter_id = GameSession.GOBLIN_CAMP_ID
+	var expedition := GameSession.get_expedition(encounter_id)
+	return tr("battle.result.victory") % tr(expedition.name_key)
 
 
 func _apply_battle_outcome(victory: bool) -> void:

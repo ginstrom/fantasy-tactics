@@ -680,3 +680,31 @@ func _find_expedition_label(world_map: Node2D, name_text: String) -> Label:
 		if marker is Label and marker.text.find(name_text) > -1:
 			return marker
 	return null
+
+
+func test_route_preview_label_stays_clear_of_the_hint_bar_at_the_top_of_the_map() -> void:
+	# The party starts at row 0. A hover-preview route destined for another
+	# tile on row 0 previously produced a label position above the map /
+	# behind the hint bar, mirroring the (already-fixed) expedition-label bug.
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._update_hover_route(Vector2i(3, 0))
+	await get_tree().process_frame
+
+	var label := _find_route_label(world_map)
+	assert_not_null(label, "Hover route destination label should be drawn")
+	assert_gte(label.position.y, 0.0, "The label must stay within the visible playfield")
+	assert_gte(
+		label.position.y,
+		WorldMapScript.EXPEDITION_LABEL_MIN_Y,
+		"The label must not be drawn behind the hint bar"
+	)
+
+
+func _find_route_label(world_map: Node2D) -> Label:
+	for child in world_map.get_node("Routes").get_children():
+		if child is Label:
+			return child
+	return null
