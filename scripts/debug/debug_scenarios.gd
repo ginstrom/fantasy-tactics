@@ -8,6 +8,7 @@ const SCENARIO_IDS := [
 	"encampment",
 	"party_manager",
 	"party_ready",
+	"party_empty",
 	"world_map",
 	"goblin_camp",
 	"orc_outpost",
@@ -25,6 +26,8 @@ static func apply(scenario_id: String) -> bool:
 			return true
 		"party_ready":
 			return _create_staffed_party()
+		"party_empty":
+			return GameSession.create_party()
 		"world_map":
 			return _deploy_at(WORLD_MAP_POSITION)
 		"goblin_camp":

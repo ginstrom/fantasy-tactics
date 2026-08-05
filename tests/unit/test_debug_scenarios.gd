@@ -53,7 +53,14 @@ func test_scenario_ids_are_in_display_order() -> void:
 		"encampment",
 		"party_manager",
 		"party_ready",
+		"party_empty",
 		"world_map",
 		"goblin_camp",
 		"orc_outpost",
 	])
+
+
+func test_party_empty_creates_an_encamped_party_with_no_members() -> void:
+	assert_true(DebugScenarios.apply("party_empty"))
+	assert_false(GameSession.has_deployed_party())
+	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
