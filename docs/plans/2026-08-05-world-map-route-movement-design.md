@@ -15,10 +15,10 @@ the route and estimated arrival time clear before the player commits.
    number of world turns required.
 3. Click an in-bounds tile to save or replace the party's route without moving.
    The displayed route becomes the remaining committed route.
-4. Click the selected party again to make one manual step along that route. A
+4. Click the movement target again to make one manual step along that route. A
    route step uses the party's single movement allocation for the current world
    turn.
-5. Press **End Turn**. The world-turn counter increases. If that allocation was
+5. Press **End Turn**. The world-turn counter increases. If any movement was
    unused, the party automatically takes the next step of its route; otherwise
    it remains in place. The next turn begins with movement available again.
 
