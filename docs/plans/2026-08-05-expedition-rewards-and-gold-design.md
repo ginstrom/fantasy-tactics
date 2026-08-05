@@ -38,8 +38,6 @@ Exact site names, enemy composition, and gold values are implementation-level ba
 
 Gold is the first banked player resource. It is campaign state, starts at zero in a new campaign, and is intended to fund a later improvement slice.
 
-Each deployed party can carry one pending expedition reward. A battle victory records the selected site's fixed reward as that pending amount while marking the site complete. It does not add the amount to banked gold on the World Map.
-
 When the party returns to the Encampment, the campaign deposits the pending amount into banked gold and clears the pending amount in the same state transition. The Encampment confirms the received amount and shows the new total. This must be idempotent: revisiting the Encampment, changing scenes, or reopening a panel cannot pay a reward a second time.
 
 Defeat grants no pending or banked gold. It retains the current outcome: return the party to the Starting Settlement and leave the expedition available for a later attempt.
@@ -56,11 +54,11 @@ Gold: <banked amount>
 
 The panel appears at least on the Encampment and World Map, where the player makes expedition and future spending decisions. It is a reusable container, not a gold-specific widget: later resources, party status, supplies, or objectives can be added without moving the basic layout.
 
-The banked amount is the primary value. During an expedition, a small pending reward indication may appear on the World Map if it improves clarity, but it must clearly remain separate from spendable gold and is not required here.
+The banked amount is the primary value. When we start showing party information on the information panel, we may show the spoils they are carrying.
 
 ## State and scene boundaries
 
-- `GameSession` owns durable campaign resources, pending rewards, site completion, party deployment, and party location.
+- `GameSession` owns durable campaign resources, party info (pending reward and party disposition), and site completion.
 - `GameManager` owns named transitions, including the route that returns a party to the Encampment.
 - The battle outcome identifies the current expedition and asks campaign state to record its victory reward; the battlefield does not own gold totals.
 - The settlement/encampment return transition performs the single deposit.
