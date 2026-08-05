@@ -40,6 +40,7 @@ const DEFAULT_WARRIOR := {
 	"weapon": "sword",
 }
 const FIRST_PARTY_ID := "party_001"
+const DEFAULT_PLAYER_NAME := "Player"
 
 var adventurers: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
@@ -49,14 +50,16 @@ var completed_encounters: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var pending_reward: int = 0
+var player_name: String = DEFAULT_PLAYER_NAME
 
 
 func _init() -> void:
 	reset()
 
 
-func start_new_game() -> void:
+func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 	reset()
+	player_name = new_player_name
 
 
 func reset() -> void:
@@ -69,6 +72,7 @@ func reset() -> void:
 	world_turn = 1
 	gold = 0
 	pending_reward = 0
+	player_name = DEFAULT_PLAYER_NAME
 
 
 func create_party() -> bool:

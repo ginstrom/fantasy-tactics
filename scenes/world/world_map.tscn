@@ -16,11 +16,17 @@ script = ExtResource("1_world_map")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="Hint" type="Label" parent="HUD"]
+[node name="FeedbackPanel" type="Panel" parent="HUD"]
 offset_left = 16.0
-offset_top = 16.0
-offset_right = 1040.0
-offset_bottom = 112.0
+offset_top = 608.0
+offset_right = 1264.0
+offset_bottom = 704.0
+
+[node name="Hint" type="Label" parent="HUD"]
+offset_left = 32.0
+offset_top = 616.0
+offset_right = 1248.0
+offset_bottom = 696.0
 autowrap_mode = 3
 text = "world_map.hint"
 

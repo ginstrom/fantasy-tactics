@@ -12,6 +12,34 @@ func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
 	assert_eq(session.selected_party_id, "")
 
 
+func test_new_session_defaults_the_player_name() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.player_name, GameSessionScript.DEFAULT_PLAYER_NAME)
+
+
+func test_start_new_game_sets_the_player_name_and_resets_other_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 25
+
+	session.start_new_game("Aria")
+
+	assert_eq(session.player_name, "Aria")
+	assert_eq(session.gold, 0)
+
+
+func test_reset_restores_the_default_player_name() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.start_new_game("Aria")
+
+	session.reset()
+
+	assert_eq(session.player_name, GameSessionScript.DEFAULT_PLAYER_NAME)
+
+
 func test_create_party_then_add_and_remove_warrior() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

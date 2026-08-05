@@ -17,12 +17,22 @@ layout_mode = 2
 text = "information.title"
 horizontal_alignment = 1
 
-[node name="PartyName" type="Label" parent="Content"]
+[node name="PlayerName" type="Label" parent="Content"]
 layout_mode = 2
-text = "information.party"
-horizontal_alignment = 1
+text = "information.player"
 
 [node name="Gold" type="Label" parent="Content"]
 layout_mode = 2
 text = "information.gold"
-horizontal_alignment = 1
+
+[node name="PartyName" type="Label" parent="Content"]
+layout_mode = 2
+text = "information.party"
+
+[node name="PartyGoldMargin" type="MarginContainer" parent="Content"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+
+[node name="PartyGold" type="Label" parent="Content/PartyGoldMargin"]
+layout_mode = 2
+text = "information.gold"

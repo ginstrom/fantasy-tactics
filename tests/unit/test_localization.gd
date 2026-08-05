@@ -18,6 +18,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.return"), "Return")
 	assert_eq(tr("menu.save"), "Save")
 	assert_eq(tr("menu.not_implemented"), "Not implemented yet")
+	assert_eq(tr("menu.enter_name"), "Enter your name:")
+	assert_eq(tr("menu.begin"), "Begin")
 	assert_eq(tr("battle.end_turn"), "End Turn")
 	assert_eq(tr("battle.round") % 1, "Round 1")
 	assert_eq(tr("battle.side.player"), "Player")
@@ -83,6 +85,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("encampment.status.ready"), "Your party is ready to depart.")
 	assert_eq(tr("encampment.depart"), "Depart")
 	assert_eq(tr("information.title"), "Information")
+	assert_eq(tr("information.player") % "Aria", "Player: Aria")
 	assert_eq(tr("information.party") % "Party 1", "Party: Party 1")
 	assert_eq(tr("information.gold") % 25, "Gold: 25")
 	assert_eq(tr("settlement.title"), "Starting Settlement")
@@ -108,6 +111,8 @@ func test_start_menu_uses_translation_keys_not_literal_copy() -> void:
 	assert_eq(start_menu.get_node("Center/VBox/NewGameButton").text, "menu.new_game")
 	assert_eq(start_menu.get_node("Center/VBox/LoadButton").text, "menu.load")
 	assert_eq(start_menu.get_node("Center/VBox/QuitButton").text, "menu.quit")
+	assert_eq(start_menu.get_node("Center/VBox/NameEntry/Prompt").text, "menu.enter_name")
+	assert_eq(start_menu.get_node("Center/VBox/NameEntry/BeginButton").text, "menu.begin")
 
 
 func test_battlefield_hud_buttons_use_translation_keys_not_literal_copy() -> void:

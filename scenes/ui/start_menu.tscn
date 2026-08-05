@@ -44,6 +44,27 @@ text = "menu.load"
 layout_mode = 2
 text = "menu.quit"
 
+[node name="NameEntry" type="VBoxContainer" parent="Center/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Prompt" type="Label" parent="Center/VBox/NameEntry"]
+layout_mode = 2
+text = "menu.enter_name"
+horizontal_alignment = 1
+
+[node name="NameInput" type="LineEdit" parent="Center/VBox/NameEntry"]
+layout_mode = 2
+
+[node name="BeginButton" type="Button" parent="Center/VBox/NameEntry"]
+layout_mode = 2
+disabled = true
+text = "menu.begin"
+
 [connection signal="pressed" from="Center/VBox/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="Center/VBox/NewGameButton" to="." method="_on_new_game_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
+[connection signal="text_changed" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_changed"]
+[connection signal="text_submitted" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_submitted"]
+[connection signal="pressed" from="Center/VBox/NameEntry/BeginButton" to="." method="_on_begin_pressed"]

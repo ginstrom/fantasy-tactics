@@ -37,8 +37,8 @@ func go_to_start_menu() -> Error:
 	return _change_scene(START_MENU_SCENE)
 
 
-func go_to_game() -> Error:
-	GameSession.start_new_game()
+func go_to_game(player_name: String = "Player") -> Error:
+	GameSession.start_new_game(player_name)
 	return go_to_starting_settlement()
 
 

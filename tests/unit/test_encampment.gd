@@ -38,6 +38,19 @@ func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
+func test_encampment_never_shows_party_info_since_it_has_no_selection_concept() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var panel: Control = screen.get_node("InformationPanel")
+
+	screen.refresh()
+
+	assert_false(panel.get_node("Content/PartyName").visible)
+	assert_false(panel.get_node("Content/PartyGoldMargin").visible)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
