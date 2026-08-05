@@ -10,7 +10,7 @@ script = ExtResource("1_debug_menu")
 offset_left = 24.0
 offset_top = 24.0
 offset_right = 324.0
-offset_bottom = 382.0
+offset_bottom = 422.0
 
 [node name="Rows" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
@@ -50,9 +50,14 @@ text = "debug.world_map"
 layout_mode = 2
 text = "debug.goblin_camp"
 
+[node name="OrcOutpostButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.orc_outpost"
+
 [connection signal="pressed" from="Panel/Rows/NewCampaignButton" to="." method="_on_new_campaign_pressed"]
 [connection signal="pressed" from="Panel/Rows/EncampmentButton" to="." method="_on_encampment_pressed"]
 [connection signal="pressed" from="Panel/Rows/PartyManagerButton" to="." method="_on_party_manager_pressed"]
 [connection signal="pressed" from="Panel/Rows/PartyReadyButton" to="." method="_on_party_ready_pressed"]
 [connection signal="pressed" from="Panel/Rows/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Panel/Rows/GoblinCampButton" to="." method="_on_goblin_camp_pressed"]
+[connection signal="pressed" from="Panel/Rows/OrcOutpostButton" to="." method="_on_orc_outpost_pressed"]

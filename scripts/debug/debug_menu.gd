@@ -38,3 +38,7 @@ func _on_world_map_pressed() -> void:
 
 func _on_goblin_camp_pressed() -> void:
 	_run("goblin_camp")
+
+
+func _on_orc_outpost_pressed() -> void:
+	_run("orc_outpost")

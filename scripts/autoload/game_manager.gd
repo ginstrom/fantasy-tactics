@@ -109,7 +109,7 @@ static func debug_scenario_target(scenario_id: String) -> DebugTarget:
 			return DebugTarget.PARTY_MANAGER
 		"world_map":
 			return DebugTarget.WORLD_MAP
-		"goblin_camp":
+		"goblin_camp", "orc_outpost":
 			return DebugTarget.BATTLEFIELD
 	return DebugTarget.NONE
 
@@ -130,7 +130,7 @@ func run_debug_scenario(scenario_id: String) -> Error:
 		DebugTarget.WORLD_MAP:
 			return go_to_world_map()
 		DebugTarget.BATTLEFIELD:
-			return enter_battle(GameSession.GOBLIN_CAMP_ID)
+			return enter_battle(scenario_id)
 	return ERR_INVALID_DATA
 
 

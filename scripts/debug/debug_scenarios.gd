@@ -11,6 +11,7 @@ const SCENARIO_IDS := [
 	"party_ready",
 	"world_map",
 	"goblin_camp",
+	"orc_outpost",
 ]
 
 
@@ -29,6 +30,8 @@ static func apply(scenario_id: String) -> bool:
 			return _deploy_at(WORLD_MAP_POSITION)
 		"goblin_camp":
 			return _deploy_at(GOBLIN_CAMP_POSITION)
+		"orc_outpost":
+			return _deploy_at(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position)
 	return false
 
 

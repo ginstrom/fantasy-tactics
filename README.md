@@ -28,15 +28,18 @@ make screenshots  # Capture a screenshot of every scene/state into ./screenshots
 
 `make play` runs a debug build. Press `F9` from a campaign screen to open the
 development-only scenario menu, which can jump to New Campaign, Encampment,
-Party Manager, Party Ready to Depart, Party on World Map, or Goblin Camp
-Battle. The menu is not created in non-debug exports.
+Party Manager, Party Ready to Depart, Party on World Map, Goblin Camp Battle,
+or Orc Outpost Battle. The menu is not created in non-debug exports.
 
 ## Screenshots
 
 `make screenshots` drives the game through every known scene and notable UI
 state, saving a numbered PNG per state to `./screenshots`. It's a real render
 (not headless), so it needs an available display; the window is positioned
-off-screen so it doesn't interrupt you.
+off-screen so it doesn't interrupt you. The tour covers expedition and reward
+states too: the World Map with both expedition labels and the gold panel, the
+World Map right after a Goblin Camp victory but before the reward is
+deposited, and the Encampment after the reward is deposited.
 
 The tour is a plain list of steps in
 `scripts/tools/screenshot_tour.gd` — as new scenes or UI states are added to

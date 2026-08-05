@@ -28,6 +28,12 @@ const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
 const HOVER_ROUTE_SEGMENT_COLOR := Color(0.4, 0.9, 0.9, 0.5)
 const HOVER_ROUTE_TARGET_COLOR := Color(0.4, 0.9, 0.9, 0.8)
 
+# Expedition labels sit above their marker by default. Matches HUD/Hint's
+# reserved bottom edge in world_map.tscn so a label on grid row 0 (or any row
+# close enough to the top) is pushed below the hint bar instead of off the
+# top of the viewport or behind it.
+const EXPEDITION_LABEL_MIN_Y := 112.0
+
 var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
@@ -286,7 +292,8 @@ func _draw_markers() -> void:
 		label.text = tr("world_map.expedition.label") % [
 			tr(record.name_key), tr(record.danger_key), record.reward
 		]
-		label.position = Vector2(record.position) * TILE_SIZE + Vector2(TILE_SIZE * 0.1, -TILE_SIZE * 0.6)
+		var label_y := maxf(record.position.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
+		label.position = Vector2(record.position.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		marker_container.add_child(label)
 

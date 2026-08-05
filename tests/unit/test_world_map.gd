@@ -637,3 +637,46 @@ func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 		if marker is ColorRect and marker.color == color:
 			return true
 	return false
+
+
+func test_orc_outpost_label_stays_clear_of_the_hint_bar_at_the_top_of_the_map() -> void:
+	# The Orc Outpost sits on grid row 0. Its label must not be pushed above
+	# the visible playfield (negative y) or behind HUD/Hint (see
+	# world_map.tscn), which reserves the screen down to y = 112.
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+	var label := _find_expedition_label(world_map, tr(orc_record.name_key))
+
+	assert_not_null(label, "Orc Outpost's expedition label should be drawn")
+	assert_gte(label.position.y, 0.0, "The label must stay within the visible playfield")
+	assert_gte(
+		label.position.y,
+		WorldMapScript.EXPEDITION_LABEL_MIN_Y,
+		"The label must not be drawn behind the hint bar"
+	)
+
+
+func test_goblin_camp_label_position_is_unchanged_by_the_hint_bar_clamp() -> void:
+	# Row 4 sits well clear of the hint bar already; the fix for row 0 must
+	# not shift labels that were never at risk of overlapping it.
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var label := _find_expedition_label(world_map, tr(goblin_record.name_key))
+
+	assert_not_null(label, "Goblin Camp's expedition label should be drawn")
+	assert_eq(
+		label.position,
+		Vector2(goblin_record.position) * WorldMapScript.TILE_SIZE
+			+ Vector2(WorldMapScript.TILE_SIZE * 0.1, -WorldMapScript.TILE_SIZE * 0.6)
+	)
+
+
+func _find_expedition_label(world_map: Node2D, name_text: String) -> Label:
+	for marker in world_map.get_node("Markers").get_children():
+		if marker is Label and marker.text.find(name_text) > -1:
+			return marker
+	return null
