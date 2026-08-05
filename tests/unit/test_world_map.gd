@@ -435,6 +435,38 @@ func test_world_map_contains_the_information_panel_showing_the_current_gold_tota
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
+func test_information_panel_hides_party_name_until_the_party_marker_is_selected() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+
+	assert_false(
+		panel.get_node("Content/PartyName").visible,
+		"Party info should stay hidden until the player selects the party marker"
+	)
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(
+		panel.get_node("Content/PartyName").visible,
+		"Selecting the party marker should reveal its info"
+	)
+
+
+func test_information_panel_hides_party_name_again_after_deselecting_with_right_click() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	world_map._handle_tile_click(world_map.party_position)
+
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	world_map._unhandled_input(right_click)
+
+	assert_false(panel.get_node("Content/PartyName").visible)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

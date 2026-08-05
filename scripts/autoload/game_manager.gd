@@ -64,9 +64,9 @@ func depart_selected_party() -> Error:
 	return _change_scene(WORLD_MAP_SCENE)
 
 
-func enter_starting_settlement() -> Error:
+func return_party_to_encampment() -> Error:
 	GameSession.return_deployed_party_to_settlement()
-	return _change_scene(STARTING_SETTLEMENT_SCENE)
+	return go_to_encampment()
 
 
 func enter_battle(encounter_id: String) -> Error:
@@ -81,7 +81,7 @@ func complete_battle() -> Error:
 
 func fail_battle() -> Error:
 	GameSession.abandon_current_encounter()
-	return enter_starting_settlement()
+	return return_party_to_encampment()
 
 
 func open_game_menu() -> void:

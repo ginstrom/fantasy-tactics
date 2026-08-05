@@ -77,17 +77,19 @@ func test_depart_selected_party_deploys_before_changing_scene() -> void:
 	assert_true(GameSession.has_deployed_party())
 
 
-func test_enter_starting_settlement_returns_party_before_changing_scene() -> void:
+func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.pending_reward = 15
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
-	manager.enter_starting_settlement()
+	manager.return_party_to_encampment()
 
 	assert_false(GameSession.has_deployed_party())
+	assert_eq(GameSession.gold, 15, "Returning to the encampment must bank any queued reward")
 
 
 func test_go_to_encampment_deposits_pending_gold_once() -> void:

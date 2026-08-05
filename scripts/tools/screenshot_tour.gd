@@ -63,8 +63,8 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.complete_battle()},
 		{"name": "encampment_reward_deposited", "action": func() -> void:
 			GameManager.go_to_encampment()},
-		{"name": "starting_settlement_revisit", "action": func() -> void:
-			GameManager.enter_starting_settlement()},
+		{"name": "encampment_revisit", "action": func() -> void:
+			GameManager.return_party_to_encampment()},
 	]
 
 

@@ -55,7 +55,7 @@ func _ready() -> void:
 	_draw_routes()
 	_update_highlights()
 	_update_turn_label()
-	information_panel.refresh()
+	_refresh_information_panel()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -78,6 +78,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			party_selected = false
 			_draw_routes()
 			_update_highlights()
+			_refresh_information_panel()
 		return
 
 	if event.button_index != MOUSE_BUTTON_LEFT:
@@ -191,6 +192,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		if not party_selected:
 			party_selected = true
 			_update_highlights()
+			_refresh_information_panel()
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
@@ -210,12 +212,14 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
+			_refresh_information_panel()
 			return
 
 		party_selected = false
 		hover_route = []
 		_draw_routes()
 		_update_highlights()
+		_refresh_information_panel()
 		return
 
 	if not party_selected:
@@ -244,7 +248,7 @@ func _on_encounter_activated(encounter_id: String) -> void:
 
 
 func _on_settlement_activated(_location_id: String) -> void:
-	GameManager.enter_starting_settlement()
+	GameManager.return_party_to_encampment()
 
 
 func _to_grid_position(local_pos: Vector2) -> Vector2i:
@@ -365,6 +369,12 @@ func _update_turn_label() -> void:
 	if not is_inside_tree():
 		return
 	turn_label.text = tr("world_map.turn") % GameSession.world_turn
+
+
+func _refresh_information_panel() -> void:
+	if not is_inside_tree():
+		return
+	information_panel.refresh(party_selected)
 
 
 func _update_highlights() -> void:

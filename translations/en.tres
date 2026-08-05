@@ -26,6 +26,7 @@ messages = {
 "encampment.status.ready": "Your party is ready to depart.",
 "encampment.depart": "Depart",
 "information.title": "Information",
+"information.party": "Party: %s",
 "information.gold": "Gold: %d",
 "settlement.title": "Starting Settlement",
 "settlement.description": "Prepare your party before setting out.",

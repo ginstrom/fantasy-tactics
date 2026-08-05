@@ -83,6 +83,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("encampment.status.ready"), "Your party is ready to depart.")
 	assert_eq(tr("encampment.depart"), "Depart")
 	assert_eq(tr("information.title"), "Information")
+	assert_eq(tr("information.party") % "Party 1", "Party: Party 1")
 	assert_eq(tr("information.gold") % 25, "Gold: 25")
 	assert_eq(tr("settlement.title"), "Starting Settlement")
 	assert_eq(tr("settlement.description"), "Prepare your party before setting out.")
