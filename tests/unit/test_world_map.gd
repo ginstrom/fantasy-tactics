@@ -150,6 +150,7 @@ func test_right_click_cancels_retargeting_and_preserves_the_route() -> void:
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
 	world_map._handle_tile_click(world_map.party_position)
+	world_map._update_hover_route(Vector2i(0, 2))
 	var right_click := InputEventMouseButton.new()
 	right_click.button_index = MOUSE_BUTTON_RIGHT
 	right_click.pressed = true
@@ -157,6 +158,7 @@ func test_right_click_cancels_retargeting_and_preserves_the_route() -> void:
 	world_map._unhandled_input(right_click)
 
 	assert_false(world_map.is_setting_route)
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
 	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)])
 
 
@@ -336,6 +338,115 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	)
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_update_hover_route_sets_the_route_when_selected() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._update_hover_route(Vector2i(2, 0))
+
+	assert_eq(world_map.hover_route, [Vector2i(1, 0), Vector2i(2, 0)])
+
+
+func test_update_hover_route_is_empty_when_not_selected() -> void:
+	var world_map := _make_world_map()
+
+	world_map._update_hover_route(Vector2i(2, 0))
+
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+
+func test_hover_route_preview_does_not_touch_the_committed_route() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	world_map._update_hover_route(Vector2i(0, 2))
+
+	assert_eq(world_map.hover_route, [Vector2i(0, 1), Vector2i(0, 2)])
+	assert_eq(
+		GameSession.get_deployed_party_route(),
+		[Vector2i(1, 0), Vector2i(2, 0)],
+		"Hover must not touch the committed route"
+	)
+
+
+func test_committing_a_route_clears_the_hover_preview() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._update_hover_route(Vector2i(2, 0))
+
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+
+func test_taking_a_manual_step_clears_the_hover_preview() -> void:
+	var world_map := _make_world_map()
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+	world_map._update_hover_route(Vector2i(2, 0))
+
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+
+func test_deselecting_the_party_clears_the_hover_preview() -> void:
+	var world_map := _make_world_map()
+	world_map.party_position = Vector2i(1, 0)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._update_hover_route(Vector2i(2, 0))
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+
+func test_pressing_end_turn_advances_the_turn_without_a_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(GameSession.world_turn, 2)
+	assert_eq(world_map.party_position, Vector2i(0, 0))
+
+
+func test_pressing_end_turn_auto_moves_one_unspent_route_step() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(world_map.party_position, Vector2i(1, 0))
+	assert_eq(GameSession.get_deployed_party_position(), Vector2i(1, 0))
+	assert_eq(GameSession.world_turn, 2)
+
+
+func test_pressing_end_turn_does_not_move_again_after_a_manual_step() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(world_map.party_position, Vector2i(1, 0))
+	assert_eq(GameSession.world_turn, 2)
+
+
+func test_end_turn_updates_the_turn_label() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 2)
 
 
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:

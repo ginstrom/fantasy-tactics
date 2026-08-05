@@ -11,14 +11,32 @@ script = ExtResource("1_world_map")
 
 [node name="Markers" type="Node2D" parent="."]
 
+[node name="Routes" type="Node2D" parent="."]
+
 [node name="HUD" type="CanvasLayer" parent="."]
 
 [node name="Hint" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 640.0
-offset_bottom = 48.0
+offset_right = 1040.0
+offset_bottom = 112.0
+autowrap_mode = 3
 text = "world_map.hint"
+
+[node name="TurnLabel" type="Label" parent="HUD"]
+offset_left = 1104.0
+offset_top = 16.0
+offset_right = 1264.0
+offset_bottom = 48.0
+text = "world_map.turn"
+
+[node name="EndTurnButton" type="Button" parent="HUD"]
+offset_left = 1104.0
+offset_top = 56.0
+offset_right = 1264.0
+offset_bottom = 88.0
+text = "world_map.end_turn"
 
 [connection signal="encounter_activated" from="." to="." method="_on_encounter_activated"]
 [connection signal="settlement_activated" from="." to="." method="_on_settlement_activated"]
+[connection signal="pressed" from="HUD/EndTurnButton" to="." method="_on_end_turn_pressed"]

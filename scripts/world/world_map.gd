@@ -25,15 +25,20 @@ const ENCOUNTER_COLOR := Color(0.9, 0.6, 0.2)
 const ENCOUNTER_COMPLETE_COLOR := Color(0.5, 0.5, 0.5)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
+const ROUTE_SEGMENT_COLOR := Color(0.9, 0.9, 0.3, 0.6)
+const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
 
 var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
 var is_setting_route: bool = false
+var hover_route: Array[Vector2i] = []
 
 @onready var tile_container: Node2D = $Tiles
 @onready var highlight_container: Node2D = $Highlights
 @onready var marker_container: Node2D = $Markers
+@onready var route_container: Node2D = $Routes
+@onready var turn_label: Label = $HUD/TurnLabel
 
 
 func _ready() -> void:
@@ -41,13 +46,19 @@ func _ready() -> void:
 	party_position = GameSession.get_deployed_party_position()
 	_draw_tiles()
 	_draw_markers()
+	_draw_routes()
 	_update_highlights()
+	_update_turn_label()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		GameManager.open_game_menu()
+		return
+
+	if event is InputEventMouseMotion:
+		_update_hover_route(_to_grid_position(get_local_mouse_position()))
 		return
 
 	if not (event is InputEventMouseButton) or not event.pressed:
@@ -57,6 +68,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if is_setting_route:
 			get_viewport().set_input_as_handled()
 			cancel_route_setting()
+			_draw_routes()
 			_update_highlights()
 		return
 
@@ -126,6 +138,25 @@ func get_route_destination() -> Vector2i:
 
 func cancel_route_setting() -> void:
 	is_setting_route = false
+	hover_route = []
+
+
+func _update_hover_route(tile_pos: Vector2i) -> void:
+	if not party_selected or not GameSession.has_deployed_party() or not grid.is_in_bounds(tile_pos):
+		hover_route = []
+	else:
+		hover_route = build_route(party_position, tile_pos)
+	_draw_routes()
+
+
+func _on_end_turn_pressed() -> void:
+	GameSession.end_world_turn()
+	party_position = GameSession.get_deployed_party_position()
+	_draw_markers()
+	_draw_routes()
+	_update_highlights()
+	_update_turn_label()
+	board_changed.emit()
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
@@ -140,6 +171,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 		if not GameSession.get_deployed_party_route().is_empty():
 			is_setting_route = true
+			_draw_routes()
 			_update_highlights()
 			return
 
@@ -149,11 +181,15 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 		if try_activate_current_tile():
 			party_selected = false
+			hover_route = []
 			_draw_markers()
+			_draw_routes()
 			_update_highlights()
 			return
 
 		party_selected = false
+		hover_route = []
+		_draw_routes()
 		_update_highlights()
 		return
 
@@ -163,7 +199,9 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if tile_pos == get_route_destination() and not is_setting_route:
 		if GameSession.take_next_route_step():
 			party_position = GameSession.get_deployed_party_position()
+			hover_route = []
 			_draw_markers()
+			_draw_routes()
 			_update_highlights()
 			board_changed.emit()
 		return
@@ -172,7 +210,9 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		var route := build_route(party_position, tile_pos)
 		if not route.is_empty() and GameSession.set_deployed_party_route(route):
 			is_setting_route = false
+			hover_route = []
 			_draw_markers()
+			_draw_routes()
 			_update_highlights()
 
 
@@ -238,6 +278,50 @@ func _draw_markers() -> void:
 	party.color = PARTY_COLOR
 	party.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker_container.add_child(party)
+
+
+func _draw_routes() -> void:
+	if not is_inside_tree():
+		return
+
+	for child in route_container.get_children():
+		child.queue_free()
+
+	var route: Array[Vector2i] = (
+		hover_route if not hover_route.is_empty() else GameSession.get_deployed_party_route()
+	)
+	if route.is_empty():
+		return
+
+	var segment_margin := TILE_SIZE * 0.35
+	for step in route:
+		var segment := ColorRect.new()
+		segment.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(segment_margin, segment_margin) * 2
+		segment.position = Vector2(step) * TILE_SIZE + Vector2(segment_margin, segment_margin)
+		segment.color = ROUTE_SEGMENT_COLOR
+		segment.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		route_container.add_child(segment)
+
+	var destination := route[route.size() - 1]
+	var target_margin := TILE_SIZE * 0.1
+	var target := ColorRect.new()
+	target.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(target_margin, target_margin) * 2
+	target.position = Vector2(destination) * TILE_SIZE + Vector2(target_margin, target_margin)
+	target.color = ROUTE_TARGET_COLOR
+	target.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	route_container.add_child(target)
+
+	var label := Label.new()
+	label.text = tr("world_map.arrival_turns") % route.size()
+	label.position = Vector2(destination) * TILE_SIZE + Vector2(TILE_SIZE * 0.1, -TILE_SIZE * 0.6)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	route_container.add_child(label)
+
+
+func _update_turn_label() -> void:
+	if not is_inside_tree():
+		return
+	turn_label.text = tr("world_map.turn") % GameSession.world_turn
 
 
 func _update_highlights() -> void:

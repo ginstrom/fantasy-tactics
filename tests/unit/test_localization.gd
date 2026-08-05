@@ -53,6 +53,9 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 			+ "Esc: menu."
 		)
 	)
+	assert_eq(tr("world_map.end_turn"), "End Turn")
+	assert_eq(tr("world_map.turn") % 3, "Turn 3")
+	assert_eq(tr("world_map.arrival_turns") % 8, "8 turns to arrival")
 	assert_eq(tr("party.title"), "Party Manager")
 	assert_eq(tr("party.warrior.summary"), "Warrior — warrior, sword")
 	assert_eq(tr("party.status.empty"), "Your party has no adventurers.")
@@ -113,6 +116,20 @@ func test_world_map_hint_uses_translation_key_not_literal_copy() -> void:
 	add_child_autofree(world_map)
 
 	assert_eq(world_map.get_node("HUD/Hint").text, "world_map.hint")
+
+
+func test_world_map_end_turn_button_uses_translation_key_not_literal_copy() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.get_node("HUD/EndTurnButton").text, "world_map.end_turn")
+
+
+func test_world_map_turn_label_is_built_from_translated_copy() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 1)
 
 
 func test_party_manager_uses_translation_keys_not_literal_copy() -> void:
