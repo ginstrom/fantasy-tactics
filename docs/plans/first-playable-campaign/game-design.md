@@ -34,12 +34,6 @@ visible upgrades. Its purpose is to prove that tactical victories make the
 strategic game more interesting and that strategic choices make the next battle
 feel different.
 
-The first implemented foundation is smaller: one Warrior, one player-created
-party, one goblin-camp expedition, and a single clear-or-return outcome. It
-now proves the route from settlement preparation through tactical combat and
-back to campaign state. It deliberately does not yet provide rewards,
-upgrades, or enough expedition choices to be a repeatable campaign.
-
 ## Completed first playable foundation
 
 The current prototype delivers this manually playable route:
