@@ -304,6 +304,6 @@ func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instea
 	assert_eq(GameSession.gold, 25, "The panel must never purchase by itself")
 	assert_eq(
 		GameSession.get_recruitment_candidates().size(),
-		3,
+		1,
 		"The panel must never remove the candidate by itself"
 	)

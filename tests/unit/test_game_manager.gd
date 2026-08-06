@@ -344,10 +344,10 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 
 	assert_eq(err, OK)
 	assert_eq(GameSession.adventurers.size(), 2)
-	# warrior_002/003/004 are live, unpurchased recruitment candidates on a
-	# fresh session, so the debug recruit's id-collision avoidance (see
-	# GameSession.recruit_adventurer) skips all three.
-	assert_eq(GameSession.adventurers[1].id, "warrior_005")
+	# warrior_002 is the sole live, unpurchased recruitment candidate on a
+	# fresh session (see GameSession.reset()), so the debug recruit's
+	# id-collision avoidance (see GameSession.recruit_adventurer) skips it.
+	assert_eq(GameSession.adventurers[1].id, "warrior_003")
 
 
 func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
@@ -485,7 +485,7 @@ func test_purchase_recruit_reports_invalid_data_when_funds_are_insufficient() ->
 
 	assert_ne(err, OK)
 	assert_eq(GameSession.adventurers.size(), 1)
-	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
 
 
 func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
@@ -500,4 +500,4 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_eq(GameSession.gold, 0)
 	assert_eq(GameSession.adventurers.size(), 2)
 	assert_eq(GameSession.adventurers[1].id, "warrior_002")
-	assert_eq(GameSession.get_recruitment_candidates().size(), 2)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 0)

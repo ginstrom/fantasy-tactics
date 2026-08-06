@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/battle/battlefield.gd" id="1_battlefield"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_battle"]
+[ext_resource type="PackedScene" path="res://scenes/ui/level_up.tscn" id="3_level_up"]
 
 [node name="Battlefield" type="Node2D"]
 script = ExtResource("1_battlefield")
@@ -57,6 +58,9 @@ offset_top = 56.0
 offset_right = 1264.0
 offset_bottom = 88.0
 text = "battle.end_turn"
+
+[node name="LevelUp" parent="HUD" instance=ExtResource("3_level_up")]
+layout_mode = 1
 
 [connection signal="pressed" from="HUD/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

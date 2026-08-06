@@ -8,6 +8,7 @@ const UnitsScene := preload("res://scenes/ui/units.tscn")
 const PartiesScene := preload("res://scenes/ui/parties.tscn")
 const StartingSettlementScene := preload("res://scenes/local/starting_settlement.tscn")
 const InformationPanelScene := preload("res://scenes/ui/information_panel.tscn")
+const LevelUpScene := preload("res://scenes/ui/level_up.tscn")
 
 
 func test_translation_keys_resolve_to_expected_english_copy() -> void:
@@ -151,6 +152,28 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		tr("add_member.hint"),
 		"Double-click a row, or select it and press Enter, to add that adventurer to the party."
 	)
+	assert_eq(
+		tr("unit_details.stats") % [25, 64, 64, 4], "XP: 25 — Attack: 64 raw / 64% hit chance — Health: 4"
+	)
+	assert_eq(tr("unit_details.skills") % 10, "Unspent skill points: 10")
+	assert_eq(
+		tr("unit_details.perks") % tr("unit_details.perk_status.learned"), "Perks: Bonus Move learned"
+	)
+	assert_eq(
+		tr("unit_details.perks") % tr("unit_details.perk_status.not_learned"),
+		"Perks: Bonus Move not yet learned"
+	)
+	assert_eq(tr("level_up.title"), "Level Up!")
+	assert_eq(tr("level_up.xp") % 20, "XP: 20")
+	assert_eq(tr("level_up.level") % 2, "Level: 2")
+	assert_eq(tr("level_up.health_gain") % [4, 1], "Max Health: 4 (+1)")
+	assert_eq(tr("level_up.attack") % [61, 61], "Attack: 61 raw / 61% hit chance")
+	assert_eq(tr("level_up.skill_points") % 9, "Unspent skill points: 9")
+	assert_eq(tr("level_up.perk_pending"), "Choose a perk to continue.")
+	assert_eq(tr("level_up.choose_bonus_move"), "Choose Bonus Move")
+	assert_eq(tr("level_up.attack_minus"), "-")
+	assert_eq(tr("level_up.attack_plus"), "+")
+	assert_eq(tr("level_up.continue"), "Continue")
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:
@@ -257,6 +280,16 @@ func test_information_panel_uses_translation_keys_not_literal_copy() -> void:
 	add_child_autofree(panel)
 
 	assert_eq(panel.get_node("Content/Title").text, "information.title")
+
+
+func test_level_up_uses_translation_keys_not_literal_copy() -> void:
+	var level_up: Control = LevelUpScene.instantiate()
+	add_child_autofree(level_up)
+
+	assert_eq(level_up.continue_button.text, "level_up.continue")
+	assert_eq(level_up.attack_plus_button.text, "level_up.attack_plus")
+	assert_eq(level_up.attack_minus_button.text, "level_up.attack_minus")
+	assert_eq(level_up.choose_bonus_move_button.text, "level_up.choose_bonus_move")
 
 
 func test_starting_settlement_uses_translation_keys_not_literal_copy() -> void:

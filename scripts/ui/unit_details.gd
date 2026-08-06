@@ -1,10 +1,12 @@
 extends Control
 
-## Renders a single adventurer's real fields (name/class/level/availability)
-## from GameManager.route_context_id. Skills, perks, and stats have no real
-## data yet (see GameSession.DEFAULT_WARRIOR's stats/progression placeholders)
-## so they are only ever labelled TBD here, never invented. An unknown id
-## still leaves a working Back path.
+## Renders a single adventurer's real fields (name/class/level/availability,
+## and — see _show_adventurer() — XP, raw/effective Attack, effective max
+## health, unspent skill points, and Bonus Move perk status) from
+## GameManager.route_context_id. Every value is read fresh from
+## GameSession.get_adventurer()/its effective_* getters; this screen never
+## invents or caches progression data of its own. An unknown id still leaves
+## a working Back path.
 ##
 ## Opened via the Roster route (GameManager.unit_details_origin, captured
 ## once into `origin` below), an available and unassigned adventurer
@@ -62,6 +64,23 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	class_label.text = tr("information.class") % adventurer["class"]
 	level_label.text = tr("information.level") % adventurer["level"]
 	status_label.text = tr("unit_details.status") % tr("availability.%s" % adventurer["availability_status"])
+
+	var adventurer_id: String = adventurer["id"]
+	# xp is stored as a float; floor it for this display-only row and never
+	# write the floored value back (see GameSession.DEFAULT_WARRIOR).
+	var xp_display: int = int(floor(adventurer.progression.xp))
+	var raw_attack: int = adventurer.stats.attack
+	var hit_chance_percent := int(round(GameSession.get_effective_hit_chance(adventurer_id) * 100.0))
+	var effective_max_health: int = GameSession.get_effective_max_health(adventurer_id)
+	stats_label.text = tr("unit_details.stats") % [xp_display, raw_attack, hit_chance_percent, effective_max_health]
+
+	skills_label.text = tr("unit_details.skills") % adventurer.progression.skill_points
+
+	var has_bonus_move: bool = adventurer.progression.perks.has(GameSession.BONUS_MOVE_PERK_ID)
+	var perk_status_key := (
+		"unit_details.perk_status.learned" if has_bonus_move else "unit_details.perk_status.not_learned"
+	)
+	perks_label.text = tr("unit_details.perks") % tr(perk_status_key)
 
 	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label]:
 		label.visible = true

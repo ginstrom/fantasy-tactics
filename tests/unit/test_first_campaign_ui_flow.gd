@@ -4,6 +4,9 @@ const PartiesScene := preload("res://scenes/ui/parties.tscn")
 const PartyDetailsScene := preload("res://scenes/ui/party_details.tscn")
 const AddMemberScene := preload("res://scenes/ui/add_member.tscn")
 const DeployPartyScene := preload("res://scenes/ui/deploy_party.tscn")
+const WorldMapScene := preload("res://scenes/world/world_map.tscn")
+const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
+const EncampmentScene := preload("res://scenes/ui/encampment.tscn")
 
 
 func before_each() -> void:
@@ -51,3 +54,83 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(GameManager.route_context_id, "")
+
+
+## Covers the rest of docs/plans/first-playable-campaign/game-loop-flow.md:
+## move to an encounter, enter it, win the battle, then walk the party home
+## and bank the reward. Party formation/deployment (the first half of the
+## flow) is exercised step-by-step above; movement mechanics themselves (turn
+## by turn routing) are covered exhaustively by test_world_map.gd, so this
+## test jumps the deployed party's position the same way that file's own
+## encounter-activation tests do, and focuses on proving the real signal
+## wiring between screens (World Map -> Battlefield -> World Map ->
+## Encampment) still drives GameManager/GameSession correctly end to end.
+func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+	assert_true(GameSession.has_deployed_party())
+
+	# Move to an encounter + enter it: jump the party onto the seeded Goblin
+	# Camp tile, then click it twice (select, then activate) exactly as a
+	# player would from the World Map.
+	var goblin_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.set_deployed_party_position(goblin_position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_eq(world_map.party_position, goblin_position)
+
+	world_map._handle_tile_click(world_map.party_position)
+	assert_true(world_map.party_selected, "First click on the camp must select, not enter")
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
+
+	# Complete battle: defeat the goblin via the real board-click path (not
+	# the private outcome hook other battle tests use directly), so this test
+	# also proves a real kill still drives the win pipeline through to
+	# GameManager.complete_battle().
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.apply_super_power()
+
+	var warrior_start: Vector2i = battlefield.grid.WARRIOR_START
+	var goblin_start: Vector2i = battlefield.grid.GOBLIN_START
+	var adjacent_to_goblin: Vector2i = goblin_start + Vector2i.UP
+	battlefield.grid._handle_tile_click(warrior_start)
+	battlefield.grid._handle_tile_click(adjacent_to_goblin)
+	battlefield.grid._handle_tile_click(goblin_start)
+
+	var settle_frames := 0
+	while GameSession.selected_encounter != "" and settle_frames < 30:
+		await get_tree().process_frame
+		settle_frames += 1
+
+	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
+	assert_eq(GameSession.selected_encounter, "", "Victory should clear the encounter selection")
+	assert_eq(GameSession.pending_reward, 10, "The goblin camp's reward should be queued but not yet banked")
+	assert_eq(GameSession.gold, 0, "Winning the battle alone must not bank the reward")
+
+	# Move party back to encampment, bank reward: walk the party home (again
+	# jumping position, per this test's routing note above) and click the
+	# settlement tile to return it, the same single action that also banks
+	# the queued reward.
+	GameSession.set_deployed_party_position(GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
+	var return_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(return_map)
+	assert_eq(return_map.party_position, GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
+
+	return_map._handle_tile_click(return_map.party_position)
+	assert_true(return_map.party_selected, "First click on the settlement must select, not enter")
+	return_map._handle_tile_click(return_map.party_position)
+
+	assert_false(GameSession.has_deployed_party())
+	assert_eq(GameSession.gold, 10, "Returning to the encampment must bank the queued reward")
+	assert_eq(GameSession.pending_reward, 0)
+
+	var encampment: Control = EncampmentScene.instantiate()
+	add_child_autofree(encampment)
+	var information_panel: Control = encampment.get_node("InformationPanel")
+	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 10)

@@ -194,3 +194,289 @@ func test_apply_battle_outcome_false_returns_the_party_home_without_completing()
 	assert_false(GameSession.is_encounter_complete("goblin_camp"))
 	assert_eq(GameSession.gold, 0, "Defeat must not queue or bank any gold")
 	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue or bank any gold")
+
+
+## Task 2: battle XP events (kill XP on an enemy defeat, clear XP on victory),
+## awarded exactly once per encounter attempt regardless of repeated events.
+
+func _setup_goblin_camp_battle() -> Node2D:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	return battlefield
+
+
+func _setup_orc_outpost_battle() -> Node2D:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	return battlefield
+
+
+## Places the enemy adjacent to the warrior and near death so a single hit
+## defeats it, without needing a full multi-turn combat sequence.
+func _stage_a_killing_blow(battlefield: Node2D) -> Dictionary:
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+	var enemy = battlefield.grid.get_unit_at(Vector2i(4, 4))
+	enemy.grid_position = Vector2i(1, 2)
+	enemy.health = 1
+	battlefield.grid.selected_unit = warrior
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	return {"warrior": warrior, "enemy": enemy}
+
+
+func test_defeating_the_goblin_awards_its_five_point_kill_xp() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var units := _stage_a_killing_blow(battlefield)
+
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	assert_eq(GameSession.get_adventurer("warrior_001").progression.xp, 5.0, "A goblin kill should award 5 XP")
+
+
+func test_defeating_the_orc_awards_its_ten_point_kill_xp() -> void:
+	var battlefield := _setup_orc_outpost_battle()
+	var units := _stage_a_killing_blow(battlefield)
+
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	assert_eq(GameSession.get_adventurer("warrior_001").progression.xp, 10.0, "An orc kill should award 10 XP")
+
+
+func test_kill_xp_award_guard_prevents_a_duplicate_award_from_a_repeated_event() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var units := _stage_a_killing_blow(battlefield)
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+	var xp_after_first_kill: float = GameSession.get_adventurer("warrior_001").progression.xp
+
+	battlefield._award_kill_xp()
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		xp_after_first_kill,
+		"A repeated kill event must not award XP twice"
+	)
+
+
+func test_winning_the_goblin_camp_awards_its_ten_point_clear_xp() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		10.0,
+		"Winning the goblin camp should award its 10 clear XP"
+	)
+
+
+func test_winning_the_orc_outpost_awards_its_twenty_point_clear_xp() -> void:
+	var battlefield := _setup_orc_outpost_battle()
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		20.0,
+		"Winning the orc outpost should award its 20 clear XP"
+	)
+
+
+func test_clear_xp_award_guard_prevents_a_duplicate_award_from_a_repeated_call() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	battlefield._award_clear_xp()
+	var xp_after_first_award: float = GameSession.get_adventurer("warrior_001").progression.xp
+
+	battlefield._award_clear_xp()
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		xp_after_first_award,
+		"A repeated clear XP call (e.g. a repeated result-timer fire) must not award XP twice"
+	)
+
+
+func test_defeat_awards_no_clear_xp_but_keeps_xp_already_earned_from_a_kill() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var units := _stage_a_killing_blow(battlefield)
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	battlefield._apply_battle_outcome(false)
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		5.0,
+		"Defeat must keep XP already earned from a kill but award no clear XP"
+	)
+	assert_eq(GameSession.gold, 0, "Defeat must not bank any gold")
+	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue any pending gold")
+
+
+func test_a_level_up_from_kill_xp_raises_the_active_units_max_and_current_health() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_a_killing_blow(battlefield)
+
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	assert_eq(GameSession.get_adventurer("warrior_001").level, 2, "19 + 10 orc kill XP should cross the level 2 threshold")
+	assert_eq(units.warrior.max_health, 4, "The active unit's max health must rise immediately on a mid-battle level-up")
+	assert_eq(units.warrior.health, 4, "The active unit's current health must rise by the same amount as max health")
+
+
+## Task 3: the immediate, queued, modal level-up overlay. A queued level-up
+## locks the board and End Turn button for as long as any modal is queued or
+## showing, shows multiple leveled party members one at a time in stable
+## party order, and gates the battle-result scene transition (both the
+## kill-triggered and the clear-triggered paths) until every queued level-up
+## has resolved.
+
+func test_a_level_up_from_kill_xp_shows_the_modal_and_locks_board_and_end_turn_input() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_a_killing_blow(battlefield)
+
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	assert_true(battlefield.level_up.visible, "A mid-battle level-up must show its overlay immediately")
+	assert_eq(battlefield.level_up.adventurer_id, "warrior_001")
+	assert_true(battlefield.end_turn_button.disabled)
+	assert_true(battlefield.grid.input_locked)
+
+
+func test_resolving_the_only_queued_level_up_unlocks_board_and_end_turn_input() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_a_killing_blow(battlefield)
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_false(battlefield.level_up.visible)
+	assert_false(battlefield.end_turn_button.disabled)
+	assert_false(battlefield.grid.input_locked)
+
+
+func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party_order() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.recruit_adventurer()
+	# recruit_adventurer() mints the next warrior_NNN id that collides with
+	# neither an existing adventurer nor a still-open recruitment candidate
+	# template (warrior_002/003/004 stay open after reset()), so the newly
+	# recruited id is read back rather than assumed.
+	var second_member_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(second_member_id)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._award_party_xp(42.0)
+
+	assert_true(battlefield.level_up.visible)
+	assert_eq(battlefield.level_up.adventurer_id, "warrior_001", "The first party member must be shown first")
+	assert_true(battlefield.end_turn_button.disabled, "Input must stay locked while a second level-up is still queued")
+
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_true(
+		battlefield.level_up.visible,
+		"The next queued member must show immediately, without an unlocked gap in between"
+	)
+	assert_eq(battlefield.level_up.adventurer_id, second_member_id)
+	assert_true(battlefield.end_turn_button.disabled)
+
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_false(battlefield.level_up.visible, "Input unlocks only after the last queued modal completes")
+	assert_false(battlefield.end_turn_button.disabled)
+	assert_false(battlefield.grid.input_locked)
+
+
+func test_a_level_up_from_clear_xp_must_resolve_before_the_battle_completes() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_true(
+		battlefield.level_up.visible,
+		"Clear XP crossing a level threshold must show the overlay before completing the battle"
+	)
+	assert_false(
+		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
+		"The battle-result scene transition must wait for the queued level-up to resolve"
+	)
+
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_true(
+		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
+		"The battle completes once the queued level-up resolves"
+	)
+
+
+func test_a_clear_xp_level_up_that_requires_a_perk_choice_still_gates_completion() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 49.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_true(GameSession.is_perk_choice_pending("warrior_001"))
+	battlefield.level_up.continue_button.emit_signal("pressed")
+	assert_false(
+		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
+		"A required perk choice must block completion, not just the modal's own Continue button"
+	)
+
+	battlefield.level_up.choose_bonus_move_button.emit_signal("pressed")
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_true(GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID))
+
+
+func test_clear_xp_with_no_level_up_completes_the_battle_immediately() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_false(battlefield.level_up.visible)
+	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))

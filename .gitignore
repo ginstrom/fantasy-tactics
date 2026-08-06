@@ -1,6 +1,9 @@
 # Worktrees
 .worktrees/
 
+# Superpowers subagent-driven-development workspace
+.superpowers/
+
 # Generated screenshots (make screenshots)
 /screenshots/
 

@@ -402,6 +402,26 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	assert_eq(record.enemy.attack_name_key, "battle.enemy.orc.attack")
 
 
+func test_get_expedition_includes_kill_and_clear_xp_for_the_goblin_camp() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+
+	assert_eq(record.kill_xp, 5, "A goblin kill should award 5 XP")
+	assert_eq(record.clear_xp, 10, "Clearing the goblin camp should award 10 XP")
+
+
+func test_get_expedition_includes_kill_and_clear_xp_for_the_orc_outpost() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
+
+	assert_eq(record.kill_xp, 10, "An orc kill should award 10 XP")
+	assert_eq(record.clear_xp, 20, "Clearing the orc outpost should award 20 XP")
+
+
 func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -539,7 +559,7 @@ func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward
 	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")
 
 
-func test_default_warrior_has_level_availability_and_placeholder_progression() -> void:
+func test_default_warrior_has_level_and_availability() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
@@ -549,8 +569,35 @@ func test_default_warrior_has_level_availability_and_placeholder_progression() -
 	assert_eq(warrior["class"], "warrior")
 	assert_eq(warrior.level, 1, "A fresh Warrior starts at level 1")
 	assert_eq(warrior.availability_status, "available", "A fresh Warrior starts available for a party")
-	assert_eq(warrior.stats, {}, "Stats are a TBD placeholder that must not affect combat")
-	assert_eq(warrior.progression, {}, "Progression is a TBD placeholder that must not affect combat")
+
+
+## Task 1 (progression domain): a new campaign's default Warrior starts with a
+## complete, validated progression state rather than the old TBD placeholders.
+func test_default_warrior_starts_with_a_complete_progression_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+
+	assert_eq(warrior.progression.xp, 0.0, "XP is stored as a float")
+	assert_eq(warrior.level, 1)
+	assert_eq(warrior.stats.attack, 60)
+	assert_eq(warrior.progression.skill_points, 0, "A fresh Warrior has no unspent points")
+	assert_eq(warrior.progression.perks, [], "A fresh Warrior has chosen no perks")
+	assert_eq(warrior.stats.max_health, 3)
+
+
+func test_get_adventurer_returns_a_copy_whose_nested_progression_cannot_mutate_session_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+	warrior.progression.xp = 999.0
+	warrior.stats.attack = 999
+
+	var second_copy: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+	assert_eq(second_copy.progression.xp, 0.0, "Mutating a returned copy's nested progression must not affect session state")
+	assert_eq(second_copy.stats.attack, 60, "Mutating a returned copy's nested stats must not affect session state")
 
 
 func test_create_party_sets_name_encampment_location_and_placeholder_metadata() -> void:
@@ -815,10 +862,9 @@ func test_assign_adventurer_to_selected_party_still_works_as_a_thin_wrapper() ->
 	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
 
 
-## warrior_002 through warrior_004 are live, unpurchased recruitment
-## candidates on a fresh session (see RECRUITMENT_CANDIDATE_TEMPLATES), so a
-## fresh id must skip all three rather than mint a duplicate of one still on
-## offer in Recruitment.
+## Only warrior_002 is a live, unpurchased recruitment offer on a fresh
+## session (see the reset()-seeds-one-offer tests below), so a fresh debug
+## recruit id only needs to skip that one.
 func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -827,8 +873,8 @@ func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id(
 
 	assert_eq(session.adventurers.size(), 2)
 	var recruit: Dictionary = session.adventurers[1]
-	assert_eq(recruit.id, "warrior_005")
-	assert_eq(recruit.name, "Warrior 5")
+	assert_eq(recruit.id, "warrior_003")
+	assert_eq(recruit.name, "Warrior 3")
 	assert_eq(recruit["class"], "warrior")
 	assert_eq(recruit.availability_status, "available")
 	assert_true(session.get_available_adventurers().has(recruit))
@@ -842,26 +888,26 @@ func test_recruit_adventurer_never_collides_with_an_earlier_recruit() -> void:
 	session.recruit_adventurer()
 
 	assert_eq(session.adventurers.size(), 3)
-	assert_eq(session.adventurers[2].id, "warrior_006")
+	assert_eq(session.adventurers[2].id, "warrior_004")
 
 
-## Reproduces the exact reported failure: after a partial purchase leaves
-## some fixed candidates (warrior_003/warrior_004) still live, a debug
-## recruit must not mint an id any of them are still offering, nor one an
-## earlier debug recruit already used.
-func test_recruit_adventurer_after_a_purchase_never_collides_with_a_live_candidate() -> void:
+## Reproduces the original reported hazard, adapted to the vacancy-timed
+## catalog: a debug recruit must not mint an id any still-live recruitment
+## offer is using, nor one an earlier debug recruit already used. Manually
+## seeds an extra live offer (as if a vacancy refill had already fired) to
+## exercise the skip without waiting on a real 30-turn clock.
+func test_recruit_adventurer_never_collides_with_a_live_candidate() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.gold = 10
-	session.purchase_recruit("warrior_002")
+	session.recruitment_candidates.append(_recruitment_candidate("warrior_003"))
 
 	session.recruit_adventurer()
 
 	var recruited: Dictionary = session.adventurers[session.adventurers.size() - 1]
 	assert_eq(
 		recruited.id,
-		"warrior_005",
-		"The debug recruit must skip the still-live warrior_003/warrior_004 candidates"
+		"warrior_004",
+		"The debug recruit must skip both the seeded warrior_002 and the still-live warrior_003 offer"
 	)
 	var live_candidate_ids: Array = []
 	for candidate in session.get_recruitment_candidates():
@@ -879,17 +925,20 @@ func test_recruit_adventurer_after_a_purchase_never_collides_with_a_live_candida
 		seen_ids[id] = true
 
 
-func test_get_recruitment_candidates_returns_the_three_fixed_warrior_candidates() -> void:
+func _recruitment_candidate(candidate_id: String) -> Dictionary:
+	var candidate: Dictionary = GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)
+	candidate.id = candidate_id
+	return candidate
+
+
+func test_get_recruitment_candidates_returns_the_one_seeded_warrior_candidate() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
 
-	assert_eq(candidates.size(), 3)
-	var ids: Array = []
-	for candidate in candidates:
-		ids.append(candidate.id)
-	assert_eq(ids, ["warrior_002", "warrior_003", "warrior_004"])
+	assert_eq(candidates.size(), 1, "A fresh campaign seeds exactly one recruitable Warrior")
+	assert_eq(candidates[0].id, "warrior_002")
 	for candidate in candidates:
 		assert_eq(candidate["class"], "warrior")
 		assert_eq(candidate.level, 1, "A recruitment candidate starts at level 1")
@@ -912,7 +961,7 @@ func test_get_recruitment_candidates_returns_a_copy_that_cannot_mutate_the_catal
 	)
 
 
-func test_reset_restores_all_three_recruitment_candidates() -> void:
+func test_reset_restores_the_single_seeded_recruitment_candidate() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.gold = 10
@@ -924,7 +973,7 @@ func test_reset_restores_all_three_recruitment_candidates() -> void:
 	var ids: Array = []
 	for candidate in candidates:
 		ids.append(candidate.id)
-	assert_eq(ids, ["warrior_002", "warrior_003", "warrior_004"], "reset() must restore every purchased candidate")
+	assert_eq(ids, ["warrior_002"], "reset() must restore exactly the one seeded offer")
 
 
 func test_purchase_recruit_fails_without_enough_gold_and_changes_nothing() -> void:
@@ -934,7 +983,7 @@ func test_purchase_recruit_fails_without_enough_gold_and_changes_nothing() -> vo
 	assert_false(session.purchase_recruit("warrior_002"))
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.get_recruitment_candidates().size(), 3)
+	assert_eq(session.get_recruitment_candidates().size(), 1)
 	assert_eq(session.adventurers.size(), 1)
 
 
@@ -946,7 +995,7 @@ func test_purchase_recruit_fails_for_an_unknown_candidate_id() -> void:
 	assert_false(session.purchase_recruit("no_such_candidate"))
 
 	assert_eq(session.gold, 10)
-	assert_eq(session.get_recruitment_candidates().size(), 3)
+	assert_eq(session.get_recruitment_candidates().size(), 1)
 	assert_eq(session.adventurers.size(), 1)
 
 
@@ -977,7 +1026,7 @@ func test_purchase_recruit_refuses_when_an_adventurer_already_holds_that_id() ->
 	assert_eq(session.gold, 10, "A refused purchase must not deduct gold")
 	assert_eq(
 		session.get_recruitment_candidates().size(),
-		3,
+		1,
 		"A refused purchase must not remove the candidate from the catalog"
 	)
 	assert_eq(session.adventurers.size(), 2, "A refused purchase must not append a second adventurer")
@@ -991,13 +1040,10 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_true(session.purchase_recruit("warrior_002"))
 
 	assert_eq(session.gold, 0, "The exact candidate cost must be deducted")
-	var remaining_ids: Array = []
-	for candidate in session.get_recruitment_candidates():
-		remaining_ids.append(candidate.id)
 	assert_eq(
-		remaining_ids,
-		["warrior_003", "warrior_004"],
-		"Only the purchased candidate should be removed from the catalog"
+		session.get_recruitment_candidates(),
+		[] as Array[Dictionary],
+		"The purchased candidate should be removed from the catalog, leaving no other offers seeded"
 	)
 
 	assert_eq(session.adventurers.size(), 2)
@@ -1007,3 +1053,644 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_eq(recruit.level, 1)
 	assert_eq(recruit.availability_status, "available")
 	assert_false(recruit.has("cost"), "The adventurer record should not carry a purchase cost")
+
+
+## Regression test: RECRUITMENT_CANDIDATE_TEMPLATES used to seed purchased
+## and refilled recruits with genuinely empty "stats": {} / "progression": {}
+## dicts (only the roster's starting Warrior, DEFAULT_WARRIOR, had real
+## values). GDScript aborts the enclosing function on a missing-dictionary-
+## key read rather than raising a catchable exception, so a purchased
+## recruit's stats/progression reads would silently abort mid-function
+## (get_effective_max_health, _award_adventurer_xp — losing that share of XP
+## for good — and unit_details.gd's display all broke this way; a deployed
+## party whose first member was such a recruit could not even act in
+## battle). This single test covers all of those failure modes at the
+## domain-data level: a purchased recruit must carry the same real baseline
+## stats/progression as DEFAULT_WARRIOR, and must actually accumulate
+## awarded party XP rather than silently dropping it.
+func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	assert_true(session.purchase_recruit("warrior_002"))
+
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_002")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	var recruit: Dictionary = session.get_adventurer("warrior_002")
+	assert_eq(
+		recruit.stats.max_health,
+		GameSessionScript.DEFAULT_WARRIOR.stats.max_health,
+		"A purchased recruit must start with the Warrior baseline max health, not a missing key"
+	)
+	assert_eq(
+		recruit.stats.attack,
+		GameSessionScript.DEFAULT_WARRIOR.stats.attack,
+		"A purchased recruit must start with the Warrior baseline Attack, not a missing key"
+	)
+	assert_eq(recruit.progression.xp, 5.0, "Awarded party XP must be stored, not silently dropped")
+	assert_eq(
+		recruit.progression.skill_points,
+		GameSessionScript.DEFAULT_WARRIOR.progression.skill_points,
+		"A purchased recruit must start with real (zero) unspent skill points, not a missing key"
+	)
+
+
+## Task 1: progression domain (award_party_xp, spend_attack_points,
+## choose_perk) and the derived effective-hit/health/move calculations that
+## GameSession centralizes for later battle and UI tasks to call into.
+
+func test_award_party_xp_divides_a_five_point_award_evenly_between_two_members() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruit_adventurer()
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.assign_adventurer_to_selected_party("warrior_003")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 2.5)
+	assert_eq(session.get_adventurer("warrior_003").progression.xp, 2.5)
+
+
+func test_award_party_xp_ignores_an_unknown_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var result: Array[String] = session.award_party_xp("no_such_party", 5.0)
+
+	assert_eq(result, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 0.0)
+
+
+func test_award_party_xp_ignores_an_empty_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	var result: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	assert_eq(result, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 0.0, "An empty party must not receive XP")
+
+
+func test_award_party_xp_returns_the_ids_that_crossed_a_level_threshold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	var leveled_up: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(leveled_up, ["warrior_001"])
+	assert_eq(session.get_adventurer("warrior_001").level, 2)
+
+
+func test_award_party_xp_below_the_next_threshold_does_not_level_up() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	var leveled_up: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 19.0)
+
+	assert_eq(leveled_up, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").level, 1)
+
+
+func test_twenty_cumulative_xp_reaches_level_two() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 2)
+
+
+func test_fifty_cumulative_xp_reaches_level_three() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 30.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 3)
+
+
+func test_an_oversized_award_resolves_multiple_levels_in_one_call() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 3, "50 XP in one award should resolve straight to level 3")
+
+
+func test_each_level_gained_adds_one_max_health_and_ten_skill_points() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.max_health, 4, "Leveling once should add exactly one max health")
+	assert_eq(warrior.progression.skill_points, 10, "Leveling once should add exactly ten skill points")
+
+
+func test_only_levels_divisible_by_three_require_a_perk_choice() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 1 has no pending perk choice")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 2 does not require a perk choice")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 30.0)
+	assert_true(session.is_perk_choice_pending("warrior_001"), "Level 3 requires a perk choice")
+
+
+func test_spend_attack_points_rejects_non_positive_overspent_and_missing_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.spend_attack_points("warrior_001", 0), "A non-positive amount must be rejected")
+	assert_false(session.spend_attack_points("warrior_001", -1), "A negative amount must be rejected")
+	assert_false(session.spend_attack_points("warrior_001", 5), "A fresh Warrior has zero points to overspend")
+	assert_false(session.spend_attack_points("missing", 5), "An unknown adventurer id must be rejected")
+	assert_eq(session.get_adventurer("warrior_001").stats.attack, 60, "A rejected spend must not change Attack")
+
+
+func test_spend_attack_points_decrements_points_and_raises_raw_attack() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_true(session.spend_attack_points("warrior_001", 4))
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.attack, 64, "Spending 4 points should add 4 to raw Attack")
+	assert_eq(warrior.progression.skill_points, 6, "Spending 4 of 10 points should leave 6 unspent")
+
+
+func test_choose_perk_accepts_bonus_move_only_once_and_only_when_pending() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_false(
+		session.choose_perk("warrior_001", "bonus_move"),
+		"A perk cannot be chosen before it is pending"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+	assert_true(session.is_perk_choice_pending("warrior_001"))
+
+	assert_true(session.choose_perk("warrior_001", "bonus_move"))
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Choosing the perk resolves the pending choice")
+
+	assert_false(
+		session.choose_perk("warrior_001", "bonus_move"),
+		"The same perk cannot be chosen a second time"
+	)
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
+
+
+func test_choose_perk_rejects_an_unknown_perk_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_false(session.choose_perk("warrior_001", "no_such_perk"))
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
+
+
+func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_effective_hit_chance("warrior_001"), 0.6, "60 raw Attack should be 0.6 effective hit chance")
+
+
+func test_effective_hit_chance_caps_at_ninety_five_percent_while_raw_attack_exceeds_ninety_five() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 140.0)
+
+	session.spend_attack_points("warrior_001", 40)
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.attack, 100, "Raw Attack itself is not capped")
+	assert_eq(
+		session.get_effective_hit_chance("warrior_001"),
+		0.95,
+		"Effective hit chance is capped at 0.95 even though raw Attack exceeds 95"
+	)
+
+
+func test_get_effective_max_health_reflects_leveling() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_eq(session.get_effective_max_health("warrior_001"), 3)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(session.get_effective_max_health("warrior_001"), 4)
+
+
+func test_get_effective_move_range_adds_the_bonus_move_perk() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_eq(session.get_effective_move_range("warrior_001"), 3)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+	session.choose_perk("warrior_001", "bonus_move")
+
+	assert_eq(session.get_effective_move_range("warrior_001"), 4, "bonus_move grants one extra tile of movement")
+
+
+## Task 4 (vacancy-timed population): a fresh campaign is sparse, and every
+## cleared/hired slot refills only after its own category's wait, capped, and
+## only using freshly-minted ids. See docs/plans/2026-08-06-campaign-
+## progression-and-population/design.md's "Approved rules".
+
+func test_reset_seeds_exactly_one_active_goblin_camp_encounter() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+
+	assert_eq(active.size(), 1, "A fresh campaign starts with exactly one active encounter site")
+	assert_eq(active[0].id, GameSessionScript.GOBLIN_CAMP_ID)
+	assert_eq(active[0].template_id, GameSessionScript.GOBLIN_CAMP_ID)
+	assert_eq(active[0].position, Vector2i(4, 4))
+
+
+func test_reset_seeds_exactly_one_active_warrior_recruitment_offer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+
+	assert_eq(candidates.size(), 1, "A fresh campaign starts with exactly one recruitable Warrior")
+	assert_eq(candidates[0].id, "warrior_002")
+
+
+func test_reset_starts_with_zero_vacancy_clocks_running() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.encounter_vacancies, [] as Array[Dictionary])
+	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary])
+
+
+func test_get_active_encounters_returns_a_copy_that_cannot_mutate_the_session() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	active[0].position = Vector2i(0, 0)
+
+	assert_eq(
+		session.get_active_encounters()[0].position,
+		Vector2i(4, 4),
+		"Mutating a returned active-encounter copy must not affect session state"
+	)
+
+
+## --- Encounter vacancy timing (design.md: 15-turn refill under a 2-site cap) ---
+
+func test_clearing_the_active_encounter_removes_it_and_starts_one_vacancy_clock() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(session.get_active_encounters(), [] as Array[Dictionary], "Clearing the only site leaves zero active")
+	assert_eq(session.encounter_vacancies.size(), 1, "Clearing a site starts exactly one vacancy clock")
+	assert_eq(session.encounter_vacancies[0].turns_remaining, GameSessionScript.ENCOUNTER_VACANCY_TURNS)
+
+
+func test_encounter_vacancy_does_not_refill_before_turn_fifteen() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS - 1:
+		session.end_world_turn()
+
+	assert_eq(
+		session.get_active_encounters(),
+		[] as Array[Dictionary],
+		"14 turns after clearing must not yet refill a 15-turn vacancy"
+	)
+	assert_eq(session.encounter_vacancies.size(), 1, "The clock must still be pending")
+
+
+func test_encounter_vacancy_refills_exactly_at_turn_fifteen() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	assert_eq(active.size(), 1, "The 15th turn after clearing should refill exactly one new site")
+	assert_eq(session.encounter_vacancies, [] as Array[Dictionary], "A fired clock is consumed, not rescheduled")
+	assert_true(
+		session.completed_encounters.has(GameSessionScript.GOBLIN_CAMP_ID),
+		"The cleared site must never reopen"
+	)
+	assert_ne(
+		active[0].id,
+		GameSessionScript.GOBLIN_CAMP_ID,
+		"A refill is a distinct instance, never a reopening of the cleared one"
+	)
+
+
+func test_encounter_refill_deterministically_picks_the_orc_outpost_template_next() -> void:
+	# Goblin Camp is the only seeded active template, so the deterministic
+	# cycle (ENCOUNTER_TEMPLATE_ORDER) prefers the other, never-yet-spawned
+	# template next, at that template's own documented position.
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	assert_eq(active[0].template_id, GameSessionScript.ORC_OUTPOST_ID)
+	assert_eq(active[0].position, Vector2i(4, 0))
+
+
+## Regression test: a refill used to pick a template's documented static
+## position whenever that position was not held by a *currently active*
+## instance — but a cleared instance is removed from active_encounters
+## immediately, so once every known template had been used once and cleared,
+## the next refill reusing that template landed back on the exact tile it
+## was just cleared from, visually indistinguishable from "reopening" a
+## cleared site (which design.md's approved rules explicitly forbid). Two
+## consecutive clear-and-refill cycles are enough to force template reuse
+## (goblin_camp -> orc_outpost -> goblin_camp again).
+func test_encounter_refill_after_two_clear_cycles_does_not_reuse_the_original_cleared_tile() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	# Cycle 1: clear Goblin Camp at (4,4); wait out its vacancy so Orc
+	# Outpost spawns at its own documented (4,0).
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	assert_eq(active.size(), 1)
+	assert_eq(active[0].template_id, GameSessionScript.ORC_OUTPOST_ID)
+
+	# Cycle 2: clear Orc Outpost too; wait out its vacancy. Both templates
+	# have now been seen, so template selection falls through to reusing
+	# goblin_camp.
+	session.enter_encounter(active[0].id)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	active = session.get_active_encounters()
+	assert_eq(active.size(), 1, "The second vacancy should refill exactly one site")
+	assert_eq(
+		active[0].template_id,
+		GameSessionScript.GOBLIN_CAMP_ID,
+		"Both templates have been seen; the refill falls back to reusing goblin_camp"
+	)
+	assert_ne(
+		active[0].position,
+		Vector2i(4, 4),
+		"A reused template must not respawn on the exact tile it was previously cleared from"
+	)
+
+
+func test_encounter_refill_is_capped_at_two_active_sites_with_no_catch_up() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# Manufacture the cap-full scenario directly: two active sites and one
+	# pending clock about to fire. The organic single-party flow cannot reach
+	# two simultaneously-pending clocks in one battle (clearing always frees a
+	# slot before a second clearing can happen), so this exercises the guard
+	# the same way the game's own longer-run state eventually could.
+	session.active_encounters.append(
+		session._make_encounter_instance("encounter_999", GameSessionScript.ORC_OUTPOST_ID, Vector2i(0, 4))
+	)
+	assert_eq(session.get_active_encounters().size(), 2)
+	session.encounter_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	assert_eq(
+		session.get_active_encounters().size(),
+		2,
+		"A refill must never push active encounters above the cap"
+	)
+	assert_eq(
+		session.encounter_vacancies,
+		[] as Array[Dictionary],
+		"A clock blocked by the cap is discarded, not rescheduled or caught up later"
+	)
+
+	for i in 5:
+		session.end_world_turn()
+	assert_eq(session.get_active_encounters().size(), 2, "A capped, discarded vacancy must never catch up")
+
+
+func test_no_new_encounter_vacancy_clock_starts_while_already_at_capacity() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.active_encounters.append(
+		session._make_encounter_instance("encounter_999", GameSessionScript.ORC_OUTPOST_ID, Vector2i(0, 4))
+	)
+	assert_eq(session.get_active_encounters().size(), 2, "Both slots are active before this event")
+
+	session._start_encounter_vacancy()
+
+	assert_eq(
+		session.encounter_vacancies,
+		[] as Array[Dictionary],
+		"No new cooldown starts while the category is already at capacity"
+	)
+
+
+## --- Recruitment vacancy timing (design.md: 30-turn refill under a 4-offer cap) ---
+
+func test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+
+	session.purchase_recruit("warrior_002")
+
+	assert_eq(session.recruitment_vacancies.size(), 1)
+	assert_eq(session.recruitment_vacancies[0].turns_remaining, GameSessionScript.RECRUITMENT_VACANCY_TURNS)
+
+
+func test_a_failed_purchase_starts_no_recruitment_vacancy_clock() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.purchase_recruit("warrior_002"), "Zero gold should reject the purchase")
+
+	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary])
+
+
+func test_recruitment_vacancy_does_not_refill_before_turn_thirty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	session.purchase_recruit("warrior_002")
+
+	for i in GameSessionScript.RECRUITMENT_VACANCY_TURNS - 1:
+		session.end_world_turn()
+
+	assert_eq(session.get_recruitment_candidates(), [] as Array[Dictionary])
+	assert_eq(session.recruitment_vacancies.size(), 1)
+
+
+func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	session.purchase_recruit("warrior_002")
+
+	for i in GameSessionScript.RECRUITMENT_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_eq(candidates.size(), 1, "Turn 30 after the purchase should refill exactly one new offer")
+	assert_eq(candidates[0].id, "warrior_003", "Deterministic refill picks the next fixed template in order")
+	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary], "A fired clock is consumed, not rescheduled")
+
+
+func test_recruitment_refill_is_capped_at_four_offers_with_no_catch_up() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruitment_candidates = [
+		_recruitment_candidate("warrior_002"),
+		_recruitment_candidate("warrior_003"),
+		_recruitment_candidate("warrior_004"),
+		_recruitment_candidate("warrior_010"),
+	] as Array[Dictionary]
+	assert_eq(session.get_recruitment_candidates().size(), 4)
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	assert_eq(
+		session.get_recruitment_candidates().size(),
+		4,
+		"A refill must never push active offers above the cap"
+	)
+	assert_eq(
+		session.recruitment_vacancies,
+		[] as Array[Dictionary],
+		"A clock blocked by the cap is discarded, not rescheduled or caught up later"
+	)
+
+	for i in 5:
+		session.end_world_turn()
+	assert_eq(session.get_recruitment_candidates().size(), 4, "A capped, discarded vacancy must never catch up")
+
+
+func test_no_new_recruitment_vacancy_clock_starts_while_already_at_capacity() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruitment_candidates = [
+		_recruitment_candidate("warrior_002"),
+		_recruitment_candidate("warrior_003"),
+		_recruitment_candidate("warrior_004"),
+		_recruitment_candidate("warrior_010"),
+	] as Array[Dictionary]
+
+	session._start_recruitment_vacancy()
+
+	assert_eq(
+		session.recruitment_vacancies,
+		[] as Array[Dictionary],
+		"No new cooldown starts while the category is already at capacity"
+	)
+
+
+## --- Generated-id collision safety ---
+
+func test_generated_encounter_instance_ids_never_collide_with_historical_ones() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.completed_encounters.append("encounter_001")
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	assert_eq(active.size(), 1)
+	assert_ne(
+		active[0].id,
+		"encounter_001",
+		"A freshly minted instance id must skip one already recorded as historically cleared"
+	)
+
+
+func test_generated_recruitment_offer_ids_never_collide_with_the_roster_or_live_offers() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# Exhaust every fixed template (warrior_002/003/004) as roster members, so
+	# the overflow mint path must synthesize a fresh id.
+	session.adventurers.append(_adventurer("warrior_002", "available"))
+	session.adventurers.append(_adventurer("warrior_003", "available"))
+	session.adventurers.append(_adventurer("warrior_004", "available"))
+	session.recruitment_candidates = [] as Array[Dictionary]
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_eq(candidates.size(), 1, "The overflow mint path must still deliver exactly one new offer")
+	var new_id: String = candidates[0].id
+	assert_false(
+		["warrior_002", "warrior_003", "warrior_004"].has(new_id),
+		"The overflow id must not reuse an already-claimed fixed template id"
+	)
+	var all_ids: Array = []
+	for adventurer in session.adventurers:
+		all_ids.append(adventurer.id)
+	assert_false(all_ids.has(new_id), "A generated offer id must never collide with a roster adventurer")

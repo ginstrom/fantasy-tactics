@@ -1,6 +1,11 @@
 extends Node2D
 
 signal board_changed
+## Emitted from try_attack_selected_unit() exactly once, at the moment an
+## enemy-side unit is defeated. Battlefield connects to this to award kill
+## XP; it is a one-shot event (not a re-inspectable state like
+## last_attack_result), so a repeated board refresh cannot re-fire it.
+signal enemy_defeated
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -26,9 +31,10 @@ const ENEMY_STEP_MOVE := "move"
 const ENEMY_STEP_ATTACK := "attack"
 const WARRIOR_START := Vector2i(1, 1)
 const WARRIOR_COLOR := Color(0.3, 0.5, 0.9)
-const WARRIOR_MAX_HEALTH := 3
+# Attack damage is a fixed weapon value, not derived from progression (only
+# hit chance and max health/move range are; see GameSession's effective_*
+# getters and the campaign progression design doc).
 const WARRIOR_ATTACK_DAMAGE := 2
-const WARRIOR_HIT_CHANCE := 0.6
 const WARRIOR_ATTACK_NAME := "Sword"
 const GOBLIN_START := Vector2i(4, 4)
 const GOBLIN_COLOR := Color(0.9, 0.4, 0.3)
@@ -50,10 +56,16 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	var enemy_stats := _get_enemy_stats()
+	var player_adventurer_id := _get_player_adventurer_id()
 	units = [
 		UnitScript.new(
-			WARRIOR_START, WARRIOR_COLOR, Side.PLAYER, UNIT_MOVE_RANGE,
-			WARRIOR_MAX_HEALTH, WARRIOR_ATTACK_DAMAGE, WARRIOR_HIT_CHANCE, WARRIOR_ATTACK_NAME
+			WARRIOR_START, WARRIOR_COLOR, Side.PLAYER,
+			GameSession.get_effective_move_range(player_adventurer_id),
+			GameSession.get_effective_max_health(player_adventurer_id),
+			WARRIOR_ATTACK_DAMAGE,
+			GameSession.get_effective_hit_chance(player_adventurer_id),
+			WARRIOR_ATTACK_NAME,
+			player_adventurer_id
 		),
 		UnitScript.new(
 			GOBLIN_START, GOBLIN_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
@@ -73,6 +85,19 @@ func _get_enemy_stats() -> Dictionary:
 		# fall back to the Goblin Camp enemy so those scenarios keep working.
 		expedition = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
 	return expedition.enemy
+
+
+## Scope boundary: only a single player Unit is ever on the battlefield (see
+## the campaign progression design doc), even though a party may hold more
+## than one member. The first member of the selected party represents that
+## field unit. Scene-isolated tests that instantiate the battlefield with no
+## selected party (or an empty one) fall back to the default Warrior,
+## matching _get_enemy_stats()'s fallback pattern.
+func _get_player_adventurer_id() -> String:
+	var party: Dictionary = GameSession.get_selected_party()
+	if party.is_empty() or party.member_ids.is_empty():
+		return GameSession.WARRIOR_ID
+	return party.member_ids[0]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -148,6 +173,8 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"damage": damage,
 		"defeated": defeated,
 	}
+	if defeated and target.side == Side.ENEMY:
+		enemy_defeated.emit()
 	return true
 
 

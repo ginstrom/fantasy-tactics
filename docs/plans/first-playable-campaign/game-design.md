@@ -34,12 +34,6 @@ visible upgrades. Its purpose is to prove that tactical victories make the
 strategic game more interesting and that strategic choices make the next battle
 feel different.
 
-The first implemented foundation is smaller: one Warrior, one player-created
-party, one goblin-camp expedition, and a single clear-or-return outcome. It
-now proves the route from settlement preparation through tactical combat and
-back to campaign state. It deliberately does not yet provide rewards,
-upgrades, or enough expedition choices to be a repeatable campaign.
-
 ## Completed first playable foundation
 
 The current prototype delivers this manually playable route:
@@ -54,24 +48,57 @@ Start Menu
   -> select the deployed party and plan a route
   -> advance one world-map tile manually or with End Turn
   -> select the party at Goblin Camp and enter battle on a second click
-  -> win: clear the camp and return to the World Map
+  -> defeat the Goblin: resolve its 5 kill XP immediately (a modal Level-Up
+     overlay appears if a party member crosses a level threshold)
+  -> win: clear the camp for its 10 clear XP and return to the World Map
      or lose: return the party to the Starting Settlement; camp remains available
+  -> return to Encampment to deposit pending gold; review XP, Attack, and any
+     unspent skill points from Unit Details (skill points are spent from the
+     in-battle Level-Up overlay, not from Unit Details)
 ```
 
 Party creation and Warrior assignment, previously reachable from an
 Encampment "Party Manager" screen, are superseded by the Milestone 4
 encampment UI shell below. Party Details now offers Add Member for an
-encamped party, restoring the ordinary in-game assignment path. The next
-encampment work adds the complementary roster-first path and recruitment so a
-new campaign can grow beyond its starting Warrior without debug tooling.
+encamped party, restoring the ordinary in-game assignment path. Roster and
+Recruitment (below) let a new campaign grow beyond its starting Warrior
+without debug tooling.
 
-`GameSession` owns the one-Warrior roster, the single player-created party,
+`GameSession` owns the one-Warrior roster and its adventurer progression (XP,
+level, Attack, unspent skill points, perks), the single player-created party,
 its deployment state, world position, committed travel route, movement spent,
-world turn, and encounter completion. `GameManager` owns named scene
-transitions. The party is visible and movable only while deployed. World-map
-travel is deliberately simple: an in-bounds, empty-grid Manhattan route moves
-one tile per World Map turn; no terrain costs, obstacles, waypoints, or
-multi-party scheduling are implied yet.
+world turn, encounter completion, active encounter/recruitment instances, and
+their vacancy-refill clocks. `GameManager` owns named scene transitions. The
+party is visible and movable only while deployed. World-map travel is
+deliberately simple: an in-bounds, empty-grid Manhattan route moves one tile
+per World Map turn; no terrain costs, obstacles, waypoints, or multi-party
+scheduling are implied yet.
+
+### Adventurer progression
+
+Every kill and every cleared site awards XP immediately, split evenly across
+the deployed party: 5/10 for a Goblin kill/clear, 10/20 for an Orc kill/clear.
+Cumulative level thresholds are 0, 20, 50, 90, and so on — each level costing
+10 more XP than the last. A level grants one maximum-health point (applied
+immediately to both the persistent adventurer and the active battle unit) and ten
+unspent skill points, spendable on Attack from a modal Level-Up overlay that
+resolves immediately, before further input or a battle-result transition.
+Attack starts at 60 and has no cap, though its derived hit chance caps at 95%.
+Every third level requires a perk choice; the first available perk, Bonus
+Move, grants one extra tile of movement range. The same XP, Attack, health,
+and perk data is legible outside battle from Unit Details.
+
+### Vacancy-timed encounter and recruitment population
+
+The map and the recruitment offer list no longer show every possible site or
+candidate at once. A campaign starts with one active encounter (the Goblin
+Camp) and one active recruitment offer (a Warrior), and each category holds
+at most two active encounters or four active offers at a time. Clearing a
+site or hiring a recruit opens a vacancy; that vacancy's own 15- (encounter)
+or 30- (recruitment) World Map turn clock refills it with a new instance only
+if its category is still under its cap when the clock completes. A cleared
+site never reopens — a later spawn is a distinct new instance, though it may
+reuse a previously seen encounter template at a different map tile.
 
 Site entry retains selection-before-activation. The first click selects the
 party, so it can still move away; a second click enters the settlement or
@@ -226,8 +253,16 @@ not only appearance.
 
 ## Milestone 3: Expedition and reward loop
 
-**Status: next.** The first tactical expedition exists, but it has no reward,
-resource cost, or alternative destination yet.
+**Status: reward loop shipped; encounter catalogue still narrow.** Every
+expedition now pays out two reward types: gold (banked on return to
+Encampment) and individual adventurer XP (awarded immediately per kill and
+per clear; see Adventurer progression above). Cleared sites are persistent
+but not permanent — each vacancy refills on its own 15-turn clock under a
+two-site cap, so the world map keeps changing within a campaign rather than
+only accumulating grey markers. The encounter catalogue itself is still just
+the Goblin Camp and Orc Outpost templates; a broader roster of encounter
+types, and any travel-time or resource cost beyond World Map turns, remain
+future work.
 
 ### Player outcome
 
@@ -261,15 +296,19 @@ language rather than creating bespoke art for every prototype variation.
 
 ## Milestone 4: Encampment and party management
 
-**Status: encampment UI shell, party browsing/deployment, and party-first Add
-Member completed; roster and recruitment next.** The prototype already has an
-encampment UI shell (Units, Buildings, Trade, Deploy Party) and Units ->
-Parties -> Party Details -> Unit Details browsing with deliberate party
-deployment. An encamped party can use Add Member to assign an existing
-available adventurer. The next slice activates Roster and Recruitment: it
-adds a roster-first assignment path and a small gold-costed, finite candidate
-list. It does not yet offer a four-member starting party, development,
-equipment, buildings, trade, or a settlement investment.
+**Status: encampment UI shell, party browsing/deployment, party-first Add
+Member, roster-first assignment, recruitment, and individual adventurer
+progression completed.** The prototype already has an encampment UI shell
+(Units, Buildings, Trade, Deploy Party) and Units -> Parties -> Party Details
+-> Unit Details browsing with deliberate party deployment. An encamped party
+can use Add Member to assign an existing available adventurer, or Roster can
+assign one directly from Unit Details. Recruitment offers a small, vacancy-
+timed pool of gold-costed Warrior candidates (see Vacancy-timed encounter and
+recruitment population above) rather than a fixed catalogue. Adventurers gain
+XP, levels, Attack points, and perks from expeditions (see Adventurer
+progression above), legible from Unit Details. It does not yet offer a
+four-member starting party, equipment, buildings, trade, or a settlement
+investment.
 
 ### Player outcome
 
@@ -335,9 +374,10 @@ that do not exist yet.
 - **Trade:** buy/sell inventory, prices, stock, and equipment ownership are
   TBD. Do not invent an item economy before the first improvement loop.
 - **Roster and Recruitment growth:** this slice intentionally has no search,
-  pagination, random offers, town-size rules, building prerequisites, or
-  class-specific combat behavior. Later town growth can expand or filter the
-  fixed recruitment catalogue without changing ownership or screen routing.
+  pagination, town-size rules, building prerequisites, or class-specific
+  combat behavior. Refill timing and caps are deterministic, not random.
+  Later town growth can expand or filter the vacancy-timed offer pool without
+  changing ownership or screen routing.
 - **Party management limits:** party capacity, removal, reassignment between
   parties, injuries, and availability rules beyond the current available
   status remain TBD. The existing Add Member flow is the party-first
