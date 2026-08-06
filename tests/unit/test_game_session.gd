@@ -1361,14 +1361,14 @@ func test_reset_seeds_two_active_encounters_with_display_difficulty() -> void:
 	assert_eq(active[1].difficulty, 2, "Orc Outpost should have difficulty 2")
 
 
-func test_reset_seeds_exactly_one_active_goblin_camp_encounter() -> void:
+func test_reset_seeds_goblin_camp_first_among_two_encounters() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	var active: Array[Dictionary] = session.get_active_encounters()
 
 	assert_eq(active.size(), 2, "A fresh campaign starts with exactly two active encounter sites")
-	assert_eq(active[0].id, GameSessionScript.GOBLIN_CAMP_ID)
+	assert_eq(active[0].id, GameSessionScript.GOBLIN_CAMP_ID, "Goblin Camp should be first in the stable seeding order")
 	assert_eq(active[0].template_id, GameSessionScript.GOBLIN_CAMP_ID)
 	assert_eq(active[0].position, Vector2i(4, 4))
 
@@ -1502,19 +1502,23 @@ func test_encounter_refill_deterministically_picks_the_orc_outpost_template_next
 ## Regression test: a refill used to pick a template's documented static
 ## position whenever that position was not held by a *currently active*
 ## instance — but a cleared instance is removed from active_encounters
-## immediately, so once every known template had been used once and cleared,
-## the next refill reusing that template landed back on the exact tile it
-## was just cleared from, visually indistinguishable from "reopening" a
-## cleared site (which design.md's approved rules explicitly forbid). Two
-## consecutive clear-and-refill cycles are enough to force template reuse
-## (goblin_camp -> orc_outpost -> goblin_camp again).
+## immediately. Since reset() now seeds _used_encounter_template_ids with
+## both template ids, a refilled template's template_previously_spawned flag
+## is true on the very first refill, forcing _choose_encounter_position to
+## search for an alternative rather than respawning on the exact cleared
+## tile (which design.md's approved rules explicitly forbid).
 func test_encounter_refill_after_two_clear_cycles_does_not_reuse_the_original_cleared_tile() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	# Cycle 1: Start with Goblin Camp and Orc Outpost. Clear Goblin Camp
-	# and wait for refill. A new Goblin Camp will spawn (a new instance).
-	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	# Record Goblin Camp's original position before clearing it
+	var original_goblin_position: Vector2i = Vector2i(4, 4)
+	var goblin_instance_id: String = GameSessionScript.GOBLIN_CAMP_ID
+
+	# Clear Goblin Camp and wait for refill. The new instance must not spawn
+	# at (4, 4) even though that position is now empty, because Goblin Camp
+	# is marked as previously-spawned in _used_encounter_template_ids.
+	session.enter_encounter(goblin_instance_id)
 	session.complete_current_encounter()
 	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
@@ -1522,32 +1526,23 @@ func test_encounter_refill_after_two_clear_cycles_does_not_reuse_the_original_cl
 	var active: Array[Dictionary] = session.get_active_encounters()
 	assert_eq(active.size(), 2, "After refill: Orc Outpost + new Goblin Camp instance")
 
-	# Cycle 2: Find and clear the Orc Outpost, then wait for the next refill.
-	var orc_id: String = ""
+	# Find the new Goblin Camp instance and verify its position differs from the original
+	var new_goblin_position: Vector2i = Vector2i(-1, -1)
 	for instance in active:
-		if instance.id == GameSessionScript.ORC_OUTPOST_ID:
-			orc_id = instance.id
+		if instance.template_id == GameSessionScript.GOBLIN_CAMP_ID and instance.id != goblin_instance_id:
+			new_goblin_position = instance.position
 			break
-	assert_ne(orc_id, "", "Orc Outpost should be active")
 
-	session.enter_encounter(orc_id)
-	session.complete_current_encounter()
-	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
-		session.end_world_turn()
-
-	active = session.get_active_encounters()
-	assert_eq(active.size(), 2, "After second refill: Goblin Camp instance + new Orc Outpost instance")
-
-	# Check that we have both templates but in different instances
-	var goblin_found: bool = false
-	var orc_found: bool = false
-	for instance in active:
-		if instance.template_id == GameSessionScript.GOBLIN_CAMP_ID:
-			goblin_found = true
-		elif instance.template_id == GameSessionScript.ORC_OUTPOST_ID:
-			orc_found = true
-	assert_true(goblin_found, "A Goblin Camp instance should be active")
-	assert_true(orc_found, "An Orc Outpost instance should be active")
+	assert_ne(
+		new_goblin_position,
+		original_goblin_position,
+		"A refilled template must not respawn on the exact tile it was just cleared from"
+	)
+	assert_ne(
+		new_goblin_position,
+		Vector2i(-1, -1),
+		"A new Goblin Camp instance should have been spawned at a valid position"
+	)
 
 
 func test_encounter_refill_is_capped_at_two_active_sites_with_no_catch_up() -> void:
