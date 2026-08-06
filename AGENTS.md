@@ -1,5 +1,8 @@
 # Agent Workflow Notes
 
+Before touching code, see [docs/dev/README.md](docs/dev/README.md) for how
+to run the game, run the test suite, and a map of the codebase.
+
 ## Branching, not worktrees
 
 This is a one-person learning project. Do development on a regular
