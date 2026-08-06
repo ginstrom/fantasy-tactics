@@ -1878,10 +1878,12 @@ func test_assign_adventurer_to_party_rejects_fifth_member_at_level_one() -> void
 	session.adventurers.append(_adventurer("test_002", "available"))
 	session.adventurers.append(_adventurer("test_003", "available"))
 
+	session.adventurers.append(_adventurer("test_004", "available"))
+
 	assert_true(session.assign_adventurer_to_selected_party("test_001"))
 	assert_true(session.assign_adventurer_to_selected_party("test_002"))
 	assert_true(session.assign_adventurer_to_selected_party("test_003"))
-	assert_false(session.assign_adventurer_to_selected_party("warrior_002"), "Fifth member must be rejected at level 1")
+	assert_false(session.assign_adventurer_to_selected_party("test_004"), "Fifth member must be rejected at level 1")
 
 	assert_eq(session.get_selected_party().member_ids.size(), 4)
 
