@@ -1507,7 +1507,7 @@ func test_encounter_refill_deterministically_picks_the_orc_outpost_template_next
 ## is true on the very first refill, forcing _choose_encounter_position to
 ## search for an alternative rather than respawning on the exact cleared
 ## tile (which design.md's approved rules explicitly forbid).
-func test_encounter_refill_after_two_clear_cycles_does_not_reuse_the_original_cleared_tile() -> void:
+func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
