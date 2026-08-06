@@ -129,19 +129,21 @@ enduring design reference for the settlement/party boundaries is
 
 ## Next work
 
-The foundation establishes the campaign's entry, travel, tactical result, and
-return paths, but it is not yet a repeatable campaign. The next implementation
-work should focus on the unfinished outcomes below, in milestone order:
+The prototype now has tactical victory/defeat, XP, delayed gold, recruitment,
+and two encounter templates. It is not yet a repeatable strategic campaign:
+the current map begins with one live site and recruitment does not change the
+one-versus-one battle. The next implementation work should focus on these
+unfinished outcomes, in order:
 
-1. Make tactical results matter in campaign state: add a small reward or
-   setback and a second expedition whose risk, reward, or tactical setup
-   differs from the Goblin Camp.
-2. Turn the return to camp into a meaningful choice: add gold and one
-   deliberately small, player-visible party or settlement improvement funded
-   by it.
-3. Expand the roster from one Warrior toward the planned initial party of four
-   only after the first improvement makes a later expedition meaningfully
-   different.
+1. Start with two simultaneous expedition choices: one-star Goblin Camp and
+   two-star Orc Outpost, with star-only World Map markers. The approved design
+   is [Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md).
+2. Make a gold-funded Encampment decision change a later expedition. The
+   natural follow-up is deploying healthy party members into battle, with the
+   associated encounter/action-economy rebalance; recruitment alone is not
+   yet a tactical benefit.
+3. Expand toward the planned initial party of four only after the first
+   gold-funded capability is enjoyable and legible in subsequent expeditions.
 4. Add save/load only after the repeatable expedition, reward, and upgrade
    loop works; then enable the existing Continue and Load UI.
 5. Add durable presentation assets only when their associated gameplay choices
@@ -253,8 +255,8 @@ not only appearance.
 
 ## Milestone 3: Expedition and reward loop
 
-**Status: reward loop shipped; encounter catalogue still narrow.** Every
-expedition now pays out two reward types: gold (banked on return to
+**Status: reward and one-for-one replacement loops shipped; strategic choice
+is incomplete.** Every expedition now pays out two reward types: gold (banked on return to
 Encampment) and individual adventurer XP (awarded immediately per kill and
 per clear; see Adventurer progression above). Cleared sites are persistent
 but not permanent — each vacancy refills on its own 15-turn clock under a
@@ -296,9 +298,9 @@ language rather than creating bespoke art for every prototype variation.
 
 ## Milestone 4: Encampment and party management
 
-**Status: encampment UI shell, party browsing/deployment, party-first Add
-Member, roster-first assignment, recruitment, and individual adventurer
-progression completed.** The prototype already has an encampment UI shell
+**Status: encampment UI, party browsing/deployment, recruitment, and individual
+adventurer progression are shipped; gold-funded tactical capability is not.**
+The prototype already has an encampment UI shell
 (Units, Buildings, Trade, Deploy Party) and Units -> Parties -> Party Details
 -> Unit Details browsing with deliberate party deployment. An encamped party
 can use Add Member to assign an existing available adventurer, or Roster can

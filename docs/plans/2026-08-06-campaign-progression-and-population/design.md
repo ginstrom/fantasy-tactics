@@ -7,8 +7,11 @@ refill a bounded number of available expeditions and recruitment offers.
 
 ## Approved rules
 
-- Start a campaign with one roster Warrior, one Goblin Camp, and one
-  recruitable Warrior.
+- This delivered slice started a campaign with one roster Warrior, one Goblin
+  Camp, and one recruitable Warrior. The starting-encounter rule is superseded
+  by [Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md):
+  the current target starts with both Goblin Camp and Orc Outpost while keeping
+  the same two-site cap and vacancy rules.
 - A cleared encounter leaves a vacant encounter slot. Fifteen World Map turns
   after that vacancy begins, add one new encounter if fewer than two sites are
   active. A hired recruit similarly leaves a vacancy; refill it after thirty
