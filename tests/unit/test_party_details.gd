@@ -19,6 +19,15 @@ func _open_party_details(party_id: String) -> Control:
 	return screen
 
 
+func _tree_row_values(tree: Tree, column: int) -> Array[String]:
+	var values: Array[String] = []
+	var item := tree.get_root().get_first_child()
+	while item != null:
+		values.append(item.get_text(column))
+		item = item.get_next()
+	return values
+
+
 func test_party_details_shows_the_title_and_the_back_action() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
@@ -82,17 +91,34 @@ func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
 
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "party_details.no_members")
-	assert_eq(screen.get_node("Center/VBox/MemberList").get_child_count(), 0)
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+
+
+## Column titles are resolved via tr() (see party_details.gd) to the real
+## English copy in translations/en.tres (Name/Class/Level — see the
+## migration brief).
+func test_party_details_table_uses_the_documented_columns() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+
+	assert_eq(tree.columns, 3)
+	assert_eq(tree.get_column_title(0), "Name")
+	assert_eq(tree.get_column_title(1), "Class")
+	assert_eq(tree.get_column_title(2), "Level")
 
 
 func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
 
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
-	var row: Button = screen.get_node("Center/VBox/MemberList").get_child(0)
-	assert_eq(row.text, tr("party_details.member_row") % ["Warrior", "warrior", 1])
+	assert_eq(_tree_row_values(tree, 0), ["Warrior"])
+	assert_eq(_tree_row_values(tree, 1), ["warrior"])
+	assert_eq(_tree_row_values(tree, 2), ["1"])
 
 
 func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> void:
@@ -100,9 +126,11 @@ func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> vo
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var row: Button = screen.get_node("Center/VBox/MemberList").get_child(0)
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var item := tree.get_root().get_first_child()
 
-	row.emit_signal("pressed")
+	item.select(0)
+	tree.emit_signal("item_selected")
 
 	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
 	assert_true(panel.get_node("Content/AdventurerName").visible)
@@ -115,7 +143,9 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	screen.get_node("Center/VBox/MemberList").get_child(0).emit_signal("pressed")
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
 
 	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
 
@@ -126,12 +156,26 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that
 	)
 
 
+func test_activating_a_row_asks_game_manager_to_open_unit_details_for_that_exact_id() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+
+	tree.emit_signal("item_activated")
+
+	assert_eq(GameManager.route_context_id, GameSession.WARRIOR_ID)
+
+
 func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	screen.get_node("Center/VBox/MemberList").get_child(0).emit_signal("pressed")
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
 
 	GameSession.reset()
@@ -143,8 +187,9 @@ func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 
 func test_an_unknown_party_id_does_not_crash_and_shows_no_members() -> void:
 	var screen := _open_party_details("no_such_party")
+	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
 
-	assert_eq(screen.get_node("Center/VBox/MemberList").get_child_count(), 0)
+	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_back_button_returns_to_parties_and_leaves_the_party_untouched() -> void:

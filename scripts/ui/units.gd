@@ -1,9 +1,6 @@
 extends Control
 
-## Units hub. Parties is the only branch wired to a real screen in this
-## slice; Roster and Recruitment are visible but disabled until their
-## systems exist, following the same disabled-with-its-own-label convention
-## Encampment uses for Buildings and Trade.
+## Units hub. Parties, Roster, and Recruitment all route to real screens.
 
 @onready var information_panel: PanelContainer = $InformationPanel
 
@@ -18,8 +15,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameManager.open_game_menu()
 
 
+func _on_roster_pressed() -> void:
+	GameManager.go_to_roster()
+
+
 func _on_parties_pressed() -> void:
 	GameManager.go_to_parties()
+
+
+func _on_recruitment_pressed() -> void:
+	GameManager.go_to_recruitment()
 
 
 func _on_back_pressed() -> void:

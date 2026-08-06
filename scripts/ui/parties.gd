@@ -1,10 +1,15 @@
 extends Control
 
-## Lists every party as a selectable row and mirrors the selection into the
-## shared InformationPanel. The panel never navigates itself (see
-## information_panel.gd); this screen decides what its View button does.
+## Lists every GameSession party as a TableView row, keyed by stable party id
+## (TableView's default row_id_key), and mirrors the selected row into the
+## shared InformationPanel — the same selection pattern Roster uses for
+## adventurers (see roster.gd), applied to parties instead. Row activation and
+## the panel's View button both open the existing Party Details screen; this
+## screen never mutates a party itself.
 
-@onready var party_list: VBoxContainer = $Center/VBox/PartyList
+const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
+
+@onready var party_table: TableView = $Center/VBox/PartyTable
 @onready var empty_label: Label = $Center/VBox/EmptyLabel
 @onready var information_panel: PanelContainer = $InformationPanel
 
@@ -13,6 +18,10 @@ var selected_party_id: String = ""
 
 func _ready() -> void:
 	information_panel.party_selected.connect(_on_information_panel_party_selected)
+	party_table.row_selected.connect(_on_row_selected)
+	party_table.row_activated.connect(_on_row_activated)
+	party_table.set_columns(_build_columns())
+	information_panel.refresh()
 	refresh()
 
 
@@ -23,33 +32,33 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
-	_rebuild_party_rows()
+	var rows := _build_rows()
+	party_table.set_rows(rows)
+	empty_label.visible = rows.is_empty()
 	_refresh_selection()
 
 
-## Rebuilds the row list from scratch. remove_child() already takes each row
-## off get_children() synchronously, so a refresh called more than once per
-## frame, as tests do, never leaves stale rows sitting alongside new ones;
-## queue_free() only defers the actual deallocation.
-func _rebuild_party_rows() -> void:
-	for child in party_list.get_children():
-		party_list.remove_child(child)
-		child.queue_free()
-
-	var parties: Array[Dictionary] = GameSession.parties
-	empty_label.visible = parties.is_empty()
-
-	for party in parties:
-		var row := Button.new()
-		row.name = "PartyRow_%s" % party.id
-		row.text = party.name
-		row.pressed.connect(_on_party_row_pressed.bind(party.id))
-		party_list.add_child(row)
+func _build_columns() -> Array[TableColumn]:
+	var name_column := TableColumnDescriptor.new(&"name", tr("parties.column.party"))
+	name_column.expand = true
+	name_column.expand_ratio = 2
+	var members_column := TableColumnDescriptor.new(
+		&"member_count", tr("parties.column.members"), TableColumnDescriptor.Type.INTEGER
+	)
+	var status_column := TableColumnDescriptor.new(&"status", tr("parties.column.status"))
+	return [name_column, members_column, status_column]
 
 
-func _on_party_row_pressed(party_id: String) -> void:
-	selected_party_id = party_id
-	_refresh_selection()
+func _build_rows() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	for party in GameSession.parties:
+		rows.append({
+			"id": party.id,
+			"name": party.name,
+			"member_count": party.member_ids.size(),
+			"status": "deployed" if party.get("deployed", false) else "encamped",
+		})
+	return rows
 
 
 ## A selection that no longer resolves to a real party (list refreshed out
@@ -61,6 +70,15 @@ func _refresh_selection() -> void:
 		information_panel.refresh()
 		return
 	information_panel.refresh_party(selected_party_id)
+
+
+func _on_row_selected(row_id: Variant) -> void:
+	selected_party_id = str(row_id)
+	_refresh_selection()
+
+
+func _on_row_activated(row_id: Variant) -> void:
+	GameManager.go_to_party_details(str(row_id))
 
 
 func _on_information_panel_party_selected(party_id: String) -> void:

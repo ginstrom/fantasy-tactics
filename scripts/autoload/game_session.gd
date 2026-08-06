@@ -47,8 +47,47 @@ const DEFAULT_WARRIOR := {
 }
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
+# Fixed, individually identified recruitment offers (see the encampment
+# roster/recruitment design). All three use existing Warrior behavior; the
+# record shape is intentionally extensible for future candidates.
+const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
+	{
+		"id": "warrior_002",
+		"name": "Warrior 2",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+	{
+		"id": "warrior_003",
+		"name": "Warrior 3",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+	{
+		"id": "warrior_004",
+		"name": "Warrior 4",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+]
 
 var adventurers: Array[Dictionary] = []
+var recruitment_candidates: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
@@ -71,6 +110,9 @@ func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 func reset() -> void:
 	# The roster owns a copy so a session cannot mutate the shared default data.
 	adventurers = [DEFAULT_WARRIOR.duplicate(true)]
+	recruitment_candidates = []
+	for candidate_template in RECRUITMENT_CANDIDATE_TEMPLATES:
+		recruitment_candidates.append(candidate_template.duplicate(true))
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
@@ -132,6 +174,19 @@ func get_deployable_encamped_parties() -> Array[Dictionary]:
 	return deployable
 
 
+## Every encamped party (settlement, not deployed), regardless of whether it
+## has room or an available member — unlike get_deployable_encamped_parties(),
+## a full-but-encamped party is still a valid unit-assignment target. Shares
+## the encamped half of that same "ready" concept via _is_party_encamped so
+## the two queries cannot silently drift apart.
+func get_encamped_parties() -> Array[Dictionary]:
+	var encamped: Array[Dictionary] = []
+	for party in parties:
+		if _is_party_encamped(party):
+			encamped.append(party.duplicate(true))
+	return encamped
+
+
 func deploy_party(party_id: String) -> bool:
 	var party_index := _get_party_index(party_id)
 	if party_index == -1 or not _is_party_eligible_for_deployment(parties[party_index]):
@@ -152,9 +207,18 @@ func get_available_adventurers() -> Array[Dictionary]:
 	return available
 
 
+## Rejects a target party that is not encamped (deployed, or outside the
+## starting settlement) in addition to the existing unknown-party/unknown-
+## adventurer/already-assigned checks — a party that is out in the field has
+## nowhere to receive a new member.
 func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool:
 	var party_index := _get_party_index(party_id)
-	if party_index == -1 or not _has_adventurer(adventurer_id) or _is_adventurer_assigned(adventurer_id):
+	if (
+		party_index == -1
+		or not _is_party_encamped(parties[party_index])
+		or not _has_adventurer(adventurer_id)
+		or _is_adventurer_assigned(adventurer_id)
+	):
 		return false
 
 	var member_ids: Array = parties[party_index].member_ids
@@ -166,12 +230,57 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 	return assign_adventurer_to_party(selected_party_id, adventurer_id)
 
 
+## Debug-only convenience for populating the roster (see the debug menu).
+## Mints a warrior_NNN id/name pair, scanning upward from adventurers.size() +
+## 1 until it finds a number that collides with neither an existing
+## adventurer nor a still-live recruitment candidate. RECRUITMENT_CANDIDATE_
+## TEMPLATES fixes warrior_002/warrior_003/warrior_004 as separately tracked
+## candidates, so a naive adventurers.size()-based count can otherwise mint
+## an id one of them is still offering (or one an earlier debug recruit
+## already used), silently corrupting the roster with duplicate ids.
+## purchase_recruit() carries the matching guard for the other direction
+## (buying a candidate whose id a debug recruit already claimed).
 func recruit_adventurer() -> void:
 	var recruit_number := adventurers.size() + 1
+	var candidate_id := "warrior_%03d" % recruit_number
+	while _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1:
+		recruit_number += 1
+		candidate_id = "warrior_%03d" % recruit_number
+
 	var adventurer: Dictionary = DEFAULT_WARRIOR.duplicate(true)
-	adventurer.id = "warrior_%03d" % recruit_number
+	adventurer.id = candidate_id
 	adventurer.name = "Warrior %d" % recruit_number
 	adventurers.append(adventurer)
+
+
+func get_recruitment_candidates() -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	for candidate in recruitment_candidates:
+		candidates.append(candidate.duplicate(true))
+	return candidates
+
+
+## The only normal (non-debug) path onto the roster: validates the candidate
+## is still on offer, affordable, and not already claimed by an id-colliding
+## adventurer (e.g. an earlier debug recruit — see recruit_adventurer()'s
+## matching guard), deducts its cost exactly once, removes it from the
+## catalog, and appends the purchased adventurer (its "cost" field dropped,
+## since that is a recruitment-only concern).
+func purchase_recruit(candidate_id: String) -> bool:
+	var candidate_index := _get_recruitment_candidate_index(candidate_id)
+	if (
+		candidate_index == -1
+		or gold < recruitment_candidates[candidate_index].cost
+		or _has_adventurer(candidate_id)
+	):
+		return false
+
+	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
+	gold -= candidate.cost
+	recruitment_candidates.remove_at(candidate_index)
+	candidate.erase("cost")
+	adventurers.append(candidate)
+	return true
 
 
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
@@ -314,6 +423,13 @@ func _has_adventurer(adventurer_id: String) -> bool:
 	return _get_adventurer_index(adventurer_id) != -1
 
 
+func _get_recruitment_candidate_index(candidate_id: String) -> int:
+	for candidate_index in recruitment_candidates.size():
+		if recruitment_candidates[candidate_index].id == candidate_id:
+			return candidate_index
+	return -1
+
+
 func _party_has_available_member(party: Dictionary) -> bool:
 	for adventurer in adventurers:
 		if adventurer.id in party.member_ids and adventurer.availability_status == "available":
@@ -322,11 +438,14 @@ func _party_has_available_member(party: Dictionary) -> bool:
 
 
 func _is_party_eligible_for_deployment(party: Dictionary) -> bool:
-	return (
-		party.location_id == STARTING_SETTLEMENT_ID
-		and not party.deployed
-		and _party_has_available_member(party)
-	)
+	return _is_party_encamped(party) and _party_has_available_member(party)
+
+
+## The shared "encamped" half of both deployment eligibility and unit
+## assignment: in the starting settlement and not out in the field. Neither
+## caller should duplicate this boolean expression on its own.
+func _is_party_encamped(party: Dictionary) -> bool:
+	return party.location_id == STARTING_SETTLEMENT_ID and not party.deployed
 
 
 func _is_adventurer_assigned(adventurer_id: String) -> bool:

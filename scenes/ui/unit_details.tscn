@@ -67,6 +67,21 @@ visible = false
 text = "unit_details.not_found"
 horizontal_alignment = 1
 
+[node name="AssignmentExplanationLabel" type="Label" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.no_eligible_party"
+horizontal_alignment = 1
+
+[node name="PartyPicker" type="OptionButton" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="AddToPartyButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.add_to_party"
+
 [node name="BackButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 text = "ui.back"
@@ -82,4 +97,5 @@ offset_right = -16.0
 offset_bottom = 96.0
 grow_horizontal = 0
 
+[connection signal="pressed" from="Center/VBox/AddToPartyButton" to="." method="_on_add_to_party_pressed"]
 [connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]

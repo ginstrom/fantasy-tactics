@@ -1,14 +1,19 @@
 extends Control
 
 ## Shows the roster of a single party (read from GameManager.route_context_id)
-## and mirrors the selected member into the shared InformationPanel, the same
-## selection pattern Parties uses for parties (see parties.gd). Add Member is
-## hidden entirely for a deployed party, since you can't add a member to a
-## party that's out in the field, and disabled for an encamped party with no
-## available adventurer left to add.
+## as a TableView row per member, keyed by stable adventurer id, and mirrors
+## the selected row into the shared InformationPanel — the same selection
+## pattern Parties uses for parties (see parties.gd), applied to this party's
+## members instead. Row activation and the panel's View button both open the
+## existing Unit Details screen. Add Member is hidden entirely for a deployed
+## party, since you can't add a member to a party that's out in the field,
+## and disabled for an encamped party with no available adventurer left to
+## add.
+
+const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Center/VBox/PartyNameLabel
-@onready var member_list: VBoxContainer = $Center/VBox/MemberList
+@onready var member_table: TableView = $Center/VBox/MemberTable
 @onready var empty_label: Label = $Center/VBox/EmptyLabel
 @onready var add_member_button: Button = $Center/VBox/AddMemberButton
 @onready var information_panel: PanelContainer = $InformationPanel
@@ -20,6 +25,9 @@ var selected_adventurer_id: String = ""
 func _ready() -> void:
 	information_panel.adventurer_selected.connect(_on_information_panel_adventurer_selected)
 	party_id = GameManager.route_context_id
+	member_table.row_selected.connect(_on_row_selected)
+	member_table.row_activated.connect(_on_row_activated)
+	member_table.set_columns(_build_columns())
 	refresh()
 
 
@@ -31,12 +39,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func refresh() -> void:
 	var party := GameSession.get_party(party_id)
-	if party.is_empty():
-		party_name_label.text = ""
-		_rebuild_member_rows([])
-	else:
-		party_name_label.text = party.name
-		_rebuild_member_rows(party.member_ids)
+	party_name_label.text = "" if party.is_empty() else party.name
+	var rows := _build_rows(party)
+	member_table.set_rows(rows)
+	empty_label.visible = rows.is_empty()
 	# A deployed party is out in the field; Add Member doesn't even make
 	# sense to offer, so it disappears entirely rather than merely staying
 	# disabled. An encamped party with nobody left to recruit keeps the
@@ -46,33 +52,31 @@ func refresh() -> void:
 	_refresh_selection()
 
 
-## Rebuilds the row list from scratch. remove_child() already takes each row
-## off get_children() synchronously, so a refresh called more than once per
-## frame, as tests do, never leaves stale rows sitting alongside new ones;
-## queue_free() only defers the actual deallocation.
-func _rebuild_member_rows(member_ids: Array) -> void:
-	for child in member_list.get_children():
-		member_list.remove_child(child)
-		child.queue_free()
+func _build_columns() -> Array[TableColumn]:
+	var name_column := TableColumnDescriptor.new(&"name", tr("party_details.column.name"))
+	name_column.expand = true
+	name_column.expand_ratio = 2
+	var class_column := TableColumnDescriptor.new(&"class", tr("party_details.column.class"))
+	var level_column := TableColumnDescriptor.new(
+		&"level", tr("party_details.column.level"), TableColumnDescriptor.Type.INTEGER
+	)
+	return [name_column, class_column, level_column]
 
-	empty_label.visible = member_ids.is_empty()
 
+func _build_rows(party: Dictionary) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var member_ids: Array = party.get("member_ids", [])
 	for adventurer_id in member_ids:
 		var adventurer := GameSession.get_adventurer(adventurer_id)
 		if adventurer.is_empty():
 			continue
-		var row := Button.new()
-		row.name = "MemberRow_%s" % adventurer_id
-		row.text = tr("party_details.member_row") % [
-			adventurer["name"], adventurer["class"], adventurer["level"]
-		]
-		row.pressed.connect(_on_member_row_pressed.bind(adventurer_id))
-		member_list.add_child(row)
-
-
-func _on_member_row_pressed(adventurer_id: String) -> void:
-	selected_adventurer_id = adventurer_id
-	_refresh_selection()
+		rows.append({
+			"id": adventurer.id,
+			"name": adventurer.name,
+			"class": adventurer["class"],
+			"level": adventurer.level,
+		})
+	return rows
 
 
 ## A selection is only valid while it names a current member of this party
@@ -88,6 +92,15 @@ func _refresh_selection() -> void:
 		information_panel.refresh()
 		return
 	information_panel.refresh_adventurer(selected_adventurer_id)
+
+
+func _on_row_selected(row_id: Variant) -> void:
+	selected_adventurer_id = str(row_id)
+	_refresh_selection()
+
+
+func _on_row_activated(row_id: Variant) -> void:
+	GameManager.go_to_unit_details(str(row_id))
 
 
 func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:

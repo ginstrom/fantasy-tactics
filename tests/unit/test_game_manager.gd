@@ -331,8 +331,132 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 
 	assert_eq(err, OK)
 	assert_eq(GameSession.adventurers.size(), 2)
-	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+	# warrior_002/003/004 are live, unpurchased recruitment candidates on a
+	# fresh session, so the debug recruit's id-collision avoidance (see
+	# GameSession.recruit_adventurer) skips all three.
+	assert_eq(GameSession.adventurers[1].id, "warrior_005")
 
 
 func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
 	assert_eq(GameManager.debug_scenario_target("party_empty"), GameManager.DebugTarget.ENCAMPMENT)
+
+
+func test_roster_route_points_to_the_roster_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/roster.tscn")
+	assert_string_contains(source, "func go_to_roster()")
+
+
+func test_recruitment_route_points_to_the_recruitment_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/recruitment.tscn")
+	assert_string_contains(source, "func go_to_recruitment()")
+
+
+func test_go_to_roster_clears_stale_route_context_before_changing_scene() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
+
+	var err: Error = manager.go_to_roster()
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, "")
+	assert_eq(manager.unit_details_origin, "")
+
+
+func test_go_to_unit_details_from_roster_sets_route_context_and_marks_the_roster_origin() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.go_to_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, GameSession.WARRIOR_ID)
+	assert_eq(manager.unit_details_origin, manager.UNIT_DETAILS_ORIGIN_ROSTER)
+
+
+func test_going_to_unit_details_from_roster_with_an_unknown_id_is_invalid_and_clears_both_fields() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
+
+	var err: Error = manager.go_to_unit_details_from_roster("no_such_adventurer")
+
+	assert_ne(err, OK, "An unknown adventurer id must not be treated as a valid route")
+	assert_eq(manager.route_context_id, "")
+	assert_eq(manager.unit_details_origin, "")
+
+
+func test_go_to_unit_details_clears_a_stale_roster_origin_flag() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
+
+	var err: Error = manager.go_to_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(err, OK)
+	assert_eq(
+		manager.unit_details_origin,
+		"",
+		"The pre-Roster entry path must never leave a stale roster origin behind"
+	)
+
+
+func test_go_to_recruitment_clears_stale_route_context_before_changing_scene() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	var err: Error = manager.go_to_recruitment()
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, "")
+
+
+func test_purchase_recruit_reports_invalid_data_for_an_unknown_candidate() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("no_such_candidate")
+
+	assert_ne(err, OK, "An unknown candidate id must not be treated as a valid purchase")
+	assert_eq(GameSession.adventurers.size(), 1)
+
+
+func test_purchase_recruit_reports_invalid_data_when_funds_are_insufficient() -> void:
+	GameSession.reset()
+	GameSession.gold = 0
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("warrior_002")
+
+	assert_ne(err, OK)
+	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
+
+
+func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
+	GameSession.reset()
+	GameSession.gold = 10
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("warrior_002")
+
+	assert_eq(err, OK)
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.adventurers.size(), 2)
+	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+	assert_eq(GameSession.get_recruitment_candidates().size(), 2)

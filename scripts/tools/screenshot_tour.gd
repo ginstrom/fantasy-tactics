@@ -41,6 +41,10 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_encampment()},
 		{"name": "units", "action": func() -> void:
 			GameManager.go_to_units()},
+		{"name": "roster", "action": func() -> void:
+			GameManager.go_to_roster()},
+		{"name": "recruitment", "action": func() -> void:
+			GameManager.go_to_recruitment()},
 		{"name": "parties", "action": func() -> void:
 			GameSession.create_party()
 			GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
@@ -50,6 +54,14 @@ func _build_steps() -> Array[Dictionary]:
 		{"name": "add_member", "action": func() -> void:
 			GameSession.recruit_adventurer()
 			GameManager.go_to_add_member(GameSession.FIRST_PARTY_ID)},
+		{"name": "unit_details_from_roster", "action": func() -> void:
+			# add_member's recruit_adventurer() above just added the only
+			# currently available (unassigned) adventurer; the warrior from
+			# "parties" is already assigned to party_001, which is still
+			# encamped, so the assignment section renders with a real,
+			# selectable eligible party rather than the disabled explanation.
+			var available := GameSession.get_available_adventurers()
+			GameManager.go_to_unit_details_from_roster(available[0].id)},
 		{"name": "unit_details", "action": func() -> void:
 			GameManager.go_to_unit_details(GameSession.WARRIOR_ID)},
 		{"name": "deploy_party", "action": func() -> void:

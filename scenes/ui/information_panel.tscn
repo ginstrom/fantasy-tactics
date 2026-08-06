@@ -62,3 +62,27 @@ text = "information.level"
 layout_mode = 2
 visible = false
 text = "information.view"
+
+[node name="RecruitmentName" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="RecruitmentClass" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.class"
+
+[node name="RecruitmentLevel" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.level"
+
+[node name="RecruitmentCost" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="RecruitButton" type="Button" parent="Content"]
+layout_mode = 2
+visible = false
+disabled = true
+text = "information.recruit"

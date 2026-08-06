@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/party_details.gd" id="1_party_details"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="3_table_view"]
 
 [node name="PartyDetails" type="Control"]
 layout_mode = 3
@@ -37,9 +38,10 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "party_details.members"
 
-[node name="MemberList" type="VBoxContainer" parent="Center/VBox"]
+[node name="MemberTable" type="VBoxContainer" parent="Center/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+custom_minimum_size = Vector2(520, 280)
+script = ExtResource("3_table_view")
 
 [node name="EmptyLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
