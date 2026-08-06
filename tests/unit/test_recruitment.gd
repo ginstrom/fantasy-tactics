@@ -2,6 +2,7 @@ extends GutTest
 
 const RecruitmentScene := preload("res://scenes/ui/recruitment.tscn")
 const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
+const ScreenshotTourScript := preload("res://scripts/tools/screenshot_tour.gd")
 
 
 func before_each() -> void:
@@ -28,6 +29,17 @@ func test_recruitment_uses_the_sessions_candidate_query_not_a_private_predicate(
 	var source := FileAccess.get_file_as_string("res://scripts/ui/recruitment.gd")
 	assert_false(source.contains("func _candidate_exists"))
 	assert_string_contains(source, "GameSession.has_recruitment_candidate")
+
+
+func test_screenshot_tour_captures_distinct_affordable_and_unaffordable_recruitment_states() -> void:
+	var tour: Node = ScreenshotTourScript.new()
+	autofree(tour)
+	var step_names: Array[String] = []
+	for step in tour._build_steps():
+		step_names.append(step.name)
+
+	assert_true(step_names.has("recruitment_affordable"))
+	assert_true(step_names.has("recruitment_unaffordable"))
 
 
 func test_shows_the_permanent_player_and_gold_rows() -> void:

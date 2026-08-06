@@ -46,14 +46,22 @@ func _build_steps() -> Array[Dictionary]:
 		{"name": "recruitment", "action": func() -> void:
 			GameManager.go_to_recruitment()},
 		{"name": "parties", "action": func() -> void:
-			GameSession.create_party()
-			GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 			GameManager.go_to_parties()},
 		{"name": "party_details", "action": func() -> void:
+			GameManager.create_party()
+			GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 			GameManager.go_to_party_details(GameSession.FIRST_PARTY_ID)},
 		{"name": "add_member", "action": func() -> void:
 			GameSession.recruit_adventurer()
 			GameManager.go_to_add_member(GameSession.FIRST_PARTY_ID)},
+		{"name": "recruitment_affordable", "action": func() -> void:
+			GameSession.gold = 10
+			GameManager.go_to_recruitment()
+			call_deferred("_queue_recruitment_candidate_selection")},
+		{"name": "recruitment_unaffordable", "action": func() -> void:
+			GameSession.gold = 0
+			GameManager.go_to_recruitment()
+			call_deferred("_queue_recruitment_candidate_selection")},
 		{"name": "unit_details_from_roster", "action": func() -> void:
 			# add_member's recruit_adventurer() above just added the only
 			# currently available (unassigned) adventurer; the warrior from
@@ -90,6 +98,21 @@ func _build_steps() -> Array[Dictionary]:
 func _settle() -> void:
 	for i in FRAMES_TO_SETTLE:
 		await get_tree().process_frame
+
+
+func _select_first_recruitment_candidate() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var tree: Tree = scene.get_node_or_null("Center/VBox/RecruitmentTable/Tree")
+	if tree == null or tree.get_root() == null or tree.get_root().get_first_child() == null:
+		return
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+
+
+func _queue_recruitment_candidate_selection() -> void:
+	get_tree().process_frame.connect(_select_first_recruitment_candidate, CONNECT_ONE_SHOT)
 
 
 func _capture(index: int, name: String) -> void:
