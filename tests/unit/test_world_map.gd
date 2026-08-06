@@ -834,7 +834,7 @@ func test_orc_outpost_label_stays_clear_of_the_hint_bar_at_the_top_of_the_map() 
 	add_child_autofree(world_map)
 
 	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
-	var label := _find_expedition_label(world_map, tr(orc_record.name_key))
+	var label := _find_expedition_label_by_position(world_map, orc_record.position)
 
 	assert_not_null(label, "Orc Outpost's expedition label should be drawn")
 	assert_gte(label.position.y, 0.0, "The label must stay within the visible playfield")
@@ -852,7 +852,7 @@ func test_goblin_camp_label_position_is_unchanged_by_the_hint_bar_clamp() -> voi
 	add_child_autofree(world_map)
 
 	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
-	var label := _find_expedition_label(world_map, tr(goblin_record.name_key))
+	var label := _find_expedition_label_by_position(world_map, goblin_record.position)
 
 	assert_not_null(label, "Goblin Camp's expedition label should be drawn")
 	assert_eq(
@@ -894,4 +894,61 @@ func _find_route_label(world_map: Node2D) -> Label:
 	for child in world_map.get_node("Routes").get_children():
 		if child is Label:
 			return child
+	return null
+
+
+func test_encounter_labels_show_only_stars_for_difficulty() -> void:
+	# Task 2: Goblin Camp (difficulty 1) shows ★, Orc Outpost (difficulty 2) shows ★★
+	_append_orc_outpost_instance()
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+
+	var goblin_label := _find_expedition_label_by_position(world_map, goblin_record.position)
+	var orc_label := _find_expedition_label_by_position(world_map, orc_record.position)
+
+	assert_not_null(goblin_label, "Goblin Camp label should exist")
+	assert_not_null(orc_label, "Orc Outpost label should exist")
+	assert_eq(goblin_label.text, "★", "Goblin Camp (difficulty 1) should show single star")
+	assert_eq(orc_label.text, "★★", "Orc Outpost (difficulty 2) should show two stars")
+
+
+func test_encounter_labels_do_not_include_names_danger_or_reward() -> void:
+	# Task 2: No "Goblin", "Orc", "danger", or "gold" in label text
+	_append_orc_outpost_instance()
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+
+	var goblin_label := _find_expedition_label_by_position(world_map, goblin_record.position)
+	var orc_label := _find_expedition_label_by_position(world_map, orc_record.position)
+
+	assert_not_null(goblin_label)
+	assert_not_null(orc_label)
+	assert_false(goblin_label.text.contains("Goblin"), "Goblin label should not contain 'Goblin'")
+	assert_false(goblin_label.text.contains("Orc"), "Goblin label should not contain 'Orc'")
+	assert_false(goblin_label.text.contains("danger"), "Goblin label should not contain 'danger'")
+	assert_false(goblin_label.text.contains("gold"), "Goblin label should not contain 'gold'")
+	assert_false(orc_label.text.contains("Goblin"), "Orc label should not contain 'Goblin'")
+	assert_false(orc_label.text.contains("Orc"), "Orc label should not contain 'Orc'")
+	assert_false(orc_label.text.contains("danger"), "Orc label should not contain 'danger'")
+	assert_false(orc_label.text.contains("gold"), "Orc label should not contain 'gold'")
+
+
+func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -> Label:
+	# Find a label at a given encounter position by checking all labels in Markers
+	# and matching by approximate position (within 1 pixel tolerance for floating point)
+	var expected_x := position.x * WorldMapScript.TILE_SIZE + WorldMapScript.TILE_SIZE * 0.1
+	var expected_y := maxf(
+		position.y * WorldMapScript.TILE_SIZE - WorldMapScript.TILE_SIZE * 0.6,
+		WorldMapScript.EXPEDITION_LABEL_MIN_Y
+	)
+	for marker in world_map.get_node("Markers").get_children():
+		if marker is Label:
+			if abs(marker.position.x - expected_x) < 1.0 and abs(marker.position.y - expected_y) < 1.0:
+				return marker
 	return null

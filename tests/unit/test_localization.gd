@@ -62,14 +62,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("world_map.end_turn"), "End Turn")
 	assert_eq(tr("world_map.turn") % 3, "Turn 3")
 	assert_eq(tr("world_map.arrival_turns") % 8, "8 turns to arrival")
-	assert_eq(
-		tr("world_map.expedition.label") % ["Goblin Camp", "Low danger", 10],
-		"Goblin Camp — Low danger — 10 gold"
-	)
 	assert_eq(tr("expedition.goblin_camp.name"), "Goblin Camp")
 	assert_eq(tr("expedition.orc_outpost.name"), "Orc Outpost")
-	assert_eq(tr("expedition.danger.low"), "Low danger")
-	assert_eq(tr("expedition.danger.high"), "High danger")
 	assert_eq(tr("battle.enemy.goblin"), "Goblin")
 	assert_eq(tr("battle.enemy.orc"), "Orc")
 	assert_eq(tr("party.title"), "Party Manager")

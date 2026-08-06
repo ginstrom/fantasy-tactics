@@ -133,6 +133,12 @@ func _expedition_id_at(pos: Vector2i) -> String:
 	return ""
 
 
+func _get_difficulty_stars(difficulty: int) -> String:
+	# Clamp difficulty to 1-4 range and return star string
+	var clamped := clampi(difficulty, 1, 4)
+	return "★".repeat(clamped)
+
+
 func build_route(from: Vector2i, destination: Vector2i) -> Array[Vector2i]:
 	if not grid.is_in_bounds(from) or not grid.is_in_bounds(destination):
 		return []
@@ -302,9 +308,7 @@ func _draw_markers() -> void:
 		marker_container.add_child(encounter)
 
 		var label := Label.new()
-		label.text = tr("world_map.expedition.label") % [
-			tr(record.name_key), tr(record.danger_key), record.reward
-		]
+		label.text = _get_difficulty_stars(record.difficulty)
 		var label_y := maxf(record.position.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
 		label.position = Vector2(record.position.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
