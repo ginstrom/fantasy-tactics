@@ -49,17 +49,14 @@ visible = false
 [node name="SkillsLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
 visible = false
-text = "unit_details.skills"
 
 [node name="PerksLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
 visible = false
-text = "unit_details.perks"
 
 [node name="StatsLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
 visible = false
-text = "unit_details.stats"
 
 [node name="NotFoundLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2

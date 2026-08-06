@@ -119,15 +119,65 @@ func test_unit_details_uses_the_sessions_availability_query_not_a_private_predic
 	assert_string_contains(source, "GameSession.is_adventurer_available")
 
 
-func test_skills_perks_and_stats_are_only_labelled_tbd_placeholders() -> void:
+## Task 3: real progression data replaces the old TBD placeholders — see
+## GameSession.DEFAULT_WARRIOR / get_adventurer() for the exact dict shape
+## (stats.attack, progression.xp/skill_points/perks) these labels read.
+func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
-	assert_eq(screen.get_node("Center/VBox/SkillsLabel").text, "unit_details.skills")
-	assert_eq(screen.get_node("Center/VBox/PerksLabel").text, "unit_details.perks")
-	assert_eq(screen.get_node("Center/VBox/StatsLabel").text, "unit_details.stats")
-	assert_true(screen.get_node("Center/VBox/SkillsLabel").visible)
-	assert_true(screen.get_node("Center/VBox/PerksLabel").visible)
+	assert_eq(
+		screen.get_node("Center/VBox/StatsLabel").text,
+		tr("unit_details.stats") % [0, 60, 60, 3],
+		"A fresh Warrior has 0 XP, 60 raw Attack, 60% effective hit chance, and 3 max health"
+	)
 	assert_true(screen.get_node("Center/VBox/StatsLabel").visible)
+
+
+func test_stats_label_reflects_leveling_xp_attack_and_health_changes() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 25.5)
+	GameSession.spend_attack_points(GameSession.WARRIOR_ID, 4)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Center/VBox/StatsLabel").text,
+		tr("unit_details.stats") % [25, 64, 64, 4],
+		"25.5 XP displays floored as 25; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 4"
+	)
+
+
+func test_skills_label_shows_unspent_skill_points() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(screen.get_node("Center/VBox/SkillsLabel").text, tr("unit_details.skills") % 10)
+	assert_true(screen.get_node("Center/VBox/SkillsLabel").visible)
+
+
+func test_perks_label_shows_bonus_move_not_yet_learned_before_a_perk_choice() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Center/VBox/PerksLabel").text,
+		tr("unit_details.perks") % tr("unit_details.perk_status.not_learned")
+	)
+	assert_true(screen.get_node("Center/VBox/PerksLabel").visible)
+
+
+func test_perks_label_shows_bonus_move_learned_after_choosing_it() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.BONUS_MOVE_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Center/VBox/PerksLabel").text,
+		tr("unit_details.perks") % tr("unit_details.perk_status.learned")
+	)
 
 
 func test_an_unknown_unit_id_shows_a_not_found_message_and_hides_detail_rows() -> void:

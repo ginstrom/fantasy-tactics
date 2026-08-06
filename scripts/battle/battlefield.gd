@@ -11,11 +11,22 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var round_label: Label = $HUD/RoundLabel
 @onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var grid: Node2D = $Grid
+@onready var level_up: Control = $HUD/LevelUp
 
 var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1
 var _enemy_turn_in_progress: bool = false
 var _battle_resolved: bool = false
+# Level-up queue state (see _queue_level_up/_show_next_level_up below). A
+# leveled-up party member is queued as {"id": adventurer_id, "health_before":
+# int} so the overlay can show the health gained even though GameSession has
+# already applied it by the time the entry is queued.
+var _level_up_queue: Array[Dictionary] = []
+var _level_up_active: bool = false
+# Set when a victory's clear-XP award queues at least one level-up: defers
+# GameManager.complete_battle() (the battle-result scene transition) until
+# every queued level-up — kill-triggered or clear-triggered — has resolved.
+var _pending_victory_completion: bool = false
 # Per-instance award guards (see _award_kill_xp/_award_clear_xp): a
 # Battlefield is re-instantiated for every battle, so these cannot leak
 # across encounter attempts, but they do stop a repeated event (a duplicate
@@ -27,6 +38,7 @@ var _clear_xp_awarded: bool = false
 
 func _ready() -> void:
 	grid.enemy_defeated.connect(_award_kill_xp)
+	level_up.resolved.connect(_on_level_up_resolved)
 	_on_board_changed()
 
 
@@ -121,6 +133,12 @@ func _apply_battle_outcome(victory: bool) -> void:
 		# _current_expedition()) is still set — GameManager.complete_battle()
 		# clears it right after.
 		_award_clear_xp()
+		# _award_clear_xp() may have just queued a level-up (on top of any
+		# still-showing kill-triggered one): the battle-result scene
+		# transition must wait for the whole queue to resolve first.
+		if _level_up_active:
+			_pending_victory_completion = true
+			return
 		GameManager.complete_battle()
 	else:
 		GameManager.fail_battle()
@@ -145,18 +163,25 @@ func _award_clear_xp() -> void:
 	_award_party_xp(_current_expedition().get("clear_xp", 0))
 
 
-func _award_party_xp(amount) -> void:
+func _award_party_xp(amount: float) -> void:
 	if amount <= 0:
 		return
+	# Captured before GameSession.award_party_xp() mutates anything, so each
+	# leveled member's health-gain can be shown later even though GameSession
+	# already applies the increase as part of this same call.
+	var health_before: Dictionary = {}
+	for member_id in GameSession.get_party(GameSession.selected_party_id).get("member_ids", []):
+		health_before[member_id] = GameSession.get_effective_max_health(member_id)
+
 	var leveled_up: Array[String] = GameSession.award_party_xp(GameSession.selected_party_id, amount)
 	for adventurer_id in leveled_up:
 		_refresh_unit_health(adventurer_id)
+		_queue_level_up(adventurer_id, health_before.get(adventurer_id, 0))
 
 
 ## Applies a mid-battle level-up's health increase to the matching on-field
 ## unit immediately (design doc: "It applies the health increase to both the
-## persistent adventurer and the active unit"). Task 3's level-up overlay
-## will surface this to the player; this only keeps the numbers correct.
+## persistent adventurer and the active unit").
 func _refresh_unit_health(adventurer_id: String) -> void:
 	for unit in grid.units:
 		if unit.adventurer_id != adventurer_id:
@@ -167,10 +192,58 @@ func _refresh_unit_health(adventurer_id: String) -> void:
 		unit.health += health_gain
 
 
+## Appends to the level-up queue and starts showing it immediately if nothing
+## is currently showing. Multiple leveled party members are always shown one
+## at a time, in the stable order GameSession.award_party_xp() returned them
+## (party member order) — never all at once, never out of order.
+func _queue_level_up(adventurer_id: String, adventurer_health_before: int) -> void:
+	_level_up_queue.append({"id": adventurer_id, "health_before": adventurer_health_before})
+	if not _level_up_active:
+		_show_next_level_up()
+
+
+func _show_next_level_up() -> void:
+	if _level_up_queue.is_empty():
+		_set_level_up_in_progress(false)
+		_on_level_up_queue_drained()
+		return
+	_set_level_up_in_progress(true)
+	var entry: Dictionary = _level_up_queue.pop_front()
+	level_up.show_for_adventurer(entry.id, entry.health_before)
+
+
+func _on_level_up_resolved() -> void:
+	_show_next_level_up()
+
+
+## Only fires once the whole queue is empty (not merely once the current
+## modal closes), so a victory whose clear XP queued a level-up still waits
+## for every queued member before completing the battle.
+func _on_level_up_queue_drained() -> void:
+	if not _pending_victory_completion:
+		return
+	_pending_victory_completion = false
+	GameManager.complete_battle()
+
+
 func _set_enemy_turn_in_progress(value: bool) -> void:
 	_enemy_turn_in_progress = value
-	end_turn_button.disabled = value
-	grid.input_locked = value
+	_update_input_lock()
+
+
+## Board input and the End Turn button stay locked while either the enemy is
+## acting or any level-up modal is queued or showing, and unlock only once
+## both conditions clear — see _set_enemy_turn_in_progress()/
+## _set_level_up_in_progress(), the two flags this combines.
+func _set_level_up_in_progress(value: bool) -> void:
+	_level_up_active = value
+	_update_input_lock()
+
+
+func _update_input_lock() -> void:
+	var locked := _enemy_turn_in_progress or _level_up_active
+	end_turn_button.disabled = locked
+	grid.input_locked = locked
 
 
 func _describe_step(step: Dictionary) -> String:

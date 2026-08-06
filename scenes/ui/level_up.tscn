@@ -1,0 +1,73 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/level_up.gd" id="1_level_up"]
+
+[node name="LevelUp" type="PanelContainer"]
+visible = false
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -140.0
+offset_right = 160.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+custom_minimum_size = Vector2(320, 0)
+script = ExtResource("1_level_up")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Content"]
+layout_mode = 2
+text = "level_up.title"
+horizontal_alignment = 1
+
+[node name="NameLabel" type="Label" parent="Content"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="XPLabel" type="Label" parent="Content"]
+layout_mode = 2
+
+[node name="LevelLabel" type="Label" parent="Content"]
+layout_mode = 2
+
+[node name="HealthGainLabel" type="Label" parent="Content"]
+layout_mode = 2
+
+[node name="AttackLabel" type="Label" parent="Content"]
+layout_mode = 2
+
+[node name="SkillPointsLabel" type="Label" parent="Content"]
+layout_mode = 2
+
+[node name="AttackRow" type="HBoxContainer" parent="Content"]
+layout_mode = 2
+
+[node name="AttackMinusButton" type="Button" parent="Content/AttackRow"]
+layout_mode = 2
+disabled = true
+text = "level_up.attack_minus"
+
+[node name="AttackPlusButton" type="Button" parent="Content/AttackRow"]
+layout_mode = 2
+text = "level_up.attack_plus"
+
+[node name="PerkLabel" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="ChooseBonusMoveButton" type="Button" parent="Content"]
+layout_mode = 2
+visible = false
+text = "level_up.choose_bonus_move"
+
+[node name="ContinueButton" type="Button" parent="Content"]
+layout_mode = 2
+text = "level_up.continue"
