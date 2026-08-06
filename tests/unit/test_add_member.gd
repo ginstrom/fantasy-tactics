@@ -36,6 +36,16 @@ func test_add_member_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
+## Activation is the only affordance that assigns a row (see
+## test_activating_a_row_assigns_...); this label is what tells the player
+## that double-click/Enter is what does it.
+func test_add_member_shows_the_activation_hint() -> void:
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.get_node("Center/VBox/HintLabel").text, "add_member.hint")
+
+
 func test_reads_the_party_id_from_route_context() -> void:
 	GameSession.create_party()
 

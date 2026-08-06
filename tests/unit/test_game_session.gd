@@ -795,6 +795,10 @@ func test_assign_adventurer_to_selected_party_still_works_as_a_thin_wrapper() ->
 	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
 
 
+## warrior_002 through warrior_004 are live, unpurchased recruitment
+## candidates on a fresh session (see RECRUITMENT_CANDIDATE_TEMPLATES), so a
+## fresh id must skip all three rather than mint a duplicate of one still on
+## offer in Recruitment.
 func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -803,8 +807,8 @@ func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id(
 
 	assert_eq(session.adventurers.size(), 2)
 	var recruit: Dictionary = session.adventurers[1]
-	assert_eq(recruit.id, "warrior_002")
-	assert_eq(recruit.name, "Warrior 2")
+	assert_eq(recruit.id, "warrior_005")
+	assert_eq(recruit.name, "Warrior 5")
 	assert_eq(recruit["class"], "warrior")
 	assert_eq(recruit.availability_status, "available")
 	assert_true(session.get_available_adventurers().has(recruit))
@@ -818,7 +822,41 @@ func test_recruit_adventurer_never_collides_with_an_earlier_recruit() -> void:
 	session.recruit_adventurer()
 
 	assert_eq(session.adventurers.size(), 3)
-	assert_eq(session.adventurers[2].id, "warrior_003")
+	assert_eq(session.adventurers[2].id, "warrior_006")
+
+
+## Reproduces the exact reported failure: after a partial purchase leaves
+## some fixed candidates (warrior_003/warrior_004) still live, a debug
+## recruit must not mint an id any of them are still offering, nor one an
+## earlier debug recruit already used.
+func test_recruit_adventurer_after_a_purchase_never_collides_with_a_live_candidate() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	session.purchase_recruit("warrior_002")
+
+	session.recruit_adventurer()
+
+	var recruited: Dictionary = session.adventurers[session.adventurers.size() - 1]
+	assert_eq(
+		recruited.id,
+		"warrior_005",
+		"The debug recruit must skip the still-live warrior_003/warrior_004 candidates"
+	)
+	var live_candidate_ids: Array = []
+	for candidate in session.get_recruitment_candidates():
+		live_candidate_ids.append(candidate.id)
+	assert_false(
+		live_candidate_ids.has(recruited.id),
+		"A debug recruit must never mint an id a still-live candidate is offering"
+	)
+	var all_ids: Array = []
+	for adventurer in session.adventurers:
+		all_ids.append(adventurer.id)
+	var seen_ids: Dictionary = {}
+	for id in all_ids:
+		assert_false(seen_ids.has(id), "Adventurer ids must be unique; found a duplicate: %s" % id)
+		seen_ids[id] = true
 
 
 func test_get_recruitment_candidates_returns_the_three_fixed_warrior_candidates() -> void:
@@ -902,6 +940,27 @@ func test_purchase_recruit_fails_for_an_already_purchased_candidate() -> void:
 
 	assert_eq(session.gold, 10, "Only the first purchase should deduct gold")
 	assert_eq(session.adventurers.size(), 2, "A repeated purchase must not append a second adventurer")
+
+
+## Guards the other direction of the same id-collision hazard: if a debug
+## recruit (or any other path) already put an adventurer with this exact id
+## on the roster, buying the same-id candidate must be refused outright
+## rather than appending a second, permanently-unassignable record.
+func test_purchase_recruit_refuses_when_an_adventurer_already_holds_that_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	session.adventurers.append(_adventurer("warrior_002", "available"))
+
+	assert_false(session.purchase_recruit("warrior_002"))
+
+	assert_eq(session.gold, 10, "A refused purchase must not deduct gold")
+	assert_eq(
+		session.get_recruitment_candidates().size(),
+		3,
+		"A refused purchase must not remove the candidate from the catalog"
+	)
+	assert_eq(session.adventurers.size(), 2, "A refused purchase must not append a second adventurer")
 
 
 func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:

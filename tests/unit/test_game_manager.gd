@@ -331,7 +331,10 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 
 	assert_eq(err, OK)
 	assert_eq(GameSession.adventurers.size(), 2)
-	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+	# warrior_002/003/004 are live, unpurchased recruitment candidates on a
+	# fresh session, so the debug recruit's id-collision avoidance (see
+	# GameSession.recruit_adventurer) skips all three.
+	assert_eq(GameSession.adventurers[1].id, "warrior_005")
 
 
 func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:

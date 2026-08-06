@@ -46,6 +46,16 @@ func test_deploy_party_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
+## Activation is the only affordance that deploys a row (see
+## test_activating_a_row_deploys_...); this label is what tells the player
+## that double-click/Enter is what does it.
+func test_deploy_party_shows_the_activation_hint() -> void:
+	var screen: Control = DeployPartyScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_eq(screen.get_node("Center/VBox/HintLabel").text, "deploy_party.hint")
+
+
 func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.player_name = "Aria"
 	GameSession.gold = 25

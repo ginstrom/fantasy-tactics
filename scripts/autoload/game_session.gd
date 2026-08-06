@@ -230,10 +230,25 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 	return assign_adventurer_to_party(selected_party_id, adventurer_id)
 
 
+## Debug-only convenience for populating the roster (see the debug menu).
+## Mints a warrior_NNN id/name pair, scanning upward from adventurers.size() +
+## 1 until it finds a number that collides with neither an existing
+## adventurer nor a still-live recruitment candidate. RECRUITMENT_CANDIDATE_
+## TEMPLATES fixes warrior_002/warrior_003/warrior_004 as separately tracked
+## candidates, so a naive adventurers.size()-based count can otherwise mint
+## an id one of them is still offering (or one an earlier debug recruit
+## already used), silently corrupting the roster with duplicate ids.
+## purchase_recruit() carries the matching guard for the other direction
+## (buying a candidate whose id a debug recruit already claimed).
 func recruit_adventurer() -> void:
 	var recruit_number := adventurers.size() + 1
+	var candidate_id := "warrior_%03d" % recruit_number
+	while _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1:
+		recruit_number += 1
+		candidate_id = "warrior_%03d" % recruit_number
+
 	var adventurer: Dictionary = DEFAULT_WARRIOR.duplicate(true)
-	adventurer.id = "warrior_%03d" % recruit_number
+	adventurer.id = candidate_id
 	adventurer.name = "Warrior %d" % recruit_number
 	adventurers.append(adventurer)
 
@@ -246,12 +261,18 @@ func get_recruitment_candidates() -> Array[Dictionary]:
 
 
 ## The only normal (non-debug) path onto the roster: validates the candidate
-## is still on offer and affordable, deducts its cost exactly once, removes
-## it from the catalog, and appends the purchased adventurer (its "cost"
-## field dropped, since that is a recruitment-only concern).
+## is still on offer, affordable, and not already claimed by an id-colliding
+## adventurer (e.g. an earlier debug recruit — see recruit_adventurer()'s
+## matching guard), deducts its cost exactly once, removes it from the
+## catalog, and appends the purchased adventurer (its "cost" field dropped,
+## since that is a recruitment-only concern).
 func purchase_recruit(candidate_id: String) -> bool:
 	var candidate_index := _get_recruitment_candidate_index(candidate_id)
-	if candidate_index == -1 or gold < recruitment_candidates[candidate_index].cost:
+	if (
+		candidate_index == -1
+		or gold < recruitment_candidates[candidate_index].cost
+		or _has_adventurer(candidate_id)
+	):
 		return false
 
 	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)

@@ -135,12 +135,20 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("deploy_party.column.party"), "Party")
 	assert_eq(tr("deploy_party.column.members"), "Members")
 	assert_eq(tr("deploy_party.column.status"), "Status")
+	assert_eq(
+		tr("deploy_party.hint"),
+		"Double-click a row, or select it and press Enter, to deploy that party."
+	)
 	assert_eq(tr("party_details.column.name"), "Name")
 	assert_eq(tr("party_details.column.class"), "Class")
 	assert_eq(tr("party_details.column.level"), "Level")
 	assert_eq(tr("add_member.column.name"), "Name")
 	assert_eq(tr("add_member.column.class"), "Class")
 	assert_eq(tr("add_member.column.level"), "Level")
+	assert_eq(
+		tr("add_member.hint"),
+		"Double-click a row, or select it and press Enter, to add that adventurer to the party."
+	)
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:

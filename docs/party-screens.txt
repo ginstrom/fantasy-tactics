@@ -103,6 +103,11 @@ Party Details
                          hidden and [Back] returns to World Map rather than
                          Parties.
 
+                         Add Member itself (opened via [Add Member]) shows a
+                         hint below its TableView explaining that a
+                         double-click, or Enter on a selected row, is what
+                         adds that adventurer to the party.
+
 
 Unit Details
 ============
@@ -206,9 +211,11 @@ Deploy Party
                          | Party 2              |       2 | Encamped   |
                          +----------------------+---------+------------+
 
-                         Select a party to deploy it to the world map.
-                         A stale or no-longer-eligible row refreshes the table
-                         without leaving this screen.
+                         Select a party to show its details at right.
+                         Double-click a party, or press Enter on a selected
+                         row, to deploy it to the world map. A stale or
+                         no-longer-eligible row refreshes the table without
+                         leaving this screen.
 
                          [Back]
 
@@ -225,7 +232,12 @@ TableView conventions
   a row and updates the
   information panel; activation or the panel action opens the selected party
   or unit. Recruitment's panel action hires a selected affordable candidate.
-  In Deploy Party, selecting an eligible row deploys it immediately.
+  In Deploy Party and Add Member, the first click likewise only selects a row
+  and updates the information panel; activating that row (double-click, or
+  Enter on the selection) is what deploys the party or assigns the
+  adventurer. Because neither screen has another button for that action, both
+  show a static hint label under the table naming double-click/Enter as the
+  trigger.
 * Screen controllers provide stable row IDs and resolve them through
   `GameSession`; `TreeItem` objects never hold authoritative game state.
 * Search fields, pagination, multi-selection, and inline editing are not part
