@@ -733,9 +733,9 @@ func _is_encounter_template_active(template_id: String) -> bool:
 
 
 ## Prefers the template's own documented position; only scans for another
-## in-bounds, unoccupied, non-settlement tile (row-major) if that position is
-## already occupied by another active instance, OR if template_id has ever
-## been spawned before (tracked by _used_encounter_template_ids). The second
+## in-bounds, unoccupied, non-settlement tile if that position is already
+## occupied by another active instance, OR if template_id has ever been
+## spawned before (tracked by _used_encounter_template_ids). The second
 ## condition matters for a *reused* template: its documented tile is only
 ## ever occupied by its own instances, so once its earlier instance has been
 ## cleared (and thus removed from active_encounters), the plain occupancy
@@ -745,14 +745,31 @@ func _is_encounter_template_active(template_id: String) -> bool:
 ## _used_encounter_template_ids (rather than tracking completed instances'
 ## positions separately) is sufficient because each template's documented
 ## position is unique to it.
+##
+## The scan itself walks the grid far-corner-first (descending y, then
+## descending x) rather than row-major from the settlement corner. Both
+## templates' own documented tiles — (4, 4) and (4, 0) — already sit in that
+## far region, so scanning outward from there keeps fallback refills
+## requiring meaningful travel instead of landing 1-2 tiles from
+## STARTING_SETTLEMENT_WORLD_POSITION at (0, 0), which a settlement-first scan
+## would otherwise hand out on literally every refill (both templates are
+## marked previously-spawned from turn one, per reset()). The scan also
+## explicitly skips the current template's own documented_position: left in,
+## the far-corner-first order would otherwise re-select that exact tile
+## whenever it happens to be free (most notably Goblin Camp's, which *is* the
+## far corner scanned first), reopening the same "respawns on the tile it was
+## just cleared from" problem the template_previously_spawned guard above
+## exists to prevent.
 func _choose_encounter_position(template_id: String) -> Vector2i:
 	var documented_position: Vector2i = EXPEDITIONS[template_id].position
 	var template_previously_spawned := _used_encounter_template_ids.has(template_id)
 	if not _is_position_occupied(documented_position) and not template_previously_spawned:
 		return documented_position
-	for y in WORLD_GRID_HEIGHT:
-		for x in WORLD_GRID_WIDTH:
+	for y in range(WORLD_GRID_HEIGHT - 1, -1, -1):
+		for x in range(WORLD_GRID_WIDTH - 1, -1, -1):
 			var candidate := Vector2i(x, y)
+			if candidate == documented_position:
+				continue
 			if candidate != STARTING_SETTLEMENT_WORLD_POSITION and not _is_position_occupied(candidate):
 				return candidate
 	return documented_position

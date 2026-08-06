@@ -1482,23 +1482,6 @@ func test_encounter_vacancy_refills_exactly_at_turn_fifteen() -> void:
 	assert_true(has_new_goblin_instance, "A new Goblin Camp instance should be spawned")
 
 
-func test_encounter_refill_deterministically_picks_the_orc_outpost_template_next() -> void:
-	# Goblin Camp is the only seeded active template, so the deterministic
-	# cycle (ENCOUNTER_TEMPLATE_ORDER) prefers the other, never-yet-spawned
-	# template next, at that template's own documented position.
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
-	session.complete_current_encounter()
-
-	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
-		session.end_world_turn()
-
-	var active: Array[Dictionary] = session.get_active_encounters()
-	assert_eq(active[0].template_id, GameSessionScript.ORC_OUTPOST_ID)
-	assert_eq(active[0].position, Vector2i(4, 0))
-
-
 ## Regression test: a refill used to pick a template's documented static
 ## position whenever that position was not held by a *currently active*
 ## instance — but a cleared instance is removed from active_encounters
@@ -1542,6 +1525,53 @@ func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 		new_goblin_position,
 		Vector2i(-1, -1),
 		"A new Goblin Camp instance should have been spawned at a valid position"
+	)
+
+
+## Regression test: the fallback scan inside _choose_encounter_position only
+## fires once a refilled template's documented position is unusable (occupied
+## or, as here, previously spawned). Both templates are marked
+## previously-spawned from turn one (reset() seeds _used_encounter_template_ids
+## with both ids), so a refill's fallback scan fires on the very first
+## vacancy, not just after every template has cycled once. A naive ascending,
+## row-major scan starting at (0, 0) would hand back (1, 0) — one tile from
+## STARTING_SETTLEMENT_WORLD_POSITION at (0, 0) — even though both documented
+## encounter positions, (4, 4) and (4, 0), sit at the far side of the grid.
+## The scan must instead search far-corner-first so a refilled site keeps
+## costing meaningful travel time rather than landing next to the settlement.
+func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	# Clear Orc Outpost; Goblin Camp remains active at its documented (4, 4),
+	# occupying the far corner the scan should otherwise prefer first and
+	# forcing it to keep searching rather than trivially reusing (4, 4).
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	var new_orc_position: Vector2i = Vector2i(-1, -1)
+	for instance in active:
+		if instance.template_id == GameSessionScript.ORC_OUTPOST_ID:
+			new_orc_position = instance.position
+			break
+
+	assert_eq(
+		new_orc_position,
+		Vector2i(3, 4),
+		"A far-corner-first fallback scan should land the refill beside the far corner, not the settlement"
+	)
+	assert_ne(
+		new_orc_position,
+		Vector2i(1, 0),
+		"The refill must not land one tile from the settlement"
+	)
+	assert_ne(
+		new_orc_position,
+		Vector2i(0, 1),
+		"The refill must not land one tile from the settlement"
 	)
 
 
