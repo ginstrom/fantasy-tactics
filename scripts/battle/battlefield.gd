@@ -83,9 +83,9 @@ func _on_board_changed() -> void:
 	var selected_unit = grid.selected_unit
 	if selected_unit == null:
 		hint.text = tr("battle.hint.select_unit") % side_name
-	elif selected_unit.has_moved and selected_unit.has_acted:
+	elif selected_unit.moves_remaining <= 0 and selected_unit.has_acted:
 		hint.text = tr("battle.hint.turn_complete") % side_name
-	elif selected_unit.has_moved:
+	elif selected_unit.moves_remaining <= 0:
 		hint.text = tr("battle.hint.already_moved") % side_name
 	else:
 		hint.text = tr("battle.hint.select_destination") % side_name

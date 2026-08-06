@@ -47,3 +47,23 @@ func get_tiles_in_range(start: Vector2i, move_range: int, is_blocked: Callable) 
 		frontier = next_frontier
 
 	return reachable
+
+
+func get_tile_distances(start: Vector2i, move_range: int, is_blocked: Callable) -> Dictionary:
+	var distances := {start: 0}
+	var frontier: Array[Vector2i] = [start]
+
+	for step in move_range:
+		var next_frontier: Array[Vector2i] = []
+		for pos in frontier:
+			for neighbor in get_adjacent(pos):
+				if distances.has(neighbor):
+					continue
+				if is_blocked.call(neighbor):
+					continue
+				distances[neighbor] = step + 1
+				next_frontier.append(neighbor)
+		frontier = next_frontier
+
+	distances.erase(start)
+	return distances

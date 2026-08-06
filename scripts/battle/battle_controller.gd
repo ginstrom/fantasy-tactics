@@ -122,10 +122,10 @@ func get_unit_at(pos: Vector2i):
 
 
 func get_legal_moves(unit) -> Array[Vector2i]:
-	if unit.has_moved:
+	if unit.moves_remaining <= 0:
 		return []
 	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
-	return grid.get_tiles_in_range(unit.grid_position, unit.move_range, is_blocked)
+	return grid.get_tiles_in_range(unit.grid_position, unit.moves_remaining, is_blocked)
 
 
 func try_move_selected_unit(target: Vector2i) -> bool:
@@ -136,8 +136,12 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	if not target in get_legal_moves(selected_unit):
 		return false
 
+	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+	var distances: Dictionary = grid.get_tile_distances(
+		selected_unit.grid_position, selected_unit.moves_remaining, is_blocked
+	)
 	selected_unit.grid_position = target
-	selected_unit.has_moved = true
+	selected_unit.moves_remaining -= distances[target]
 	last_attack_result = {}
 	return true
 
@@ -182,6 +186,7 @@ func apply_super_power() -> void:
 	for unit in units:
 		if unit.side == Side.PLAYER:
 			unit.move_range = SUPER_POWER_MOVE_RANGE
+			unit.moves_remaining = SUPER_POWER_MOVE_RANGE
 			unit.attack_damage = SUPER_POWER_ATTACK_DAMAGE
 			unit.hit_chance = SUPER_POWER_HIT_CHANCE
 	_update_highlights()
@@ -192,7 +197,7 @@ func end_turn() -> void:
 	active_side = Side.ENEMY if active_side == Side.PLAYER else Side.PLAYER
 	for unit in units:
 		if unit.side == active_side:
-			unit.has_moved = false
+			unit.moves_remaining = unit.move_range
 			unit.has_acted = false
 	_select_unit(null)
 
@@ -308,7 +313,7 @@ func _select_unit_after_action() -> void:
 	if selected_unit == null or not selected_unit.is_alive():
 		_select_unit(null)
 		return
-	if selected_unit.has_moved and selected_unit.has_acted:
+	if selected_unit.moves_remaining <= 0 and selected_unit.has_acted:
 		_select_unit(null)
 		return
 	_select_unit(selected_unit)

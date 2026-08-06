@@ -4,7 +4,7 @@ var grid_position: Vector2i
 var color: Color
 var side: int
 var move_range: int
-var has_moved: bool = false
+var moves_remaining: int
 var has_acted: bool = false
 var max_health: int
 var health: int
@@ -33,6 +33,7 @@ func _init(
 	color = p_color
 	side = p_side
 	move_range = p_move_range
+	moves_remaining = p_move_range
 	max_health = p_max_health
 	health = p_max_health
 	attack_damage = p_attack_damage

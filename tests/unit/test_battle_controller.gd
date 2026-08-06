@@ -91,18 +91,34 @@ func test_unit_cannot_move_through_an_occupied_tile() -> void:
 	assert_eq(mover.grid_position, Vector2i(1, 1))
 
 
-func test_unit_cannot_move_a_second_time_in_the_same_turn() -> void:
+func test_unit_can_click_move_multiple_times_within_the_same_turn_while_points_remain() -> void:
 	var controller := _make_controller(6, 6)
 	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
 	controller.units = [mover]
 	controller.selected_unit = mover
-	controller.try_move_selected_unit(Vector2i(2, 1))
+
+	var first_moved: bool = controller.try_move_selected_unit(Vector2i(2, 1))
+	controller.selected_unit = mover
+	var second_moved: bool = controller.try_move_selected_unit(Vector2i(4, 1))
+
+	assert_true(first_moved, "The first move (spending 1 of 3 points) should succeed")
+	assert_true(second_moved, "The second move (spending the remaining 2 points) should succeed")
+	assert_eq(mover.grid_position, Vector2i(4, 1))
+	assert_eq(mover.moves_remaining, 0, "The full budget has been spent across both moves")
+
+
+func test_unit_cannot_move_once_its_points_budget_is_exhausted() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	controller.try_move_selected_unit(Vector2i(4, 1))
 	controller.selected_unit = mover
 
-	var moved_again: bool = controller.try_move_selected_unit(Vector2i(3, 1))
+	var moved_again: bool = controller.try_move_selected_unit(Vector2i(5, 1))
 
-	assert_false(moved_again, "A unit that already moved this turn cannot move again")
-	assert_eq(mover.grid_position, Vector2i(2, 1))
+	assert_false(moved_again, "A unit with no movement points remaining cannot move again")
+	assert_eq(mover.grid_position, Vector2i(4, 1))
 
 
 func test_move_is_rejected_for_a_unit_on_the_inactive_side() -> void:
@@ -130,12 +146,12 @@ func test_end_turn_switches_the_active_side_and_resets_movement() -> void:
 	controller.end_turn()
 
 	assert_eq(controller.active_side, BattleControllerScript.Side.ENEMY, "End turn hands control to the other side")
-	assert_false(enemy_unit.has_moved, "The newly active side's units have not moved yet")
+	assert_eq(enemy_unit.moves_remaining, enemy_unit.move_range, "The newly active side's units have not moved yet")
 
 	controller.end_turn()
 
 	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER, "End turn returns control to the first side")
-	assert_false(player_unit.has_moved, "The player's unit regains its movement on its next turn")
+	assert_eq(player_unit.moves_remaining, player_unit.move_range, "The player's unit regains its movement on its next turn")
 
 
 func test_ready_spawns_the_documented_warrior_and_goblin() -> void:
