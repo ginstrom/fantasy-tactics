@@ -174,6 +174,19 @@ func get_deployable_encamped_parties() -> Array[Dictionary]:
 	return deployable
 
 
+## Every encamped party (settlement, not deployed), regardless of whether it
+## has room or an available member — unlike get_deployable_encamped_parties(),
+## a full-but-encamped party is still a valid unit-assignment target. Shares
+## the encamped half of that same "ready" concept via _is_party_encamped so
+## the two queries cannot silently drift apart.
+func get_encamped_parties() -> Array[Dictionary]:
+	var encamped: Array[Dictionary] = []
+	for party in parties:
+		if _is_party_encamped(party):
+			encamped.append(party.duplicate(true))
+	return encamped
+
+
 func deploy_party(party_id: String) -> bool:
 	var party_index := _get_party_index(party_id)
 	if party_index == -1 or not _is_party_eligible_for_deployment(parties[party_index]):
@@ -194,9 +207,18 @@ func get_available_adventurers() -> Array[Dictionary]:
 	return available
 
 
+## Rejects a target party that is not encamped (deployed, or outside the
+## starting settlement) in addition to the existing unknown-party/unknown-
+## adventurer/already-assigned checks — a party that is out in the field has
+## nowhere to receive a new member.
 func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool:
 	var party_index := _get_party_index(party_id)
-	if party_index == -1 or not _has_adventurer(adventurer_id) or _is_adventurer_assigned(adventurer_id):
+	if (
+		party_index == -1
+		or not _is_party_encamped(parties[party_index])
+		or not _has_adventurer(adventurer_id)
+		or _is_adventurer_assigned(adventurer_id)
+	):
 		return false
 
 	var member_ids: Array = parties[party_index].member_ids
@@ -395,11 +417,14 @@ func _party_has_available_member(party: Dictionary) -> bool:
 
 
 func _is_party_eligible_for_deployment(party: Dictionary) -> bool:
-	return (
-		party.location_id == STARTING_SETTLEMENT_ID
-		and not party.deployed
-		and _party_has_available_member(party)
-	)
+	return _is_party_encamped(party) and _party_has_available_member(party)
+
+
+## The shared "encamped" half of both deployment eligibility and unit
+## assignment: in the starting settlement and not out in the field. Neither
+## caller should duplicate this boolean expression on its own.
+func _is_party_encamped(party: Dictionary) -> bool:
+	return party.location_id == STARTING_SETTLEMENT_ID and not party.deployed
 
 
 func _is_adventurer_assigned(adventurer_id: String) -> bool:

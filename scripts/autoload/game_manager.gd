@@ -16,6 +16,7 @@ const DEPLOY_PARTY_SCENE := "res://scenes/ui/deploy_party.tscn"
 const ADD_MEMBER_SCENE := "res://scenes/ui/add_member.tscn"
 const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
+const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -29,6 +30,13 @@ var has_saved_game: bool = false
 # it is UI navigation state, not a durable session record; an invalid
 # navigation clears it instead of leaving a stale id behind.
 var route_context_id: String = ""
+
+# Which entry path opened Unit Details (currently only the Roster route sets
+# this). It is its own field rather than folded into route_context_id
+# because Unit Details needs both the adventurer id *and* how we got there;
+# like route_context_id, it is cleared on every invalid or destination
+# route rather than left to go stale.
+var unit_details_origin: String = ""
 
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
@@ -101,48 +109,73 @@ func fail_battle() -> Error:
 
 func go_to_units() -> Error:
 	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(UNITS_SCENE)
 
 
 func go_to_parties() -> Error:
 	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(PARTIES_SCENE)
 
 
 func go_to_roster() -> Error:
 	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(ROSTER_SCENE)
 
 
 func go_to_recruitment() -> Error:
 	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(RECRUITMENT_SCENE)
 
 
 func go_to_party_details(party_id: String) -> Error:
 	if GameSession.get_party(party_id).is_empty():
 		route_context_id = ""
+		unit_details_origin = ""
 		return ERR_INVALID_DATA
 	route_context_id = party_id
 	return _change_scene(PARTY_DETAILS_SCENE)
 
 
+## The pre-Roster entry path: unit_details_origin is always cleared here, so
+## Unit Details never mistakenly offers roster-only party assignment for a
+## unit opened this way (e.g. from Party Details).
 func go_to_unit_details(adventurer_id: String) -> Error:
 	if GameSession.get_adventurer(adventurer_id).is_empty():
 		route_context_id = ""
+		unit_details_origin = ""
 		return ERR_INVALID_DATA
 	route_context_id = adventurer_id
+	unit_details_origin = ""
+	return _change_scene(UNIT_DETAILS_SCENE)
+
+
+## The Roster entry path: identical validation to go_to_unit_details(), but
+## marks unit_details_origin so Unit Details knows it may offer party
+## assignment for this visit.
+func go_to_unit_details_from_roster(adventurer_id: String) -> Error:
+	if GameSession.get_adventurer(adventurer_id).is_empty():
+		route_context_id = ""
+		unit_details_origin = ""
+		return ERR_INVALID_DATA
+	route_context_id = adventurer_id
+	unit_details_origin = UNIT_DETAILS_ORIGIN_ROSTER
 	return _change_scene(UNIT_DETAILS_SCENE)
 
 
 func go_to_deploy_party() -> Error:
 	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(DEPLOY_PARTY_SCENE)
 
 
 func go_to_add_member(party_id: String) -> Error:
 	if GameSession.get_party(party_id).is_empty():
 		route_context_id = ""
+		unit_details_origin = ""
 		return ERR_INVALID_DATA
 	route_context_id = party_id
 	return _change_scene(ADD_MEMBER_SCENE)

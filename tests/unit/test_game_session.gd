@@ -637,6 +637,79 @@ func test_get_deployable_encamped_parties_includes_a_party_with_an_available_mem
 	assert_eq(deployable[0].id, "ready_party")
 
 
+func test_get_encamped_parties_excludes_a_deployed_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("deployed_party", ["warrior_001"], GameSessionScript.STARTING_SETTLEMENT_ID, true)
+	)
+
+	assert_eq(session.get_encamped_parties(), [])
+
+
+func test_get_encamped_parties_excludes_a_party_outside_the_starting_settlement() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("away_party", ["warrior_001"], GameSessionScript.GOBLIN_CAMP_ID, false)
+	)
+
+	assert_eq(session.get_encamped_parties(), [])
+
+
+func test_get_encamped_parties_includes_a_full_but_encamped_party_with_no_available_members() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.adventurers.append(_adventurer("scout_001", "on_expedition"))
+	session.parties.append(
+		_party("busy_party", ["scout_001"], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	var encamped: Array[Dictionary] = session.get_encamped_parties()
+
+	assert_eq(
+		encamped.size(), 1, "A full-but-encamped party is still a valid unit-assignment target"
+	)
+	assert_eq(encamped[0].id, "busy_party")
+
+
+func test_get_encamped_parties_returns_a_copy_that_cannot_mutate_the_catalog() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	var encamped: Array[Dictionary] = session.get_encamped_parties()
+	encamped[0].name = "Mutated"
+
+	assert_eq(
+		session.get_selected_party().name,
+		"Party 1",
+		"Mutating a returned encamped party copy must not affect session state"
+	)
+
+
+func test_assign_adventurer_to_party_rejects_a_deployed_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("deployed_party", [] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, true)
+	)
+
+	assert_false(session.assign_adventurer_to_party("deployed_party", "warrior_001"))
+	assert_eq(session.get_party("deployed_party").member_ids, [] as Array[String])
+
+
+func test_assign_adventurer_to_party_rejects_a_party_outside_the_starting_settlement() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(
+		_party("away_party", [] as Array[String], GameSessionScript.GOBLIN_CAMP_ID, false)
+	)
+
+	assert_false(session.assign_adventurer_to_party("away_party", "warrior_001"))
+	assert_eq(session.get_party("away_party").member_ids, [] as Array[String])
+
+
 func test_deploy_party_rejects_an_unknown_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

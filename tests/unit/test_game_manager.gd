@@ -353,20 +353,59 @@ func test_recruitment_route_points_to_the_recruitment_scene() -> void:
 
 
 func test_go_to_roster_clears_stale_route_context_before_changing_scene() -> void:
-	# roster.tscn does not exist yet (built in a later milestone), so this
-	# exercises the context-clearing behavior directly rather than asserting
-	# a clean scene change; the missing-scene push_error is expected here,
-	# mirroring test_change_scene_reports_error_for_missing_scene.
+	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 	manager.route_context_id = "stale_id"
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
 
-	manager.go_to_roster()
+	var err: Error = manager.go_to_roster()
 
+	assert_eq(err, OK)
 	assert_eq(manager.route_context_id, "")
-	assert_push_error("roster.tscn")
-	for tracked in get_errors():
-		tracked.handled = true
+	assert_eq(manager.unit_details_origin, "")
+
+
+func test_go_to_unit_details_from_roster_sets_route_context_and_marks_the_roster_origin() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.go_to_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, GameSession.WARRIOR_ID)
+	assert_eq(manager.unit_details_origin, manager.UNIT_DETAILS_ORIGIN_ROSTER)
+
+
+func test_going_to_unit_details_from_roster_with_an_unknown_id_is_invalid_and_clears_both_fields() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
+
+	var err: Error = manager.go_to_unit_details_from_roster("no_such_adventurer")
+
+	assert_ne(err, OK, "An unknown adventurer id must not be treated as a valid route")
+	assert_eq(manager.route_context_id, "")
+	assert_eq(manager.unit_details_origin, "")
+
+
+func test_go_to_unit_details_clears_a_stale_roster_origin_flag() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.unit_details_origin = manager.UNIT_DETAILS_ORIGIN_ROSTER
+
+	var err: Error = manager.go_to_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(err, OK)
+	assert_eq(
+		manager.unit_details_origin,
+		"",
+		"The pre-Roster entry path must never leave a stale roster origin behind"
+	)
 
 
 func test_go_to_recruitment_clears_stale_route_context_before_changing_scene() -> void:

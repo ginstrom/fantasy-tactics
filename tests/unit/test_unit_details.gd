@@ -5,15 +5,27 @@ const UnitDetailsScene := preload("res://scenes/ui/unit_details.tscn")
 
 func before_each() -> void:
 	GameSession.reset()
+	GameManager.route_context_id = ""
+	GameManager.unit_details_origin = ""
 
 
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameManager.unit_details_origin = ""
 
 
 func _open_unit_details(adventurer_id: String) -> Control:
 	GameManager.route_context_id = adventurer_id
+	GameManager.unit_details_origin = ""
+	var screen: Control = UnitDetailsScene.instantiate()
+	add_child_autofree(screen)
+	return screen
+
+
+func _open_unit_details_from_roster(adventurer_id: String) -> Control:
+	GameManager.route_context_id = adventurer_id
+	GameManager.unit_details_origin = GameManager.UNIT_DETAILS_ORIGIN_ROSTER
 	var screen: Control = UnitDetailsScene.instantiate()
 	add_child_autofree(screen)
 	return screen
@@ -127,3 +139,105 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_assignment_section_is_hidden_when_not_opened_via_roster() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_false(screen.get_node("Center/VBox/PartyPicker").visible)
+	assert_false(screen.get_node("Center/VBox/AddToPartyButton").visible)
+	assert_false(screen.get_node("Center/VBox/AssignmentExplanationLabel").visible)
+
+
+func test_roster_origin_shows_an_enabled_picker_and_action_for_an_available_unassigned_unit() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	var picker: OptionButton = screen.get_node("Center/VBox/PartyPicker")
+	var add_button: Button = screen.get_node("Center/VBox/AddToPartyButton")
+	assert_true(picker.visible)
+	assert_true(add_button.visible)
+	assert_false(add_button.disabled)
+	assert_false(screen.get_node("Center/VBox/AssignmentExplanationLabel").visible)
+	assert_eq(picker.item_count, 1)
+	assert_eq(picker.get_item_text(0), "Party 1")
+	assert_eq(picker.get_item_metadata(0), GameSession.FIRST_PARTY_ID)
+
+
+func test_roster_origin_with_no_encamped_party_shows_a_disabled_explained_action() -> void:
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	var picker: OptionButton = screen.get_node("Center/VBox/PartyPicker")
+	var add_button: Button = screen.get_node("Center/VBox/AddToPartyButton")
+	assert_false(picker.visible)
+	assert_true(add_button.visible, "The disabled action itself should still be present, not merely absent")
+	assert_true(add_button.disabled)
+	assert_true(screen.get_node("Center/VBox/AssignmentExplanationLabel").visible)
+	assert_eq(
+		screen.get_node("Center/VBox/AssignmentExplanationLabel").text, "unit_details.no_eligible_party"
+	)
+
+
+func test_roster_origin_hides_the_assignment_section_for_an_assigned_unit() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	assert_false(screen.get_node("Center/VBox/PartyPicker").visible)
+	assert_false(screen.get_node("Center/VBox/AddToPartyButton").visible)
+	assert_false(screen.get_node("Center/VBox/AssignmentExplanationLabel").visible)
+
+
+func test_roster_origin_hides_the_assignment_section_for_an_unavailable_unit() -> void:
+	GameSession.create_party()
+	GameSession.adventurers[0]["availability_status"] = "unavailable"
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	assert_false(screen.get_node("Center/VBox/PartyPicker").visible)
+	assert_false(screen.get_node("Center/VBox/AddToPartyButton").visible)
+
+
+func test_pressing_add_to_party_assigns_the_chosen_party_and_routes_to_roster() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+	var add_button: Button = screen.get_node("Center/VBox/AddToPartyButton")
+
+	add_button.emit_signal("pressed")
+
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
+	assert_eq(GameManager.route_context_id, "")
+	assert_eq(GameManager.unit_details_origin, "")
+
+
+func test_a_stale_party_selection_fails_safely_and_refreshes_in_place() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+	var add_button: Button = screen.get_node("Center/VBox/AddToPartyButton")
+	# The chosen party stops being eligible while the screen is still open.
+	GameSession.parties[0].deployed = true
+
+	add_button.emit_signal("pressed")
+
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [] as Array[String])
+	assert_eq(GameManager.route_context_id, GameSession.WARRIOR_ID, "A stale selection must not navigate away")
+	assert_true(
+		screen.get_node("Center/VBox/AssignmentExplanationLabel").visible,
+		"No encamped party remains, so the disabled explanation should show"
+	)
+	assert_true(screen.get_node("Center/VBox/AddToPartyButton").disabled)
+
+
+func test_back_button_source_can_route_to_roster() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/unit_details.gd")
+
+	assert_string_contains(source, "GameManager.go_to_roster()")
+
+
+func test_back_button_from_roster_origin_routes_to_roster_and_clears_context() -> void:
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, "")
+	assert_eq(GameManager.unit_details_origin, "")
