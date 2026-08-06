@@ -9,6 +9,7 @@ const EXPEDITIONS: Dictionary = {
 		"position": Vector2i(4, 4),
 		"name_key": "expedition.goblin_camp.name",
 		"danger_key": "expedition.danger.low",
+		"difficulty": 1,
 		"reward": 10,
 		# XP: 5 for a Goblin kill, 10 for clearing its site (see the campaign
 		# progression design doc). BattleController/Battlefield read these
@@ -27,6 +28,7 @@ const EXPEDITIONS: Dictionary = {
 		"position": Vector2i(4, 0),
 		"name_key": "expedition.orc_outpost.name",
 		"danger_key": "expedition.danger.high",
+		"difficulty": 2,
 		"reward": 25,
 		# XP: 10 for an Orc kill, 20 for clearing its site.
 		"kill_xp": 10,
@@ -191,10 +193,11 @@ func reset() -> void:
 	selected_encounter = ""
 	completed_encounters = []
 	active_encounters = [
-		_make_encounter_instance(GOBLIN_CAMP_ID, GOBLIN_CAMP_ID, EXPEDITIONS[GOBLIN_CAMP_ID].position)
+		_make_encounter_instance(GOBLIN_CAMP_ID, GOBLIN_CAMP_ID, EXPEDITIONS[GOBLIN_CAMP_ID].position),
+		_make_encounter_instance(ORC_OUTPOST_ID, ORC_OUTPOST_ID, EXPEDITIONS[ORC_OUTPOST_ID].position),
 	]
 	encounter_vacancies = []
-	_used_encounter_template_ids = [GOBLIN_CAMP_ID]
+	_used_encounter_template_ids = [GOBLIN_CAMP_ID, ORC_OUTPOST_ID]
 	world_turn = 1
 	gold = 0
 	pending_reward = 0
