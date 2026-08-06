@@ -42,8 +42,9 @@ back with the user. Deliver the tasks in order:
 6. [06-portrait-panel-and-hud.md](06-portrait-panel-and-hud.md) — the
    Baldur's-Gate-style left portrait panel and the adjusted health HUD.
 7. [07-integration-and-regression-sweep.md](07-integration-and-regression-sweep.md)
-   — rewrite the full-campaign integration test, full-suite regression pass,
-   manual verification, merge back to `main`.
+   — full-suite regression pass, manual verification, merge back to `main`.
+   (The full-campaign integration test rewrite this task originally owned
+   landed early, as an in-scope straggler fix during Task 4.)
 
 Tasks 1-2 (Guild Hall) are small and low-risk and establish
 `GameSession.get_max_party_size()`, which task 4's fielding logic does not
