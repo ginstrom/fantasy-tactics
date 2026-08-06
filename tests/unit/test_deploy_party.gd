@@ -69,19 +69,18 @@ func test_no_deployable_party_shows_the_empty_state_without_errors() -> void:
 	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
 
 
-## Column titles are resolved via tr() (see deploy_party.gd), but the actual
-## English copy is added later in the localization milestone; until then
-## tr() falls back to returning the key itself, which is what these columns
-## are documented by (Party/Members/Status — see the migration brief).
+## Column titles are resolved via tr() (see deploy_party.gd) to the real
+## English copy in translations/en.tres (Party/Members/Status — see the
+## migration brief).
 func test_deploy_party_table_uses_the_documented_columns() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
 
 	assert_eq(tree.columns, 3)
-	assert_eq(tree.get_column_title(0), "deploy_party.column.party")
-	assert_eq(tree.get_column_title(1), "deploy_party.column.members")
-	assert_eq(tree.get_column_title(2), "deploy_party.column.status")
+	assert_eq(tree.get_column_title(0), "Party")
+	assert_eq(tree.get_column_title(1), "Members")
+	assert_eq(tree.get_column_title(2), "Status")
 
 
 func test_lists_exactly_the_deployable_parties_not_every_party() -> void:

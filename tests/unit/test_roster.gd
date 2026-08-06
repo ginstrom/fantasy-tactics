@@ -45,21 +45,20 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
-## Column titles are resolved via tr() (see roster.gd), but the actual
-## English copy is added later in the localization milestone; until then
-## tr() falls back to returning the key itself, which is what these columns
-## are documented by (Name/Class/Level/Status/Party — see the design doc).
+## Column titles are resolved via tr() (see roster.gd) to the real English
+## copy in translations/en.tres (Name/Class/Level/Status/Party — see the
+## design doc).
 func test_roster_table_uses_the_documented_columns() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
 
 	assert_eq(tree.columns, 5)
-	assert_eq(tree.get_column_title(0), "roster.column.name")
-	assert_eq(tree.get_column_title(1), "roster.column.class")
-	assert_eq(tree.get_column_title(2), "roster.column.level")
-	assert_eq(tree.get_column_title(3), "roster.column.status")
-	assert_eq(tree.get_column_title(4), "roster.column.party")
+	assert_eq(tree.get_column_title(0), "Name")
+	assert_eq(tree.get_column_title(1), "Class")
+	assert_eq(tree.get_column_title(2), "Level")
+	assert_eq(tree.get_column_title(3), "Status")
+	assert_eq(tree.get_column_title(4), "Party")
 
 
 func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
@@ -71,7 +70,7 @@ func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	assert_eq(_tree_row_values(tree, 1), ["warrior"])
 	assert_eq(_tree_row_values(tree, 2), ["1"])
 	assert_eq(_tree_row_values(tree, 3), ["available"])
-	assert_eq(_tree_row_values(tree, 4), ["roster.unassigned"])
+	assert_eq(_tree_row_values(tree, 4), ["Unassigned"])
 
 
 func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> void:
@@ -161,7 +160,7 @@ func test_refresh_reflects_a_new_assignment_made_elsewhere() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
-	assert_eq(_tree_row_values(tree, 4), ["roster.unassigned"])
+	assert_eq(_tree_row_values(tree, 4), ["Unassigned"])
 
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

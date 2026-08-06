@@ -45,19 +45,18 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	assert_eq(screen.selected_party_id, "")
 
 
-## Column titles are resolved via tr() (see parties.gd), but the actual
-## English copy is added later in the localization milestone; until then
-## tr() falls back to returning the key itself, which is what these columns
-## are documented by (Party/Members/Status — see the migration brief).
+## Column titles are resolved via tr() (see parties.gd) to the real English
+## copy in translations/en.tres (Party/Members/Status — see the migration
+## brief).
 func test_parties_table_uses_the_documented_columns() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
 
 	assert_eq(tree.columns, 3)
-	assert_eq(tree.get_column_title(0), "parties.column.party")
-	assert_eq(tree.get_column_title(1), "parties.column.members")
-	assert_eq(tree.get_column_title(2), "parties.column.status")
+	assert_eq(tree.get_column_title(0), "Party")
+	assert_eq(tree.get_column_title(1), "Members")
+	assert_eq(tree.get_column_title(2), "Status")
 
 
 func test_every_party_renders_as_a_row_with_name_members_and_status() -> void:

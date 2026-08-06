@@ -51,10 +51,10 @@ func test_recruitment_table_uses_the_documented_columns() -> void:
 	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
 
 	assert_eq(tree.columns, 4)
-	assert_eq(tree.get_column_title(0), "recruitment.column.name")
-	assert_eq(tree.get_column_title(1), "recruitment.column.class")
-	assert_eq(tree.get_column_title(2), "recruitment.column.level")
-	assert_eq(tree.get_column_title(3), "recruitment.column.cost")
+	assert_eq(tree.get_column_title(0), "Name")
+	assert_eq(tree.get_column_title(1), "Class")
+	assert_eq(tree.get_column_title(2), "Level")
+	assert_eq(tree.get_column_title(3), "Cost")
 
 
 func test_recruitment_lists_exactly_the_current_candidates() -> void:

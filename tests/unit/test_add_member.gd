@@ -55,19 +55,17 @@ func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void
 	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
 
 
-## Column titles are resolved via tr() (see add_member.gd), but the actual
-## English copy is added later in the localization milestone; until then
-## tr() falls back to returning the key itself, which is what these columns
-## are documented by (Name/Class/Level — see the migration brief).
+## Column titles are resolved via tr() (see add_member.gd) to the real English
+## copy in translations/en.tres (Name/Class/Level — see the migration brief).
 func test_add_member_table_uses_the_documented_columns() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
 
 	assert_eq(tree.columns, 3)
-	assert_eq(tree.get_column_title(0), "add_member.column.name")
-	assert_eq(tree.get_column_title(1), "add_member.column.class")
-	assert_eq(tree.get_column_title(2), "add_member.column.level")
+	assert_eq(tree.get_column_title(0), "Name")
+	assert_eq(tree.get_column_title(1), "Class")
+	assert_eq(tree.get_column_title(2), "Level")
 
 
 func test_lists_exactly_the_available_adventurers() -> void:
