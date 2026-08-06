@@ -42,6 +42,15 @@ func _open_unit_details_from_add_member(adventurer_id: String, party_id: String)
 	return screen
 
 
+func _open_unit_details_from_party_details(adventurer_id: String, party_id: String) -> Control:
+	GameManager.route_context_id = adventurer_id
+	GameManager.unit_details_origin = GameManager.UNIT_DETAILS_ORIGIN_PARTY_DETAILS
+	GameManager.add_member_return_party_id = party_id
+	var screen: Control = UnitDetailsScene.instantiate()
+	add_child_autofree(screen)
+	return screen
+
+
 ## Extracts a single top-level function's own source (from "func <name>(" up
 ## to the next top-level "func ", or end of file) so a source-string
 ## assertion can target that function's branches specifically. A whole-file
@@ -323,3 +332,15 @@ func test_back_from_add_member_with_a_stale_party_falls_back_to_parties() -> voi
 	assert_eq(GameManager.route_context_id, "")
 	assert_eq(GameManager.unit_details_origin, "")
 	assert_eq(GameManager.add_member_return_party_id, "")
+
+
+func test_back_from_a_deployed_partys_member_returns_to_that_party_details() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen := _open_unit_details_from_party_details(GameSession.WARRIOR_ID, GameSession.FIRST_PARTY_ID)
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+	assert_eq(GameManager.unit_details_origin, "")

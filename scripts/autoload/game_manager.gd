@@ -18,6 +18,7 @@ const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
+const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -84,6 +85,14 @@ func go_to_world_map() -> Error:
 	return _change_scene(WORLD_MAP_SCENE)
 
 
+## The pause menu is available from every local screen, so it provides the
+## campaign-level escape hatch back to the World Map.  Unpause before changing
+## scenes: a paused destination would otherwise be unable to receive input.
+func go_to_world_map_from_game_menu() -> Error:
+	close_game_menu()
+	return go_to_world_map()
+
+
 ## The session owns the single-party restriction; this UI-facing wrapper only
 ## converts its success value into the Error contract used by screen actions.
 func create_party() -> Error:
@@ -143,6 +152,8 @@ func go_to_party_details(party_id: String) -> Error:
 		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = party_id
+	unit_details_origin = ""
+	add_member_return_party_id = ""
 	return _change_scene(PARTY_DETAILS_SCENE)
 
 
@@ -178,6 +189,16 @@ func go_to_unit_details_from_add_member(adventurer_id: String, party_id: String)
 		return ERR_INVALID_DATA
 	route_context_id = adventurer_id
 	unit_details_origin = UNIT_DETAILS_ORIGIN_ADD_MEMBER
+	add_member_return_party_id = party_id
+	return _change_scene(UNIT_DETAILS_SCENE)
+
+
+func go_to_unit_details_from_party_details(adventurer_id: String, party_id: String) -> Error:
+	if GameSession.get_adventurer(adventurer_id).is_empty() or GameSession.get_party(party_id).is_empty():
+		_clear_detail_context()
+		return ERR_INVALID_DATA
+	route_context_id = adventurer_id
+	unit_details_origin = UNIT_DETAILS_ORIGIN_PARTY_DETAILS
 	add_member_return_party_id = party_id
 	return _change_scene(UNIT_DETAILS_SCENE)
 

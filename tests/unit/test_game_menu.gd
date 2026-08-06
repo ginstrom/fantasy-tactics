@@ -32,8 +32,20 @@ func test_return_save_and_quit_are_always_enabled() -> void:
 	add_child_autofree(menu)
 
 	assert_false(menu.get_node("Center/VBox/ReturnButton").disabled)
+	assert_false(menu.get_node("Center/VBox/WorldMapButton").disabled)
 	assert_false(menu.get_node("Center/VBox/SaveButton").disabled)
 	assert_false(menu.get_node("Center/VBox/QuitButton").disabled)
+
+
+func test_pressing_world_map_closes_the_menu_and_unpauses_the_game() -> void:
+	GameManager.open_game_menu()
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	menu.get_node("Center/VBox/WorldMapButton").emit_signal("pressed")
+
+	assert_false(GameManager.is_game_menu_open())
+	assert_false(get_tree().paused)
 
 
 func test_pressing_save_shows_the_not_implemented_status() -> void:

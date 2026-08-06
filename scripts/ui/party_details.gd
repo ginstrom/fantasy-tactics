@@ -100,11 +100,11 @@ func _on_row_selected(row_id: Variant) -> void:
 
 
 func _on_row_activated(row_id: Variant) -> void:
-	GameManager.go_to_unit_details(str(row_id))
+	GameManager.go_to_unit_details_from_party_details(str(row_id), party_id)
 
 
 func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
-	GameManager.go_to_unit_details(adventurer_id)
+	GameManager.go_to_unit_details_from_party_details(adventurer_id, party_id)
 
 
 func _on_add_member_pressed() -> void:

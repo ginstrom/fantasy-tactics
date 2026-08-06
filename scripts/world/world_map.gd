@@ -43,6 +43,7 @@ var hover_route: Array[Vector2i] = []
 @onready var marker_container: Node2D = $Markers
 @onready var route_container: Node2D = $Routes
 @onready var turn_label: Label = $HUD/TurnLabel
+@onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var information_panel: PanelContainer = $HUD/InformationPanel
 
 
@@ -55,6 +56,7 @@ func _ready() -> void:
 	_draw_routes()
 	_update_highlights()
 	_update_turn_label()
+	_refresh_turn_controls()
 	_refresh_information_panel()
 
 
@@ -118,6 +120,8 @@ func try_activate_current_tile() -> bool:
 	var encounter_id := _expedition_id_at(party_position)
 	if encounter_id == "" or GameSession.is_encounter_complete(encounter_id):
 		return false
+	if GameSession.selected_encounter != "" and GameSession.selected_encounter != encounter_id:
+		return false
 
 	encounter_activated.emit(encounter_id)
 	return true
@@ -175,17 +179,25 @@ func _update_hover_route(tile_pos: Vector2i) -> void:
 
 
 func _on_end_turn_pressed() -> void:
+	if GameSession.selected_encounter != "":
+		return
 	GameSession.end_world_turn()
 	party_position = GameSession.get_deployed_party_position()
 	_draw_markers()
 	_draw_routes()
 	_update_highlights()
 	_update_turn_label()
+	_refresh_turn_controls()
 	board_changed.emit()
 
 
 func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if not GameSession.has_deployed_party():
+		# The World Map remains reachable from the pause menu before a party is
+		# formed. Its always-visible settlement marker is the recovery route
+		# back to Encampment in that state.
+		if tile_pos == SETTLEMENT_POSITION:
+			settlement_activated.emit(SETTLEMENT_ID)
 		return
 
 	if tile_pos == party_position:
@@ -369,6 +381,12 @@ func _update_turn_label() -> void:
 	if not is_inside_tree():
 		return
 	turn_label.text = tr("world_map.turn") % GameSession.world_turn
+
+
+func _refresh_turn_controls() -> void:
+	if not is_inside_tree():
+		return
+	end_turn_button.disabled = GameSession.selected_encounter != ""
 
 
 func _refresh_information_panel() -> void:

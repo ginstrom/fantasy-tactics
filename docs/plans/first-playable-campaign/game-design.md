@@ -85,7 +85,10 @@ The player-facing shell is also in place: New Game begins at the settlement;
 Continue and Load are intentionally disabled until a save system exists; and
 Escape opens a pause-menu overlay from the settlement, encampment, party
 manager, world map, and battlefield. The overlay can return to the unchanged
-scene, show the current "Not implemented yet" Save status, or quit.
+scene, open the World Map, show the current "Not implemented yet" Save status,
+or quit. Opening the World Map during an active battle preserves that battle:
+its encounter can be re-entered, while End Turn remains locked until the battle
+resolves.
 
 For fast development checks, a debug-only F9 scenario menu can open a fresh
 campaign at the settlement, encampment, party manager, a ready-to-depart

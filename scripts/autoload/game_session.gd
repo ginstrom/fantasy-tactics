@@ -392,6 +392,12 @@ func take_next_route_step() -> bool:
 
 
 func end_world_turn() -> bool:
+	# A selected encounter is the durable marker for an unresolved battle. The
+	# World Map may be opened to inspect it, but time cannot pass until the
+	# player resumes and resolves (or loses) that battle.
+	if selected_encounter != "":
+		return false
+
 	var auto_moved := false
 	if has_deployed_party() and not get_selected_party().movement_spent:
 		auto_moved = take_next_route_step()

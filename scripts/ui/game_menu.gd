@@ -29,6 +29,10 @@ func _on_return_pressed() -> void:
 	GameManager.close_game_menu()
 
 
+func _on_world_map_pressed() -> void:
+	GameManager.go_to_world_map_from_game_menu()
+
+
 func _on_save_pressed() -> void:
 	status_label.text = tr("menu.not_implemented")
 	status_label.visible = true

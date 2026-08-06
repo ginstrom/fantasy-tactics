@@ -31,6 +31,10 @@ theme_override_constants/separation = 16
 layout_mode = 2
 text = "menu.return"
 
+[node name="WorldMapButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "menu.world_map"
+
 [node name="SaveButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 text = "menu.save"
@@ -50,5 +54,6 @@ visible = false
 horizontal_alignment = 1
 
 [connection signal="pressed" from="Center/VBox/ReturnButton" to="." method="_on_return_pressed"]
+[connection signal="pressed" from="Center/VBox/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Center/VBox/SaveButton" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]

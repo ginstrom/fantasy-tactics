@@ -137,6 +137,11 @@ func _on_back_pressed() -> void:
 		and not GameSession.get_party(add_member_return_party_id).is_empty()
 	):
 		GameManager.go_to_add_member(add_member_return_party_id)
+	elif (
+		origin == GameManager.UNIT_DETAILS_ORIGIN_PARTY_DETAILS
+		and not GameSession.get_party(add_member_return_party_id).is_empty()
+	):
+		GameManager.go_to_party_details(add_member_return_party_id)
 	elif origin == GameManager.UNIT_DETAILS_ORIGIN_ROSTER:
 		GameManager.go_to_roster()
 	else:

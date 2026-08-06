@@ -431,6 +431,18 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
 
 
+func test_clicking_the_settlement_without_a_deployed_party_returns_to_encampment() -> void:
+	GameSession.reset()
+	var world_map := _make_world_map()
+	watch_signals(world_map)
+
+	world_map._handle_tile_click(WorldMapScript.SETTLEMENT_POSITION)
+
+	assert_signal_emitted_with_parameters(
+		world_map, "settlement_activated", [WorldMapScript.SETTLEMENT_ID]
+	)
+
+
 func test_clicking_deployed_party_at_settlement_selects_it_before_entry() -> void:
 	var world_map := _make_world_map()
 
@@ -695,6 +707,43 @@ func test_pressing_end_turn_advances_the_turn_without_a_route() -> void:
 
 	assert_eq(GameSession.world_turn, 2)
 	assert_eq(world_map.party_position, Vector2i(0, 0))
+
+
+func test_active_battle_disables_and_blocks_end_turn() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._on_end_turn_pressed()
+
+	assert_true(world_map.get_node("HUD/EndTurnButton").disabled)
+	assert_eq(GameSession.world_turn, 1)
+
+
+func test_active_encounter_can_be_reentered_from_the_world_map() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var world_map := _make_world_map()
+	world_map.party_position = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	watch_signals(world_map)
+
+	var activated: bool = world_map.try_activate_current_tile()
+
+	assert_true(activated)
+	assert_signal_emitted_with_parameters(
+		world_map, "encounter_activated", [GameSession.GOBLIN_CAMP_ID]
+	)
+
+
+func test_active_battle_cannot_be_replaced_by_a_different_encounter() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var world_map := _make_world_map()
+	world_map.party_position = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
+	watch_signals(world_map)
+
+	var activated: bool = world_map.try_activate_current_tile()
+
+	assert_false(activated)
+	assert_signal_not_emitted(world_map, "encounter_activated")
 
 
 func test_pressing_end_turn_auto_moves_one_unspent_route_step() -> void:

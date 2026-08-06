@@ -130,7 +130,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("parties.column.party"), "Party")
 	assert_eq(tr("parties.column.members"), "Members")
 	assert_eq(tr("parties.column.status"), "Status")
-	assert_eq(tr("availability.available"), "Available")
+	assert_eq(tr("availability.available"), "Healthy")
 	assert_eq(tr("availability.unavailable"), "Unavailable")
 	assert_eq(tr("party_status.encamped"), "Encamped")
 	assert_eq(tr("party_status.deployed"), "Deployed")
