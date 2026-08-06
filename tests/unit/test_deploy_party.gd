@@ -1,6 +1,7 @@
 extends GutTest
 
 const DeployPartyScene := preload("res://scenes/ui/deploy_party.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -27,15 +28,6 @@ func _ineligible_party(party_id: String) -> Dictionary:
 		"progression": {},
 		"metadata": {},
 	}
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_deploy_party_shows_the_title_and_the_back_action() -> void:
@@ -76,7 +68,7 @@ func test_no_deployable_party_shows_the_empty_state_without_errors() -> void:
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "deploy_party.empty")
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_deploy_party_uses_the_sessions_deployability_query_not_a_private_predicate() -> void:
@@ -108,9 +100,9 @@ func test_lists_exactly_the_deployable_parties_not_every_party() -> void:
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
 
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), ["Party 1"])
-	assert_eq(_tree_row_values(tree, 1), ["1"])
-	assert_eq(_tree_row_values(tree, 2), ["Encamped"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["Encamped"])
 
 
 ## Selection alone must never deploy — only activating a row (see
@@ -184,7 +176,7 @@ func test_an_invalidated_selection_leaves_the_screen_in_place_and_refreshes_the_
 		"Sanity: deploy_party must not have run its normal deployment side effects again"
 	)
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_back_button_returns_to_the_encampment() -> void:

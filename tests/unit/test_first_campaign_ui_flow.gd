@@ -9,12 +9,19 @@ const DeployPartyScene := preload("res://scenes/ui/deploy_party.tscn")
 func before_each() -> void:
 	GameSession.reset()
 	GameManager.route_context_id = ""
+	GameManager.unit_details_origin = ""
+	GameManager.add_member_return_party_id = ""
 
 
 func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
+	assert_eq(GameSession.parties.size(), 0)
 	var parties: Control = PartiesScene.instantiate()
 	add_child_autofree(parties)
-	parties.get_node("Center/VBox/CreatePartyButton").emit_signal("pressed")
+	var create_button: Button = parties.get_node("Center/VBox/CreatePartyButton")
+	assert_true(create_button.visible)
+	assert_false(create_button.disabled)
+	create_button.emit_signal("pressed")
+	assert_eq(GameSession.parties.size(), 1)
 
 	var party_table: Tree = parties.get_node("Center/VBox/PartyTable/Tree")
 	party_table.get_root().get_first_child().select(0)
@@ -23,7 +30,10 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	add_child_autofree(details)
 	assert_eq(details.party_id, GameSession.FIRST_PARTY_ID)
 
-	details.get_node("Center/VBox/AddMemberButton").emit_signal("pressed")
+	var add_member_button: Button = details.get_node("Center/VBox/AddMemberButton")
+	assert_true(add_member_button.visible)
+	assert_false(add_member_button.disabled)
+	add_member_button.emit_signal("pressed")
 	var add_member: Control = AddMemberScene.instantiate()
 	add_child_autofree(add_member)
 	var adventurer_table: Tree = add_member.get_node("Center/VBox/AdventurerTable/Tree")
@@ -35,6 +45,7 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	var deploy_party: Control = DeployPartyScene.instantiate()
 	add_child_autofree(deploy_party)
 	var deploy_table: Tree = deploy_party.get_node("Center/VBox/PartyTable/Tree")
+	assert_ne(deploy_table.get_root().get_first_child(), null)
 	deploy_table.get_root().get_first_child().select(0)
 	deploy_table.emit_signal("item_activated")
 

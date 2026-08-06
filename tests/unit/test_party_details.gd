@@ -1,6 +1,7 @@
 extends GutTest
 
 const PartyDetailsScene := preload("res://scenes/ui/party_details.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -17,15 +18,6 @@ func _open_party_details(party_id: String) -> Control:
 	var screen: Control = PartyDetailsScene.instantiate()
 	add_child_autofree(screen)
 	return screen
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_party_details_shows_the_title_and_the_back_action() -> void:
@@ -92,7 +84,7 @@ func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "party_details.no_members")
 	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 ## Column titles are resolved via tr() (see party_details.gd) to the real
@@ -116,9 +108,9 @@ func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
 
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(_tree_row_values(tree, 1), ["warrior"])
-	assert_eq(_tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
 
 
 func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> void:
@@ -189,7 +181,7 @@ func test_an_unknown_party_id_does_not_crash_and_shows_no_members() -> void:
 	var screen := _open_party_details("no_such_party")
 	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
 
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_back_button_returns_to_parties_and_leaves_the_party_untouched() -> void:

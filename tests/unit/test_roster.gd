@@ -1,6 +1,7 @@
 extends GutTest
 
 const RosterScene := preload("res://scenes/ui/roster.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -13,15 +14,6 @@ func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_roster_shows_the_title_and_the_back_action() -> void:
@@ -66,11 +58,11 @@ func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
 
-	assert_eq(_tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(_tree_row_values(tree, 1), ["warrior"])
-	assert_eq(_tree_row_values(tree, 2), ["1"])
-	assert_eq(_tree_row_values(tree, 3), ["Available"])
-	assert_eq(_tree_row_values(tree, 4), ["Unassigned"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["Available"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])
 
 
 func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> void:
@@ -80,7 +72,7 @@ func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> voi
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
 
-	assert_eq(_tree_row_values(tree, 4), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1"])
 
 
 func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> void:
@@ -160,13 +152,13 @@ func test_refresh_reflects_a_new_assignment_made_elsewhere() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
-	assert_eq(_tree_row_values(tree, 4), ["Unassigned"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])
 
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	screen.refresh()
 
-	assert_eq(_tree_row_values(tree, 4), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1"])
 
 
 func test_back_button_returns_to_units() -> void:

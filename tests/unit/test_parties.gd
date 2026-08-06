@@ -1,6 +1,7 @@
 extends GutTest
 
 const PartiesScene := preload("res://scenes/ui/parties.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -10,15 +11,6 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_parties_shows_the_title_and_the_back_action() -> void:
@@ -41,7 +33,7 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "parties.empty")
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 	assert_eq(screen.selected_party_id, "")
 
 
@@ -56,7 +48,7 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
-	assert_eq(_tree_row_values(screen.get_node("Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(screen.get_node("Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
 	assert_true(create_button.disabled)
 	create_button.emit_signal("pressed")
 	assert_eq(GameSession.parties.size(), 1)
@@ -83,9 +75,9 @@ func test_every_party_renders_as_a_row_with_name_members_and_status() -> void:
 	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
 
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), ["Party 1"])
-	assert_eq(_tree_row_values(tree, 1), ["0"])
-	assert_eq(_tree_row_values(tree, 2), ["Encamped"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["0"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["Encamped"])
 
 
 func test_selecting_a_party_row_stores_the_id_locally_and_refreshes_the_panel() -> void:

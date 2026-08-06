@@ -1,6 +1,7 @@
 extends GutTest
 
 const RecruitmentScene := preload("res://scenes/ui/recruitment.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -13,15 +14,6 @@ func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_recruitment_shows_the_title_and_the_back_action() -> void:
@@ -68,11 +60,11 @@ func test_recruitment_lists_exactly_the_current_candidates() -> void:
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(_tree_row_values(tree, 0), ["Warrior 2", "Warrior 3", "Warrior 4"])
-	assert_eq(_tree_row_values(tree, 1), ["warrior", "warrior", "warrior"])
-	assert_eq(_tree_row_values(tree, 2), ["1", "1", "1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2", "Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior", "warrior", "warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "1", "1"])
 	assert_eq(
-		_tree_row_values(tree, 3),
+		UiTestHelpers.tree_row_values(tree, 3),
 		[
 			"%d %s" % [10, tr(&"recruitment.column.cost_unit")],
 			"%d %s" % [10, tr(&"recruitment.column.cost_unit")],
@@ -88,7 +80,7 @@ func test_recruitment_does_not_list_a_candidate_already_purchased_elsewhere() ->
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(_tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
 
 
 func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel() -> void:
@@ -205,7 +197,7 @@ func test_pressing_recruit_for_a_candidate_purchased_elsewhere_refreshes_in_plac
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_eq(GameSession.gold, 0, "The stale purchase attempt must not deduct gold again")
-	assert_eq(_tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
 
 
 func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_safely() -> void:
@@ -223,7 +215,7 @@ func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_false(panel.get_node("Content/RecruitmentName").visible)
-	assert_eq(_tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
 
 
 func test_an_empty_recruitment_shows_the_empty_state_without_errors() -> void:

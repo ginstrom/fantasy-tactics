@@ -1,6 +1,7 @@
 extends GutTest
 
 const AddMemberScene := preload("res://scenes/ui/add_member.tscn")
+const UiTestHelpers := preload("res://tests/unit/ui_test_helpers.gd")
 
 
 func before_each() -> void:
@@ -19,15 +20,6 @@ func _open_add_member(party_id: String) -> Control:
 	var screen: Control = AddMemberScene.instantiate()
 	add_child_autofree(screen)
 	return screen
-
-
-func _tree_row_values(tree: Tree, column: int) -> Array[String]:
-	var values: Array[String] = []
-	var item := tree.get_root().get_first_child()
-	while item != null:
-		values.append(item.get_text(column))
-		item = item.get_next()
-	return values
 
 
 func test_add_member_shows_the_title_and_the_back_action() -> void:
@@ -70,7 +62,7 @@ func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "add_member.empty")
 	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 ## Column titles are resolved via tr() (see add_member.gd) to the real English
@@ -92,9 +84,9 @@ func test_lists_exactly_the_available_adventurers() -> void:
 	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
 
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(_tree_row_values(tree, 1), ["warrior"])
-	assert_eq(_tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
 
 
 ## Selection alone must never assign — only activating a row (see
@@ -172,7 +164,7 @@ func test_a_stale_row_fails_safely_and_refreshes_the_list_in_place() -> void:
 	tree.emit_signal("item_activated")
 
 	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_back_button_returns_to_party_details_without_mutating_the_party() -> void:
