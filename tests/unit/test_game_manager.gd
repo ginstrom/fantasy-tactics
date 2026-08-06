@@ -77,6 +77,18 @@ func test_depart_selected_party_deploys_before_changing_scene() -> void:
 	assert_true(GameSession.has_deployed_party())
 
 
+func test_create_party_wraps_the_one_party_session_contract_without_routing() -> void:
+	GameSession.reset()
+	GameManager.route_context_id = "existing_context"
+
+	assert_eq(GameManager.create_party(), OK)
+	assert_eq(GameManager.create_party(), ERR_INVALID_DATA)
+	assert_eq(GameSession.parties.size(), 1)
+	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
+	assert_eq(GameManager.route_context_id, "existing_context")
+	GameManager.route_context_id = ""
+
+
 func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void:
 	GameSession.reset()
 	GameSession.create_party()

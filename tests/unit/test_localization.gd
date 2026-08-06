@@ -90,6 +90,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("units.roster"), "Roster")
 	assert_eq(tr("units.recruitment"), "Recruitment")
 	assert_eq(tr("parties.title"), "Parties")
+	assert_eq(tr("parties.create"), "Create Party")
 	assert_eq(tr("parties.empty"), "No parties yet.")
 	assert_eq(tr("party_details.add_member"), "Add Member")
 	assert_eq(tr("ui.tbd"), "TBD")

@@ -11,6 +11,7 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_table: TableView = $Center/VBox/PartyTable
 @onready var empty_label: Label = $Center/VBox/EmptyLabel
+@onready var create_party_button: Button = $Center/VBox/CreatePartyButton
 @onready var information_panel: PanelContainer = $InformationPanel
 
 var selected_party_id: String = ""
@@ -35,6 +36,7 @@ func refresh() -> void:
 	var rows := _build_rows()
 	party_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
+	create_party_button.disabled = not rows.is_empty()
 	_refresh_selection()
 
 
@@ -83,6 +85,11 @@ func _on_row_activated(row_id: Variant) -> void:
 
 func _on_information_panel_party_selected(party_id: String) -> void:
 	GameManager.go_to_party_details(party_id)
+
+
+func _on_create_party_pressed() -> void:
+	GameManager.create_party()
+	refresh()
 
 
 func _on_back_pressed() -> void:

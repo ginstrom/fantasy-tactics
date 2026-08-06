@@ -30,6 +30,10 @@ layout_mode = 2
 text = "parties.title"
 horizontal_alignment = 1
 
+[node name="CreatePartyButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "parties.create"
+
 [node name="PartyTable" type="VBoxContainer" parent="Center/VBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(520, 280)
@@ -57,3 +61,4 @@ offset_bottom = 160.0
 grow_horizontal = 0
 
 [connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Center/VBox/CreatePartyButton" to="." method="_on_create_party_pressed"]

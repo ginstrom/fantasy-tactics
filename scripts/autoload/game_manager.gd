@@ -78,7 +78,17 @@ func go_to_encampment() -> Error:
 
 
 func go_to_world_map() -> Error:
+	route_context_id = ""
+	unit_details_origin = ""
 	return _change_scene(WORLD_MAP_SCENE)
+
+
+## The session owns the single-party restriction; this UI-facing wrapper only
+## converts its success value into the Error contract used by screen actions.
+func create_party() -> Error:
+	if not GameSession.create_party():
+		return ERR_INVALID_DATA
+	return OK
 
 
 func depart_selected_party() -> Error:

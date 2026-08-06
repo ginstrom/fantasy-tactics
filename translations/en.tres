@@ -59,6 +59,7 @@ messages = {
 "recruitment.column.cost": "Cost",
 "recruitment.column.cost_unit": "gold",
 "parties.title": "Parties",
+"parties.create": "Create Party",
 "parties.empty": "No parties yet.",
 "parties.column.party": "Party",
 "parties.column.members": "Members",

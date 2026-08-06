@@ -99,6 +99,8 @@ func test_cannot_create_a_second_party() -> void:
 
 	assert_true(session.create_party())
 	assert_false(session.create_party())
+	assert_eq(session.parties.size(), 1)
+	assert_eq(session.get_selected_party().id, GameSessionScript.FIRST_PARTY_ID)
 
 
 func test_cannot_assign_an_unknown_or_already_assigned_adventurer() -> void:

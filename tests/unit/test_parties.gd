@@ -45,6 +45,23 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	assert_eq(screen.selected_party_id, "")
 
 
+func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	var create_button: Button = screen.get_node("Center/VBox/CreatePartyButton")
+
+	assert_true(create_button.visible)
+	assert_false(create_button.disabled)
+	create_button.emit_signal("pressed")
+
+	assert_eq(GameSession.parties.size(), 1)
+	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
+	assert_eq(_tree_row_values(screen.get_node("Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
+	assert_true(create_button.disabled)
+	create_button.emit_signal("pressed")
+	assert_eq(GameSession.parties.size(), 1)
+
+
 ## Column titles are resolved via tr() (see parties.gd) to the real English
 ## copy in translations/en.tres (Party/Members/Status — see the migration
 ## brief).
