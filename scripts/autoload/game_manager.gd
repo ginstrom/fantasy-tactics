@@ -16,6 +16,8 @@ const DEPLOY_PARTY_SCENE := "res://scenes/ui/deploy_party.tscn"
 const ADD_MEMBER_SCENE := "res://scenes/ui/add_member.tscn"
 const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
+const BUILDINGS_SCENE := "res://scenes/ui/buildings.tscn"
+const GUILD_HALL_SCENE := "res://scenes/ui/guild_hall.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
@@ -145,6 +147,16 @@ func go_to_roster() -> Error:
 func go_to_recruitment() -> Error:
 	_clear_detail_context()
 	return _change_scene(RECRUITMENT_SCENE)
+
+
+func go_to_buildings() -> Error:
+	_clear_detail_context()
+	return _change_scene(BUILDINGS_SCENE)
+
+
+func go_to_guild_hall() -> Error:
+	_clear_detail_context()
+	return _change_scene(GUILD_HALL_SCENE)
 
 
 func go_to_party_details(party_id: String) -> Error:

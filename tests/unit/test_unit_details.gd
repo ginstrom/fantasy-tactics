@@ -291,6 +291,39 @@ func test_roster_origin_hides_the_assignment_section_for_an_unavailable_unit() -
 	assert_false(screen.get_node("Center/VBox/AddToPartyButton").visible)
 
 
+## The seeded Warrior itself never joins this party — it stays unassigned and
+## available so it remains eligible to open from Roster — but the sole
+## encamped party is filled to the level-1 cap by four other adventurers.
+## Just like the existing "no encamped party" case, a Roster-origin unit with
+## no room to join anywhere shows the disabled, explained action rather than
+## an empty-but-technically-present picker (see
+## test_roster_origin_with_no_encamped_party_shows_a_disabled_explained_action).
+func test_roster_origin_excludes_a_full_party_and_shows_a_disabled_explained_action() -> void:
+	GameSession.create_party()
+	GameSession.recruit_adventurer()
+	GameSession.recruit_adventurer()
+	GameSession.recruit_adventurer()
+	GameSession.recruit_adventurer()
+	# recruit_adventurer()'s id-collision avoidance skips warrior_002 (still a
+	# live recruitment candidate on a fresh session — see
+	# GameSession.recruit_adventurer), so four calls mint warrior_003..006.
+	GameSession.assign_adventurer_to_selected_party("warrior_003")
+	GameSession.assign_adventurer_to_selected_party("warrior_004")
+	GameSession.assign_adventurer_to_selected_party("warrior_005")
+	GameSession.assign_adventurer_to_selected_party("warrior_006")
+	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
+
+	var picker: OptionButton = screen.get_node("Center/VBox/PartyPicker")
+	var add_button: Button = screen.get_node("Center/VBox/AddToPartyButton")
+	assert_false(picker.visible)
+	assert_true(add_button.visible, "The disabled action itself should still be present, not merely absent")
+	assert_true(add_button.disabled)
+	assert_true(screen.get_node("Center/VBox/AssignmentExplanationLabel").visible)
+	assert_eq(
+		screen.get_node("Center/VBox/AssignmentExplanationLabel").text, "unit_details.no_eligible_party"
+	)
+
+
 func test_pressing_add_to_party_assigns_the_chosen_party_and_routes_to_roster() -> void:
 	GameSession.create_party()
 	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)

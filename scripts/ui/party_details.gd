@@ -48,7 +48,10 @@ func refresh() -> void:
 	# disabled. An encamped party with nobody left to recruit keeps the
 	# button visible but disabled, so its presence isn't a mystery.
 	add_member_button.visible = not party.get("deployed", false)
-	add_member_button.disabled = GameSession.get_available_adventurers().is_empty()
+	add_member_button.disabled = (
+		GameSession.get_available_adventurers().is_empty()
+		or party.get("member_ids", []).size() >= GameSession.get_max_party_size()
+	)
 	_refresh_selection()
 
 

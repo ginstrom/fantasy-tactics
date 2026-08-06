@@ -108,7 +108,14 @@ func _refresh_assignment_section(adventurer: Dictionary) -> void:
 		_hide_assignment_section()
 		return
 
-	var encamped_parties: Array[Dictionary] = GameSession.get_encamped_parties()
+	# get_encamped_parties() intentionally includes a full-but-encamped party
+	# (it's still a valid unit-assignment target from GameSession's point of
+	# view — see its docstring); this screen filters those out itself so it
+	# never offers a party assignment that would fail for capacity reasons.
+	var encamped_parties: Array[Dictionary] = []
+	for party in GameSession.get_encamped_parties():
+		if party.member_ids.size() < GameSession.get_max_party_size():
+			encamped_parties.append(party)
 	party_picker.clear()
 	for party in encamped_parties:
 		party_picker.add_item(party.name)

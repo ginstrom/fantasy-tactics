@@ -20,12 +20,21 @@ func test_encampment_exposes_units_buildings_trade_and_deploy_party() -> void:
 	assert_eq(screen.get_node("Center/VBox/DeployPartyButton").text, "encampment.deploy_party")
 
 
-func test_buildings_and_trade_are_present_but_cannot_route_to_unimplemented_systems() -> void:
+func test_buildings_button_is_enabled_and_routes_via_game_manager() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
 
 	assert_eq(screen.get_node("Center/VBox/BuildingsButton").text, "encampment.buildings")
-	assert_true(screen.get_node("Center/VBox/BuildingsButton").disabled)
+	assert_false(screen.get_node("Center/VBox/BuildingsButton").disabled)
+
+	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
+	assert_string_contains(source, "GameManager.go_to_buildings()")
+
+
+func test_trade_is_present_but_cannot_route_to_an_unimplemented_system() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
 	assert_eq(screen.get_node("Center/VBox/TradeButton").text, "encampment.trade")
 	assert_true(screen.get_node("Center/VBox/TradeButton").disabled)
 

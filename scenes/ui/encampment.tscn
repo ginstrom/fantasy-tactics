@@ -35,7 +35,7 @@ text = "encampment.units"
 
 [node name="BuildingsButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
-disabled = true
+disabled = false
 text = "encampment.buildings"
 
 [node name="TradeButton" type="Button" parent="Center/VBox"]
@@ -59,4 +59,5 @@ offset_bottom = 96.0
 grow_horizontal = 0
 
 [connection signal="pressed" from="Center/VBox/UnitsButton" to="." method="_on_units_button_pressed"]
+[connection signal="pressed" from="Center/VBox/BuildingsButton" to="." method="_on_buildings_button_pressed"]
 [connection signal="pressed" from="Center/VBox/DeployPartyButton" to="." method="_on_deploy_party_button_pressed"]

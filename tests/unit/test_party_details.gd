@@ -48,6 +48,30 @@ func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
 	assert_true(add_button.disabled, "The only adventurer is already a member of this party")
 
 
+## Mirrors test_add_member_is_disabled_when_no_adventurer_is_available's
+## setup but with the party filled to the level-1 cap (4 members) instead of
+## simply having no available adventurer left — Add Member must stay
+## disabled once the party itself has no room, not only when the roster is
+## exhausted (see design.md's "party is full" UI awareness).
+func test_add_member_is_disabled_when_party_is_at_the_level_one_cap() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	GameSession.recruit_adventurer()
+	GameSession.recruit_adventurer()
+	# recruit_adventurer()'s id-collision avoidance skips warrior_002 (still a
+	# live recruitment candidate on a fresh session — see
+	# GameSession.recruit_adventurer), so three calls mint warrior_003/004/005.
+	GameSession.assign_adventurer_to_selected_party("warrior_003")
+	GameSession.assign_adventurer_to_selected_party("warrior_004")
+	GameSession.assign_adventurer_to_selected_party("warrior_005")
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	assert_true(add_button.visible, "Add Member must still be offered even though the party is full")
+	assert_true(add_button.disabled, "The party is at the level-1 cap of 4 members")
+
+
 func test_pressing_add_member_routes_to_the_add_member_screen_with_this_partys_id() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)

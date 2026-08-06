@@ -25,6 +25,9 @@ messages = {
 "encampment.buildings": "Buildings",
 "encampment.trade": "Trade",
 "encampment.deploy_party": "Deploy Party",
+"buildings.title": "Buildings",
+"buildings.column.name": "Name",
+"buildings.guild_hall": "Guild Hall",
 "information.title": "Information",
 "information.player": "Player: %s",
 "information.party": "Party: %s",
@@ -148,5 +151,10 @@ messages = {
 "debug.goblin_camp": "Goblin Camp Battle",
 "debug.orc_outpost": "Orc Outpost Battle",
 "debug.super_power": "Super Power",
-"debug.recruit": "Recruit Adventurer"
+"debug.recruit": "Recruit Adventurer",
+"guild_hall.title": "Guild Hall",
+"guild_hall.level": "Guild Hall — Level %d",
+"guild_hall.party_size": "Party size: %d",
+"guild_hall.upgrade": "Upgrade to Level 2 — %d gold",
+"guild_hall.max_level": "Max Level"
 }

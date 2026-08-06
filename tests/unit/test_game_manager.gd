@@ -368,6 +368,44 @@ func test_recruitment_route_points_to_the_recruitment_scene() -> void:
 	assert_string_contains(source, "func go_to_recruitment()")
 
 
+func test_buildings_route_points_to_the_buildings_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/buildings.tscn")
+	assert_string_contains(source, "func go_to_buildings()")
+
+
+func test_guild_hall_route_points_to_the_guild_hall_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/guild_hall.tscn")
+	assert_string_contains(source, "func go_to_guild_hall()")
+
+
+func test_entering_buildings_clears_a_stale_route_context_id() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	var err: Error = manager.go_to_buildings()
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, "")
+
+
+func test_entering_guild_hall_clears_a_stale_route_context_id() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	var err: Error = manager.go_to_guild_hall()
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, "")
+
+
 func test_go_to_roster_clears_stale_route_context_before_changing_scene() -> void:
 	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
