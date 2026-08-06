@@ -5,6 +5,7 @@ func after_each() -> void:
 	# A failed assertion in an open_game_menu test can skip its manual
 	# close_game_menu() cleanup, leaving the tree paused for later tests.
 	get_tree().paused = false
+	GameManager.add_member_return_party_id = ""
 
 
 func test_battle_route_uses_battlefield_scene() -> void:
@@ -391,6 +392,34 @@ func test_go_to_unit_details_from_roster_sets_route_context_and_marks_the_roster
 	assert_eq(err, OK)
 	assert_eq(manager.route_context_id, GameSession.WARRIOR_ID)
 	assert_eq(manager.unit_details_origin, manager.UNIT_DETAILS_ORIGIN_ROSTER)
+
+
+func test_go_to_unit_details_from_add_member_preserves_a_valid_return_party() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(
+		manager.go_to_unit_details_from_add_member(GameSession.WARRIOR_ID, GameSession.FIRST_PARTY_ID), OK
+	)
+	assert_eq(manager.route_context_id, GameSession.WARRIOR_ID)
+	assert_eq(manager.unit_details_origin, manager.UNIT_DETAILS_ORIGIN_ADD_MEMBER)
+	assert_eq(manager.add_member_return_party_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_go_to_unit_details_from_add_member_rejects_missing_live_records_and_clears_context() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale"
+	manager.unit_details_origin = "stale"
+	manager.add_member_return_party_id = "stale"
+
+	assert_eq(manager.go_to_unit_details_from_add_member(GameSession.WARRIOR_ID, "missing_party"), ERR_INVALID_DATA)
+	assert_eq(manager.route_context_id, "")
+	assert_eq(manager.unit_details_origin, "")
+	assert_eq(manager.add_member_return_party_id, "")
 
 
 func test_going_to_unit_details_from_roster_with_an_unknown_id_is_invalid_and_clears_both_fields() -> void:

@@ -7,12 +7,14 @@ func before_each() -> void:
 	GameSession.reset()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
+	GameManager.add_member_return_party_id = ""
 
 
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
+	GameManager.add_member_return_party_id = ""
 
 
 func _open_unit_details(adventurer_id: String) -> Control:
@@ -26,6 +28,15 @@ func _open_unit_details(adventurer_id: String) -> Control:
 func _open_unit_details_from_roster(adventurer_id: String) -> Control:
 	GameManager.route_context_id = adventurer_id
 	GameManager.unit_details_origin = GameManager.UNIT_DETAILS_ORIGIN_ROSTER
+	var screen: Control = UnitDetailsScene.instantiate()
+	add_child_autofree(screen)
+	return screen
+
+
+func _open_unit_details_from_add_member(adventurer_id: String, party_id: String) -> Control:
+	GameManager.route_context_id = adventurer_id
+	GameManager.unit_details_origin = GameManager.UNIT_DETAILS_ORIGIN_ADD_MEMBER
+	GameManager.add_member_return_party_id = party_id
 	var screen: Control = UnitDetailsScene.instantiate()
 	add_child_autofree(screen)
 	return screen
@@ -289,3 +300,26 @@ func test_back_button_from_roster_origin_routes_to_roster_and_clears_context() -
 
 	assert_eq(GameManager.route_context_id, "")
 	assert_eq(GameManager.unit_details_origin, "")
+
+
+func test_back_from_add_member_returns_to_the_same_partys_candidate_list() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details_from_add_member(GameSession.WARRIOR_ID, GameSession.FIRST_PARTY_ID)
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+	assert_eq(GameManager.unit_details_origin, "")
+	assert_eq(GameManager.add_member_return_party_id, "")
+
+
+func test_back_from_add_member_with_a_stale_party_falls_back_to_parties() -> void:
+	GameSession.create_party()
+	var screen := _open_unit_details_from_add_member(GameSession.WARRIOR_ID, GameSession.FIRST_PARTY_ID)
+	GameSession.reset()
+
+	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameManager.route_context_id, "")
+	assert_eq(GameManager.unit_details_origin, "")
+	assert_eq(GameManager.add_member_return_party_id, "")

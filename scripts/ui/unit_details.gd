@@ -29,11 +29,13 @@ extends Control
 
 var unit_id: String = ""
 var origin: String = ""
+var add_member_return_party_id: String = ""
 
 
 func _ready() -> void:
 	unit_id = GameManager.route_context_id
 	origin = GameManager.unit_details_origin
+	add_member_return_party_id = GameManager.add_member_return_party_id
 	information_panel.refresh()
 	refresh()
 
@@ -130,7 +132,12 @@ func _on_add_to_party_pressed() -> void:
 ## remember how we got here" pattern party_details.gd uses for a deployed
 ## vs. encamped party, applied here to route origin instead.
 func _on_back_pressed() -> void:
-	if origin == GameManager.UNIT_DETAILS_ORIGIN_ROSTER:
+	if (
+		origin == GameManager.UNIT_DETAILS_ORIGIN_ADD_MEMBER
+		and not GameSession.get_party(add_member_return_party_id).is_empty()
+	):
+		GameManager.go_to_add_member(add_member_return_party_id)
+	elif origin == GameManager.UNIT_DETAILS_ORIGIN_ROSTER:
 		GameManager.go_to_roster()
 	else:
 		GameManager.go_to_parties()

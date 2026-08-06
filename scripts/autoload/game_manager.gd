@@ -17,6 +17,7 @@ const ADD_MEMBER_SCENE := "res://scenes/ui/add_member.tscn"
 const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
+const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -37,6 +38,7 @@ var route_context_id: String = ""
 # like route_context_id, it is cleared on every invalid or destination
 # route rather than left to go stale.
 var unit_details_origin: String = ""
+var add_member_return_party_id: String = ""
 
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
@@ -78,8 +80,7 @@ func go_to_encampment() -> Error:
 
 
 func go_to_world_map() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(WORLD_MAP_SCENE)
 
 
@@ -118,33 +119,28 @@ func fail_battle() -> Error:
 
 
 func go_to_units() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(UNITS_SCENE)
 
 
 func go_to_parties() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(PARTIES_SCENE)
 
 
 func go_to_roster() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(ROSTER_SCENE)
 
 
 func go_to_recruitment() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(RECRUITMENT_SCENE)
 
 
 func go_to_party_details(party_id: String) -> Error:
 	if GameSession.get_party(party_id).is_empty():
-		route_context_id = ""
-		unit_details_origin = ""
+		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = party_id
 	return _change_scene(PARTY_DETAILS_SCENE)
@@ -155,11 +151,11 @@ func go_to_party_details(party_id: String) -> Error:
 ## unit opened this way (e.g. from Party Details).
 func go_to_unit_details(adventurer_id: String) -> Error:
 	if GameSession.get_adventurer(adventurer_id).is_empty():
-		route_context_id = ""
-		unit_details_origin = ""
+		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = adventurer_id
 	unit_details_origin = ""
+	add_member_return_party_id = ""
 	return _change_scene(UNIT_DETAILS_SCENE)
 
 
@@ -168,26 +164,36 @@ func go_to_unit_details(adventurer_id: String) -> Error:
 ## assignment for this visit.
 func go_to_unit_details_from_roster(adventurer_id: String) -> Error:
 	if GameSession.get_adventurer(adventurer_id).is_empty():
-		route_context_id = ""
-		unit_details_origin = ""
+		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = adventurer_id
 	unit_details_origin = UNIT_DETAILS_ORIGIN_ROSTER
+	add_member_return_party_id = ""
+	return _change_scene(UNIT_DETAILS_SCENE)
+
+
+func go_to_unit_details_from_add_member(adventurer_id: String, party_id: String) -> Error:
+	if GameSession.get_adventurer(adventurer_id).is_empty() or GameSession.get_party(party_id).is_empty():
+		_clear_detail_context()
+		return ERR_INVALID_DATA
+	route_context_id = adventurer_id
+	unit_details_origin = UNIT_DETAILS_ORIGIN_ADD_MEMBER
+	add_member_return_party_id = party_id
 	return _change_scene(UNIT_DETAILS_SCENE)
 
 
 func go_to_deploy_party() -> Error:
-	route_context_id = ""
-	unit_details_origin = ""
+	_clear_detail_context()
 	return _change_scene(DEPLOY_PARTY_SCENE)
 
 
 func go_to_add_member(party_id: String) -> Error:
 	if GameSession.get_party(party_id).is_empty():
-		route_context_id = ""
-		unit_details_origin = ""
+		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = party_id
+	unit_details_origin = ""
+	add_member_return_party_id = ""
 	return _change_scene(ADD_MEMBER_SCENE)
 
 
@@ -302,3 +308,9 @@ func _change_scene(path: String) -> Error:
 	if err != OK:
 		push_error("Failed to change scene to %s (error %d)" % [path, err])
 	return err
+
+
+func _clear_detail_context() -> void:
+	route_context_id = ""
+	unit_details_origin = ""
+	add_member_return_party_id = ""

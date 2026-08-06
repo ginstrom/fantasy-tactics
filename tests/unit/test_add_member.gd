@@ -5,11 +5,13 @@ const AddMemberScene := preload("res://scenes/ui/add_member.tscn")
 
 func before_each() -> void:
 	GameSession.reset()
+	GameManager.add_member_return_party_id = ""
 
 
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameManager.add_member_return_party_id = ""
 
 
 func _open_add_member(party_id: String) -> Control:
@@ -133,6 +135,8 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> voi
 		GameSession.WARRIOR_ID,
 		"Pressing View must ask GameManager to route to that exact unit's details"
 	)
+	assert_eq(GameManager.unit_details_origin, GameManager.UNIT_DETAILS_ORIGIN_ADD_MEMBER)
+	assert_eq(GameManager.add_member_return_party_id, GameSession.FIRST_PARTY_ID)
 
 
 func test_activating_a_row_assigns_that_exact_adventurer_to_this_party() -> void:
