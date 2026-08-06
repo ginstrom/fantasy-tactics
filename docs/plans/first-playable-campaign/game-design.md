@@ -52,8 +52,9 @@ Start Menu
      overlay appears if a party member crosses a level threshold)
   -> win: clear the camp for its 10 clear XP and return to the World Map
      or lose: return the party to the Starting Settlement; camp remains available
-  -> return to Encampment to deposit pending gold; spend any unspent Attack
-     points from Unit Details
+  -> return to Encampment to deposit pending gold; review XP, Attack, and any
+     unspent skill points from Unit Details (skill points are spent from the
+     in-battle Level-Up overlay, not from Unit Details)
 ```
 
 Party creation and Warrior assignment, previously reachable from an

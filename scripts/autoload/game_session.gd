@@ -98,9 +98,15 @@ const DEFAULT_WARRIOR := {
 }
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
-# Fixed, individually identified recruitment offers (see the encampment
-# roster/recruitment design). All three use existing Warrior behavior; the
-# record shape is intentionally extensible for future candidates.
+# A pool of recruitment templates that vacancy-timed refills draw from (see
+# _spawn_next_recruitment_offer): the initial offer and every later refill
+# claims the next not-yet-offered template here before falling back to
+# minting an overflow "warrior_NNN" candidate. Templates intentionally omit
+# stats/progression — every current template matches the Warrior baseline, so
+# purchase_recruit() and _spawn_next_recruitment_offer() both seed real
+# stats/progression from DEFAULT_WARRIOR (see
+# _seed_adventurer_baseline_stats) rather than storing (and risking stale)
+# copies here.
 const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 	{
 		"id": "warrior_002",
@@ -109,8 +115,6 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"weapon": "sword",
 		"level": 1,
 		"availability_status": "available",
-		"stats": {},
-		"progression": {},
 		"cost": 10,
 	},
 	{
@@ -120,8 +124,6 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"weapon": "sword",
 		"level": 1,
 		"availability_status": "available",
-		"stats": {},
-		"progression": {},
 		"cost": 10,
 	},
 	{
@@ -131,8 +133,6 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"weapon": "sword",
 		"level": 1,
 		"availability_status": "available",
-		"stats": {},
-		"progression": {},
 		"cost": 10,
 	},
 ]
@@ -345,6 +345,23 @@ func recruit_adventurer() -> void:
 	adventurers.append(adventurer)
 
 
+## Seeds a template-derived record's stats/progression with real values,
+## duplicating DEFAULT_WARRIOR's authored base stats and starting progression
+## the same way recruit_adventurer() gets them by duplicating the whole
+## DEFAULT_WARRIOR dict. RECRUITMENT_CANDIDATE_TEMPLATES intentionally omits
+## stats/progression (see its comment), so purchase_recruit() and
+## _spawn_next_recruitment_offer() both call this before a template-derived
+## record can be purchased into the roster — without it, a purchased or
+## refilled recruit would carry genuinely empty stats/progression dicts
+## instead of zeroed real ones, breaking every reader that expects real keys
+## (get_effective_max_health, _award_adventurer_xp, unit_details.gd, and the
+## deployed-party stat derivation in BattleController).
+func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
+	record["stats"] = DEFAULT_WARRIOR.stats.duplicate(true)
+	record["progression"] = DEFAULT_WARRIOR.progression.duplicate(true)
+	return record
+
+
 ## Shared id-collision predicate for both the debug recruit-mint path above
 ## and the recruitment-offer overflow mint path (see
 ## _spawn_next_recruitment_offer). A "warrior_NNN" id is taken if it already
@@ -379,7 +396,7 @@ func purchase_recruit(candidate_id: String) -> bool:
 	gold -= candidate.cost
 	recruitment_candidates.remove_at(candidate_index)
 	candidate.erase("cost")
-	adventurers.append(candidate)
+	adventurers.append(_seed_adventurer_baseline_stats(candidate))
 	_start_recruitment_vacancy()
 	return true
 
@@ -714,10 +731,21 @@ func _is_encounter_template_active(template_id: String) -> bool:
 
 ## Prefers the template's own documented position; only scans for another
 ## in-bounds, unoccupied, non-settlement tile (row-major) if that position is
-## already occupied by another active instance.
+## already occupied by another active instance, OR if template_id has ever
+## been spawned before (tracked by _used_encounter_template_ids). The second
+## condition matters for a *reused* template: its documented tile is only
+## ever occupied by its own instances, so once its earlier instance has been
+## cleared (and thus removed from active_encounters), the plain occupancy
+## check alone would hand a refill back the exact tile a site was just
+## cleared from — visually indistinguishable from "reopening" it, which
+## design.md's approved rules explicitly forbid. Reusing
+## _used_encounter_template_ids (rather than tracking completed instances'
+## positions separately) is sufficient because each template's documented
+## position is unique to it.
 func _choose_encounter_position(template_id: String) -> Vector2i:
 	var documented_position: Vector2i = EXPEDITIONS[template_id].position
-	if not _is_position_occupied(documented_position):
+	var template_previously_spawned := _used_encounter_template_ids.has(template_id)
+	if not _is_position_occupied(documented_position) and not template_previously_spawned:
 		return documented_position
 	for y in WORLD_GRID_HEIGHT:
 		for x in WORLD_GRID_WIDTH:
@@ -775,7 +803,7 @@ func _advance_recruitment_vacancies() -> void:
 func _spawn_next_recruitment_offer() -> Dictionary:
 	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
 		if not _is_warrior_id_taken(template.id):
-			return template.duplicate(true)
+			return _seed_adventurer_baseline_stats(template.duplicate(true))
 
 	var overflow_number := adventurers.size() + recruitment_candidates.size() + 1
 	var overflow_id := "warrior_%03d" % overflow_number
@@ -786,7 +814,7 @@ func _spawn_next_recruitment_offer() -> Dictionary:
 	var offer: Dictionary = RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)
 	offer.id = overflow_id
 	offer.name = "Warrior %d" % overflow_number
-	return offer
+	return _seed_adventurer_baseline_stats(offer)
 
 
 ## Divides amount evenly across party_id's members and adds each member's

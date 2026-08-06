@@ -1055,6 +1055,48 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_false(recruit.has("cost"), "The adventurer record should not carry a purchase cost")
 
 
+## Regression test: RECRUITMENT_CANDIDATE_TEMPLATES used to seed purchased
+## and refilled recruits with genuinely empty "stats": {} / "progression": {}
+## dicts (only the roster's starting Warrior, DEFAULT_WARRIOR, had real
+## values). GDScript aborts the enclosing function on a missing-dictionary-
+## key read rather than raising a catchable exception, so a purchased
+## recruit's stats/progression reads would silently abort mid-function
+## (get_effective_max_health, _award_adventurer_xp — losing that share of XP
+## for good — and unit_details.gd's display all broke this way; a deployed
+## party whose first member was such a recruit could not even act in
+## battle). This single test covers all of those failure modes at the
+## domain-data level: a purchased recruit must carry the same real baseline
+## stats/progression as DEFAULT_WARRIOR, and must actually accumulate
+## awarded party XP rather than silently dropping it.
+func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	assert_true(session.purchase_recruit("warrior_002"))
+
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_002")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	var recruit: Dictionary = session.get_adventurer("warrior_002")
+	assert_eq(
+		recruit.stats.max_health,
+		GameSessionScript.DEFAULT_WARRIOR.stats.max_health,
+		"A purchased recruit must start with the Warrior baseline max health, not a missing key"
+	)
+	assert_eq(
+		recruit.stats.attack,
+		GameSessionScript.DEFAULT_WARRIOR.stats.attack,
+		"A purchased recruit must start with the Warrior baseline Attack, not a missing key"
+	)
+	assert_eq(recruit.progression.xp, 5.0, "Awarded party XP must be stored, not silently dropped")
+	assert_eq(
+		recruit.progression.skill_points,
+		GameSessionScript.DEFAULT_WARRIOR.progression.skill_points,
+		"A purchased recruit must start with real (zero) unspent skill points, not a missing key"
+	)
+
+
 ## Task 1: progression domain (award_party_xp, spend_attack_points,
 ## choose_perk) and the derived effective-hit/health/move calculations that
 ## GameSession centralizes for later battle and UI tasks to call into.
@@ -1411,6 +1453,52 @@ func test_encounter_refill_deterministically_picks_the_orc_outpost_template_next
 	var active: Array[Dictionary] = session.get_active_encounters()
 	assert_eq(active[0].template_id, GameSessionScript.ORC_OUTPOST_ID)
 	assert_eq(active[0].position, Vector2i(4, 0))
+
+
+## Regression test: a refill used to pick a template's documented static
+## position whenever that position was not held by a *currently active*
+## instance — but a cleared instance is removed from active_encounters
+## immediately, so once every known template had been used once and cleared,
+## the next refill reusing that template landed back on the exact tile it
+## was just cleared from, visually indistinguishable from "reopening" a
+## cleared site (which design.md's approved rules explicitly forbid). Two
+## consecutive clear-and-refill cycles are enough to force template reuse
+## (goblin_camp -> orc_outpost -> goblin_camp again).
+func test_encounter_refill_after_two_clear_cycles_does_not_reuse_the_original_cleared_tile() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	# Cycle 1: clear Goblin Camp at (4,4); wait out its vacancy so Orc
+	# Outpost spawns at its own documented (4,0).
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	var active: Array[Dictionary] = session.get_active_encounters()
+	assert_eq(active.size(), 1)
+	assert_eq(active[0].template_id, GameSessionScript.ORC_OUTPOST_ID)
+
+	# Cycle 2: clear Orc Outpost too; wait out its vacancy. Both templates
+	# have now been seen, so template selection falls through to reusing
+	# goblin_camp.
+	session.enter_encounter(active[0].id)
+	session.complete_current_encounter()
+	for i in GameSessionScript.ENCOUNTER_VACANCY_TURNS:
+		session.end_world_turn()
+
+	active = session.get_active_encounters()
+	assert_eq(active.size(), 1, "The second vacancy should refill exactly one site")
+	assert_eq(
+		active[0].template_id,
+		GameSessionScript.GOBLIN_CAMP_ID,
+		"Both templates have been seen; the refill falls back to reusing goblin_camp"
+	)
+	assert_ne(
+		active[0].position,
+		Vector2i(4, 4),
+		"A reused template must not respawn on the exact tile it was previously cleared from"
+	)
 
 
 func test_encounter_refill_is_capped_at_two_active_sites_with_no_catch_up() -> void:
