@@ -202,9 +202,23 @@ func deploy_party(party_id: String) -> bool:
 func get_available_adventurers() -> Array[Dictionary]:
 	var available: Array[Dictionary] = []
 	for adventurer in adventurers:
-		if not _is_adventurer_assigned(adventurer.id):
+		if is_adventurer_available(adventurer.id):
 			available.append(adventurer)
 	return available
+
+
+func is_adventurer_available(adventurer_id: String) -> bool:
+	var adventurer := get_adventurer(adventurer_id)
+	return not adventurer.is_empty() and adventurer.availability_status == "available" and not _is_adventurer_assigned(adventurer_id)
+
+
+func has_recruitment_candidate(candidate_id: String) -> bool:
+	return _get_recruitment_candidate_index(candidate_id) != -1
+
+
+func is_party_deployable(party_id: String) -> bool:
+	var party := get_party(party_id)
+	return not party.is_empty() and _is_party_eligible_for_deployment(party)
 
 
 ## Rejects a target party that is not encamped (deployed, or outside the

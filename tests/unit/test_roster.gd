@@ -69,7 +69,7 @@ func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	assert_eq(_tree_row_values(tree, 0), ["Warrior"])
 	assert_eq(_tree_row_values(tree, 1), ["warrior"])
 	assert_eq(_tree_row_values(tree, 2), ["1"])
-	assert_eq(_tree_row_values(tree, 3), ["available"])
+	assert_eq(_tree_row_values(tree, 3), ["Available"])
 	assert_eq(_tree_row_values(tree, 4), ["Unassigned"])
 
 

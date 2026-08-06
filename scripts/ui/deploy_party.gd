@@ -61,7 +61,7 @@ func _build_rows() -> Array[Dictionary]:
 			"id": party.id,
 			"name": party.name,
 			"member_count": party.member_ids.size(),
-			"status": "deployed" if party.get("deployed", false) else "encamped",
+			"status": tr("party_status.deployed" if party.get("deployed", false) else "party_status.encamped"),
 		})
 	return rows
 
@@ -70,18 +70,11 @@ func _build_rows() -> Array[Dictionary]:
 ## invalidated elsewhere while this screen was open) clears back to the safe,
 ## unselected empty state instead of leaving the panel pointed at a stale id.
 func _refresh_selection() -> void:
-	if selected_party_id == "" or not _is_party_deployable(selected_party_id):
+	if selected_party_id == "" or not GameSession.is_party_deployable(selected_party_id):
 		selected_party_id = ""
 		information_panel.refresh()
 		return
 	information_panel.refresh_party(selected_party_id)
-
-
-func _is_party_deployable(party_id: String) -> bool:
-	for party in GameSession.get_deployable_encamped_parties():
-		if party.id == party_id:
-			return true
-	return false
 
 
 func _on_row_selected(row_id: Variant) -> void:

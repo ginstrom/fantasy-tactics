@@ -85,7 +85,7 @@ func test_every_party_renders_as_a_row_with_name_members_and_status() -> void:
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(_tree_row_values(tree, 0), ["Party 1"])
 	assert_eq(_tree_row_values(tree, 1), ["0"])
-	assert_eq(_tree_row_values(tree, 2), ["encamped"])
+	assert_eq(_tree_row_values(tree, 2), ["Encamped"])
 
 
 func test_selecting_a_party_row_stores_the_id_locally_and_refreshes_the_panel() -> void:

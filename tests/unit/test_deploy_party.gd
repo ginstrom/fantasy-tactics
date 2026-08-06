@@ -79,6 +79,12 @@ func test_no_deployable_party_shows_the_empty_state_without_errors() -> void:
 	assert_eq(_tree_row_values(tree, 0), [] as Array[String])
 
 
+func test_deploy_party_uses_the_sessions_deployability_query_not_a_private_predicate() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/deploy_party.gd")
+	assert_false(source.contains("func _is_party_deployable"))
+	assert_string_contains(source, "GameSession.is_party_deployable")
+
+
 ## Column titles are resolved via tr() (see deploy_party.gd) to the real
 ## English copy in translations/en.tres (Party/Members/Status — see the
 ## migration brief).
@@ -104,7 +110,7 @@ func test_lists_exactly_the_deployable_parties_not_every_party() -> void:
 	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
 	assert_eq(_tree_row_values(tree, 0), ["Party 1"])
 	assert_eq(_tree_row_values(tree, 1), ["1"])
-	assert_eq(_tree_row_values(tree, 2), ["encamped"])
+	assert_eq(_tree_row_values(tree, 2), ["Encamped"])
 
 
 ## Selection alone must never deploy — only activating a row (see

@@ -72,18 +72,11 @@ func _build_rows() -> Array[Dictionary]:
 ## elsewhere while this screen was open) clears back to the safe, unselected
 ## empty state instead of leaving the panel pointed at a stale id.
 func _refresh_selection() -> void:
-	if selected_adventurer_id == "" or not _is_adventurer_available(selected_adventurer_id):
+	if selected_adventurer_id == "" or not GameSession.is_adventurer_available(selected_adventurer_id):
 		selected_adventurer_id = ""
 		information_panel.refresh()
 		return
 	information_panel.refresh_adventurer(selected_adventurer_id)
-
-
-func _is_adventurer_available(adventurer_id: String) -> bool:
-	for adventurer in GameSession.get_available_adventurers():
-		if adventurer.id == adventurer_id:
-			return true
-	return false
 
 
 func _on_row_selected(row_id: Variant) -> void:

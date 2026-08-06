@@ -58,7 +58,7 @@ func _build_rows() -> Array[Dictionary]:
 			"id": party.id,
 			"name": party.name,
 			"member_count": party.member_ids.size(),
-			"status": "deployed" if party.get("deployed", false) else "encamped",
+			"status": tr("party_status.deployed" if party.get("deployed", false) else "party_status.encamped"),
 		})
 	return rows
 

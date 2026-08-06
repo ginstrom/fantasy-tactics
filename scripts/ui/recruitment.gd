@@ -47,7 +47,9 @@ func _build_columns() -> Array[TableColumn]:
 	var level_column := TableColumnDescriptor.new(
 		&"level", tr("recruitment.column.level"), TableColumnDescriptor.Type.INTEGER
 	)
-	var cost_column := TableColumnDescriptor.new(&"cost", tr("recruitment.column.cost"))
+	var cost_column := TableColumnDescriptor.new(
+		&"cost", tr("recruitment.column.cost"), TableColumnDescriptor.Type.INTEGER
+	)
 	cost_column.formatter = func(value: Variant, _row: Dictionary) -> String:
 		# recruitment.column.cost_unit is substituted as the VALUE here, not
 		# used as the format string. Keep its translation a plain unit word
@@ -74,18 +76,11 @@ func _build_rows() -> Array[Dictionary]:
 ## current candidate (purchased, here or elsewhere) clears back to the safe,
 ## unselected empty state instead of leaving the panel pointed at a dead id.
 func _refresh_selection() -> void:
-	if selected_candidate_id == "" or not _candidate_exists(selected_candidate_id):
+	if selected_candidate_id == "" or not GameSession.has_recruitment_candidate(selected_candidate_id):
 		selected_candidate_id = ""
 		information_panel.refresh()
 		return
 	information_panel.refresh_recruitment_candidate(selected_candidate_id)
-
-
-func _candidate_exists(candidate_id: String) -> bool:
-	for candidate in GameSession.get_recruitment_candidates():
-		if candidate.id == candidate_id:
-			return true
-	return false
 
 
 func _on_row_selected(row_id: Variant) -> void:

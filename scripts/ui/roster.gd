@@ -61,7 +61,7 @@ func _build_rows() -> Array[Dictionary]:
 			"name": adventurer.name,
 			"class": adventurer["class"],
 			"level": adventurer.level,
-			"availability_status": adventurer.availability_status,
+			"availability_status": tr("availability.%s" % adventurer.availability_status),
 			"party_name": _party_name_for(adventurer.id),
 		})
 	return rows

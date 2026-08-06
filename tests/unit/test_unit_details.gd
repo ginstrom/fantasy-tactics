@@ -80,7 +80,7 @@ func test_renders_name_class_level_and_availability_status() -> void:
 	assert_eq(screen.get_node("Center/VBox/ClassLabel").text, tr("information.class") % "warrior")
 	assert_eq(screen.get_node("Center/VBox/LevelLabel").text, tr("information.level") % 1)
 	assert_eq(
-		screen.get_node("Center/VBox/StatusLabel").text, tr("unit_details.status") % "available"
+		screen.get_node("Center/VBox/StatusLabel").text, tr("unit_details.status") % tr("availability.available")
 	)
 
 
@@ -89,8 +89,14 @@ func test_renders_status_for_a_non_available_unit() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_eq(
-		screen.get_node("Center/VBox/StatusLabel").text, tr("unit_details.status") % "unavailable"
+		screen.get_node("Center/VBox/StatusLabel").text, tr("unit_details.status") % tr("availability.unavailable")
 	)
+
+
+func test_unit_details_uses_the_sessions_availability_query_not_a_private_predicate() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/unit_details.gd")
+	assert_false(source.contains("func _is_adventurer_unassigned"))
+	assert_string_contains(source, "GameSession.is_adventurer_available")
 
 
 func test_skills_perks_and_stats_are_only_labelled_tbd_placeholders() -> void:

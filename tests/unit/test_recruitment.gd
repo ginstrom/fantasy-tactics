@@ -32,6 +32,12 @@ func test_recruitment_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
 
 
+func test_recruitment_uses_the_sessions_candidate_query_not_a_private_predicate() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/recruitment.gd")
+	assert_false(source.contains("func _candidate_exists"))
+	assert_string_contains(source, "GameSession.has_recruitment_candidate")
+
+
 func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.player_name = "Aria"
 	GameSession.gold = 25

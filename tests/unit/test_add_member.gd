@@ -54,6 +54,12 @@ func test_reads_the_party_id_from_route_context() -> void:
 	assert_eq(screen.party_id, GameSession.FIRST_PARTY_ID)
 
 
+func test_add_member_uses_the_sessions_availability_query_not_a_private_predicate() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/add_member.gd")
+	assert_false(source.contains("func _is_adventurer_available"))
+	assert_string_contains(source, "GameSession.is_adventurer_available")
+
+
 func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

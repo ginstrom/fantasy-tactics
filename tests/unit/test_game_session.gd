@@ -103,6 +103,24 @@ func test_cannot_create_a_second_party() -> void:
 	assert_eq(session.get_selected_party().id, GameSessionScript.FIRST_PARTY_ID)
 
 
+func test_public_ui_eligibility_queries_report_current_state_without_mutating_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_true(session.is_adventurer_available(GameSessionScript.WARRIOR_ID))
+	assert_false(session.is_adventurer_available("missing"))
+	assert_true(session.has_recruitment_candidate("warrior_002"))
+	assert_false(session.is_party_deployable(GameSessionScript.FIRST_PARTY_ID))
+	session.create_party()
+	session.assign_adventurer_to_selected_party(GameSessionScript.WARRIOR_ID)
+	assert_true(session.is_party_deployable(GameSessionScript.FIRST_PARTY_ID))
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	assert_false(session.is_party_deployable(GameSessionScript.FIRST_PARTY_ID))
+	session.gold = 10
+	session.purchase_recruit("warrior_002")
+	assert_false(session.has_recruitment_candidate("warrior_002"))
+
+
 func test_cannot_assign_an_unknown_or_already_assigned_adventurer() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

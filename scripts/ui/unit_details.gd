@@ -59,7 +59,7 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	name_label.text = adventurer["name"]
 	class_label.text = tr("information.class") % adventurer["class"]
 	level_label.text = tr("information.level") % adventurer["level"]
-	status_label.text = tr("unit_details.status") % adventurer["availability_status"]
+	status_label.text = tr("unit_details.status") % tr("availability.%s" % adventurer["availability_status"])
 
 	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label]:
 		label.visible = true
@@ -81,8 +81,7 @@ func _show_not_found() -> void:
 func _refresh_assignment_section(adventurer: Dictionary) -> void:
 	var eligible_for_assignment: bool = (
 		origin == GameManager.UNIT_DETAILS_ORIGIN_ROSTER
-		and adventurer["availability_status"] == "available"
-		and _is_adventurer_unassigned(adventurer["id"])
+		and GameSession.is_adventurer_available(adventurer["id"])
 	)
 	if not eligible_for_assignment:
 		_hide_assignment_section()
@@ -106,18 +105,6 @@ func _hide_assignment_section() -> void:
 	party_picker.visible = false
 	party_picker.clear()
 	add_to_party_button.visible = false
-
-
-## An adventurer counts as unassigned only while it is not a member of any
-## party. This reads only the published GameSession.get_available_adventurers()
-## query (never GameSession's private assignment check) so the UI stays a
-## consumer of published state, matching the "resolve state only through
-## GameSession" convention.
-func _is_adventurer_unassigned(adventurer_id: String) -> bool:
-	for adventurer in GameSession.get_available_adventurers():
-		if adventurer.id == adventurer_id:
-			return true
-	return false
 
 
 ## Party ids come from the picker's item metadata (never its display text),
