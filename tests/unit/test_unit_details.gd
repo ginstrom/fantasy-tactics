@@ -31,6 +31,23 @@ func _open_unit_details_from_roster(adventurer_id: String) -> Control:
 	return screen
 
 
+## Extracts a single top-level function's own source (from "func <name>(" up
+## to the next top-level "func ", or end of file) so a source-string
+## assertion can target that function's branches specifically. A whole-file
+## substring search is too weak here: both GameManager.go_to_roster() and
+## GameManager.go_to_parties() are called from more than one place in
+## unit_details.gd (e.g. go_to_roster() is also the Add-to-Party success
+## route), so a plain assert_string_contains(source, ...) against the whole
+## file would still pass even if _on_back_pressed()'s two branches were
+## swapped.
+func _function_source(source: String, function_name: String) -> String:
+	var start := source.find("func %s(" % function_name)
+	if start == -1:
+		return ""
+	var next_func := source.find("\nfunc ", start + 1)
+	return source.substr(start) if next_func == -1 else source.substr(start, next_func - start)
+
+
 func test_unit_details_shows_the_title_and_the_back_action() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
@@ -228,10 +245,35 @@ func test_a_stale_party_selection_fails_safely_and_refreshes_in_place() -> void:
 	assert_true(screen.get_node("Center/VBox/AddToPartyButton").disabled)
 
 
-func test_back_button_source_can_route_to_roster() -> void:
+## A whole-file search for "GameManager.go_to_roster()" would also match the
+## Add-to-Party success path, so this scopes the assertion to
+## _on_back_pressed()'s own source and checks each branch of its single
+## if/else independently: the branch guarded by the Roster-origin check must
+## route to Roster, and the other branch must route to Parties. This fails
+## if the two branches are ever swapped, unlike a plain substring search.
+func test_back_button_routes_to_roster_for_roster_origin_and_to_parties_otherwise() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/ui/unit_details.gd")
+	var back_pressed_source := _function_source(source, "_on_back_pressed")
+	var branches := back_pressed_source.split("else", true, 1)
 
-	assert_string_contains(source, "GameManager.go_to_roster()")
+	assert_eq(
+		branches.size(),
+		2,
+		"_on_back_pressed must branch once on origin (if/else) for this test to discriminate the branches"
+	)
+	assert_string_contains(
+		branches[0],
+		"UNIT_DETAILS_ORIGIN_ROSTER",
+		"The first branch must be the one guarded by the Roster-origin check"
+	)
+	assert_string_contains(
+		branches[0],
+		"GameManager.go_to_roster()",
+		"The Roster-origin branch specifically must route to Roster"
+	)
+	assert_string_contains(
+		branches[1], "GameManager.go_to_parties()", "Every other origin must route to Parties"
+	)
 
 
 func test_back_button_from_roster_origin_routes_to_roster_and_clears_context() -> void:
