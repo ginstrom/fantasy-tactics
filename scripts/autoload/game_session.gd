@@ -54,6 +54,25 @@ const BONUS_MOVE_PERK_ID := "bonus_move"
 const EFFECTIVE_HIT_CHANCE_CAP := 0.95
 const ATTACK_TO_HIT_CHANCE_DIVISOR := 100.0
 
+# Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
+# A campaign starts sparse (one active encounter, one active recruitment
+# offer) and refills each cleared/hired slot only after its own category's
+# wait, and only while under that category's cap. See EXPEDITIONS/
+# RECRUITMENT_CANDIDATE_TEMPLATES for the template pools these instances/
+# offers are spawned from.
+const ENCOUNTER_INSTANCE_CAP := 2
+const RECRUITMENT_OFFER_CAP := 4
+const ENCOUNTER_VACANCY_TURNS := 15
+const RECRUITMENT_VACANCY_TURNS := 30
+# Deterministic template cycling order for encounter refills. Must mirror
+# EXPEDITIONS' keys exactly (order matters for repeatable tests/screenshots).
+const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost"]
+# Mirrors world_map.gd's GRID_WIDTH/GRID_HEIGHT. Duplicated here (rather than
+# cross-referenced) because GameSession is an autoload with no dependency on
+# the world scene script; keep both in sync if the map grid ever resizes.
+const WORLD_GRID_WIDTH := 5
+const WORLD_GRID_HEIGHT := 5
+
 const WARRIOR_ID := "warrior_001"
 const DEFAULT_WARRIOR := {
 	"id": WARRIOR_ID,
@@ -119,11 +138,34 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 ]
 
 var adventurers: Array[Dictionary] = []
+# Active recruitment OFFERS (not the template pool — see
+# RECRUITMENT_CANDIDATE_TEMPLATES). A fresh campaign seeds exactly one
+# (warrior_002); purchasing one starts a RECRUITMENT_VACANCY_TURNS clock that
+# may add another later, capped at RECRUITMENT_OFFER_CAP.
 var recruitment_candidates: Array[Dictionary] = []
+# One pending clock per open recruitment vacancy: {"turns_remaining": int}.
+var recruitment_vacancies: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
 var completed_encounters: Array[String] = []
+# Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
+# instance is a spawned record: {id, template_id, position, ...copied
+# template fields}. A fresh campaign seeds exactly one (the Goblin Camp, id
+# "goblin_camp", at its documented position). Clearing one starts an
+# ENCOUNTER_VACANCY_TURNS clock that may add another later, capped at
+# ENCOUNTER_INSTANCE_CAP. A cleared instance is never reopened; it is only
+# ever recorded (by its own id) in completed_encounters.
+var active_encounters: Array[Dictionary] = []
+# One pending clock per open encounter vacancy: {"turns_remaining": int}.
+var encounter_vacancies: Array[Dictionary] = []
+# Every template id ever spawned as an active instance (initial seed plus
+# every refill), so a refill prefers a template variety has not yet shown the
+# player before falling back to reusing one (see _choose_encounter_template).
+# Recruitment offers do not need an equivalent: a purchased offer's id lives
+# on in the roster forever, so _is_warrior_id_taken already answers "has this
+# template been used" for that category.
+var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var pending_reward: int = 0
@@ -142,13 +184,17 @@ func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 func reset() -> void:
 	# The roster owns a copy so a session cannot mutate the shared default data.
 	adventurers = [DEFAULT_WARRIOR.duplicate(true)]
-	recruitment_candidates = []
-	for candidate_template in RECRUITMENT_CANDIDATE_TEMPLATES:
-		recruitment_candidates.append(candidate_template.duplicate(true))
+	recruitment_candidates = [RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)]
+	recruitment_vacancies = []
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
 	completed_encounters = []
+	active_encounters = [
+		_make_encounter_instance(GOBLIN_CAMP_ID, GOBLIN_CAMP_ID, EXPEDITIONS[GOBLIN_CAMP_ID].position)
+	]
+	encounter_vacancies = []
+	_used_encounter_template_ids = [GOBLIN_CAMP_ID]
 	world_turn = 1
 	gold = 0
 	pending_reward = 0
@@ -289,7 +335,7 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 func recruit_adventurer() -> void:
 	var recruit_number := adventurers.size() + 1
 	var candidate_id := "warrior_%03d" % recruit_number
-	while _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1:
+	while _is_warrior_id_taken(candidate_id):
 		recruit_number += 1
 		candidate_id = "warrior_%03d" % recruit_number
 
@@ -297,6 +343,14 @@ func recruit_adventurer() -> void:
 	adventurer.id = candidate_id
 	adventurer.name = "Warrior %d" % recruit_number
 	adventurers.append(adventurer)
+
+
+## Shared id-collision predicate for both the debug recruit-mint path above
+## and the recruitment-offer overflow mint path (see
+## _spawn_next_recruitment_offer). A "warrior_NNN" id is taken if it already
+## names either a roster adventurer or a still-live recruitment offer.
+func _is_warrior_id_taken(candidate_id: String) -> bool:
+	return _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1
 
 
 func get_recruitment_candidates() -> Array[Dictionary]:
@@ -326,6 +380,7 @@ func purchase_recruit(candidate_id: String) -> bool:
 	recruitment_candidates.remove_at(candidate_index)
 	candidate.erase("cost")
 	adventurers.append(candidate)
+	_start_recruitment_vacancy()
 	return true
 
 
@@ -437,6 +492,8 @@ func end_world_turn() -> bool:
 	world_turn += 1
 	if has_deployed_party():
 		parties[_get_selected_party_index()].movement_spent = false
+	_advance_encounter_vacancies()
+	_advance_recruitment_vacancies()
 	return auto_moved
 
 
@@ -515,6 +572,13 @@ func enter_encounter(encounter_id: String) -> void:
 	selected_encounter = encounter_id
 
 
+## Marks the current selection complete (once — a re-completion of an
+## already-completed id is a no-op) and, only when it names a still-live
+## active instance, removes that instance and opens an encounter vacancy.
+## Ids that name a template directly rather than a live instance (e.g. the
+## debug menu's raw battlefield shortcuts) still record history and queue
+## their reward, but never touch active_encounters/encounter_vacancies since
+## there was no real instance to clear.
 func complete_current_encounter() -> void:
 	if selected_encounter == "":
 		return
@@ -522,6 +586,7 @@ func complete_current_encounter() -> void:
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
 		pending_reward += expedition.get("reward", 0)
+		_clear_active_encounter(selected_encounter)
 	selected_encounter = ""
 
 
@@ -540,10 +605,188 @@ func is_encounter_complete(encounter_id: String) -> bool:
 	return completed_encounters.has(encounter_id)
 
 
+## Resolves either a live active-encounter-instance id or a raw template id
+## from EXPEDITIONS (checked in that order), returning a safe copy either
+## way. The instance branch is what keeps World Map's normal flow working;
+## the template branch is what keeps direct template-id callers (the debug
+## menu's raw battlefield shortcuts, and get_expedition(GOBLIN_CAMP_ID/
+## ORC_OUTPOST_ID) callers generally) working unchanged.
 func get_expedition(encounter_id: String) -> Dictionary:
+	var instance_index := _get_active_encounter_index(encounter_id)
+	if instance_index != -1:
+		return active_encounters[instance_index].duplicate(true)
 	if not EXPEDITIONS.has(encounter_id):
 		return {}
 	return EXPEDITIONS[encounter_id].duplicate(true)
+
+
+func get_active_encounters() -> Array[Dictionary]:
+	var instances: Array[Dictionary] = []
+	for instance in active_encounters:
+		instances.append(instance.duplicate(true))
+	return instances
+
+
+func _make_encounter_instance(instance_id: String, template_id: String, position: Vector2i) -> Dictionary:
+	var instance: Dictionary = EXPEDITIONS[template_id].duplicate(true)
+	instance["id"] = instance_id
+	instance["template_id"] = template_id
+	instance["position"] = position
+	return instance
+
+
+func _get_active_encounter_index(instance_id: String) -> int:
+	for index in active_encounters.size():
+		if active_encounters[index].id == instance_id:
+			return index
+	return -1
+
+
+## No-ops for an id that does not name a live active instance (e.g. a raw
+## template id entered via the debug menu) — see complete_current_encounter().
+func _clear_active_encounter(instance_id: String) -> void:
+	var index := _get_active_encounter_index(instance_id)
+	if index == -1:
+		return
+	active_encounters.remove_at(index)
+	_start_encounter_vacancy()
+
+
+## Distinguishes "no new cooldown starts if already at capacity" (this guard,
+## evaluated once at vacancy-open time) from "a clock exists but is capped
+## from firing" (the symmetric guard inside _advance_encounter_vacancies).
+func _start_encounter_vacancy() -> void:
+	if active_encounters.size() >= ENCOUNTER_INSTANCE_CAP:
+		return
+	encounter_vacancies.append({"turns_remaining": ENCOUNTER_VACANCY_TURNS})
+
+
+## Ticks every pending encounter vacancy clock down by one World Map turn. A
+## clock that reaches zero fires exactly once: if the cap still has room it
+## spawns a new instance; either way the clock is then discarded — a vacancy
+## blocked by a full cap does not reschedule itself or catch up later.
+func _advance_encounter_vacancies() -> void:
+	var still_pending: Array[Dictionary] = []
+	for vacancy in encounter_vacancies:
+		vacancy.turns_remaining -= 1
+		if vacancy.turns_remaining > 0:
+			still_pending.append(vacancy)
+			continue
+		if active_encounters.size() < ENCOUNTER_INSTANCE_CAP:
+			active_encounters.append(_spawn_next_encounter_instance())
+	encounter_vacancies = still_pending
+
+
+func _spawn_next_encounter_instance() -> Dictionary:
+	var template_id := _choose_encounter_template()
+	var position := _choose_encounter_position(template_id)
+	if not _used_encounter_template_ids.has(template_id):
+		_used_encounter_template_ids.append(template_id)
+	return _make_encounter_instance(_mint_encounter_instance_id(), template_id, position)
+
+
+## Deterministic and two-tiered: prefer the first template in
+## ENCOUNTER_TEMPLATE_ORDER that is both not currently active AND has never
+## been spawned before (so the player sees each known site at least once
+## before any is reused). Once every known template has been seen at least
+## once, fall back to the first merely-not-currently-active template (a
+## previously seen template reused at a fresh instance, per design.md). Falls
+## back to the first template outright if every known one is already active
+## (cannot happen while ENCOUNTER_INSTANCE_CAP <= ENCOUNTER_TEMPLATE_ORDER.
+## size(), but keeps this deterministic rather than failing outright if that
+## ever changes).
+func _choose_encounter_template() -> String:
+	for template_id in ENCOUNTER_TEMPLATE_ORDER:
+		if not _is_encounter_template_active(template_id) and not _used_encounter_template_ids.has(template_id):
+			return template_id
+	for template_id in ENCOUNTER_TEMPLATE_ORDER:
+		if not _is_encounter_template_active(template_id):
+			return template_id
+	return ENCOUNTER_TEMPLATE_ORDER[0]
+
+
+func _is_encounter_template_active(template_id: String) -> bool:
+	for instance in active_encounters:
+		if instance.template_id == template_id:
+			return true
+	return false
+
+
+## Prefers the template's own documented position; only scans for another
+## in-bounds, unoccupied, non-settlement tile (row-major) if that position is
+## already occupied by another active instance.
+func _choose_encounter_position(template_id: String) -> Vector2i:
+	var documented_position: Vector2i = EXPEDITIONS[template_id].position
+	if not _is_position_occupied(documented_position):
+		return documented_position
+	for y in WORLD_GRID_HEIGHT:
+		for x in WORLD_GRID_WIDTH:
+			var candidate := Vector2i(x, y)
+			if candidate != STARTING_SETTLEMENT_WORLD_POSITION and not _is_position_occupied(candidate):
+				return candidate
+	return documented_position
+
+
+func _is_position_occupied(position: Vector2i) -> bool:
+	for instance in active_encounters:
+		if instance.position == position:
+			return true
+	return false
+
+
+## Mints an "encounter_NNN" id that collides with neither a currently-active
+## instance nor a historically-completed one (completed_encounters), so a
+## cleared site's old id is never reused by an unrelated later spawn.
+func _mint_encounter_instance_id() -> String:
+	var instance_number := 1
+	var instance_id := "encounter_%03d" % instance_number
+	while _get_active_encounter_index(instance_id) != -1 or completed_encounters.has(instance_id):
+		instance_number += 1
+		instance_id = "encounter_%03d" % instance_number
+	return instance_id
+
+
+## Mirrors _start_encounter_vacancy()/_advance_encounter_vacancies() for the
+## recruitment category (see their docstrings for the capacity-guard split).
+func _start_recruitment_vacancy() -> void:
+	if recruitment_candidates.size() >= RECRUITMENT_OFFER_CAP:
+		return
+	recruitment_vacancies.append({"turns_remaining": RECRUITMENT_VACANCY_TURNS})
+
+
+func _advance_recruitment_vacancies() -> void:
+	var still_pending: Array[Dictionary] = []
+	for vacancy in recruitment_vacancies:
+		vacancy.turns_remaining -= 1
+		if vacancy.turns_remaining > 0:
+			still_pending.append(vacancy)
+			continue
+		if recruitment_candidates.size() < RECRUITMENT_OFFER_CAP:
+			recruitment_candidates.append(_spawn_next_recruitment_offer())
+	recruitment_vacancies = still_pending
+
+
+## Deterministic: the first fixed template (in RECRUITMENT_CANDIDATE_TEMPLATES
+## order) not already claimed by a live offer or a roster adventurer. Once
+## every fixed template has been claimed, mints a fresh "warrior_NNN"
+## candidate via the same collision-avoiding convention recruit_adventurer()
+## uses, so a refill never silently fails once the small fixed pool is
+## exhausted.
+func _spawn_next_recruitment_offer() -> Dictionary:
+	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
+		if not _is_warrior_id_taken(template.id):
+			return template.duplicate(true)
+
+	var overflow_number := adventurers.size() + recruitment_candidates.size() + 1
+	var overflow_id := "warrior_%03d" % overflow_number
+	while _is_warrior_id_taken(overflow_id):
+		overflow_number += 1
+		overflow_id = "warrior_%03d" % overflow_number
+
+	var offer: Dictionary = RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)
+	offer.id = overflow_id
+	offer.name = "Warrior %d" % overflow_number
+	return offer
 
 
 ## Divides amount evenly across party_id's members and adds each member's

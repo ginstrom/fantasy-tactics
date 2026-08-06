@@ -302,55 +302,59 @@ func test_clicking_a_completed_encounter_after_selecting_deselects_instead_of_en
 	assert_false(world_map.party_selected, "A completed encounter must not stay selected forever")
 
 
-func test_party_selects_then_activates_each_catalog_expedition_marker() -> void:
-	for encounter_id in GameSession.EXPEDITIONS.keys():
-		GameSession.reset()
-		_deploy_warrior_party()
-		var record: Dictionary = GameSession.get_expedition(encounter_id)
-		GameSession.set_deployed_party_position(record.position)
-		var world_map := _make_world_map()
-		world_map.party_position = record.position
-		watch_signals(world_map)
-
-		world_map._handle_tile_click(world_map.party_position)
-		assert_true(
-			world_map.party_selected,
-			"First click on %s must select, not enter" % encounter_id
-		)
-
-		world_map._handle_tile_click(world_map.party_position)
-		assert_signal_emitted_with_parameters(
-			world_map, "encounter_activated", [encounter_id]
-		)
+## Regression coverage for the active-instance model generally, not only the
+## specifically-seeded Goblin Camp: any active encounter instance — including
+## one using a different template and a freshly minted (non-template) id —
+## must be exactly as selectable/activatable as the seeded one.
+func _append_orc_outpost_instance() -> Dictionary:
+	var orc_position: Vector2i = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
+	var instance: Dictionary = GameSession._make_encounter_instance(
+		"encounter_999", GameSession.ORC_OUTPOST_ID, orc_position
+	)
+	GameSession.active_encounters.append(instance)
+	return instance
 
 
-func test_selected_party_can_route_away_from_each_catalog_expedition_marker() -> void:
-	for encounter_id in GameSession.EXPEDITIONS.keys():
-		GameSession.reset()
-		_deploy_warrior_party()
-		var record: Dictionary = GameSession.get_expedition(encounter_id)
-		GameSession.set_deployed_party_position(record.position)
-		var world_map := _make_world_map()
-		world_map.party_position = record.position
-		world_map._handle_tile_click(world_map.party_position)
-		watch_signals(world_map)
-		var destination := _adjacent_tile_within_bounds(record.position)
+func test_party_selects_then_activates_a_manufactured_active_instance() -> void:
+	var instance := _append_orc_outpost_instance()
+	GameSession.set_deployed_party_position(instance.position)
+	var world_map := _make_world_map()
+	world_map.party_position = instance.position
+	watch_signals(world_map)
 
-		world_map._handle_tile_click(destination)
-		world_map._handle_tile_click(destination)
+	world_map._handle_tile_click(world_map.party_position)
+	assert_true(world_map.party_selected, "First click on any active instance must select, not enter")
 
-		assert_signal_not_emitted(world_map, "encounter_activated")
-		assert_eq(
-			world_map.party_position,
-			destination,
-			"A selected party on %s must be able to move away instead of entering" % encounter_id
-		)
+	world_map._handle_tile_click(world_map.party_position)
+	assert_signal_emitted_with_parameters(
+		world_map, "encounter_activated", [instance.id]
+	)
 
 
-func test_completing_goblin_camp_rejects_only_goblin_camp_while_orc_outpost_remains_activatable() -> void:
+func test_selected_party_can_route_away_from_a_manufactured_active_instance() -> void:
+	var instance := _append_orc_outpost_instance()
+	GameSession.set_deployed_party_position(instance.position)
+	var world_map := _make_world_map()
+	world_map.party_position = instance.position
+	world_map._handle_tile_click(world_map.party_position)
+	watch_signals(world_map)
+	var destination := _adjacent_tile_within_bounds(instance.position)
+
+	world_map._handle_tile_click(destination)
+	world_map._handle_tile_click(destination)
+
+	assert_signal_not_emitted(world_map, "encounter_activated")
+	assert_eq(
+		world_map.party_position,
+		destination,
+		"A selected party on any active instance must be able to move away instead of entering"
+	)
+
+
+func test_completing_goblin_camp_rejects_only_goblin_camp_while_a_separate_active_instance_remains_activatable() -> void:
+	var orc_instance := _append_orc_outpost_instance()
 	GameSession.completed_encounters.append(GameSession.GOBLIN_CAMP_ID)
 	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
-	var orc_record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
 
 	var goblin_map := _make_world_map()
 	goblin_map.party_position = goblin_record.position
@@ -359,10 +363,10 @@ func test_completing_goblin_camp_rejects_only_goblin_camp_while_orc_outpost_rema
 	)
 
 	var orc_map := _make_world_map()
-	orc_map.party_position = orc_record.position
+	orc_map.party_position = orc_instance.position
 	assert_true(
 		orc_map.try_activate_current_tile(),
-		"Orc Outpost must remain activatable while only Goblin Camp is completed"
+		"A separate active instance must remain activatable while only Goblin Camp is completed"
 	)
 
 
@@ -425,8 +429,8 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	# One ColorRect + one Label per catalog expedition, plus one settlement ColorRect.
-	var expected_marker_count := GameSession.EXPEDITIONS.size() * 2 + 1
+	# One ColorRect + one Label per active encounter instance, plus one settlement ColorRect.
+	var expected_marker_count := GameSession.get_active_encounters().size() * 2 + 1
 	assert_eq(world_map.get_node("Markers").get_child_count(), expected_marker_count)
 	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
 
@@ -781,6 +785,37 @@ func test_end_turn_updates_the_turn_label() -> void:
 	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 2)
 
 
+## Task 4: the map only ever draws GameSession's live active-encounter list
+## (see _draw_markers), so a vacancy that refills mid-session must appear the
+## very next time End Turn redraws the markers — no separate "refresh" step.
+func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var before_count := world_map.get_node("Markers").get_child_count()
+	# Advance the first 14 turns directly through GameSession (no vacancy
+	# fires yet) so the redraw-heavy assertion below only exercises a single,
+	# real End Turn press — repeatedly calling _draw_markers() synchronously
+	# would otherwise pile up nodes still pending their deferred queue_free().
+	for i in GameSession.ENCOUNTER_VACANCY_TURNS - 1:
+		GameSession.end_world_turn()
+
+	world_map._on_end_turn_pressed()
+	# _draw_markers() queue_free()s the stale markers before adding fresh
+	# ones; queue_free() is deferred, so a frame must pass before the node
+	# count reflects only the redrawn set (see the other Routes-container
+	# tests in this file that already await a frame for the same reason).
+	await get_tree().process_frame
+
+	var after_count := world_map.get_node("Markers").get_child_count()
+	assert_eq(
+		after_count,
+		before_count + 2,
+		"A 15-turn refill should add exactly one new encounter marker (ColorRect + Label)"
+	)
+
+
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 	for marker in world_map.get_node("Markers").get_children():
 		if marker is ColorRect and marker.color == color:
@@ -791,7 +826,10 @@ func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 func test_orc_outpost_label_stays_clear_of_the_hint_bar_at_the_top_of_the_map() -> void:
 	# The Orc Outpost sits on grid row 0. Its label must not be pushed above
 	# the visible playfield (negative y) or behind HUD/Hint (see
-	# world_map.tscn), which reserves the screen down to y = 112.
+	# world_map.tscn), which reserves the screen down to y = 112. The Orc
+	# Outpost is not active by default (only Goblin Camp is seeded), so this
+	# manufactures an active instance for it to exercise the same regression.
+	_append_orc_outpost_instance()
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 

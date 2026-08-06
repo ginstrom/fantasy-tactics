@@ -67,21 +67,20 @@ func test_recruitment_table_uses_the_documented_columns() -> void:
 	assert_eq(tree.get_column_title(3), "Cost")
 
 
+## Task 4: a fresh campaign seeds exactly one active recruitment offer
+## (warrior_002); the other fixed templates (warrior_003/004) only appear
+## once their own 30-turn vacancy clock refills the offer list.
 func test_recruitment_lists_exactly_the_current_candidates() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2", "Warrior 3", "Warrior 4"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior", "warrior", "warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "1", "1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
 	assert_eq(
 		UiTestHelpers.tree_row_values(tree, 3),
-		[
-			"%d %s" % [10, tr(&"recruitment.column.cost_unit")],
-			"%d %s" % [10, tr(&"recruitment.column.cost_unit")],
-			"%d %s" % [10, tr(&"recruitment.column.cost_unit")],
-		]
+		["%d %s" % [10, tr(&"recruitment.column.cost_unit")]]
 	)
 
 
@@ -92,7 +91,7 @@ func test_recruitment_does_not_list_a_candidate_already_purchased_elsewhere() ->
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel() -> void:
@@ -125,7 +124,7 @@ func test_selecting_a_row_does_not_purchase_it() -> void:
 	tree.emit_signal("item_selected")
 
 	assert_eq(GameSession.gold, 25)
-	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
 	assert_eq(GameSession.adventurers.size(), 1)
 
 
@@ -166,7 +165,7 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster
 	panel.get_node("Content/RecruitButton").emit_signal("pressed")
 
 	assert_eq(GameSession.gold, 0, "The one-time purchase must deduct the candidate's cost")
-	assert_eq(GameSession.get_recruitment_candidates().size(), 2)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 0)
 	assert_eq(GameSession.adventurers.size(), 2)
 	assert_eq(GameSession.adventurers[1].id, "warrior_002")
 	assert_eq(
@@ -209,7 +208,7 @@ func test_pressing_recruit_for_a_candidate_purchased_elsewhere_refreshes_in_plac
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_eq(GameSession.gold, 0, "The stale purchase attempt must not deduct gold again")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_safely() -> void:
@@ -227,7 +226,7 @@ func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_false(panel.get_node("Content/RecruitmentName").visible)
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
 func test_an_empty_recruitment_shows_the_empty_state_without_errors() -> void:
@@ -244,8 +243,6 @@ func test_purchasing_the_last_candidate_leaves_the_empty_state_after_a_refresh()
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	GameSession.purchase_recruit("warrior_002")
-	GameSession.purchase_recruit("warrior_003")
-	GameSession.purchase_recruit("warrior_004")
 
 	screen.refresh()
 

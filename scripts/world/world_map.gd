@@ -20,7 +20,6 @@ const TILE_COLOR_DARK := Color(0.15, 0.22, 0.15)
 const PARTY_COLOR := Color(0.3, 0.5, 0.9)
 const SETTLEMENT_COLOR := Color(0.5, 0.7, 0.4)
 const ENCOUNTER_COLOR := Color(0.9, 0.6, 0.2)
-const ENCOUNTER_COMPLETE_COLOR := Color(0.5, 0.5, 0.5)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
 const ROUTE_SEGMENT_COLOR := Color(0.9, 0.9, 0.3, 0.6)
@@ -128,9 +127,9 @@ func try_activate_current_tile() -> bool:
 
 
 func _expedition_id_at(pos: Vector2i) -> String:
-	for encounter_id in GameSession.EXPEDITIONS.keys():
-		if GameSession.EXPEDITIONS[encounter_id].position == pos:
-			return encounter_id
+	for instance in GameSession.get_active_encounters():
+		if instance.position == pos:
+			return instance.id
 	return ""
 
 
@@ -290,17 +289,15 @@ func _draw_markers() -> void:
 
 	var margin := TILE_SIZE * 0.2
 
-	for encounter_id in GameSession.EXPEDITIONS.keys():
-		var record: Dictionary = GameSession.get_expedition(encounter_id)
-
+	# Only active encounter instances are ever drawn — a cleared instance is
+	# removed from GameSession.active_encounters (see GameSession.
+	# complete_current_encounter) and simply vanishes rather than lingering as
+	# a completed marker.
+	for record in GameSession.get_active_encounters():
 		var encounter := ColorRect.new()
 		encounter.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
 		encounter.position = Vector2(record.position) * TILE_SIZE + Vector2(margin, margin)
-		encounter.color = (
-			ENCOUNTER_COMPLETE_COLOR
-			if GameSession.is_encounter_complete(encounter_id)
-			else ENCOUNTER_COLOR
-		)
+		encounter.color = ENCOUNTER_COLOR
 		encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		marker_container.add_child(encounter)
 
