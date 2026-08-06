@@ -14,6 +14,8 @@ const PARTY_DETAILS_SCENE := "res://scenes/ui/party_details.tscn"
 const UNIT_DETAILS_SCENE := "res://scenes/ui/unit_details.tscn"
 const DEPLOY_PARTY_SCENE := "res://scenes/ui/deploy_party.tscn"
 const ADD_MEMBER_SCENE := "res://scenes/ui/add_member.tscn"
+const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
+const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
@@ -105,6 +107,16 @@ func go_to_units() -> Error:
 func go_to_parties() -> Error:
 	route_context_id = ""
 	return _change_scene(PARTIES_SCENE)
+
+
+func go_to_roster() -> Error:
+	route_context_id = ""
+	return _change_scene(ROSTER_SCENE)
+
+
+func go_to_recruitment() -> Error:
+	route_context_id = ""
+	return _change_scene(RECRUITMENT_SCENE)
 
 
 func go_to_party_details(party_id: String) -> Error:

@@ -746,3 +746,112 @@ func test_recruit_adventurer_never_collides_with_an_earlier_recruit() -> void:
 
 	assert_eq(session.adventurers.size(), 3)
 	assert_eq(session.adventurers[2].id, "warrior_003")
+
+
+func test_get_recruitment_candidates_returns_the_three_fixed_warrior_candidates() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+
+	assert_eq(candidates.size(), 3)
+	var ids: Array = []
+	for candidate in candidates:
+		ids.append(candidate.id)
+	assert_eq(ids, ["warrior_002", "warrior_003", "warrior_004"])
+	for candidate in candidates:
+		assert_eq(candidate["class"], "warrior")
+		assert_eq(candidate.level, 1, "A recruitment candidate starts at level 1")
+		assert_eq(candidate.availability_status, "available")
+		assert_eq(candidate.cost, 10, "Every fixed candidate costs 10 gold")
+
+
+func test_get_recruitment_candidates_returns_a_copy_that_cannot_mutate_the_catalog() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	candidates[0].name = "Mutated"
+
+	var second_candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_eq(
+		second_candidates[0].name,
+		"Warrior 2",
+		"Mutating a returned candidate must not affect the catalog"
+	)
+
+
+func test_reset_restores_all_three_recruitment_candidates() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+	session.purchase_recruit("warrior_002")
+
+	session.reset()
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	var ids: Array = []
+	for candidate in candidates:
+		ids.append(candidate.id)
+	assert_eq(ids, ["warrior_002", "warrior_003", "warrior_004"], "reset() must restore every purchased candidate")
+
+
+func test_purchase_recruit_fails_without_enough_gold_and_changes_nothing() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.purchase_recruit("warrior_002"))
+
+	assert_eq(session.gold, 0)
+	assert_eq(session.get_recruitment_candidates().size(), 3)
+	assert_eq(session.adventurers.size(), 1)
+
+
+func test_purchase_recruit_fails_for_an_unknown_candidate_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+
+	assert_false(session.purchase_recruit("no_such_candidate"))
+
+	assert_eq(session.gold, 10)
+	assert_eq(session.get_recruitment_candidates().size(), 3)
+	assert_eq(session.adventurers.size(), 1)
+
+
+func test_purchase_recruit_fails_for_an_already_purchased_candidate() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 20
+	session.purchase_recruit("warrior_002")
+
+	assert_false(session.purchase_recruit("warrior_002"))
+
+	assert_eq(session.gold, 10, "Only the first purchase should deduct gold")
+	assert_eq(session.adventurers.size(), 2, "A repeated purchase must not append a second adventurer")
+
+
+func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 10
+
+	assert_true(session.purchase_recruit("warrior_002"))
+
+	assert_eq(session.gold, 0, "The exact candidate cost must be deducted")
+	var remaining_ids: Array = []
+	for candidate in session.get_recruitment_candidates():
+		remaining_ids.append(candidate.id)
+	assert_eq(
+		remaining_ids,
+		["warrior_003", "warrior_004"],
+		"Only the purchased candidate should be removed from the catalog"
+	)
+
+	assert_eq(session.adventurers.size(), 2)
+	var recruit: Dictionary = session.adventurers[1]
+	assert_eq(recruit.id, "warrior_002")
+	assert_eq(recruit["class"], "warrior")
+	assert_eq(recruit.level, 1)
+	assert_eq(recruit.availability_status, "available")
+	assert_false(recruit.has("cost"), "The adventurer record should not carry a purchase cost")

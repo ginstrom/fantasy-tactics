@@ -336,3 +336,49 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 
 func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
 	assert_eq(GameManager.debug_scenario_target("party_empty"), GameManager.DebugTarget.ENCAMPMENT)
+
+
+func test_roster_route_points_to_the_roster_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/roster.tscn")
+	assert_string_contains(source, "func go_to_roster()")
+
+
+func test_recruitment_route_points_to_the_recruitment_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/recruitment.tscn")
+	assert_string_contains(source, "func go_to_recruitment()")
+
+
+func test_go_to_roster_clears_stale_route_context_before_changing_scene() -> void:
+	# roster.tscn does not exist yet (built in a later milestone), so this
+	# exercises the context-clearing behavior directly rather than asserting
+	# a clean scene change; the missing-scene push_error is expected here,
+	# mirroring test_change_scene_reports_error_for_missing_scene.
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	manager.go_to_roster()
+
+	assert_eq(manager.route_context_id, "")
+	assert_push_error("roster.tscn")
+	for tracked in get_errors():
+		tracked.handled = true
+
+
+func test_go_to_recruitment_clears_stale_route_context_before_changing_scene() -> void:
+	# recruitment.tscn does not exist yet (built in a later milestone); see
+	# the comment on test_go_to_roster_clears_stale_route_context_before_changing_scene.
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	manager.go_to_recruitment()
+
+	assert_eq(manager.route_context_id, "")
+	assert_push_error("recruitment.tscn")
+	for tracked in get_errors():
+		tracked.handled = true

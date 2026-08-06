@@ -47,8 +47,47 @@ const DEFAULT_WARRIOR := {
 }
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
+# Fixed, individually identified recruitment offers (see the encampment
+# roster/recruitment design). All three use existing Warrior behavior; the
+# record shape is intentionally extensible for future candidates.
+const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
+	{
+		"id": "warrior_002",
+		"name": "Warrior 2",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+	{
+		"id": "warrior_003",
+		"name": "Warrior 3",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+	{
+		"id": "warrior_004",
+		"name": "Warrior 4",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		"stats": {},
+		"progression": {},
+		"cost": 10,
+	},
+]
 
 var adventurers: Array[Dictionary] = []
+var recruitment_candidates: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
@@ -71,6 +110,9 @@ func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 func reset() -> void:
 	# The roster owns a copy so a session cannot mutate the shared default data.
 	adventurers = [DEFAULT_WARRIOR.duplicate(true)]
+	recruitment_candidates = []
+	for candidate_template in RECRUITMENT_CANDIDATE_TEMPLATES:
+		recruitment_candidates.append(candidate_template.duplicate(true))
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
@@ -172,6 +214,30 @@ func recruit_adventurer() -> void:
 	adventurer.id = "warrior_%03d" % recruit_number
 	adventurer.name = "Warrior %d" % recruit_number
 	adventurers.append(adventurer)
+
+
+func get_recruitment_candidates() -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	for candidate in recruitment_candidates:
+		candidates.append(candidate.duplicate(true))
+	return candidates
+
+
+## The only normal (non-debug) path onto the roster: validates the candidate
+## is still on offer and affordable, deducts its cost exactly once, removes
+## it from the catalog, and appends the purchased adventurer (its "cost"
+## field dropped, since that is a recruitment-only concern).
+func purchase_recruit(candidate_id: String) -> bool:
+	var candidate_index := _get_recruitment_candidate_index(candidate_id)
+	if candidate_index == -1 or gold < recruitment_candidates[candidate_index].cost:
+		return false
+
+	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
+	gold -= candidate.cost
+	recruitment_candidates.remove_at(candidate_index)
+	candidate.erase("cost")
+	adventurers.append(candidate)
+	return true
 
 
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
@@ -312,6 +378,13 @@ func _get_adventurer_index(adventurer_id: String) -> int:
 
 func _has_adventurer(adventurer_id: String) -> bool:
 	return _get_adventurer_index(adventurer_id) != -1
+
+
+func _get_recruitment_candidate_index(candidate_id: String) -> int:
+	for candidate_index in recruitment_candidates.size():
+		if recruitment_candidates[candidate_index].id == candidate_id:
+			return candidate_index
+	return -1
 
 
 func _party_has_available_member(party: Dictionary) -> bool:
