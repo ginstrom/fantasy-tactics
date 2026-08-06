@@ -32,6 +32,20 @@ const EXPEDITIONS: Dictionary = {
 		},
 	},
 }
+# Progression domain constants (see docs/plans/2026-08-06-campaign-progression-and-population).
+# Cumulative XP threshold for level N is 5*N*(N+1) - 10: level 1 costs 0, level
+# 2 costs 20, level 3 costs 50, level 4 costs 90, each step costing 10 XP more
+# than the previous one. See get_level_xp_threshold().
+const BASE_ATTACK := 60
+const BASE_MAX_HEALTH := 3
+const BASE_MOVE_RANGE := 3
+const LEVEL_UP_MAX_HEALTH_BONUS := 1
+const LEVEL_UP_SKILL_POINTS := 10
+const PERK_LEVEL_INTERVAL := 3
+const BONUS_MOVE_PERK_ID := "bonus_move"
+const EFFECTIVE_HIT_CHANCE_CAP := 0.95
+const ATTACK_TO_HIT_CHANCE_DIVISOR := 100.0
+
 const WARRIOR_ID := "warrior_001"
 const DEFAULT_WARRIOR := {
 	"id": WARRIOR_ID,
@@ -40,10 +54,20 @@ const DEFAULT_WARRIOR := {
 	"weapon": "sword",
 	"level": 1,
 	"availability_status": "available",
-	# TBD: stat block. Placeholder only; does not affect combat yet.
-	"stats": {},
-	# TBD: leveling/progression data. Placeholder only; does not affect combat yet.
-	"progression": {},
+	# Authored base combat values; effective values (hit chance, max health,
+	# move range) are derived from these plus progression by GameSession.
+	"stats": {
+		"max_health": BASE_MAX_HEALTH,
+		"attack": BASE_ATTACK,
+		"move_range": BASE_MOVE_RANGE,
+	},
+	# Durable leveling state. xp is a float so fractional party XP awards are
+	# never truncated; display-facing rounding is a UI concern.
+	"progression": {
+		"xp": 0.0,
+		"skill_points": 0,
+		"perks": [],
+	},
 }
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
@@ -512,3 +536,135 @@ func get_expedition(encounter_id: String) -> Dictionary:
 	if not EXPEDITIONS.has(encounter_id):
 		return {}
 	return EXPEDITIONS[encounter_id].duplicate(true)
+
+
+## Divides amount evenly across party_id's members and adds each member's
+## share to their stored (float) xp, applying as many level-ups as the new
+## total crosses (see get_level_xp_threshold()). Silently ignores an unknown
+## or memberless party. Returns the ids of members who gained at least one
+## level from this award.
+func award_party_xp(party_id: String, amount: float) -> Array[String]:
+	var leveled_up: Array[String] = []
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return leveled_up
+
+	var member_ids: Array = parties[party_index].member_ids
+	if member_ids.is_empty():
+		return leveled_up
+
+	var share := amount / member_ids.size()
+	for member_id in member_ids:
+		if _award_adventurer_xp(member_id, share):
+			leveled_up.append(member_id)
+	return leveled_up
+
+
+func _award_adventurer_xp(adventurer_id: String, amount: float) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+
+	var adventurer: Dictionary = adventurers[adventurer_index]
+	adventurer.progression.xp += amount
+
+	var leveled_up := false
+	while adventurer.progression.xp >= get_level_xp_threshold(adventurer.level + 1):
+		adventurer.level += 1
+		adventurer.stats.max_health += LEVEL_UP_MAX_HEALTH_BONUS
+		adventurer.progression.skill_points += LEVEL_UP_SKILL_POINTS
+		leveled_up = true
+	return leveled_up
+
+
+## The single source of truth for cumulative XP thresholds: level 1 costs 0,
+## level 2 costs 20, level 3 costs 50, level 4 costs 90 — each level costing
+## 10 XP more than the previous step. Equivalent to 5*level*(level+1) - 10.
+func get_level_xp_threshold(level: int) -> float:
+	return float(5 * level * (level + 1) - 10)
+
+
+## True once an adventurer has reached a level divisible by PERK_LEVEL_INTERVAL
+## for which no perk has been chosen yet. choose_perk() is the only way to
+## resolve a pending choice.
+func is_perk_choice_pending(adventurer_id: String) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	return _pending_perk_slot_count(adventurers[adventurer_index]) > 0
+
+
+func _pending_perk_slot_count(adventurer: Dictionary) -> int:
+	var earned_slots: int = adventurer.level / PERK_LEVEL_INTERVAL
+	return earned_slots - adventurer.progression.perks.size()
+
+
+## Rejects a non-positive amount, an amount greater than the adventurer's
+## unspent skill points, or an unknown adventurer id, without mutating
+## anything. Otherwise decrements skill_points by amount and adds amount to
+## the adventurer's raw (uncapped) Attack.
+func spend_attack_points(adventurer_id: String, amount: int) -> bool:
+	if amount <= 0:
+		return false
+
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+
+	var adventurer: Dictionary = adventurers[adventurer_index]
+	if amount > adventurer.progression.skill_points:
+		return false
+
+	adventurer.progression.skill_points -= amount
+	adventurer.stats.attack += amount
+	return true
+
+
+## Only accepts BONUS_MOVE_PERK_ID, only while is_perk_choice_pending() is
+## true for adventurer_id, and only once per adventurer (a perk already in
+## progression.perks cannot be re-chosen).
+func choose_perk(adventurer_id: String, perk_id: String) -> bool:
+	if perk_id != BONUS_MOVE_PERK_ID:
+		return false
+
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+
+	var adventurer: Dictionary = adventurers[adventurer_index]
+	if adventurer.progression.perks.has(perk_id):
+		return false
+	if _pending_perk_slot_count(adventurer) <= 0:
+		return false
+
+	adventurer.progression.perks.append(perk_id)
+	return true
+
+
+## Centralized effective-hit-chance formula: min(raw Attack / 100.0, 0.95).
+## Raw Attack itself is never capped (it feeds future defence/debuff math);
+## only the chance derived from it is. Returns 0.0 for an unknown adventurer.
+func get_effective_hit_chance(adventurer_id: String) -> float:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0.0
+	return minf(adventurer.stats.attack / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
+
+
+## Centralized effective max health: the adventurer's stored max_health,
+## which leveling already keeps current. Returns 0 for an unknown adventurer.
+func get_effective_max_health(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	return adventurer.stats.max_health
+
+
+## Centralized effective move range: base move_range plus one extra tile if
+## the bonus_move perk has been chosen. Returns 0 for an unknown adventurer.
+func get_effective_move_range(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	var bonus := 1 if adventurer.progression.perks.has(BONUS_MOVE_PERK_ID) else 0
+	return adventurer.stats.move_range + bonus

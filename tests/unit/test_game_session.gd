@@ -539,7 +539,7 @@ func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward
 	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")
 
 
-func test_default_warrior_has_level_availability_and_placeholder_progression() -> void:
+func test_default_warrior_has_level_and_availability() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
@@ -549,8 +549,35 @@ func test_default_warrior_has_level_availability_and_placeholder_progression() -
 	assert_eq(warrior["class"], "warrior")
 	assert_eq(warrior.level, 1, "A fresh Warrior starts at level 1")
 	assert_eq(warrior.availability_status, "available", "A fresh Warrior starts available for a party")
-	assert_eq(warrior.stats, {}, "Stats are a TBD placeholder that must not affect combat")
-	assert_eq(warrior.progression, {}, "Progression is a TBD placeholder that must not affect combat")
+
+
+## Task 1 (progression domain): a new campaign's default Warrior starts with a
+## complete, validated progression state rather than the old TBD placeholders.
+func test_default_warrior_starts_with_a_complete_progression_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+
+	assert_eq(warrior.progression.xp, 0.0, "XP is stored as a float")
+	assert_eq(warrior.level, 1)
+	assert_eq(warrior.stats.attack, 60)
+	assert_eq(warrior.progression.skill_points, 0, "A fresh Warrior has no unspent points")
+	assert_eq(warrior.progression.perks, [], "A fresh Warrior has chosen no perks")
+	assert_eq(warrior.stats.max_health, 3)
+
+
+func test_get_adventurer_returns_a_copy_whose_nested_progression_cannot_mutate_session_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+	warrior.progression.xp = 999.0
+	warrior.stats.attack = 999
+
+	var second_copy: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+	assert_eq(second_copy.progression.xp, 0.0, "Mutating a returned copy's nested progression must not affect session state")
+	assert_eq(second_copy.stats.attack, 60, "Mutating a returned copy's nested stats must not affect session state")
 
 
 func test_create_party_sets_name_encampment_location_and_placeholder_metadata() -> void:
@@ -1007,3 +1034,241 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_eq(recruit.level, 1)
 	assert_eq(recruit.availability_status, "available")
 	assert_false(recruit.has("cost"), "The adventurer record should not carry a purchase cost")
+
+
+## Task 1: progression domain (award_party_xp, spend_attack_points,
+## choose_perk) and the derived effective-hit/health/move calculations that
+## GameSession centralizes for later battle and UI tasks to call into.
+
+func test_award_party_xp_divides_a_five_point_award_evenly_between_two_members() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruit_adventurer()
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.assign_adventurer_to_selected_party("warrior_005")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 2.5)
+	assert_eq(session.get_adventurer("warrior_005").progression.xp, 2.5)
+
+
+func test_award_party_xp_ignores_an_unknown_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var result: Array[String] = session.award_party_xp("no_such_party", 5.0)
+
+	assert_eq(result, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 0.0)
+
+
+func test_award_party_xp_ignores_an_empty_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	var result: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
+
+	assert_eq(result, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").progression.xp, 0.0, "An empty party must not receive XP")
+
+
+func test_award_party_xp_returns_the_ids_that_crossed_a_level_threshold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	var leveled_up: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(leveled_up, ["warrior_001"])
+	assert_eq(session.get_adventurer("warrior_001").level, 2)
+
+
+func test_award_party_xp_below_the_next_threshold_does_not_level_up() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	var leveled_up: Array[String] = session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 19.0)
+
+	assert_eq(leveled_up, [] as Array[String])
+	assert_eq(session.get_adventurer("warrior_001").level, 1)
+
+
+func test_twenty_cumulative_xp_reaches_level_two() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 2)
+
+
+func test_fifty_cumulative_xp_reaches_level_three() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 30.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 3)
+
+
+func test_an_oversized_award_resolves_multiple_levels_in_one_call() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 3, "50 XP in one award should resolve straight to level 3")
+
+
+func test_each_level_gained_adds_one_max_health_and_ten_skill_points() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.max_health, 4, "Leveling once should add exactly one max health")
+	assert_eq(warrior.progression.skill_points, 10, "Leveling once should add exactly ten skill points")
+
+
+func test_only_levels_divisible_by_three_require_a_perk_choice() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 1 has no pending perk choice")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 2 does not require a perk choice")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 30.0)
+	assert_true(session.is_perk_choice_pending("warrior_001"), "Level 3 requires a perk choice")
+
+
+func test_spend_attack_points_rejects_non_positive_overspent_and_missing_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.spend_attack_points("warrior_001", 0), "A non-positive amount must be rejected")
+	assert_false(session.spend_attack_points("warrior_001", -1), "A negative amount must be rejected")
+	assert_false(session.spend_attack_points("warrior_001", 5), "A fresh Warrior has zero points to overspend")
+	assert_false(session.spend_attack_points("missing", 5), "An unknown adventurer id must be rejected")
+	assert_eq(session.get_adventurer("warrior_001").stats.attack, 60, "A rejected spend must not change Attack")
+
+
+func test_spend_attack_points_decrements_points_and_raises_raw_attack() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_true(session.spend_attack_points("warrior_001", 4))
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.attack, 64, "Spending 4 points should add 4 to raw Attack")
+	assert_eq(warrior.progression.skill_points, 6, "Spending 4 of 10 points should leave 6 unspent")
+
+
+func test_choose_perk_accepts_bonus_move_only_once_and_only_when_pending() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_false(
+		session.choose_perk("warrior_001", "bonus_move"),
+		"A perk cannot be chosen before it is pending"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+	assert_true(session.is_perk_choice_pending("warrior_001"))
+
+	assert_true(session.choose_perk("warrior_001", "bonus_move"))
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Choosing the perk resolves the pending choice")
+
+	assert_false(
+		session.choose_perk("warrior_001", "bonus_move"),
+		"The same perk cannot be chosen a second time"
+	)
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
+
+
+func test_choose_perk_rejects_an_unknown_perk_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_false(session.choose_perk("warrior_001", "no_such_perk"))
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
+
+
+func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_effective_hit_chance("warrior_001"), 0.6, "60 raw Attack should be 0.6 effective hit chance")
+
+
+func test_effective_hit_chance_caps_at_ninety_five_percent_while_raw_attack_exceeds_ninety_five() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 140.0)
+
+	session.spend_attack_points("warrior_001", 40)
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.attack, 100, "Raw Attack itself is not capped")
+	assert_eq(
+		session.get_effective_hit_chance("warrior_001"),
+		0.95,
+		"Effective hit chance is capped at 0.95 even though raw Attack exceeds 95"
+	)
+
+
+func test_get_effective_max_health_reflects_leveling() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_eq(session.get_effective_max_health("warrior_001"), 3)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(session.get_effective_max_health("warrior_001"), 4)
+
+
+func test_get_effective_move_range_adds_the_bonus_move_perk() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_eq(session.get_effective_move_range("warrior_001"), 3)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+	session.choose_perk("warrior_001", "bonus_move")
+
+	assert_eq(session.get_effective_move_range("warrior_001"), 4, "bonus_move grants one extra tile of movement")
