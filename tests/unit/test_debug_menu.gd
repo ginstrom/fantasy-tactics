@@ -1,6 +1,7 @@
 extends GutTest
 
 const DebugMenuScene := preload("res://scenes/debug/debug_menu.tscn")
+const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 
 func before_each() -> void:
@@ -53,7 +54,7 @@ func test_super_power_button_maxes_the_party_and_closes_the_menu_during_a_battle
 	GameSession.reset()
 	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
 	add_child_autofree(battlefield)
-	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 	menu.visible = true

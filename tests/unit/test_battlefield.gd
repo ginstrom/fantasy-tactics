@@ -1,6 +1,7 @@
 extends GutTest
 
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
+const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 
 func after_each() -> void:
@@ -73,7 +74,7 @@ func test_locked_input_ignores_board_clicks() -> void:
 func test_describe_step_reports_a_hit_with_damage() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var attacker = battlefield.grid.get_unit_at(Vector2i(4, 4))
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {"type": "attack", "attacker": attacker, "hit": true, "damage": 1}
 
 	assert_eq(battlefield._describe_step(step), tr("battle.status.hit") % [tr("battle.side.enemy"), 1])
@@ -82,7 +83,7 @@ func test_describe_step_reports_a_hit_with_damage() -> void:
 func test_describe_step_reports_a_miss() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var attacker = battlefield.grid.get_unit_at(Vector2i(4, 4))
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {"type": "attack", "attacker": attacker, "hit": false, "damage": 0}
 
 	assert_eq(battlefield._describe_step(step), tr("battle.status.miss") % tr("battle.side.enemy"))
@@ -91,8 +92,13 @@ func test_describe_step_reports_a_miss() -> void:
 func test_describe_step_reports_an_enemy_move() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var mover = battlefield.grid.get_unit_at(Vector2i(4, 4))
-	var step := {"type": "move", "unit": mover, "from": Vector2i(4, 4), "to": Vector2i(4, 3)}
+	var mover = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var step := {
+		"type": "move",
+		"unit": mover,
+		"from": BattleControllerScript.ENEMY_START_POSITIONS[0],
+		"to": Vector2i(4, 3),
+	}
 
 	assert_eq(battlefield._describe_step(step), tr("battle.status.enemy_move") % tr("battle.side.enemy"))
 
@@ -112,7 +118,7 @@ func test_ready_shows_full_health_for_both_units() -> void:
 func test_health_label_shows_defeated_after_a_unit_dies() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var goblin = battlefield.grid.get_unit_at(Vector2i(4, 4))
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	goblin.take_damage(goblin.max_health)
 	battlefield.grid.units.erase(goblin)
 
@@ -224,9 +230,9 @@ func _setup_orc_outpost_battle() -> Node2D:
 ## Places the enemy adjacent to the warrior and near death so a single hit
 ## defeats it, without needing a full multi-turn combat sequence.
 func _stage_a_killing_blow(battlefield: Node2D) -> Dictionary:
-	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
-	var enemy = battlefield.grid.get_unit_at(Vector2i(4, 4))
-	enemy.grid_position = Vector2i(1, 2)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	enemy.grid_position = warrior.grid_position + Vector2i(1, 0)
 	enemy.health = 1
 	battlefield.grid.selected_unit = warrior
 	battlefield.grid.hit_roll = func() -> float: return 0.0

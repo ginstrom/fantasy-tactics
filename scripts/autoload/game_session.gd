@@ -22,6 +22,7 @@ const EXPEDITIONS: Dictionary = {
 			"max_health": 3,
 			"attack_damage": 1,
 			"hit_chance": 0.3,
+			"count": 2,
 		},
 	},
 	"orc_outpost": {
@@ -39,6 +40,7 @@ const EXPEDITIONS: Dictionary = {
 			"max_health": 5,
 			"attack_damage": 2,
 			"hit_chance": 0.5,
+			"count": 3,
 		},
 	},
 }

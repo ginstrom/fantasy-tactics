@@ -1,5 +1,7 @@
 extends GutTest
 
+const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+
 
 func after_each() -> void:
 	# A failed assertion in an open_game_menu test can skip its manual
@@ -147,7 +149,7 @@ func test_apply_super_power_maxes_out_player_units_on_the_active_battlefield() -
 	GameSession.reset()
 	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
 	add_child_autofree(battlefield)
-	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
 	assert_eq(GameManager.apply_super_power(), OK)
 

@@ -29,18 +29,26 @@ const SUPER_POWER_ATTACK_DAMAGE := 100
 const SUPER_POWER_HIT_CHANCE := 1.0
 const ENEMY_STEP_MOVE := "move"
 const ENEMY_STEP_ATTACK := "attack"
-const WARRIOR_START := Vector2i(1, 1)
-const WARRIOR_COLOR := Color(0.3, 0.5, 0.9)
+const PLAYER_START_POSITIONS: Array[Vector2i] = [
+	Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 0),
+]
+const PLAYER_COLORS: Array[Color] = [
+	Color(0.3, 0.5, 0.9), Color(0.3, 0.8, 0.5), Color(0.85, 0.8, 0.3),
+	Color(0.7, 0.4, 0.85), Color(0.9, 0.6, 0.3),
+]
+const ENEMY_START_POSITIONS: Array[Vector2i] = [
+	Vector2i(5, 5), Vector2i(4, 5), Vector2i(5, 4),
+]
+const ENEMY_COLOR := Color(0.9, 0.4, 0.3)
 # Attack damage is a fixed weapon value, not derived from progression (only
 # hit chance and max health/move range are; see GameSession's effective_*
 # getters and the campaign progression design doc).
 const WARRIOR_ATTACK_DAMAGE := 2
 const WARRIOR_ATTACK_NAME := "Sword"
-const GOBLIN_START := Vector2i(4, 4)
-const GOBLIN_COLOR := Color(0.9, 0.4, 0.3)
 
 var grid
 var units: Array = []
+var _player_adventurer_ids: Array[String] = []
 var selected_unit = null
 var active_side: int = Side.PLAYER
 var input_locked: bool = false
@@ -56,23 +64,26 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	var enemy_stats := _get_enemy_stats()
-	var player_adventurer_id := _get_player_adventurer_id()
-	units = [
-		UnitScript.new(
-			WARRIOR_START, WARRIOR_COLOR, Side.PLAYER,
-			GameSession.get_effective_move_range(player_adventurer_id),
-			GameSession.get_effective_max_health(player_adventurer_id),
+	_player_adventurer_ids = _get_player_adventurer_ids()
+	units = []
+	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
+		var adventurer_id: String = _player_adventurer_ids[index]
+		units.append(UnitScript.new(
+			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
+			GameSession.get_effective_move_range(adventurer_id),
+			GameSession.get_effective_max_health(adventurer_id),
 			WARRIOR_ATTACK_DAMAGE,
-			GameSession.get_effective_hit_chance(player_adventurer_id),
+			GameSession.get_effective_hit_chance(adventurer_id),
 			WARRIOR_ATTACK_NAME,
-			player_adventurer_id
-		),
-		UnitScript.new(
-			GOBLIN_START, GOBLIN_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
+			adventurer_id
+		))
+	var enemy_count: int = enemy_stats.get("count", 1)
+	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
+		units.append(UnitScript.new(
+			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key)
-		),
-	]
+		))
 	_draw_tiles()
 	_draw_units()
 	_update_highlights()
@@ -87,17 +98,16 @@ func _get_enemy_stats() -> Dictionary:
 	return expedition.enemy
 
 
-## Scope boundary: only a single player Unit is ever on the battlefield (see
-## the campaign progression design doc), even though a party may hold more
-## than one member. The first member of the selected party represents that
-## field unit. Scene-isolated tests that instantiate the battlefield with no
-## selected party (or an empty one) fall back to the default Warrior,
-## matching _get_enemy_stats()'s fallback pattern.
-func _get_player_adventurer_id() -> String:
+## One player Unit is fielded per party member (see the campaign progression
+## design doc's "Fielding" section), in stable party order. Scene-isolated
+## tests that instantiate the battlefield with no selected party (or an empty
+## one) fall back to the default Warrior, matching _get_enemy_stats()'s
+## fallback pattern.
+func _get_player_adventurer_ids() -> Array[String]:
 	var party: Dictionary = GameSession.get_selected_party()
 	if party.is_empty() or party.member_ids.is_empty():
-		return GameSession.WARRIOR_ID
-	return party.member_ids[0]
+		return [GameSession.WARRIOR_ID]
+	return party.member_ids
 
 
 func _unhandled_input(event: InputEvent) -> void:
