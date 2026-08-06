@@ -409,15 +409,51 @@ func test_go_to_unit_details_clears_a_stale_roster_origin_flag() -> void:
 
 
 func test_go_to_recruitment_clears_stale_route_context_before_changing_scene() -> void:
-	# recruitment.tscn does not exist yet (built in a later milestone); see
-	# the comment on test_go_to_roster_clears_stale_route_context_before_changing_scene.
+	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 	manager.route_context_id = "stale_id"
 
-	manager.go_to_recruitment()
+	var err: Error = manager.go_to_recruitment()
 
+	assert_eq(err, OK)
 	assert_eq(manager.route_context_id, "")
-	assert_push_error("recruitment.tscn")
-	for tracked in get_errors():
-		tracked.handled = true
+
+
+func test_purchase_recruit_reports_invalid_data_for_an_unknown_candidate() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("no_such_candidate")
+
+	assert_ne(err, OK, "An unknown candidate id must not be treated as a valid purchase")
+	assert_eq(GameSession.adventurers.size(), 1)
+
+
+func test_purchase_recruit_reports_invalid_data_when_funds_are_insufficient() -> void:
+	GameSession.reset()
+	GameSession.gold = 0
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("warrior_002")
+
+	assert_ne(err, OK)
+	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
+
+
+func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
+	GameSession.reset()
+	GameSession.gold = 10
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var err: Error = manager.purchase_recruit("warrior_002")
+
+	assert_eq(err, OK)
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.adventurers.size(), 2)
+	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+	assert_eq(GameSession.get_recruitment_candidates().size(), 2)

@@ -42,12 +42,17 @@ func test_parties_and_roster_are_active_branches() -> void:
 	assert_eq(screen.get_node("Center/VBox/RosterButton").text, "units.roster")
 
 
-func test_recruitment_is_unavailable_but_labelled_with_its_own_name() -> void:
+func test_recruitment_is_an_active_branch() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_true(screen.get_node("Center/VBox/RecruitmentButton").disabled)
+	assert_false(screen.get_node("Center/VBox/RecruitmentButton").disabled)
 	assert_eq(screen.get_node("Center/VBox/RecruitmentButton").text, "units.recruitment")
+
+
+func test_recruitment_button_routes_to_the_recruitment_screen() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/units.gd")
+	assert_string_contains(source, "GameManager.go_to_recruitment()")
 
 
 func test_parties_button_routes_to_the_parties_screen() -> void:

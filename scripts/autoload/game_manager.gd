@@ -198,6 +198,17 @@ func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> Erro
 	return OK
 
 
+## A narrow Error-returning wrapper around GameSession.purchase_recruit, the
+## only normal purchase path (see its docstring for the funds/candidate
+## validation it performs). Never changes scene itself, matching
+## assign_adventurer_to_party()/deploy_party(); Recruitment decides whether
+## and when to route to Roster based on the returned Error.
+func purchase_recruit(candidate_id: String) -> Error:
+	if not GameSession.purchase_recruit(candidate_id):
+		return ERR_INVALID_DATA
+	return OK
+
+
 func open_game_menu() -> void:
 	_game_menu.refresh()
 	_game_menu.visible = true
