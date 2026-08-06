@@ -91,14 +91,22 @@ and perk data is legible outside battle from Unit Details.
 ### Vacancy-timed encounter and recruitment population
 
 The map and the recruitment offer list no longer show every possible site or
-candidate at once. A campaign starts with one active encounter (the Goblin
-Camp) and one active recruitment offer (a Warrior), and each category holds
+candidate at once. A campaign starts with two active encounters, the
+one-star Goblin Camp (difficulty 1) and the two-star Orc Outpost (difficulty
+2), and one active recruitment offer (a Warrior); each category still holds
 at most two active encounters or four active offers at a time. Clearing a
 site or hiring a recruit opens a vacancy; that vacancy's own 15- (encounter)
 or 30- (recruitment) World Map turn clock refills it with a new instance only
 if its category is still under its cap when the clock completes. A cleared
 site never reopens — a later spawn is a distinct new instance, though it may
 reuse a previously seen encounter template at a different map tile.
+
+The World Map marks each active encounter with a difficulty-only star badge
+(one star for Goblin Camp, two for Orc Outpost) rather than a numeric label,
+so the player can compare expedition risk at a glance before committing a
+route. The approved rationale for starting with two simultaneous expedition
+choices and for star-only markers is recorded in
+[Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md).
 
 Site entry retains selection-before-activation. The first click selects the
 party, so it can still move away; a second click enters the settlement or
@@ -131,22 +139,19 @@ enduring design reference for the settlement/party boundaries is
 
 The prototype now has tactical victory/defeat, XP, delayed gold, recruitment,
 and two encounter templates. It is not yet a repeatable strategic campaign:
-the current map begins with one live site and recruitment does not change the
-one-versus-one battle. The next implementation work should focus on these
+the current map begins with two live sites and recruitment does not change
+the one-versus-one battle. The next implementation work should focus on these
 unfinished outcomes, in order:
 
-1. Start with two simultaneous expedition choices: one-star Goblin Camp and
-   two-star Orc Outpost, with star-only World Map markers. The approved design
-   is [Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md).
-2. Make a gold-funded Encampment decision change a later expedition. The
+1. Make a gold-funded Encampment decision change a later expedition. The
    natural follow-up is deploying healthy party members into battle, with the
    associated encounter/action-economy rebalance; recruitment alone is not
    yet a tactical benefit.
-3. Expand toward the planned initial party of four only after the first
+2. Expand toward the planned initial party of four only after the first
    gold-funded capability is enjoyable and legible in subsequent expeditions.
-4. Add save/load only after the repeatable expedition, reward, and upgrade
+3. Add save/load only after the repeatable expedition, reward, and upgrade
    loop works; then enable the existing Continue and Load UI.
-5. Add durable presentation assets only when their associated gameplay choices
+4. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
