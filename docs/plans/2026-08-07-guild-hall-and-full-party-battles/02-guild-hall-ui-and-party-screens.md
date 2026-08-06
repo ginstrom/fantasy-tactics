@@ -11,7 +11,7 @@ capacity reasons stay honest once a party can actually be full (design.md
 
 - Modify: `scripts/ui/party_details.gd`, `tests/unit/test_party_details.gd`
 - Modify: `scripts/ui/unit_details.gd`, `tests/unit/test_unit_details.gd`
-- Modify: `scripts/ui/game_manager.gd`, `tests/unit/test_game_manager.gd`
+- Modify: `scripts/autoload/game_manager.gd`, `tests/unit/test_game_manager.gd`
 - Modify: `scenes/ui/encampment.tscn`, `tests/unit/test_encampment.gd`
 - Create: `scripts/ui/buildings.gd`, `scenes/ui/buildings.tscn`,
   `tests/unit/test_buildings.gd`
