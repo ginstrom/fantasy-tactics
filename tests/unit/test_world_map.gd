@@ -308,6 +308,15 @@ func test_clicking_a_completed_encounter_after_selecting_deselects_instead_of_en
 ## must be exactly as selectable/activatable as the seeded one.
 func _append_orc_outpost_instance() -> Dictionary:
 	var orc_position: Vector2i = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
+	# GameSession.reset() already seeds a live "orc_outpost" active instance at
+	# this same position, so blindly appending here would leave two active
+	# instances sharing a tile — an artifact of this fixture, not a real
+	# gameplay scenario. Drop any instance already occupying the tile first so
+	# the manufactured "encounter_999" instance remains the sole, unambiguous
+	# occupant for position-based lookups (e.g. WorldMap._expedition_id_at()).
+	GameSession.active_encounters = GameSession.active_encounters.filter(
+		func(existing: Dictionary) -> bool: return existing.position != orc_position
+	)
 	var instance: Dictionary = GameSession._make_encounter_instance(
 		"encounter_999", GameSession.ORC_OUTPOST_ID, orc_position
 	)
