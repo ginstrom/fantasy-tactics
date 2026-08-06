@@ -10,6 +10,11 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.goblin_camp.name",
 		"danger_key": "expedition.danger.low",
 		"reward": 10,
+		# XP: 5 for a Goblin kill, 10 for clearing its site (see the campaign
+		# progression design doc). BattleController/Battlefield read these
+		# rather than hard-coding the values a second time.
+		"kill_xp": 5,
+		"clear_xp": 10,
 		"enemy": {
 			"name_key": "battle.enemy.goblin",
 			"attack_name_key": "battle.enemy.goblin.attack",
@@ -23,6 +28,9 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.orc_outpost.name",
 		"danger_key": "expedition.danger.high",
 		"reward": 25,
+		# XP: 10 for an Orc kill, 20 for clearing its site.
+		"kill_xp": 10,
+		"clear_xp": 20,
 		"enemy": {
 			"name_key": "battle.enemy.orc",
 			"attack_name_key": "battle.enemy.orc.attack",

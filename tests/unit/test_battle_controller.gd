@@ -176,6 +176,65 @@ func test_ready_builds_the_orc_outpost_enemy_when_orc_outpost_is_selected() -> v
 	assert_eq(enemy.attack_name, tr("battle.enemy.orc.attack"))
 
 
+## Task 2: the player Unit is built from the selected party's first member's
+## effective (derived) combat stats rather than fixed constants.
+func test_ready_builds_the_player_unit_from_the_first_partys_effective_stats() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+	var warrior = controller.get_unit_at(Vector2i(1, 1))
+
+	assert_eq(
+		warrior.max_health,
+		GameSession.get_effective_max_health(GameSession.WARRIOR_ID),
+		"The unit's max health must come from GameSession's derived value"
+	)
+	assert_eq(warrior.max_health, 4, "One level up should have added one max health")
+	assert_eq(warrior.health, 4, "A fresh unit starts at full (derived) health")
+
+
+func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_when_raw_attack_reaches_one_hundred() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 140.0)
+	GameSession.spend_attack_points(GameSession.WARRIOR_ID, 40)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+
+	assert_eq(
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.attack,
+		100,
+		"Raw Attack itself must not be capped"
+	)
+	assert_eq(warrior.hit_chance, 0.95, "Raw Attack 100 should cap the unit's hit chance at 0.95")
+
+
+func test_ready_builds_the_player_unit_with_one_extra_move_tile_after_choosing_bonus_move() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.BONUS_MOVE_PERK_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+
+	assert_eq(warrior.move_range, 4, "The bonus_move perk should add one extra move tile to the player unit")
+
+
+func test_ready_falls_back_to_the_default_warrior_when_no_party_is_selected() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(Vector2i(1, 1))
+
+	assert_eq(warrior.max_health, GameSession.get_effective_max_health(GameSession.WARRIOR_ID))
+	assert_eq(warrior.hit_chance, GameSession.get_effective_hit_chance(GameSession.WARRIOR_ID))
+	assert_eq(warrior.move_range, GameSession.get_effective_move_range(GameSession.WARRIOR_ID))
+
+
 func test_ready_builds_the_goblin_camp_enemy_when_goblin_camp_is_selected() -> void:
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()

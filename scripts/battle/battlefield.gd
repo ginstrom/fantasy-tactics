@@ -16,9 +16,17 @@ var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1
 var _enemy_turn_in_progress: bool = false
 var _battle_resolved: bool = false
+# Per-instance award guards (see _award_kill_xp/_award_clear_xp): a
+# Battlefield is re-instantiated for every battle, so these cannot leak
+# across encounter attempts, but they do stop a repeated event (a duplicate
+# board refresh, or a repeated result-timer fire) from awarding XP twice for
+# the same kill or the same clear.
+var _kill_xp_awarded: bool = false
+var _clear_xp_awarded: bool = false
 
 
 func _ready() -> void:
+	grid.enemy_defeated.connect(_award_kill_xp)
 	_on_board_changed()
 
 
@@ -93,21 +101,70 @@ func _show_battle_result(victory: bool) -> void:
 
 func _victory_message() -> String:
 	# Captured before GameManager.complete_battle() clears selected_encounter.
-	# Scene-isolated tests instantiate the battlefield with no selected
-	# encounter; fall back to the Goblin Camp, matching
-	# BattleController._get_enemy_stats()'s fallback.
+	var expedition := _current_expedition()
+	return tr("battle.result.victory") % tr(expedition.name_key)
+
+
+## Scene-isolated tests instantiate the battlefield with no selected
+## encounter; fall back to the Goblin Camp, matching
+## BattleController._get_enemy_stats()'s fallback.
+func _current_expedition() -> Dictionary:
 	var encounter_id: String = GameSession.selected_encounter
 	if encounter_id == "":
 		encounter_id = GameSession.GOBLIN_CAMP_ID
-	var expedition := GameSession.get_expedition(encounter_id)
-	return tr("battle.result.victory") % tr(expedition.name_key)
+	return GameSession.get_expedition(encounter_id)
 
 
 func _apply_battle_outcome(victory: bool) -> void:
 	if victory:
+		# Clear XP only on victory, and only while selected_encounter (read by
+		# _current_expedition()) is still set — GameManager.complete_battle()
+		# clears it right after.
+		_award_clear_xp()
 		GameManager.complete_battle()
 	else:
 		GameManager.fail_battle()
+
+
+## Called once per real kill via BattleController's enemy_defeated signal.
+## Guarded by _kill_xp_awarded so a repeated event cannot award it twice.
+func _award_kill_xp() -> void:
+	if _kill_xp_awarded:
+		return
+	_kill_xp_awarded = true
+	_award_party_xp(_current_expedition().get("kill_xp", 0))
+
+
+## Guarded by _clear_xp_awarded so a repeated call (e.g. a repeated
+## result-timer fire) cannot award it twice. Gold's own pending-reward flow
+## is untouched; this only concerns XP.
+func _award_clear_xp() -> void:
+	if _clear_xp_awarded:
+		return
+	_clear_xp_awarded = true
+	_award_party_xp(_current_expedition().get("clear_xp", 0))
+
+
+func _award_party_xp(amount) -> void:
+	if amount <= 0:
+		return
+	var leveled_up: Array[String] = GameSession.award_party_xp(GameSession.selected_party_id, amount)
+	for adventurer_id in leveled_up:
+		_refresh_unit_health(adventurer_id)
+
+
+## Applies a mid-battle level-up's health increase to the matching on-field
+## unit immediately (design doc: "It applies the health increase to both the
+## persistent adventurer and the active unit"). Task 3's level-up overlay
+## will surface this to the player; this only keeps the numbers correct.
+func _refresh_unit_health(adventurer_id: String) -> void:
+	for unit in grid.units:
+		if unit.adventurer_id != adventurer_id:
+			continue
+		var new_max_health: int = GameSession.get_effective_max_health(adventurer_id)
+		var health_gain: int = new_max_health - unit.max_health
+		unit.max_health = new_max_health
+		unit.health += health_gain
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

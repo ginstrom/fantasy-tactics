@@ -402,6 +402,26 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	assert_eq(record.enemy.attack_name_key, "battle.enemy.orc.attack")
 
 
+func test_get_expedition_includes_kill_and_clear_xp_for_the_goblin_camp() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+
+	assert_eq(record.kill_xp, 5, "A goblin kill should award 5 XP")
+	assert_eq(record.clear_xp, 10, "Clearing the goblin camp should award 10 XP")
+
+
+func test_get_expedition_includes_kill_and_clear_xp_for_the_orc_outpost() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
+
+	assert_eq(record.kill_xp, 10, "An orc kill should award 10 XP")
+	assert_eq(record.clear_xp, 20, "Clearing the orc outpost should award 20 XP")
+
+
 func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
