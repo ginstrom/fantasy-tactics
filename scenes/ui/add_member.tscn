@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/add_member.gd" id="1_add_member"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="3_table_view"]
 
 [node name="AddMember" type="Control"]
 layout_mode = 3
@@ -29,9 +30,10 @@ layout_mode = 2
 text = "add_member.title"
 horizontal_alignment = 1
 
-[node name="AdventurerList" type="VBoxContainer" parent="Center/VBox"]
+[node name="AdventurerTable" type="VBoxContainer" parent="Center/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+custom_minimum_size = Vector2(520, 280)
+script = ExtResource("3_table_view")
 
 [node name="EmptyLabel" type="Label" parent="Center/VBox"]
 layout_mode = 2
