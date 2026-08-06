@@ -122,6 +122,11 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 	recruitment_name_label.text = candidate["name"]
 	recruitment_class_label.text = tr("information.class") % candidate["class"]
 	recruitment_level_label.text = tr("information.level") % candidate["level"]
+	# information.recruitment_cost is substituted as the label VALUE here, not
+	# used as the format string like every other row above/below (e.g.
+	# tr("information.class") % ...). Keep its translation a plain label word
+	# with no %d/%s of its own — the numeric placeholder already lives in
+	# this line's "%s %d" template.
 	recruitment_cost_label.text = "%s %d" % [tr(&"information.recruitment_cost"), candidate["cost"]]
 	recruitment_name_label.visible = true
 	recruitment_class_label.visible = true

@@ -49,6 +49,10 @@ func _build_columns() -> Array[TableColumn]:
 	)
 	var cost_column := TableColumnDescriptor.new(&"cost", tr("recruitment.column.cost"))
 	cost_column.formatter = func(value: Variant, _row: Dictionary) -> String:
+		# recruitment.column.cost_unit is substituted as the VALUE here, not
+		# used as the format string. Keep its translation a plain unit word
+		# with no %d/%s of its own — the numeric placeholder already lives
+		# in this line's "%d %s" template.
 		return "%d %s" % [int(value), tr(&"recruitment.column.cost_unit")]
 	return [name_column, class_column, level_column, cost_column]
 
