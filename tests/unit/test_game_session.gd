@@ -1773,3 +1773,135 @@ func test_generated_recruitment_offer_ids_never_collide_with_the_roster_or_live_
 	for adventurer in session.adventurers:
 		all_ids.append(adventurer.id)
 	assert_false(all_ids.has(new_id), "A generated offer id must never collide with a roster adventurer")
+
+
+## Task 1 (guild hall domain): party-size cap driven by guild hall level, with
+## an upgrade rule and enforcement in assign_adventurer_to_party().
+
+func test_new_session_starts_at_guild_hall_level_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.guild_hall_level, 1)
+
+
+func test_reset_restores_guild_hall_level_to_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = 2
+
+	session.reset()
+
+	assert_eq(session.guild_hall_level, 1)
+
+
+func test_get_max_party_size_returns_four_at_level_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_max_party_size(), 4)
+
+
+func test_get_max_party_size_returns_five_at_level_two() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = 2
+
+	assert_eq(session.get_max_party_size(), 5)
+
+
+func test_upgrade_guild_hall_with_fifty_gold_succeeds() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 50
+
+	assert_true(session.upgrade_guild_hall())
+
+	assert_eq(session.guild_hall_level, 2)
+	assert_eq(session.gold, 0)
+	assert_eq(session.get_max_party_size(), 5)
+
+
+func test_upgrade_guild_hall_with_forty_nine_gold_fails() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 49
+
+	assert_false(session.upgrade_guild_hall())
+
+	assert_eq(session.guild_hall_level, 1)
+	assert_eq(session.gold, 49)
+
+
+func test_upgrade_guild_hall_at_max_level_returns_false() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 100
+	session.upgrade_guild_hall()
+
+	assert_false(session.upgrade_guild_hall())
+
+	assert_eq(session.gold, 50, "Gold should not be deducted on a failed upgrade after first success")
+	assert_eq(session.guild_hall_level, 2)
+
+
+func test_can_upgrade_guild_hall_is_false_with_no_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.can_upgrade_guild_hall())
+
+
+func test_can_upgrade_guild_hall_is_true_with_fifty_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 50
+
+	assert_true(session.can_upgrade_guild_hall())
+
+
+func test_can_upgrade_guild_hall_is_false_at_max_level() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 50
+	session.upgrade_guild_hall()
+
+	assert_false(session.can_upgrade_guild_hall())
+
+
+func test_assign_adventurer_to_party_rejects_fifth_member_at_level_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.adventurers.append(_adventurer("test_001", "available"))
+	session.adventurers.append(_adventurer("test_002", "available"))
+	session.adventurers.append(_adventurer("test_003", "available"))
+
+	assert_true(session.assign_adventurer_to_selected_party("test_001"))
+	assert_true(session.assign_adventurer_to_selected_party("test_002"))
+	assert_true(session.assign_adventurer_to_selected_party("test_003"))
+	assert_false(session.assign_adventurer_to_selected_party("warrior_002"), "Fifth member must be rejected at level 1")
+
+	assert_eq(session.get_selected_party().member_ids.size(), 4)
+
+
+func test_assign_adventurer_to_party_accepts_fifth_member_after_upgrade() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.adventurers.append(_adventurer("test_001", "available"))
+	session.adventurers.append(_adventurer("test_002", "available"))
+	session.adventurers.append(_adventurer("test_003", "available"))
+	session.adventurers.append(_adventurer("test_004", "available"))
+
+	assert_true(session.assign_adventurer_to_selected_party("test_001"))
+	assert_true(session.assign_adventurer_to_selected_party("test_002"))
+	assert_true(session.assign_adventurer_to_selected_party("test_003"))
+	session.gold = 50
+	session.upgrade_guild_hall()
+
+	assert_true(session.assign_adventurer_to_selected_party("test_004"), "Fifth member must be accepted after upgrade")
+
+	assert_eq(session.get_selected_party().member_ids.size(), 5)

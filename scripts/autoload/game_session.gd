@@ -53,6 +53,10 @@ const LEVEL_UP_MAX_HEALTH_BONUS := 1
 const LEVEL_UP_SKILL_POINTS := 10
 const PERK_LEVEL_INTERVAL := 3
 const BONUS_MOVE_PERK_ID := "bonus_move"
+const GUILD_HALL_LEVEL_1_PARTY_CAP := 4
+const GUILD_HALL_LEVEL_2_PARTY_CAP := 5
+const GUILD_HALL_UPGRADE_COST := 50
+const GUILD_HALL_MAX_LEVEL := 2
 const EFFECTIVE_HIT_CHANCE_CAP := 0.95
 const ATTACK_TO_HIT_CHANCE_DIVISOR := 100.0
 
@@ -170,6 +174,7 @@ var encounter_vacancies: Array[Dictionary] = []
 var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
+var guild_hall_level: int = 1
 var pending_reward: int = 0
 var player_name: String = DEFAULT_PLAYER_NAME
 
@@ -200,6 +205,7 @@ func reset() -> void:
 	_used_encounter_template_ids = [GOBLIN_CAMP_ID, ORC_OUTPOST_ID]
 	world_turn = 1
 	gold = 0
+	guild_hall_level = 1
 	pending_reward = 0
 	player_name = DEFAULT_PLAYER_NAME
 
@@ -305,7 +311,7 @@ func is_party_deployable(party_id: String) -> bool:
 ## Rejects a target party that is not encamped (deployed, or outside the
 ## starting settlement) in addition to the existing unknown-party/unknown-
 ## adventurer/already-assigned checks — a party that is out in the field has
-## nowhere to receive a new member.
+## nowhere to receive a new member. Also rejects if the party is at its size cap.
 func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool:
 	var party_index := _get_party_index(party_id)
 	if (
@@ -313,6 +319,7 @@ func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool
 		or not _is_party_encamped(parties[party_index])
 		or not _has_adventurer(adventurer_id)
 		or _is_adventurer_assigned(adventurer_id)
+		or parties[party_index].member_ids.size() >= get_max_party_size()
 	):
 		return false
 
@@ -619,6 +626,24 @@ func deposit_pending_reward() -> int:
 	gold += deposited
 	pending_reward = 0
 	return deposited
+
+
+func get_max_party_size() -> int:
+	if guild_hall_level >= GUILD_HALL_MAX_LEVEL:
+		return GUILD_HALL_LEVEL_2_PARTY_CAP
+	return GUILD_HALL_LEVEL_1_PARTY_CAP
+
+
+func can_upgrade_guild_hall() -> bool:
+	return guild_hall_level < GUILD_HALL_MAX_LEVEL and gold >= GUILD_HALL_UPGRADE_COST
+
+
+func upgrade_guild_hall() -> bool:
+	if not can_upgrade_guild_hall():
+		return false
+	gold -= GUILD_HALL_UPGRADE_COST
+	guild_hall_level += 1
+	return true
 
 
 func is_encounter_complete(encounter_id: String) -> bool:
