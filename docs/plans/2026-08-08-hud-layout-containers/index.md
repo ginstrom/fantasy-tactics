@@ -62,6 +62,13 @@ first — it's the spec this plan implements. Deliver the tasks in order:
    verification (real mouse clicks — headless GUT cannot simulate these
    reliably, see note in Task 3), merge back to `main`.
 
+All three tasks are complete and merged to `main`, along with an unplanned
+fix for a missing `CampNav` panel on the Guild Hall screen found right
+after (same root cause class: a screen never brought in line with the
+container-based pattern). See
+[04-outstanding-followups.md](04-outstanding-followups.md) for gaps and
+loose ends noticed along the way that aren't fixed yet and aren't blocking.
+
 Tasks 1 and 2 are independent of each other (different scenes) but follow
 the identical pattern — do 1 first since it's the more complex of the two
 (it has the `TopLeft` stack and the portrait panel), and reuse whatever
