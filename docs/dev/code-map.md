@@ -23,6 +23,28 @@ scene's script if you're unsure which layer decides eligibility (e.g. "can
 this party deploy?" — that's always `GameSession`; `GameManager.deploy_party()`
 is just an `Error`-returning wrapper around `GameSession.deploy_party()`).
 
+## Configuration: `GameConfig` is read-only and loads once
+
+A third autoload, `GameConfig` (`scripts/autoload/game_config.gd`),
+loads `config/game_config.json` once at startup and exposes typed
+`get_int(section, key, default)`/`get_float(section, key, default)`
+accessors. It owns no gameplay state and is never mutated at runtime.
+`GameSession` reads sixteen balance constants from it in its own
+`_ready()` (combat formula inputs, level-up growth, Guild Hall
+caps/cost, population caps/timers — see
+`docs/plans/2026-08-07-config-and-automation/02-migrate-balance-constants-to-config.md`
+for the exact list and why those sixteen and not others). Every other
+`GameSession` constant (ids, the `EXPEDITIONS`/`STAR_ENEMY_COMPOSITIONS`
+content tables, grid dimensions) is still a plain code constant — only
+genuinely tunable difficulty/balance numbers moved. `GameConfig` is
+declared first in `project.godot`'s `[autoload]` list, before
+`GameManager`/`GameSession`, specifically so it's fully constructed
+before `GameSession._ready()` reads from it.
+
+A missing or malformed `config/game_config.json` never crashes the
+game — `GameConfig` falls back to its own built-in `DEFAULTS` (which
+mirrors the shipped file exactly) and logs a `push_error`.
+
 ## Directory map
 
 `scenes/` and `scripts/` mirror each other by domain:
@@ -177,3 +199,21 @@ Godot's `tr()` at render time, defined in `translations/en.tres`. See the
 root [`README.md`](../../README.md#localization) for how to add a key; see
 `tests/unit/test_localization.gd` for the pattern that verifies every key in
 use actually resolves.
+
+## Headless battle simulation
+
+`scripts/tools/battle_bot.gd` (`BattleBot`) and
+`scripts/tools/battle_sim.gd`/`battle_sim_main.gd` play full, real
+battles with no human input — `BattleBot` picks player actions with the
+same "move toward nearest living opponent, attack if adjacent" policy
+`BattleController._take_enemy_unit_actions()` already uses for the enemy
+side, and `battle_sim.gd` drives a real `battlefield.tscn` instance
+through to `GameManager.complete_battle()`/`fail_battle()`, including
+auto-resolving any level-up modal a battle's XP award queues (see
+`docs/plans/2026-08-07-config-and-automation/04-headless-battle-sim-and-logging.md`
+for why that's necessary — Orc Outpost's kill+clear XP always crosses
+the level-2 threshold). Run via `make simulate`; see
+[running-the-game.md](running-the-game.md#run-the-headless-battle-simulator).
+This exists for balance/AI-tuning data (damage/kills/gold per battle),
+not for testing — `tests/unit/test_battle_bot.gd` already covers
+`BattleBot`'s decision logic in isolation without needing a real battle.

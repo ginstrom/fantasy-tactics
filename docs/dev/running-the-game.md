@@ -105,6 +105,41 @@ non-debug export build.
 | Godot exits immediately with a display/rendering error | No display available | Run under `xvfb-run` |
 | A new scene/UI state you added isn't captured | `screenshot_tour.gd`'s step list wasn't updated | Add a `{"name": ..., "action": ...}` entry to `_build_steps()` in `scripts/tools/screenshot_tour.gd` — see that file's own header comment for the convention |
 
+## Run the headless battle simulator
+
+Plays N full battles with no human input — `BattleBot` controls the
+player side, the game's existing enemy AI controls the enemy side — and
+logs one JSON line per battle outcome. Useful for balance/AI-tuning data
+(damage dealt, kills, gold earned, win rate per encounter), not for
+correctness testing (see [testing.md](testing.md) for that).
+
+### Steps
+
+1. From the repository root, run:
+   ```
+   make simulate
+   ```
+   This plays 20 battles by default (10 Goblin Camp, 10 Orc Outpost,
+   alternating) and appends results to `user://battle_sim.jsonl`.
+2. Override the run count with `RUNS=N make simulate`.
+
+### Verification
+
+- The terminal prints one `[battle_sim] i/N <encounter_id> -> <outcome>`
+  line per battle, ending with `[battle_sim] done: N battles logged to
+  user://battle_sim.jsonl`.
+- `user://` resolves to Godot's per-project user data directory — on
+  Linux, `find ~/.local/share/godot -name battle_sim.jsonl`. Each line
+  parses as JSON with keys `encounter_id`, `outcome` (`"victory"` /
+  `"defeat"` / `"stalemate"`), `cleared`, `rounds`, `damage_dealt`,
+  `kills`, `gold_earned`.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A line's `outcome` is `"stalemate"` | The bot couldn't reach or defeat every enemy within the round cap | Rare for the two shipped encounters under normal balance values; if it happens consistently after a balance change (`config/game_config.json`), the change likely made a fight unwinnable by the greedy bot policy — not necessarily a bug, but worth a second look |
+
 ## Open the project in the editor
 
 ### Steps

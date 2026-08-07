@@ -13,6 +13,7 @@ is operational only.
 | Launch the game and drive it manually (play, jump to a scene, take screenshots) | [running-the-game.md](running-the-game.md) |
 | Run the automated test suite, or write a new test | [testing.md](testing.md) |
 | Get oriented in the codebase before making a change | [code-map.md](code-map.md) |
+| Play N headless battles and log balance/outcome data | [running-the-game.md](running-the-game.md#run-the-headless-battle-simulator) |
 
 Each page uses the same structure: **Prerequisites**, then one **Steps /
 Verification / Troubleshooting** block per task. If a step doesn't say how to
