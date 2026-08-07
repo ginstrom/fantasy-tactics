@@ -12,10 +12,10 @@ extends Control
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
-@onready var party_name_label: Label = $Center/VBox/PartyNameLabel
-@onready var member_table: TableView = $Center/VBox/MemberTable
-@onready var empty_label: Label = $Center/VBox/EmptyLabel
-@onready var add_member_button: Button = $Center/VBox/AddMemberButton
+@onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
+@onready var member_table: TableView = $Body/Center/VBox/MemberTable
+@onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
+@onready var add_member_button: Button = $Body/Center/VBox/AddMemberButton
 @onready var information_panel: PanelContainer = $InformationPanel
 
 var party_id: String = ""

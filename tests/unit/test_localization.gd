@@ -200,8 +200,12 @@ func test_battlefield_hint_is_built_from_translated_copy() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
+	# Round one opens with the first party member already selected (see
+	# battle_controller.gd's _ready()), so the hint reflects the
+	# select-a-destination state rather than the no-selection one.
 	assert_eq(
-		battlefield.get_node("HUD/Hint").text, "Player's move. Click a unit to select it, or press 1-5. Esc: menu."
+		battlefield.get_node("HUD/Hint").text,
+		"Player's move. Click a highlighted tile to move (or use WASD), or select another unit."
 	)
 
 
@@ -270,8 +274,8 @@ func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:
 	assert_eq(units.get_node("Body/Center/VBox/PartiesButton").text, "units.parties")
 	assert_eq(units.get_node("Body/Center/VBox/RosterButton").text, "units.roster")
 	assert_eq(units.get_node("Body/Center/VBox/RecruitmentButton").text, "units.recruitment")
-	assert_eq(parties.get_node("Center/VBox/Title").text, "parties.title")
-	assert_eq(parties.get_node("Center/VBox/EmptyLabel").text, "parties.empty")
+	assert_eq(parties.get_node("Body/Center/VBox/Title").text, "parties.title")
+	assert_eq(parties.get_node("Body/Center/VBox/EmptyLabel").text, "parties.empty")
 
 
 func test_information_panel_uses_translation_keys_not_literal_copy() -> void:

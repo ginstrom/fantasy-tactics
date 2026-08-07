@@ -48,7 +48,12 @@ offset_bottom = 520.0
 script = ExtResource("4_portrait_panel")
 
 [node name="Rows" type="VBoxContainer" parent="HUD/PortraitPanel"]
-layout_mode = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="RoundLabel" type="Label" parent="HUD"]
 offset_left = 1104.0

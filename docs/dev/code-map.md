@@ -167,9 +167,12 @@ tile works the same way for returning home.
 ## Camp navigation: CampNav is a reusable shell, not a router
 
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
-identically into five top-level camp screens — Encampment, Units,
-Buildings, Deploy Party, World Map — to give a persistent left-hand nav.
-It renders six buttons, but the Trade button is permanently `disabled` in
+identically into every Encampment screen — Encampment, Units, Buildings,
+Deploy Party, Roster, Parties, Recruitment, Party Details, Unit Details,
+Add Member — to give a persistent left-hand nav. It is deliberately absent
+from the World Map: that screen isn't part of the Encampment, and a party
+returns home by clicking the settlement tile instead. It renders six
+buttons, but the Trade button is permanently `disabled` in
 the `.tscn` and has no `_on_trade_button_pressed()` handler; there's no
 Trade screen yet for it to route to. CampNav has no state of its own
 beyond the Deploy Party button's disabled flag (set in `refresh()` from

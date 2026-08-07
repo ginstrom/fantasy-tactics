@@ -24,15 +24,15 @@ func test_party_details_shows_the_title_and_the_back_action() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "party_details.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "party_details.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 func test_add_member_is_enabled_for_an_encamped_party_with_an_available_adventurer() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
 	assert_true(add_button.visible, "Add Member must be offered for an encamped party")
 	assert_false(add_button.disabled, "An available adventurer exists, so Add Member must be usable")
 	assert_eq(add_button.text, "party_details.add_member")
@@ -43,7 +43,7 @@ func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
 	assert_true(add_button.visible)
 	assert_true(add_button.disabled, "The only adventurer is already a member of this party")
 
@@ -67,7 +67,7 @@ func test_add_member_is_disabled_when_party_is_at_the_level_one_cap() -> void:
 	GameSession.assign_adventurer_to_selected_party("warrior_005")
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Center/VBox/AddMemberButton")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
 	assert_true(add_button.visible, "Add Member must still be offered even though the party is full")
 	assert_true(add_button.disabled, "The party is at the level-1 cap of 4 members")
 
@@ -76,7 +76,7 @@ func test_pressing_add_member_routes_to_the_add_member_screen_with_this_partys_i
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	screen.get_node("Center/VBox/AddMemberButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/AddMemberButton").emit_signal("pressed")
 
 	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 
@@ -88,7 +88,7 @@ func test_add_member_is_hidden_entirely_for_a_deployed_party() -> void:
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_false(
-		screen.get_node("Center/VBox/AddMemberButton").visible,
+		screen.get_node("Body/Center/VBox/AddMemberButton").visible,
 		"You can't add a member to a party that's out in the field"
 	)
 
@@ -105,9 +105,9 @@ func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "party_details.no_members")
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "party_details.no_members")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
@@ -117,7 +117,7 @@ func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
 func test_party_details_table_uses_the_documented_columns() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 
 	assert_eq(tree.columns, 3)
 	assert_eq(tree.get_column_title(0), "Name")
@@ -129,9 +129,9 @@ func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 
-	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
@@ -142,7 +142,7 @@ func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> vo
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -159,7 +159,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -176,7 +176,7 @@ func test_activating_a_row_asks_game_manager_to_open_unit_details_for_that_exact
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -189,7 +189,7 @@ func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
@@ -203,7 +203,7 @@ func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 
 func test_an_unknown_party_id_does_not_crash_and_shows_no_members() -> void:
 	var screen := _open_party_details("no_such_party")
-	var tree: Tree = screen.get_node("Center/VBox/MemberTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
@@ -221,7 +221,7 @@ func test_back_button_clears_only_the_ui_route_context() -> void:
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/BackButton").emit_signal("pressed")
 
 	assert_eq(GameManager.route_context_id, "")
 	assert_false(GameSession.has_deployed_party(), "Back must never deploy or otherwise mutate the party")
@@ -240,7 +240,7 @@ func test_back_button_clears_route_context_and_leaves_a_deployed_party_untouched
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/BackButton").emit_signal("pressed")
 
 	assert_eq(GameManager.route_context_id, "")
 	assert_true(

@@ -16,17 +16,17 @@ extends Control
 ## unavailable adventurer, so the screen's pre-Roster behavior is preserved
 ## exactly when not opened from Roster.
 
-@onready var name_label: Label = $Center/VBox/NameLabel
-@onready var class_label: Label = $Center/VBox/ClassLabel
-@onready var level_label: Label = $Center/VBox/LevelLabel
-@onready var status_label: Label = $Center/VBox/StatusLabel
-@onready var skills_label: Label = $Center/VBox/SkillsLabel
-@onready var perks_label: Label = $Center/VBox/PerksLabel
-@onready var stats_label: Label = $Center/VBox/StatsLabel
-@onready var not_found_label: Label = $Center/VBox/NotFoundLabel
-@onready var assignment_explanation_label: Label = $Center/VBox/AssignmentExplanationLabel
-@onready var party_picker: OptionButton = $Center/VBox/PartyPicker
-@onready var add_to_party_button: Button = $Center/VBox/AddToPartyButton
+@onready var name_label: Label = $Body/Center/VBox/NameLabel
+@onready var class_label: Label = $Body/Center/VBox/ClassLabel
+@onready var level_label: Label = $Body/Center/VBox/LevelLabel
+@onready var status_label: Label = $Body/Center/VBox/StatusLabel
+@onready var skills_label: Label = $Body/Center/VBox/SkillsLabel
+@onready var perks_label: Label = $Body/Center/VBox/PerksLabel
+@onready var stats_label: Label = $Body/Center/VBox/StatsLabel
+@onready var not_found_label: Label = $Body/Center/VBox/NotFoundLabel
+@onready var assignment_explanation_label: Label = $Body/Center/VBox/AssignmentExplanationLabel
+@onready var party_picker: OptionButton = $Body/Center/VBox/PartyPicker
+@onready var add_to_party_button: Button = $Body/Center/VBox/AddToPartyButton
 @onready var information_panel: PanelContainer = $InformationPanel
 
 var unit_id: String = ""

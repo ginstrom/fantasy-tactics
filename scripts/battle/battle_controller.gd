@@ -86,6 +86,9 @@ func _ready() -> void:
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key)
 		))
+	# Round one is a new round too: open it with the first party member
+	# already selected rather than forcing a manual pick.
+	selected_unit = _first_living_player_unit()
 	_draw_tiles()
 	_draw_units()
 	_update_highlights()
@@ -284,7 +287,17 @@ func end_turn() -> void:
 		if unit.side == active_side:
 			unit.moves_remaining = unit.move_range
 			unit.has_acted = false
-	_select_unit(null)
+	# A new round starts once control returns to the player; open it with the
+	# first party member already selected rather than forcing a manual pick.
+	_select_unit(_first_living_player_unit() if active_side == Side.PLAYER else null)
+
+
+func _first_living_player_unit():
+	for adventurer_id in _player_adventurer_ids:
+		var unit = _get_unit_by_adventurer_id(adventurer_id)
+		if unit != null and unit.is_alive():
+			return unit
+	return null
 
 
 func is_battle_won() -> bool:

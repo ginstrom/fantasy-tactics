@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/unit_details.gd" id="1_unit_details"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
 
 [node name="UnitDetails" type="Control"]
 layout_mode = 3
@@ -12,74 +13,83 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_unit_details")
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Body" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 16
 
-[node name="VBox" type="VBoxContainer" parent="Center"]
+[node name="CampNav" parent="Body" instance=ExtResource("3_camp_nav")]
+layout_mode = 2
+
+[node name="Center" type="CenterContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Body/Center"]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Title" type="Label" parent="Center/VBox"]
+[node name="Title" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "unit_details.title"
 horizontal_alignment = 1
 
-[node name="NameLabel" type="Label" parent="Center/VBox"]
+[node name="NameLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 horizontal_alignment = 1
 
-[node name="ClassLabel" type="Label" parent="Center/VBox"]
+[node name="ClassLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="LevelLabel" type="Label" parent="Center/VBox"]
+[node name="LevelLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="StatusLabel" type="Label" parent="Center/VBox"]
+[node name="StatusLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="SkillsLabel" type="Label" parent="Center/VBox"]
+[node name="SkillsLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="PerksLabel" type="Label" parent="Center/VBox"]
+[node name="PerksLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="StatsLabel" type="Label" parent="Center/VBox"]
+[node name="StatsLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="NotFoundLabel" type="Label" parent="Center/VBox"]
+[node name="NotFoundLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 text = "unit_details.not_found"
 horizontal_alignment = 1
 
-[node name="AssignmentExplanationLabel" type="Label" parent="Center/VBox"]
+[node name="AssignmentExplanationLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 text = "unit_details.no_eligible_party"
 horizontal_alignment = 1
 
-[node name="PartyPicker" type="OptionButton" parent="Center/VBox"]
+[node name="PartyPicker" type="OptionButton" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 
-[node name="AddToPartyButton" type="Button" parent="Center/VBox"]
+[node name="AddToPartyButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
 text = "unit_details.add_to_party"
 
-[node name="BackButton" type="Button" parent="Center/VBox"]
+[node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
 
@@ -94,5 +104,5 @@ offset_right = -16.0
 offset_bottom = 96.0
 grow_horizontal = 0
 
-[connection signal="pressed" from="Center/VBox/AddToPartyButton" to="." method="_on_add_to_party_pressed"]
-[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/AddToPartyButton" to="." method="_on_add_to_party_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

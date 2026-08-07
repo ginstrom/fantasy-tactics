@@ -104,7 +104,7 @@ func _select_first_recruitment_candidate() -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
-	var tree: Tree = scene.get_node_or_null("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = scene.get_node_or_null("Body/Center/VBox/RecruitmentTable/Tree")
 	if tree == null or tree.get_root() == null or tree.get_root().get_first_child() == null:
 		return
 	tree.get_root().get_first_child().select(0)

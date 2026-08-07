@@ -32,12 +32,6 @@ const HOVER_ROUTE_TARGET_COLOR := Color(0.4, 0.9, 0.9, 0.8)
 # off the top edge of the viewport.
 const EXPEDITION_LABEL_MIN_Y := 112.0
 
-# Reserves room for the persistent left nav (CampNav, 180px wide + 16px
-# margin each side) so the tile grid never renders underneath it. Applied
-# once to Board's own position in _ready() -- every drawing function below
-# stays relative to Board's local origin and needs no offset of its own.
-const BOARD_OFFSET := Vector2(212.0, 0.0)
-
 var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
@@ -56,7 +50,6 @@ var repathing: bool = false
 
 func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
-	board.position = BOARD_OFFSET
 	party_position = GameSession.get_deployed_party_position()
 	information_panel.party_selected.connect(_on_information_panel_party_selected)
 	_draw_tiles()

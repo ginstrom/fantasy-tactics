@@ -43,18 +43,25 @@ Start Menu
   -> New Game
   -> Starting Settlement
   -> Encampment
-  -> Units -> Parties -> Deploy Party
+  -> Units -> Parties -> assign up to four members (five after a Guild Hall
+     upgrade) -> Deploy Party
   -> depart to the World Map
   -> select the deployed party and plan a route
   -> advance one world-map tile manually or with End Turn
-  -> select the party at Goblin Camp and enter battle on a second click
-  -> defeat the Goblin: resolve its 5 kill XP immediately (a modal Level-Up
-     overlay appears if a party member crosses a level threshold)
-  -> win: clear the camp for its 10 clear XP and return to the World Map
-     or lose: return the party to the Starting Settlement; camp remains available
+  -> select the party at an active site and enter battle on a second click
+  -> field every deployed party member and the site's full, star-tier enemy
+     count; move and attack by mouse, WASD, or number-key (1-5) selection,
+     spending a shared per-unit movement-points budget
+  -> defeat each enemy: resolve its kill XP immediately, split evenly across
+     the deployed party (a modal Level-Up overlay appears if a member
+     crosses a level threshold)
+  -> win: clear the site for its clear XP and return to the World Map
+     or lose: return the party to the Starting Settlement; site remains
+     available
   -> return to Encampment to deposit pending gold; review XP, Attack, and any
      unspent skill points from Unit Details (skill points are spent from the
-     in-battle Level-Up overlay, not from Unit Details)
+     in-battle Level-Up overlay, not from Unit Details); optionally spend
+     gold at the Guild Hall to raise the party-size cap
 ```
 
 Party creation and Warrior assignment, previously reachable from an
@@ -64,15 +71,16 @@ encamped party, restoring the ordinary in-game assignment path. Roster and
 Recruitment (below) let a new campaign grow beyond its starting Warrior
 without debug tooling.
 
-`GameSession` owns the one-Warrior roster and its adventurer progression (XP,
-level, Attack, unspent skill points, perks), the single player-created party,
-its deployment state, world position, committed travel route, movement spent,
-world turn, encounter completion, active encounter/recruitment instances, and
-their vacancy-refill clocks. `GameManager` owns named scene transitions. The
-party is visible and movable only while deployed. World-map travel is
-deliberately simple: an in-bounds, empty-grid Manhattan route moves one tile
-per World Map turn; no terrain costs, obstacles, waypoints, or multi-party
-scheduling are implied yet.
+`GameSession` owns the Warrior-only roster and each adventurer's progression
+(XP, level, Attack, unspent skill points, perks), player-created parties and
+their deployment state, world position, committed travel route, movement
+spent, world turn, encounter completion, active encounter/recruitment
+instances and their vacancy-refill clocks, and the Guild Hall's level and
+resulting party-size cap. `GameManager` owns named scene transitions. A party
+is visible and movable only while deployed. World-map travel is deliberately
+simple: an in-bounds, empty-grid Manhattan route moves one tile per World Map
+turn; no terrain costs, obstacles, waypoints, or multi-party scheduling are
+implied yet — one party is deployed and battled at a time.
 
 ### Adventurer progression
 
@@ -109,12 +117,38 @@ choices and for star-only markers is recorded in
 [Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md).
 
 Site entry retains selection-before-activation. The first click selects the
-party, so it can still move away; a second click enters the settlement or
-Goblin Camp. A cleared camp rejects entry. In the battle, the Warrior and one
-Goblin each have 3 health and can move once and make one adjacent attack in
-either order. The Warrior's Sword deals 2 damage on a 60% hit chance; the
-Goblin's Short Sword deals 1 damage on a 30% hit chance. The Goblin takes a
-visible, deterministic AI decision sequence after the player ends the round.
+party, so it can still move away; a second click enters the settlement or an
+active site. A cleared camp rejects entry.
+
+### Full-party battles and the Guild Hall
+
+Every deployed party member — not just the first — is fielded on the
+battlefield, at a fixed start position, alongside the site's full enemy
+count. A unit's movement is a spendable per-turn points budget (base 3
+tiles, plus one per Bonus Move perk) rather than an all-or-nothing flag, so
+WASD steps and multi-tile mouse clicks can be freely interleaved with a
+unit's one attack. The player selects a unit by mouse, WASD, or number key
+(1-5); a left portrait panel shows one square per fielded party member, with
+the unit's colour, health, a selection ring, and a dimmed state once
+defeated.
+
+Each site's star rating now drives a randomly resolved enemy composition
+instead of a fixed matchup: the one-star Goblin Camp always fields one
+Goblin; the two-star Orc Outpost fields two Goblins or one Orc, chosen at
+random each time the site is entered. A Warrior has 3 health, Attack 60 (a
+60% hit chance), and deals 2 damage with its Sword; a Goblin has 3 health, a
+30% hit chance, and deals 1 damage with its Short Sword; an Orc has 5
+health, a 50% hit chance, and deals 2 damage. Enemies take a visible,
+deterministic AI decision sequence after the player ends the round.
+
+The Guild Hall is the game's first gold-funded building. A fresh campaign
+caps party assignment at 4 members (Guild Hall level 1); spending 50 gold at
+the Guild Hall raises the cap to 5 (level 2, the max for this slice).
+`party_details.gd` and `unit_details.gd` both reject an assignment past the
+current cap rather than silently failing it. The approved spec for this
+slice — fielding, movement points, selection, the portrait panel, and the
+Guild Hall cap — is recorded in
+[Guild Hall and Full-Party Battles Design](../2026-08-07-guild-hall-and-full-party-battles-design.md).
 
 The player-facing shell is also in place: New Game begins at the settlement;
 Continue and Load are intentionally disabled until a save system exists; and
@@ -137,26 +171,30 @@ enduring design reference for the settlement/party boundaries is
 
 ## Next work
 
-The prototype now has tactical victory/defeat, XP, delayed gold, recruitment,
-and two encounter templates. It is not yet a repeatable strategic campaign:
-the current map begins with two live sites and recruitment does not change
-the one-versus-one battle. The next implementation work should focus on these
-unfinished outcomes, in order:
+The prototype now fields a full party against a full, star-tier-randomized
+enemy composition, and the Guild Hall gives players their first gold-funded
+tactical decision (a larger party). Recruitment, XP, and gold all feed that
+loop already. The next implementation work should focus on these unfinished
+outcomes, in order:
 
-1. Make a gold-funded Encampment decision change a later expedition. The
-   natural follow-up is deploying healthy party members into battle, with the
-   associated encounter/action-economy rebalance; recruitment alone is not
-   yet a tactical benefit.
-2. Expand toward the planned initial party of four only after the first
-   gold-funded capability is enjoyable and legible in subsequent expeditions.
-3. Add save/load only after the repeatable expedition, reward, and upgrade
-   loop works; then enable the existing Continue and Load UI.
-4. Add durable presentation assets only when their associated gameplay choices
+1. Give players a second gold-funded, expedition-facing decision beyond
+   party size. Buildings currently offers only the Guild Hall and Trade is
+   still unimplemented, so an equipment or Trade improvement (e.g. a
+   blacksmith upgrading the Warrior's Sword) is the natural next building.
+2. Broaden the encounter catalogue beyond the Goblin Camp and Orc Outpost
+   templates so expedition choice differs by more than star rating alone —
+   Milestone 3's remaining gap.
+3. Add save/load now that the expedition, reward, and upgrade loop is
+   repeatable; then enable the existing Continue and Load UI.
+4. Assemble Milestone 5's first campaign slice — onboarding and pacing —
+   once at least one more building and encounter type have landed.
+5. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
-feature. The completed scenario menu accelerates checks, but it does not
-replace exercising the complete settlement-to-expedition route.
+feature. The completed scenario menu and the headless battle simulator (see
+`docs/dev/running-the-game.md`) accelerate checks, but neither replaces
+exercising the complete settlement-to-expedition route by hand.
 
 ## Design principles
 
@@ -221,10 +259,11 @@ licence, including temporary assets.
 
 ## Milestone 2: Tactical encounter loop
 
-**Status: completed for the Goblin Camp.** The implemented battle has the
-narrow Warrior-versus-Goblin setup described above, real win/loss detection,
-visible enemy pacing, and campaign outcomes: victory clears the camp and
-returns to the map; defeat returns the party home without clearing the camp.
+**Status: completed for the Goblin Camp and Orc Outpost.** The implemented
+battle has the full-party setup described in Full-party battles and the
+Guild Hall above, real win/loss detection, visible enemy pacing, and
+campaign outcomes: victory clears the site and returns to the map; defeat
+returns the party home without clearing the site.
 
 ### Player outcome
 
@@ -260,16 +299,19 @@ not only appearance.
 
 ## Milestone 3: Expedition and reward loop
 
-**Status: reward and one-for-one replacement loops shipped; strategic choice
-is incomplete.** Every expedition now pays out two reward types: gold (banked on return to
-Encampment) and individual adventurer XP (awarded immediately per kill and
-per clear; see Adventurer progression above). Cleared sites are persistent
-but not permanent — each vacancy refills on its own 15-turn clock under a
-two-site cap, so the world map keeps changing within a campaign rather than
-only accumulating grey markers. The encounter catalogue itself is still just
-the Goblin Camp and Orc Outpost templates; a broader roster of encounter
-types, and any travel-time or resource cost beyond World Map turns, remain
-future work.
+**Status: reward, replacement, and full-party tactical loops shipped;
+catalogue breadth is incomplete.** Every expedition now pays out two reward
+types: gold (banked on return to Encampment) and individual adventurer XP
+(awarded immediately per kill and per clear; see Adventurer progression
+above). Cleared sites are persistent but not permanent — each vacancy
+refills on its own 15-turn clock under a two-site cap, so the world map
+keeps changing within a campaign rather than only accumulating grey markers.
+Each site's star rating also now resolves to a randomized enemy composition
+(see Full-party battles and the Guild Hall above), so the two templates
+already produce more than one tactical setup. The encounter catalogue
+itself is still just the Goblin Camp and Orc Outpost templates; a broader
+roster of encounter types, and any travel-time or resource cost beyond
+World Map turns, remain future work.
 
 ### Player outcome
 
@@ -303,19 +345,20 @@ language rather than creating bespoke art for every prototype variation.
 
 ## Milestone 4: Encampment and party management
 
-**Status: encampment UI, party browsing/deployment, recruitment, and individual
-adventurer progression are shipped; gold-funded tactical capability is not.**
-The prototype already has an encampment UI shell
+**Status: encampment UI, party browsing/deployment, recruitment, individual
+adventurer progression, and the first gold-funded building are shipped;
+equipment and Trade are not.** The prototype has an encampment UI shell
 (Units, Buildings, Trade, Deploy Party) and Units -> Parties -> Party Details
 -> Unit Details browsing with deliberate party deployment. An encamped party
 can use Add Member to assign an existing available adventurer, or Roster can
-assign one directly from Unit Details. Recruitment offers a small, vacancy-
-timed pool of gold-costed Warrior candidates (see Vacancy-timed encounter and
-recruitment population above) rather than a fixed catalogue. Adventurers gain
-XP, levels, Attack points, and perks from expeditions (see Adventurer
-progression above), legible from Unit Details. It does not yet offer a
-four-member starting party, equipment, buildings, trade, or a settlement
-investment.
+assign one directly from Unit Details, up to the Guild Hall's current
+party-size cap (see Full-party battles and the Guild Hall above). Recruitment
+offers a small, vacancy-timed pool of gold-costed Warrior candidates (see
+Vacancy-timed encounter and recruitment population above) rather than a fixed
+catalogue. Adventurers gain XP, levels, Attack points, and perks from
+expeditions (see Adventurer progression above), legible from Unit Details.
+Buildings currently offers only the Guild Hall; it does not yet offer
+equipment, Trade, or any other settlement investment.
 
 ### Player outcome
 
@@ -375,9 +418,11 @@ Party Details -> Unit Details and Deploy Party. The remaining destinations
 remain visibly unavailable or labelled TBD; they must not simulate systems
 that do not exist yet.
 
-- **Buildings:** building cards, construction prerequisites and costs,
-  service effects, upgrade levels, and associated art are TBD. Implement after
-  one gold-funded improvement has a proven expedition-facing benefit.
+- **Buildings:** the Guild Hall is the first building card, with a real cost
+  (50 gold), an upgrade level (1-2), and a service effect (a raised
+  party-size cap). Further building cards, construction prerequisites, and
+  associated art remain TBD; implement each after its expedition-facing
+  benefit is proven.
 - **Trade:** buy/sell inventory, prices, stock, and equipment ownership are
   TBD. Do not invent an item economy before the first improvement loop.
 - **Roster and Recruitment growth:** this slice intentionally has no search,
@@ -385,10 +430,11 @@ that do not exist yet.
   combat behavior. Refill timing and caps are deterministic, not random.
   Later town growth can expand or filter the vacancy-timed offer pool without
   changing ownership or screen routing.
-- **Party management limits:** party capacity, removal, reassignment between
-  parties, injuries, and availability rules beyond the current available
-  status remain TBD. The existing Add Member flow is the party-first
-  assignment path; Roster's Unit Details action is the unit-first path.
+- **Party management limits:** party capacity is now the Guild Hall's cap (4,
+  or 5 after the upgrade); removal, reassignment between parties, injuries,
+  and availability rules beyond the current available status remain TBD.
+  The existing Add Member flow is the party-first assignment path; Roster's
+  Unit Details action is the unit-first path.
 
 The durable model direction is deliberately modest. Parties keep stable IDs,
 display names, member IDs, location/deployment state, and placeholder fields
@@ -401,8 +447,11 @@ prototype's single Warrior immediately usable.
 
 ## Milestone 5: First campaign slice
 
-**Status: not started.** This milestone begins only after the reward and
-upgrade loop gives players a reason to choose among multiple expeditions.
+**Status: not started.** The reward and upgrade loop now exists (gold, XP,
+the Guild Hall, and randomized site compositions), but this milestone still
+waits on the catalogue and Trade/equipment gaps called out in Next work
+above — one building and two encounter templates are not yet the "several
+expeditions, several upgrades" this milestone asks for.
 
 ### Player outcome
 

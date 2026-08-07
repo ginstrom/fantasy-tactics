@@ -11,8 +11,8 @@ extends Control
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
-@onready var recruitment_table: TableView = $Center/VBox/RecruitmentTable
-@onready var empty_label: Label = $Center/VBox/EmptyLabel
+@onready var recruitment_table: TableView = $Body/Center/VBox/RecruitmentTable
+@onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
 @onready var information_panel: PanelContainer = $InformationPanel
 
 var selected_candidate_id: String = ""

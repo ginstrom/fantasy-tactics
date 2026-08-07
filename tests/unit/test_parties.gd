@@ -17,8 +17,8 @@ func test_parties_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "parties.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "parties.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 func test_back_button_returns_to_the_encampment() -> void:
@@ -30,9 +30,9 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "parties.empty")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "parties.empty")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 	assert_eq(screen.selected_party_id, "")
 
@@ -40,7 +40,7 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
-	var create_button: Button = screen.get_node("Center/VBox/CreatePartyButton")
+	var create_button: Button = screen.get_node("Body/Center/VBox/CreatePartyButton")
 
 	assert_true(create_button.visible)
 	assert_false(create_button.disabled)
@@ -48,7 +48,7 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
-	assert_eq(UiTestHelpers.tree_row_values(screen.get_node("Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(screen.get_node("Body/Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
 	assert_true(create_button.disabled)
 	create_button.emit_signal("pressed")
 	assert_eq(GameSession.parties.size(), 1)
@@ -60,7 +60,7 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 func test_parties_table_uses_the_documented_columns() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 
 	assert_eq(tree.columns, 3)
 	assert_eq(tree.get_column_title(0), "Party")
@@ -72,9 +72,9 @@ func test_every_party_renders_as_a_row_with_name_members_and_status() -> void:
 	GameSession.create_party()
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 
-	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Party 1"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["0"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["Encamped"])
@@ -85,7 +85,7 @@ func test_selecting_a_party_row_stores_the_id_locally_and_refreshes_the_panel() 
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -103,7 +103,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_party_details() -> vo
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -120,7 +120,7 @@ func test_activating_a_row_asks_game_manager_to_open_party_details() -> void:
 	GameSession.create_party()
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -133,7 +133,7 @@ func test_a_refresh_that_invalidates_the_selection_clears_it_and_falls_back_to_t
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_party_id, GameSession.FIRST_PARTY_ID)
@@ -143,7 +143,7 @@ func test_a_refresh_that_invalidates_the_selection_clears_it_and_falls_back_to_t
 
 	assert_eq(screen.selected_party_id, "")
 	assert_false(panel.get_node("Content/PartyName").visible)
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 
 
 func test_entering_parties_clears_a_stale_route_context_id() -> void:

@@ -21,8 +21,8 @@ func test_recruitment_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "recruitment.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "recruitment.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 func test_recruitment_uses_the_sessions_candidate_query_not_a_private_predicate() -> void:
@@ -58,7 +58,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 func test_recruitment_table_uses_the_documented_columns() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 
 	assert_eq(tree.columns, 4)
 	assert_eq(tree.get_column_title(0), "Name")
@@ -73,7 +73,7 @@ func test_recruitment_table_uses_the_documented_columns() -> void:
 func test_recruitment_lists_exactly_the_current_candidates() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
@@ -89,7 +89,7 @@ func test_recruitment_does_not_list_a_candidate_already_purchased_elsewhere() ->
 	GameSession.purchase_recruit("warrior_002")
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
@@ -99,7 +99,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel(
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -117,7 +117,7 @@ func test_selecting_a_row_does_not_purchase_it() -> void:
 	GameSession.gold = 25
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -133,7 +133,7 @@ func test_the_recruit_action_is_disabled_with_zero_gold() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -145,7 +145,7 @@ func test_the_recruit_action_is_enabled_with_ten_gold() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -157,7 +157,7 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	GameManager.route_context_id = "stale_id"
@@ -180,7 +180,7 @@ func test_a_second_purchase_attempt_of_the_same_now_gone_candidate_does_not_purc
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	panel.get_node("Content/RecruitButton").emit_signal("pressed")
@@ -197,7 +197,7 @@ func test_pressing_recruit_for_a_candidate_purchased_elsewhere_refreshes_in_plac
 	GameSession.gold = 10
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_candidate_id, "warrior_002")
@@ -216,7 +216,7 @@ func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RecruitmentTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_candidate_id, "warrior_002")
@@ -234,8 +234,8 @@ func test_an_empty_recruitment_shows_the_empty_state_without_errors() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "recruitment.empty")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "recruitment.empty")
 
 
 func test_purchasing_the_last_candidate_leaves_the_empty_state_after_a_refresh() -> void:
@@ -246,7 +246,7 @@ func test_purchasing_the_last_candidate_leaves_the_empty_state_after_a_refresh()
 
 	screen.refresh()
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 
 
 func test_back_button_returns_to_units() -> void:

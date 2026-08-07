@@ -26,8 +26,8 @@ func test_add_member_shows_the_title_and_the_back_action() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "add_member.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "add_member.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 ## Activation is the only affordance that assigns a row (see
@@ -37,7 +37,7 @@ func test_add_member_shows_the_activation_hint() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 
-	assert_eq(screen.get_node("Center/VBox/HintLabel").text, "add_member.hint")
+	assert_eq(screen.get_node("Body/Center/VBox/HintLabel").text, "add_member.hint")
 
 
 func test_reads_the_party_id_from_route_context() -> void:
@@ -59,9 +59,9 @@ func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "add_member.empty")
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "add_member.empty")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
@@ -70,7 +70,7 @@ func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void
 func test_add_member_table_uses_the_documented_columns() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 
 	assert_eq(tree.columns, 3)
 	assert_eq(tree.get_column_title(0), "Name")
@@ -81,9 +81,9 @@ func test_add_member_table_uses_the_documented_columns() -> void:
 func test_lists_exactly_the_available_adventurers() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 
-	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
@@ -95,7 +95,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_pan
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -116,7 +116,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> voi
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -134,7 +134,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> voi
 func test_activating_a_row_assigns_that_exact_adventurer_to_this_party() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -145,7 +145,7 @@ func test_activating_a_row_assigns_that_exact_adventurer_to_this_party() -> void
 func test_activating_a_row_returns_to_that_partys_details() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -156,14 +156,14 @@ func test_activating_a_row_returns_to_that_partys_details() -> void:
 func test_a_stale_row_fails_safely_and_refreshes_the_list_in_place() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var tree: Tree = screen.get_node("Center/VBox/AdventurerTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	# The adventurer gets assigned elsewhere out from under the still-displayed row.
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 
 	tree.emit_signal("item_activated")
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
@@ -171,7 +171,7 @@ func test_back_button_returns_to_party_details_without_mutating_the_party() -> v
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 
-	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/BackButton").emit_signal("pressed")
 
 	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [] as Array[String])

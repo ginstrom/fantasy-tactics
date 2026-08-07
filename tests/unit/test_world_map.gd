@@ -940,14 +940,10 @@ func test_goblin_camp_label_position_is_unchanged_by_the_hint_bar_clamp() -> voi
 	var label := _find_expedition_label_by_position(world_map, goblin_record.position)
 
 	assert_not_null(label, "Goblin Camp's expedition label should be drawn")
-	# Board's offset shifts every descendant's on-screen (global) position, not
-	# their position local to Markers, so the rendered pixel position this test
-	# guards is global_position -- see _find_expedition_label_by_position below.
 	assert_eq(
 		label.global_position,
 		Vector2(goblin_record.position) * WorldMapScript.TILE_SIZE
 			+ Vector2(WorldMapScript.TILE_SIZE * 0.1, -WorldMapScript.TILE_SIZE * 0.6)
-			+ WorldMapScript.BOARD_OFFSET
 	)
 
 
@@ -1031,12 +1027,8 @@ func test_encounter_labels_do_not_include_names_danger_or_reward() -> void:
 func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -> Label:
 	# Find a label at a given encounter position by checking all labels in Markers
 	# and matching by approximate position (within 1 pixel tolerance for floating point).
-	# Markers is drawn relative to Board's local origin (see world_map.gd's
-	# _draw_markers, unchanged by the Board offset), so the rendered on-screen
-	# position is global_position: Board's own offset plus that local position.
 	var expected_x := (
 		position.x * WorldMapScript.TILE_SIZE + WorldMapScript.TILE_SIZE * 0.1
-		+ WorldMapScript.BOARD_OFFSET.x
 	)
 	var expected_y := maxf(
 		position.y * WorldMapScript.TILE_SIZE - WorldMapScript.TILE_SIZE * 0.6,
@@ -1052,8 +1044,11 @@ func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -
 	return null
 
 
-func test_world_map_contains_the_camp_nav() -> void:
+## World Map isn't an encampment screen -- the persistent left nav belongs
+## only on Encampment and its sub-screens; the settlement tile is how a
+## party returns home from here.
+func test_world_map_does_not_contain_the_camp_nav() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	assert_not_null(world_map.get_node("HUD/CampNav"))
+	assert_null(world_map.get_node_or_null("HUD/CampNav"))

@@ -65,11 +65,14 @@ func test_set_enemy_turn_in_progress_locks_and_unlocks_input() -> void:
 func test_locked_input_ignores_board_clicks() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
+	var selection_before_lock = battlefield.grid.selected_unit
 	battlefield._set_enemy_turn_in_progress(true)
 
 	battlefield.grid._handle_tile_click(Vector2i(1, 1))
 
-	assert_null(battlefield.grid.selected_unit, "A locked board must ignore clicks")
+	assert_eq(
+		battlefield.grid.selected_unit, selection_before_lock, "A locked board must ignore clicks"
+	)
 
 
 func test_describe_step_reports_a_hit_with_damage() -> void:
@@ -162,6 +165,45 @@ func test_portrait_panel_dims_a_defeated_member() -> void:
 		battlefield.portrait_panel.get_node("Rows/Portrait0").modulate,
 		PortraitPanelScript.DEFEATED_MODULATE
 	)
+
+
+## Regression test for a portrait row whose clickable rect had collapsed to a
+## few px (a Button's minimum size ignores children added directly rather
+## than via its text/icon), while its swatch/label still visibly rendered at
+## full size — so the row looked clickable but almost never registered a
+## real click. emit_signal("pressed") (see the test above) can't catch this,
+## since it bypasses hit-testing entirely.
+func test_portrait_row_click_target_spans_its_visible_content() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
+
+	assert_eq(
+		row.size.y, float(PortraitPanelScript.PORTRAIT_SIZE),
+		"The row's clickable height must match its swatch, not the empty-text button minimum"
+	)
+	assert_gt(row.size.x, 0.0, "The row must stretch to a real clickable width")
+
+
+## Decorative children default to MOUSE_FILTER_STOP, which (being drawn on
+## top of the row Button) would otherwise claim the click for themselves and
+## never let the Button register it as a press.
+func test_portrait_row_decorative_children_do_not_intercept_clicks() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
+	for child_name in ["Swatch", "Health", "SelectionRing"]:
+		var child: Control = row.find_child(child_name, true, false)
+		assert_eq(
+			child.mouse_filter, Control.MOUSE_FILTER_IGNORE,
+			"%s must not intercept clicks meant for the row button" % child_name
+		)
 
 
 func test_clicking_a_portrait_selects_that_party_member() -> void:

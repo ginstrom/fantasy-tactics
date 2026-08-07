@@ -154,6 +154,54 @@ func test_end_turn_switches_the_active_side_and_resets_movement() -> void:
 	assert_eq(player_unit.moves_remaining, player_unit.move_range, "The player's unit regains its movement on its next turn")
 
 
+func test_end_turn_selects_the_first_living_player_unit_when_a_new_round_starts() -> void:
+	var controller := _make_controller(6, 6)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+	)
+	var enemy_unit = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 2)
+	controller.units = [first, second, enemy_unit]
+	controller._player_adventurer_ids = ["warrior_001", "warrior_002"] as Array[String]
+	controller.active_side = BattleControllerScript.Side.PLAYER
+	controller.selected_unit = second
+
+	controller.end_turn()
+
+	assert_null(controller.selected_unit, "Handing control to the enemy does not select one of its units")
+
+	controller.end_turn()
+
+	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER, "Control returns to the player")
+	assert_eq(
+		controller.selected_unit, first, "The first party member should be selected when a new round starts"
+	)
+
+
+func test_end_turn_skips_a_defeated_party_member_when_selecting_at_round_start() -> void:
+	var controller := _make_controller(6, 6)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+	)
+	var enemy_unit = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 2)
+	first.health = 0
+	controller.units = [first, second, enemy_unit]
+	controller._player_adventurer_ids = ["warrior_001", "warrior_002"] as Array[String]
+	controller.active_side = BattleControllerScript.Side.PLAYER
+
+	controller.end_turn()
+	controller.end_turn()
+
+	assert_eq(
+		controller.selected_unit, second, "A defeated party member cannot be the round-start selection"
+	)
+
+
 func test_ready_spawns_one_unit_per_party_member_in_party_order() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
@@ -176,6 +224,20 @@ func test_ready_spawns_one_unit_per_party_member_in_party_order() -> void:
 	assert_eq(first.adventurer_id, GameSession.WARRIOR_ID)
 	assert_not_null(second, "The second party member should spawn at the second player start position")
 	assert_eq(second.adventurer_id, recruit_id)
+
+
+func test_ready_selects_the_first_party_member_so_round_one_opens_with_a_selection() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	var recruit_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(recruit_id)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_not_null(controller.selected_unit, "Round one should open with a unit already selected")
+	assert_eq(controller.selected_unit.adventurer_id, GameSession.WARRIOR_ID)
 
 
 func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> void:

@@ -20,8 +20,8 @@ func test_roster_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "roster.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "roster.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 func test_shows_the_permanent_player_and_gold_rows() -> void:
@@ -43,7 +43,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 func test_roster_table_uses_the_documented_columns() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
 	assert_eq(tree.columns, 5)
 	assert_eq(tree.get_column_title(0), "Name")
@@ -56,7 +56,7 @@ func test_roster_table_uses_the_documented_columns() -> void:
 func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
@@ -70,7 +70,7 @@ func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> voi
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1"])
 
@@ -79,7 +79,7 @@ func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> voi
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -95,7 +95,7 @@ func test_the_panels_view_button_routes_to_unit_details_via_the_roster_origin() 
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -112,7 +112,7 @@ func test_the_panels_view_button_routes_to_unit_details_via_the_roster_origin() 
 func test_activating_a_row_routes_to_unit_details_via_the_roster_origin() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -126,15 +126,15 @@ func test_an_empty_roster_shows_the_empty_state_without_errors() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "roster.empty")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "roster.empty")
 
 
 func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	assert_eq(screen.selected_adventurer_id, GameSession.WARRIOR_ID)
@@ -145,13 +145,13 @@ func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 
 	assert_eq(screen.selected_adventurer_id, "")
 	assert_false(panel.get_node("Content/AdventurerName").visible)
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 
 
 func test_refresh_reflects_a_new_assignment_made_elsewhere() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/RosterTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])
 
 	GameSession.create_party()
