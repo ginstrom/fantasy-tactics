@@ -156,11 +156,17 @@ func get_unit_at(pos: Vector2i):
 	return null
 
 
+func _move_distances(unit) -> Dictionary:
+	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+	return grid.get_tile_distances(unit.grid_position, unit.moves_remaining, is_blocked)
+
+
 func get_legal_moves(unit) -> Array[Vector2i]:
 	if unit.moves_remaining <= 0:
 		return []
-	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
-	return grid.get_tiles_in_range(unit.grid_position, unit.moves_remaining, is_blocked)
+	var moves: Array[Vector2i] = []
+	moves.assign(_move_distances(unit).keys())
+	return moves
 
 
 func try_move_selected_unit(target: Vector2i) -> bool:
@@ -171,10 +177,7 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	if not target in get_legal_moves(selected_unit):
 		return false
 
-	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
-	var distances: Dictionary = grid.get_tile_distances(
-		selected_unit.grid_position, selected_unit.moves_remaining, is_blocked
-	)
+	var distances := _move_distances(selected_unit)
 	selected_unit.grid_position = target
 	selected_unit.moves_remaining -= distances[target]
 	last_attack_result = {}
