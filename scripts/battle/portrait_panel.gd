@@ -4,7 +4,7 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 
 const PORTRAIT_SIZE := 48
 const DEFEATED_MODULATE := Color(1, 1, 1, 0.35)
-const SELECTED_MODULATE := Color(1, 1, 1, 1)
+const LIVING_MODULATE := Color(1, 1, 1, 1)
 
 @onready var rows: VBoxContainer = $Rows
 
@@ -23,10 +23,10 @@ func refresh() -> void:
 		child.queue_free()
 	# Read from the board's own authoritative fielded-unit list rather than
 	# re-deriving from GameSession: grid._player_adventurer_ids is what was
-	# actually fielded (capped by PLAYER_START_POSITIONS.size(), with its own
-	# empty-party fallback), so the row list can never drift from the board.
-	# This also means _find_unit() == null can only mean "defeated" here,
-	# never "never fielded".
+	# actually fielded (uncapped; only the separate `units` array is capped
+	# by PLAYER_START_POSITIONS.size()), so the row list can never drift
+	# from the board. This also means _find_unit() == null can only mean
+	# "defeated" here, never "never fielded".
 	var member_ids: Array = grid._player_adventurer_ids
 	for index in member_ids.size():
 		rows.add_child(_build_row(index, member_ids[index]))
@@ -38,7 +38,7 @@ func _build_row(index: int, adventurer_id: String) -> Button:
 	row.name = "Portrait%d" % index
 	row.flat = true
 	row.pressed.connect(func() -> void: grid.select_unit_by_adventurer_id(adventurer_id))
-	row.modulate = SELECTED_MODULATE if unit != null else DEFEATED_MODULATE
+	row.modulate = LIVING_MODULATE if unit != null else DEFEATED_MODULATE
 
 	var hbox := HBoxContainer.new()
 	row.add_child(hbox)
