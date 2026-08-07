@@ -266,10 +266,10 @@ func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:
 	var parties: Control = PartiesScene.instantiate()
 	add_child_autofree(parties)
 
-	assert_eq(units.get_node("Center/VBox/Title").text, "units.title")
-	assert_eq(units.get_node("Center/VBox/PartiesButton").text, "units.parties")
-	assert_eq(units.get_node("Center/VBox/RosterButton").text, "units.roster")
-	assert_eq(units.get_node("Center/VBox/RecruitmentButton").text, "units.recruitment")
+	assert_eq(units.get_node("Body/Center/VBox/Title").text, "units.title")
+	assert_eq(units.get_node("Body/Center/VBox/PartiesButton").text, "units.parties")
+	assert_eq(units.get_node("Body/Center/VBox/RosterButton").text, "units.roster")
+	assert_eq(units.get_node("Body/Center/VBox/RecruitmentButton").text, "units.recruitment")
 	assert_eq(parties.get_node("Center/VBox/Title").text, "parties.title")
 	assert_eq(parties.get_node("Center/VBox/EmptyLabel").text, "parties.empty")
 

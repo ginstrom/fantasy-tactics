@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/units.gd" id="1_units"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
 
 [node name="Units" type="Control"]
 layout_mode = 3
@@ -12,36 +13,45 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_units")
 
-[node name="Center" type="CenterContainer" parent="."]
+[node name="Body" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 16
 
-[node name="VBox" type="VBoxContainer" parent="Center"]
+[node name="CampNav" parent="Body" instance=ExtResource("3_camp_nav")]
+layout_mode = 2
+
+[node name="Center" type="CenterContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Body/Center"]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Title" type="Label" parent="Center/VBox"]
+[node name="Title" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "units.title"
 horizontal_alignment = 1
 
-[node name="RosterButton" type="Button" parent="Center/VBox"]
+[node name="RosterButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "units.roster"
 
-[node name="PartiesButton" type="Button" parent="Center/VBox"]
+[node name="PartiesButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "units.parties"
 
-[node name="RecruitmentButton" type="Button" parent="Center/VBox"]
+[node name="RecruitmentButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "units.recruitment"
 
-[node name="BackButton" type="Button" parent="Center/VBox"]
+[node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
 
@@ -56,7 +66,7 @@ offset_right = -16.0
 offset_bottom = 96.0
 grow_horizontal = 0
 
-[connection signal="pressed" from="Center/VBox/RosterButton" to="." method="_on_roster_pressed"]
-[connection signal="pressed" from="Center/VBox/PartiesButton" to="." method="_on_parties_pressed"]
-[connection signal="pressed" from="Center/VBox/RecruitmentButton" to="." method="_on_recruitment_pressed"]
-[connection signal="pressed" from="Center/VBox/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RosterButton" to="." method="_on_roster_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/PartiesButton" to="." method="_on_parties_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RecruitmentButton" to="." method="_on_recruitment_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

@@ -48,7 +48,7 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	GameManager.go_to_deploy_party()
 	var deploy_party: Control = DeployPartyScene.instantiate()
 	add_child_autofree(deploy_party)
-	var deploy_table: Tree = deploy_party.get_node("Center/VBox/PartyTable/Tree")
+	var deploy_table: Tree = deploy_party.get_node("Body/Center/VBox/PartyTable/Tree")
 	assert_ne(deploy_table.get_root().get_first_child(), null)
 	deploy_table.get_root().get_first_child().select(0)
 	deploy_table.emit_signal("item_activated")

@@ -34,8 +34,8 @@ func test_deploy_party_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "deploy_party.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "deploy_party.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 ## Activation is the only affordance that deploys a row (see
@@ -45,7 +45,7 @@ func test_deploy_party_shows_the_activation_hint() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/HintLabel").text, "deploy_party.hint")
+	assert_eq(screen.get_node("Body/Center/VBox/HintLabel").text, "deploy_party.hint")
 
 
 func test_shows_the_permanent_player_and_gold_rows() -> void:
@@ -65,9 +65,9 @@ func test_no_deployable_party_shows_the_empty_state_without_errors() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
-	assert_eq(screen.get_node("Center/VBox/EmptyLabel").text, "deploy_party.empty")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/EmptyLabel").text, "deploy_party.empty")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
@@ -83,7 +83,7 @@ func test_deploy_party_uses_the_sessions_deployability_query_not_a_private_predi
 func test_deploy_party_table_uses_the_documented_columns() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 
 	assert_eq(tree.columns, 3)
 	assert_eq(tree.get_column_title(0), "Party")
@@ -97,9 +97,9 @@ func test_lists_exactly_the_deployable_parties_not_every_party() -> void:
 	GameSession.parties.append(_ineligible_party("ineligible_party"))
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 
-	assert_false(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Party 1"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["1"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["Encamped"])
@@ -113,7 +113,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_pan
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	var item := tree.get_root().get_first_child()
 
 	item.select(0)
@@ -132,7 +132,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_party_details() -> vo
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("InformationPanel")
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 
@@ -150,7 +150,7 @@ func test_activating_a_row_deploys_that_exact_party() -> void:
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 
 	tree.emit_signal("item_activated")
@@ -164,7 +164,7 @@ func test_an_invalidated_selection_leaves_the_screen_in_place_and_refreshes_the_
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var tree: Tree = screen.get_node("Center/VBox/PartyTable/Tree")
+	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	# The party becomes ineligible out from under the still-displayed row.
 	GameSession.parties[0].deployed = true
@@ -175,7 +175,7 @@ func test_an_invalidated_selection_leaves_the_screen_in_place_and_refreshes_the_
 		GameSession.get_party(GameSession.FIRST_PARTY_ID).movement_spent,
 		"Sanity: deploy_party must not have run its normal deployment side effects again"
 	)
-	assert_true(screen.get_node("Center/VBox/EmptyLabel").visible)
+	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
@@ -190,7 +190,7 @@ func test_back_button_does_not_deploy_or_otherwise_mutate_the_party() -> void:
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
 
-	screen.get_node("Center/VBox/BackButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/BackButton").emit_signal("pressed")
 
 	assert_false(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
@@ -208,3 +208,10 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_deploy_party_contains_the_camp_nav() -> void:
+	var screen: Control = DeployPartyScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_not_null(screen.get_node("Body/CampNav"))

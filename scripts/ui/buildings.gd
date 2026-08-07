@@ -11,7 +11,7 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 const GUILD_HALL_ROW_ID := "guild_hall"
 
-@onready var building_table: TableView = $Center/VBox/BuildingTable
+@onready var building_table: TableView = $Body/Center/VBox/BuildingTable
 
 
 func _ready() -> void:

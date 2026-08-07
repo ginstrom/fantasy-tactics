@@ -15,8 +15,8 @@ func test_units_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/Title").text, "units.title")
-	assert_eq(screen.get_node("Center/VBox/BackButton").text, "ui.back")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "units.title")
+	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
 func test_shows_the_permanent_player_and_gold_rows() -> void:
@@ -36,18 +36,18 @@ func test_parties_and_roster_are_active_branches() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_false(screen.get_node("Center/VBox/PartiesButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/PartiesButton").text, "units.parties")
-	assert_false(screen.get_node("Center/VBox/RosterButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/RosterButton").text, "units.roster")
+	assert_false(screen.get_node("Body/Center/VBox/PartiesButton").disabled)
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesButton").text, "units.parties")
+	assert_false(screen.get_node("Body/Center/VBox/RosterButton").disabled)
+	assert_eq(screen.get_node("Body/Center/VBox/RosterButton").text, "units.roster")
 
 
 func test_recruitment_is_an_active_branch() -> void:
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_false(screen.get_node("Center/VBox/RecruitmentButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/RecruitmentButton").text, "units.recruitment")
+	assert_false(screen.get_node("Body/Center/VBox/RecruitmentButton").disabled)
+	assert_eq(screen.get_node("Body/Center/VBox/RecruitmentButton").text, "units.recruitment")
 
 
 func test_recruitment_button_routes_to_the_recruitment_screen() -> void:
@@ -90,3 +90,10 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_units_contains_the_camp_nav() -> void:
+	var screen: Control = UnitsScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_not_null(screen.get_node("Body/CampNav"))
