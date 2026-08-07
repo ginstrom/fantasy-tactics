@@ -1,4 +1,6 @@
-.PHONY: help editor play test check screenshots
+RUNS ?= 20
+
+.PHONY: help editor play test check screenshots simulate
 
 help:
 	@echo "make editor       Open the Godot editor"
@@ -6,6 +8,7 @@ help:
 	@echo "make test         Run automated tests"
 	@echo "make check        Run the current validation suite"
 	@echo "make screenshots  Capture a screenshot of every scene/state into ./screenshots"
+	@echo "make simulate     Play N headless battles and log outcomes (RUNS=20 make simulate)"
 
 editor:
 	godot --editor project.godot
@@ -24,3 +27,6 @@ check: test
 screenshots:
 	godot --path . --rendering-driver opengl3 --position=-3000,-3000 \
 		-s scripts/tools/screenshot_tour_main.gd -- --outdir=$(CURDIR)/screenshots
+
+simulate:
+	godot --headless -s scripts/tools/battle_sim_main.gd -- --runs=$(RUNS)
