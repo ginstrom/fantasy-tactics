@@ -855,3 +855,15 @@ func test_player_start_positions_can_seat_a_full_max_size_party() -> void:
 		BattleControllerScript.PLAYER_START_POSITIONS.size() >= GameSession.GUILD_HALL_LEVEL_2_PARTY_CAP,
 		"The fielding cluster must have at least as many start positions as the max Guild Hall party cap"
 	)
+
+
+func test_select_unit_by_adventurer_id_rejects_a_non_player_unit() -> void:
+	var controller := _make_controller(4, 4)
+	var enemy = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Claw")
+	enemy.adventurer_id = "not_really_an_adventurer"
+	controller.units = [enemy]
+
+	var selected: bool = controller.select_unit_by_adventurer_id("not_really_an_adventurer")
+
+	assert_false(selected)
+	assert_null(controller.selected_unit)

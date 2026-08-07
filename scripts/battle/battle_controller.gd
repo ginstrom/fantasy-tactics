@@ -247,7 +247,7 @@ func select_unit_by_adventurer_id(adventurer_id: String) -> bool:
 	if input_locked or active_side != Side.PLAYER:
 		return false
 	var unit = _get_unit_by_adventurer_id(adventurer_id)
-	if unit == null or not unit.is_alive():
+	if unit == null or not unit.is_alive() or unit.side != Side.PLAYER:
 		return false
 	_select_unit(unit)
 	return true
