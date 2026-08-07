@@ -127,8 +127,8 @@ func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 
 	assert_eq(
 		screen.get_node("Center/VBox/StatsLabel").text,
-		tr("unit_details.stats") % [0, 60, 60, 3],
-		"A fresh Warrior has 0 XP, 60 raw Attack, 60% effective hit chance, and 3 max health"
+		tr("unit_details.stats") % [0, 20, 60, 60, 3],
+		"A fresh level-1 Warrior has 0/20 XP to level 2, 60 raw Attack, 60% effective hit chance, and 3 max health"
 	)
 	assert_true(screen.get_node("Center/VBox/StatsLabel").visible)
 
@@ -142,8 +142,8 @@ func test_stats_label_reflects_leveling_xp_attack_and_health_changes() -> void:
 
 	assert_eq(
 		screen.get_node("Center/VBox/StatsLabel").text,
-		tr("unit_details.stats") % [25, 64, 64, 4],
-		"25.5 XP displays floored as 25; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 4"
+		tr("unit_details.stats") % [25, 50, 64, 64, 4],
+		"25.5 XP displays floored as 25/50 to level 3; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 4"
 	)
 
 

@@ -147,7 +147,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		"Double-click a row, or select it and press Enter, to add that adventurer to the party."
 	)
 	assert_eq(
-		tr("unit_details.stats") % [25, 64, 64, 4], "XP: 25 — Attack: 64 raw / 64% hit chance — Health: 4"
+		tr("unit_details.stats") % [25, 50, 64, 64, 4], "XP: 25 / 50 — Attack: 64 raw / 64% hit chance — Health: 4"
 	)
 	assert_eq(tr("unit_details.skills") % 10, "Unspent skill points: 10")
 	assert_eq(

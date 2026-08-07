@@ -69,10 +69,14 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	# xp is stored as a float; floor it for this display-only row and never
 	# write the floored value back (see GameSession.DEFAULT_WARRIOR).
 	var xp_display: int = int(floor(adventurer.progression.xp))
+	var xp_to_next_level: int = int(GameSession.get_level_xp_threshold(adventurer["level"] + 1))
 	var raw_attack: int = adventurer.stats.attack
 	var hit_chance_percent := int(round(GameSession.get_effective_hit_chance(adventurer_id) * 100.0))
 	var effective_max_health: int = GameSession.get_effective_max_health(adventurer_id)
-	stats_label.text = tr("unit_details.stats") % [xp_display, raw_attack, hit_chance_percent, effective_max_health]
+	stats_label.text = (
+		tr("unit_details.stats")
+		% [xp_display, xp_to_next_level, raw_attack, hit_chance_percent, effective_max_health]
+	)
 
 	skills_label.text = tr("unit_details.skills") % adventurer.progression.skill_points
 
