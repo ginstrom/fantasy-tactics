@@ -130,6 +130,7 @@ messages = {
 "level_up.attack_minus": "-",
 "level_up.attack_plus": "+",
 "level_up.continue": "Continue",
+"camp_nav.world_map": "World Map",
 "world_map.hint": "World Map. Click the party to select it, then click a highlighted tile to move. Click a marked location to enter battle. Return to the settlement by clicking a selected party there. Esc: menu.",
 "world_map.end_turn": "End Turn",
 "world_map.turn": "Turn %d",

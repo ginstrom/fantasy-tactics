@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/camp_nav.gd" id="1_camp_nav"]
+
+[node name="CampNav" type="PanelContainer"]
+layout_mode = 3
+anchors_preset = 0
+custom_minimum_size = Vector2(180, 0)
+script = ExtResource("1_camp_nav")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EncampmentButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "encampment.title"
+
+[node name="UnitsButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "encampment.units"
+
+[node name="BuildingsButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "encampment.buildings"
+
+[node name="TradeButton" type="Button" parent="VBox"]
+layout_mode = 2
+disabled = true
+text = "encampment.trade"
+
+[node name="DeployPartyButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "encampment.deploy_party"
+
+[node name="WorldMapButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "camp_nav.world_map"
+
+[connection signal="pressed" from="VBox/EncampmentButton" to="." method="_on_encampment_button_pressed"]
+[connection signal="pressed" from="VBox/UnitsButton" to="." method="_on_units_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsButton" to="." method="_on_buildings_button_pressed"]
+[connection signal="pressed" from="VBox/DeployPartyButton" to="." method="_on_deploy_party_button_pressed"]
+[connection signal="pressed" from="VBox/WorldMapButton" to="." method="_on_world_map_button_pressed"]
