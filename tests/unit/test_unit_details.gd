@@ -120,7 +120,7 @@ func test_unit_details_uses_the_sessions_availability_query_not_a_private_predic
 
 
 ## Task 3: real progression data replaces the old TBD placeholders — see
-## GameSession.DEFAULT_WARRIOR / get_adventurer() for the exact dict shape
+## GameSession.get_default_warrior() / get_adventurer() for the exact dict shape
 ## (stats.attack, progression.xp/skill_points/perks) these labels read.
 func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)

@@ -82,19 +82,25 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 # Cumulative XP threshold for level N is 5*N*(N+1) - 10: level 1 costs 0, level
 # 2 costs 20, level 3 costs 50, level 4 costs 90, each step costing 10 XP more
 # than the previous one. See get_level_xp_threshold().
-const BASE_ATTACK := 60
-const BASE_MAX_HEALTH := 3
-const BASE_MOVE_RANGE := 3
-const LEVEL_UP_MAX_HEALTH_BONUS := 1
-const LEVEL_UP_SKILL_POINTS := 10
-const PERK_LEVEL_INTERVAL := 3
+# Balance values below default to GameConfig's own DEFAULTS and are
+# overwritten from config/game_config.json in _ready() (see
+# docs/plans/2026-08-07-config-and-automation). They stay UPPER_SNAKE_CASE
+# vars, not real consts, specifically so every existing
+# GameSession.SOME_CONSTANT call site keeps working unchanged — GDScript
+# exposes both consts and vars the same way through a singleton instance.
+var BASE_ATTACK: int = 60
+var BASE_MAX_HEALTH: int = 3
+var BASE_MOVE_RANGE: int = 3
+var LEVEL_UP_MAX_HEALTH_BONUS: int = 1
+var LEVEL_UP_SKILL_POINTS: int = 10
+var PERK_LEVEL_INTERVAL: int = 3
 const BONUS_MOVE_PERK_ID := "bonus_move"
-const GUILD_HALL_LEVEL_1_PARTY_CAP := 4
-const GUILD_HALL_LEVEL_2_PARTY_CAP := 5
-const GUILD_HALL_UPGRADE_COST := 50
-const GUILD_HALL_MAX_LEVEL := 2
-const EFFECTIVE_HIT_CHANCE_CAP := 0.95
-const ATTACK_TO_HIT_CHANCE_DIVISOR := 100.0
+var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 4
+var GUILD_HALL_LEVEL_2_PARTY_CAP: int = 5
+var GUILD_HALL_UPGRADE_COST: int = 50
+var GUILD_HALL_MAX_LEVEL: int = 2
+var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
+var ATTACK_TO_HIT_CHANCE_DIVISOR: float = 100.0
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
 # A campaign starts sparse (one active encounter, one active recruitment
@@ -102,10 +108,10 @@ const ATTACK_TO_HIT_CHANCE_DIVISOR := 100.0
 # wait, and only while under that category's cap. See EXPEDITIONS/
 # RECRUITMENT_CANDIDATE_TEMPLATES for the template pools these instances/
 # offers are spawned from.
-const ENCOUNTER_INSTANCE_CAP := 2
-const RECRUITMENT_OFFER_CAP := 4
-const ENCOUNTER_VACANCY_TURNS := 15
-const RECRUITMENT_VACANCY_TURNS := 30
+var ENCOUNTER_INSTANCE_CAP: int = 2
+var RECRUITMENT_OFFER_CAP: int = 4
+var ENCOUNTER_VACANCY_TURNS: int = 15
+var RECRUITMENT_VACANCY_TURNS: int = 30
 # Deterministic template cycling order for encounter refills. Must mirror
 # EXPEDITIONS' keys exactly (order matters for repeatable tests/screenshots).
 const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost"]
@@ -116,28 +122,33 @@ const WORLD_GRID_WIDTH := 5
 const WORLD_GRID_HEIGHT := 5
 
 const WARRIOR_ID := "warrior_001"
-const DEFAULT_WARRIOR := {
-	"id": WARRIOR_ID,
-	"name": "Warrior",
-	"class": "warrior",
-	"weapon": "sword",
-	"level": 1,
-	"availability_status": "available",
-	# Authored base combat values; effective values (hit chance, max health,
-	# move range) are derived from these plus progression by GameSession.
-	"stats": {
-		"max_health": BASE_MAX_HEALTH,
-		"attack": BASE_ATTACK,
-		"move_range": BASE_MOVE_RANGE,
-	},
-	# Durable leveling state. xp is a float so fractional party XP awards are
-	# never truncated; display-facing rounding is a UI concern.
-	"progression": {
-		"xp": 0.0,
-		"skill_points": 0,
-		"perks": [],
-	},
-}
+
+
+func get_default_warrior() -> Dictionary:
+	return {
+		"id": WARRIOR_ID,
+		"name": "Warrior",
+		"class": "warrior",
+		"weapon": "sword",
+		"level": 1,
+		"availability_status": "available",
+		# Authored base combat values; effective values (hit chance, max health,
+		# move range) are derived from these plus progression by GameSession.
+		"stats": {
+			"max_health": BASE_MAX_HEALTH,
+			"attack": BASE_ATTACK,
+			"move_range": BASE_MOVE_RANGE,
+		},
+		# Durable leveling state. xp is a float so fractional party XP awards are
+		# never truncated; display-facing rounding is a UI concern.
+		"progression": {
+			"xp": 0.0,
+			"skill_points": 0,
+			"perks": [],
+		},
+	}
+
+
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
 # A pool of recruitment templates that vacancy-timed refills draw from (see
@@ -224,6 +235,30 @@ func _init() -> void:
 	reset()
 
 
+func _ready() -> void:
+	_load_balance_config()
+	reset()
+
+
+func _load_balance_config() -> void:
+	BASE_ATTACK = GameConfig.get_int("combat", "base_attack", BASE_ATTACK)
+	BASE_MAX_HEALTH = GameConfig.get_int("combat", "base_max_health", BASE_MAX_HEALTH)
+	BASE_MOVE_RANGE = GameConfig.get_int("combat", "base_move_range", BASE_MOVE_RANGE)
+	EFFECTIVE_HIT_CHANCE_CAP = GameConfig.get_float("combat", "effective_hit_chance_cap", EFFECTIVE_HIT_CHANCE_CAP)
+	ATTACK_TO_HIT_CHANCE_DIVISOR = GameConfig.get_float("combat", "attack_to_hit_chance_divisor", ATTACK_TO_HIT_CHANCE_DIVISOR)
+	LEVEL_UP_MAX_HEALTH_BONUS = GameConfig.get_int("progression", "level_up_max_health_bonus", LEVEL_UP_MAX_HEALTH_BONUS)
+	LEVEL_UP_SKILL_POINTS = GameConfig.get_int("progression", "level_up_skill_points", LEVEL_UP_SKILL_POINTS)
+	PERK_LEVEL_INTERVAL = GameConfig.get_int("progression", "perk_level_interval", PERK_LEVEL_INTERVAL)
+	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
+	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
+	GUILD_HALL_UPGRADE_COST = GameConfig.get_int("guild_hall", "upgrade_cost", GUILD_HALL_UPGRADE_COST)
+	GUILD_HALL_MAX_LEVEL = GameConfig.get_int("guild_hall", "max_level", GUILD_HALL_MAX_LEVEL)
+	ENCOUNTER_INSTANCE_CAP = GameConfig.get_int("population", "encounter_instance_cap", ENCOUNTER_INSTANCE_CAP)
+	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
+	ENCOUNTER_VACANCY_TURNS = GameConfig.get_int("population", "encounter_vacancy_turns", ENCOUNTER_VACANCY_TURNS)
+	RECRUITMENT_VACANCY_TURNS = GameConfig.get_int("population", "recruitment_vacancy_turns", RECRUITMENT_VACANCY_TURNS)
+
+
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 	reset()
 	player_name = new_player_name
@@ -231,7 +266,7 @@ func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 
 func reset() -> void:
 	# The roster owns a copy so a session cannot mutate the shared default data.
-	adventurers = [DEFAULT_WARRIOR.duplicate(true)]
+	adventurers = [get_default_warrior()]
 	recruitment_candidates = [RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)]
 	recruitment_vacancies = []
 	parties = []
@@ -390,7 +425,7 @@ func recruit_adventurer() -> void:
 		recruit_number += 1
 		candidate_id = "warrior_%03d" % recruit_number
 
-	var adventurer: Dictionary = DEFAULT_WARRIOR.duplicate(true)
+	var adventurer: Dictionary = get_default_warrior()
 	adventurer.id = candidate_id
 	adventurer.name = "Warrior %d" % recruit_number
 	adventurers.append(adventurer)
@@ -408,8 +443,8 @@ func recruit_adventurer() -> void:
 ## (get_effective_max_health, _award_adventurer_xp, unit_details.gd, and the
 ## deployed-party stat derivation in BattleController).
 func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
-	record["stats"] = DEFAULT_WARRIOR.stats.duplicate(true)
-	record["progression"] = DEFAULT_WARRIOR.progression.duplicate(true)
+	record["stats"] = get_default_warrior().stats.duplicate(true)
+	record["progression"] = get_default_warrior().progression.duplicate(true)
 	return record
 
 
