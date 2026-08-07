@@ -11,78 +11,63 @@ func after_each() -> void:
 	GameManager.close_game_menu()
 
 
-func test_encampment_exposes_units_buildings_trade_and_deploy_party() -> void:
+func test_encampment_contains_the_camp_nav() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Center/VBox/UnitsButton").text, "encampment.units")
-	assert_false(screen.get_node("Center/VBox/UnitsButton").disabled)
-	assert_eq(screen.get_node("Center/VBox/DeployPartyButton").text, "encampment.deploy_party")
-
-
-func test_buildings_button_is_enabled_and_routes_via_game_manager() -> void:
-	var screen: Control = EncampmentScene.instantiate()
-	add_child_autofree(screen)
-
-	assert_eq(screen.get_node("Center/VBox/BuildingsButton").text, "encampment.buildings")
-	assert_false(screen.get_node("Center/VBox/BuildingsButton").disabled)
-
-	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
-	assert_string_contains(source, "GameManager.go_to_buildings()")
-
-
-func test_trade_is_present_but_cannot_route_to_an_unimplemented_system() -> void:
-	var screen: Control = EncampmentScene.instantiate()
-	add_child_autofree(screen)
-
-	assert_eq(screen.get_node("Center/VBox/TradeButton").text, "encampment.trade")
-	assert_true(screen.get_node("Center/VBox/TradeButton").disabled)
+	assert_not_null(screen.get_node("Body/CampNav"))
 
 
 func test_the_old_depart_and_manage_party_controls_are_absent() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_false(screen.has_node("Center/VBox/DepartButton"))
-	assert_false(screen.has_node("Center/VBox/ManagePartyButton"))
-	assert_false(screen.has_node("Center/VBox/Status"))
+	assert_false(screen.has_node("Body/Center/VBox/DepartButton"))
+	assert_false(screen.has_node("Body/Center/VBox/ManagePartyButton"))
+	assert_false(screen.has_node("Body/Center/VBox/Status"))
+	assert_false(
+		screen.has_node("Body/Center/VBox/UnitsButton"),
+		"Encampment's own content no longer has nav buttons -- they live in CampNav"
+	)
+	assert_false(screen.has_node("Body/Center/VBox/BuildingsButton"))
+	assert_false(screen.has_node("Body/Center/VBox/TradeButton"))
+	assert_false(screen.has_node("Body/Center/VBox/DeployPartyButton"))
 
 
-func test_deploy_party_is_disabled_until_a_deployable_party_exists() -> void:
-	var screen: Control = EncampmentScene.instantiate()
-	add_child_autofree(screen)
-
-	assert_true(screen.get_node("Center/VBox/DeployPartyButton").disabled)
-
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	screen.refresh()
-
-	assert_false(screen.get_node("Center/VBox/DeployPartyButton").disabled)
-
-
-func test_deploy_party_becomes_disabled_again_once_no_deployable_party_remains() -> void:
+func test_encampment_shows_population_parties_and_units_counts() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
-	screen.refresh()
-	assert_false(screen.get_node("Center/VBox/DeployPartyButton").disabled)
 
+	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 1)
+
+
+func test_units_count_excludes_members_of_a_deployed_party() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 0,
+		"The only adventurer is out with a deployed party"
+	)
+
+
+func test_refresh_updates_the_counts() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 0)
+
+	GameSession.create_party()
 	screen.refresh()
 
-	assert_true(screen.get_node("Center/VBox/DeployPartyButton").disabled)
-
-
-func test_units_button_routes_via_game_manager() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
-	assert_string_contains(source, "GameManager.go_to_units()")
-
-
-func test_deploy_party_button_routes_via_game_manager() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/encampment.gd")
-	assert_string_contains(source, "GameManager.go_to_deploy_party()")
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
 
 
 func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total() -> void:

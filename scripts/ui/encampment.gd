@@ -1,6 +1,8 @@
 extends Control
 
-@onready var deploy_party_button: Button = $Center/VBox/DeployPartyButton
+@onready var population_label: Label = $Body/Center/VBox/PopulationLabel
+@onready var parties_label: Label = $Body/Center/VBox/PartiesLabel
+@onready var units_label: Label = $Body/Center/VBox/UnitsLabel
 @onready var information_panel: PanelContainer = $InformationPanel
 
 
@@ -15,17 +17,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
-	deploy_party_button.disabled = GameSession.get_deployable_encamped_parties().is_empty()
+	population_label.text = tr("encampment.population") % GameSession.adventurers.size()
+	parties_label.text = tr("encampment.parties_count") % GameSession.get_encamped_parties().size()
+	units_label.text = tr("encampment.units_count") % _count_encamped_units()
 	information_panel.refresh()
 
 
-func _on_units_button_pressed() -> void:
-	GameManager.go_to_units()
-
-
-func _on_buildings_button_pressed() -> void:
-	GameManager.go_to_buildings()
-
-
-func _on_deploy_party_button_pressed() -> void:
-	GameManager.go_to_deploy_party()
+## Adventurers currently physically present at the encampment: the roster
+## minus whoever is out with a deployed party (an encamped-but-unassigned
+## party's members still count as present).
+func _count_encamped_units() -> int:
+	var deployed_member_ids: Array = []
+	for party in GameSession.parties:
+		if party.get("deployed", false):
+			deployed_member_ids.append_array(party.member_ids)
+	return GameSession.adventurers.size() - deployed_member_ids.size()

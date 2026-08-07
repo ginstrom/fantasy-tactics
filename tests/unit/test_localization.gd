@@ -251,12 +251,24 @@ func test_encampment_uses_translation_keys_not_literal_copy() -> void:
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
 
-	assert_eq(encampment.get_node("Center/VBox/Title").text, "encampment.title")
-	assert_eq(encampment.get_node("Center/VBox/UnitsButton").text, "encampment.units")
-	assert_eq(encampment.get_node("Center/VBox/BuildingsButton").text, "encampment.buildings")
-	assert_eq(encampment.get_node("Center/VBox/TradeButton").text, "encampment.trade")
+	var deployed_member_count := 0
+	for party in GameSession.parties:
+		if party.get("deployed", false):
+			deployed_member_count += party.member_ids.size()
+	var units_count: int = GameSession.adventurers.size() - deployed_member_count
+
+	assert_eq(encampment.get_node("Body/Center/VBox/Title").text, "encampment.title")
 	assert_eq(
-		encampment.get_node("Center/VBox/DeployPartyButton").text, "encampment.deploy_party"
+		encampment.get_node("Body/Center/VBox/PopulationLabel").text,
+		tr("encampment.population") % GameSession.adventurers.size()
+	)
+	assert_eq(
+		encampment.get_node("Body/Center/VBox/PartiesLabel").text,
+		tr("encampment.parties_count") % GameSession.get_encamped_parties().size()
+	)
+	assert_eq(
+		encampment.get_node("Body/Center/VBox/UnitsLabel").text,
+		tr("encampment.units_count") % units_count
 	)
 
 
