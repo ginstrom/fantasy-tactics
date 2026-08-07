@@ -53,6 +53,8 @@ Parties
                          | Party 2              |       2 | Deployed   |
                          +----------------------+---------+------------+
 
+                         [Create Party]
+
                          Select a party to show its details at right.
                          Double-click a party, or use [View], to open it.
 
