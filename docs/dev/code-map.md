@@ -13,7 +13,7 @@ one or both of them.
 | Autoload | File | Owns | Never does |
 |---|---|---|---|
 | `GameManager` | `scripts/autoload/game_manager.gd` | Scene navigation (`go_to_*`, `_change_scene`), short-lived UI routing context (`route_context_id`), thin `Error`-returning wrappers around `GameSession` calls | Hold durable game state |
-| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), gold | Touch the scene tree |
+| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), gold, Guild Hall level | Touch the scene tree |
 
 A scene's `_on_*_pressed()` handler almost always does one of two things:
 call a `GameManager.go_to_*()`/action method (which may call into
@@ -30,16 +30,17 @@ is just an `Error`-returning wrapper around `GameSession.deploy_party()`).
 ```
 scenes/                          scripts/
 ├── boot/                        ├── autoload/    GameManager, GameSession (see above)
-├── ui/                          ├── battle/      BattleController (Grid node), Battlefield, GridScript, Unit
-│   (encampment, parties,        ├── boot/        entry point → Start Menu
-│    party_details, add_member,  ├── debug/       F9 debug menu + scenario definitions
-│    deploy_party, roster,       ├── local/       starting_settlement.gd (pre-Encampment intro screen)
-│    recruitment, units,         ├── tools/       screenshot_tour (non-test tooling)
-│    unit_details, start_menu,   ├── ui/          one script per scenes/ui/ scene, plus shared
-│    game_menu, information_     │                widgets (table_view.gd, table_column.gd)
-│    panel, party_manager,       └── world/       world_map.gd
-│    level_up)
-├── world/
+├── ui/                          ├── battle/      BattleController (Grid node), Battlefield,
+│   (encampment, parties,        │                GridScript, Unit, PortraitPanel
+│    party_details, add_member,  ├── boot/        entry point → Start Menu
+│    deploy_party, roster,       ├── debug/       F9 debug menu + scenario definitions
+│    recruitment, units,         ├── local/       starting_settlement.gd (pre-Encampment intro screen)
+│    unit_details, start_menu,   ├── tools/       screenshot_tour (non-test tooling)
+│    game_menu, information_     ├── ui/          one script per scenes/ui/ scene, plus shared
+│    panel, party_manager,       │                widgets (table_view.gd, table_column.gd) —
+│    level_up, buildings,        │                note: portrait_panel.gd lives in scripts/battle/
+│    guild_hall, camp_nav)       │                above, not here
+├── world/                       └── world/       world_map.gd
 ├── local/
 ├── battle/
 └── debug/
@@ -62,7 +63,12 @@ often more precise than its own source comments.
   `travel_route: Array[Vector2i]`, `movement_spent: bool`.
 - **`EXPEDITIONS: Dictionary`** (constant) — the two encounter *templates*
   (`goblin_camp`, `orc_outpost`): fixed `position`, `reward`, `kill_xp`,
-  `clear_xp`, `enemy` stats. Read-only at runtime.
+  `clear_xp`, `difficulty` (star tier), and a documented-default `enemy`.
+  A live *active instance*'s `enemy` is re-resolved from
+  `STAR_ENEMY_COMPOSITIONS[difficulty]` every time it's entered (see
+  `enter_encounter()`/`_resolve_enemy_composition()`/
+  `enemy_composition_roll`) — 1 star is a fixed single goblin; 2-3 stars
+  randomly pick between two goblins-vs-fewer-orcs options.
 - **`active_encounters: Array[Dictionary]`** — the *live instances* on the
   World Map right now, each an expedition-shaped dict plus `id` and
   `template_id`. A cleared instance is removed here (not marked complete in
@@ -100,7 +106,11 @@ This is the single most common source of confusion reading battle code —
 2. **`GridScript`** (`scripts/battle/grid.gd`) — a plain `RefCounted` helper
    for tile geometry only (`is_in_bounds`, `get_adjacent`,
    `get_tiles_in_range`). `BattleController` holds one of these as its own
-   `grid` member variable (`battle_controller.gd`'s `var grid`).
+   `grid` member variable (`battle_controller.gd`'s `var grid`);
+   `get_tile_distances` runs the identical BFS but also records
+   distance-from-start, and is what `battle_controller.gd`'s
+   `_move_distances()` uses for both `get_legal_moves()` and
+   `try_move_selected_unit()`.
 
 So `battlefield.grid` (the controller) and `battlefield.grid.grid` (the
 tile-geometry helper) are two different objects. `scripts/world/world_map.gd`
@@ -111,7 +121,10 @@ reuses the same `GridScript` for its own 5×5 board, independently of battle.
 → `Battlefield._on_board_changed()` (wired in the `.tscn`) → checks
 `grid.is_battle_won()`/`is_battle_lost()` → `_resolve_battle()` (awaits a
 short timer for the result banner) → `_apply_battle_outcome()` → XP award,
-then `GameManager.complete_battle()` or `GameManager.fail_battle()`.
+then `GameManager.complete_battle()` or `GameManager.fail_battle()`. Player
+units can also be moved with WASD and selected with the 1-5 number keys
+(`battle_controller.gd`'s `MOVE_KEY_DIRECTIONS`/`NUMBER_KEYS`), independent
+of the click path described above.
 
 ## World Map: routing is turn-based, not real-time
 
@@ -125,6 +138,23 @@ Standing on an encounter tile and clicking it again activates it
 (`try_activate_current_tile()` → `encounter_activated` signal → `.tscn`-wired
 `_on_encounter_activated()` → `GameManager.enter_battle()`). The settlement
 tile works the same way for returning home.
+
+## Camp navigation: CampNav is a reusable shell, not a router
+
+`scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
+identically into five top-level camp screens — Encampment, Units,
+Buildings, Deploy Party, World Map — to give a persistent left-hand nav.
+It renders six buttons, but the Trade button is permanently `disabled` in
+the `.tscn` and has no `_on_trade_button_pressed()` handler; there's no
+Trade screen yet for it to route to. CampNav has no state of its own
+beyond the Deploy Party button's disabled flag (set in `refresh()` from
+`GameSession.get_deployable_encamped_parties().is_empty()`) and never
+receives a signal from its parent screen — every wired button calls a
+`GameManager.go_to_*()` directly. That's the opposite of
+`InformationPanel`'s pattern, whose buttons forward a signal
+(`party_selected`, `adventurer_selected`, `recruit_selected`) up to the
+parent screen instead of routing themselves, since its "View" destination
+depends on the parent screen's own selection.
 
 ## Progression formulas
 
