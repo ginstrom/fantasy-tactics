@@ -43,9 +43,9 @@ var repathing: bool = false
 @onready var highlight_container: Node2D = $Board/Highlights
 @onready var marker_container: Node2D = $Board/Markers
 @onready var route_container: Node2D = $Board/Routes
-@onready var turn_label: Label = $HUD/TurnLabel
-@onready var end_turn_button: Button = $HUD/EndTurnButton
-@onready var information_panel: PanelContainer = $HUD/InformationPanel
+@onready var turn_label: Label = %TurnLabel
+@onready var end_turn_button: Button = %EndTurnButton
+@onready var information_panel: PanelContainer = %InformationPanel
 
 
 func _ready() -> void:

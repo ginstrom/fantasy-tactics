@@ -18,40 +18,56 @@ script = ExtResource("1_world_map")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="FeedbackPanel" type="Panel" parent="HUD"]
-offset_left = 16.0
-offset_top = 608.0
-offset_right = 1264.0
-offset_bottom = 704.0
+[node name="Margin" type="MarginContainer" parent="HUD"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
-[node name="Hint" type="Label" parent="HUD"]
-offset_left = 32.0
-offset_top = 616.0
-offset_right = 1248.0
-offset_bottom = 696.0
+[node name="VBox" type="VBoxContainer" parent="HUD/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TopRow" type="HBoxContainer" parent="HUD/Margin/VBox"]
+layout_mode = 2
+alignment = 2
+
+[node name="TopRight" type="VBoxContainer" parent="HUD/Margin/VBox/TopRow"]
+layout_mode = 2
+
+[node name="TurnLabel" type="Label" parent="HUD/Margin/VBox/TopRow/TopRight"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "world_map.turn"
+
+[node name="EndTurnButton" type="Button" parent="HUD/Margin/VBox/TopRow/TopRight"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "world_map.end_turn"
+
+[node name="InformationPanel" parent="HUD/Margin/VBox/TopRow/TopRight" instance=ExtResource("2_information_panel")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="HUD/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BottomPanel" type="PanelContainer" parent="HUD/Margin/VBox"]
+layout_mode = 2
+
+[node name="Hint" type="Label" parent="HUD/Margin/VBox/BottomPanel"]
+unique_name_in_owner = true
+layout_mode = 2
 autowrap_mode = 3
 text = "world_map.hint"
 
-[node name="TurnLabel" type="Label" parent="HUD"]
-offset_left = 1104.0
-offset_top = 16.0
-offset_right = 1264.0
-offset_bottom = 48.0
-text = "world_map.turn"
-
-[node name="EndTurnButton" type="Button" parent="HUD"]
-offset_left = 1104.0
-offset_top = 56.0
-offset_right = 1264.0
-offset_bottom = 88.0
-text = "world_map.end_turn"
-
-[node name="InformationPanel" parent="HUD" instance=ExtResource("2_information_panel")]
-offset_left = 984.0
-offset_top = 96.0
-offset_right = 1264.0
-offset_bottom = 176.0
-
 [connection signal="encounter_activated" from="." to="." method="_on_encounter_activated"]
 [connection signal="settlement_activated" from="." to="." method="_on_settlement_activated"]
-[connection signal="pressed" from="HUD/EndTurnButton" to="." method="_on_end_turn_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/TopRow/TopRight/EndTurnButton" to="." method="_on_end_turn_pressed"]

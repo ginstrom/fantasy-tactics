@@ -501,7 +501,7 @@ func test_world_map_renders_a_party_deployed_via_the_deploy_party_action() -> vo
 	world_map._handle_tile_click(world_map.party_position)
 
 	assert_true(world_map.party_selected, "The deployed party's marker must remain selectable")
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 	assert_true(panel.get_node("Content/PartyName").visible)
 	assert_eq(panel.get_node("Content/PartyName").text, tr("information.party") % "Party 1")
 
@@ -553,7 +553,7 @@ func test_world_map_contains_the_information_panel_showing_the_current_gold_tota
 	GameSession.gold = 25
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
@@ -561,7 +561,7 @@ func test_world_map_contains_the_information_panel_showing_the_current_gold_tota
 func test_information_panel_hides_party_name_until_the_party_marker_is_selected() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 
 	assert_false(
 		panel.get_node("Content/PartyName").visible,
@@ -579,7 +579,7 @@ func test_information_panel_hides_party_name_until_the_party_marker_is_selected(
 func test_information_panel_hides_party_name_again_after_deselecting_with_right_click() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 	world_map._handle_tile_click(world_map.party_position)
 
 	var right_click := InputEventMouseButton.new()
@@ -596,7 +596,7 @@ func test_information_panel_hides_party_name_again_after_deselecting_with_right_
 func test_pressing_the_panels_view_party_button_routes_to_party_details() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 	world_map._handle_tile_click(world_map.party_position)
 
 	panel.get_node("Content/PartyViewButton").emit_signal("pressed")
@@ -612,7 +612,7 @@ func test_information_panel_shows_the_pending_reward_for_a_selected_party_with_o
 	GameSession.pending_reward = 15
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 
 	world_map._handle_tile_click(world_map.party_position)
 
@@ -626,7 +626,7 @@ func test_information_panel_hides_the_pending_reward_row_when_there_is_none() ->
 	GameSession.pending_reward = 0
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var panel: Control = world_map.get_node("HUD/InformationPanel")
+	var panel: Control = world_map.get_node("%InformationPanel")
 
 	world_map._handle_tile_click(world_map.party_position)
 
@@ -805,7 +805,7 @@ func test_active_battle_disables_and_blocks_end_turn() -> void:
 
 	world_map._on_end_turn_pressed()
 
-	assert_true(world_map.get_node("HUD/EndTurnButton").disabled)
+	assert_true(world_map.get_node("%EndTurnButton").disabled)
 	assert_eq(GameSession.world_turn, 1)
 
 
@@ -867,7 +867,7 @@ func test_end_turn_updates_the_turn_label() -> void:
 
 	world_map._on_end_turn_pressed()
 
-	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 2)
+	assert_eq(world_map.get_node("%TurnLabel").text, tr("world_map.turn") % 2)
 
 
 ## Task 4: the map only ever draws GameSession's live active-encounter list
@@ -1052,3 +1052,18 @@ func test_world_map_does_not_contain_the_camp_nav() -> void:
 	add_child_autofree(world_map)
 
 	assert_null(world_map.get_node_or_null("HUD/CampNav"))
+
+
+func test_hud_top_right_stack_holds_turn_label_end_turn_and_information_panel() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.turn_label.get_parent(), world_map.end_turn_button.get_parent())
+	assert_eq(world_map.information_panel.get_parent(), world_map.turn_label.get_parent())
+
+
+func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_true(world_map.get_node("%Hint").get_parent() is PanelContainer)

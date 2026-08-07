@@ -234,21 +234,21 @@ func test_world_map_hint_uses_translation_key_not_literal_copy() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	assert_eq(world_map.get_node("HUD/Hint").text, "world_map.hint")
+	assert_eq(world_map.get_node("%Hint").text, "world_map.hint")
 
 
 func test_world_map_end_turn_button_uses_translation_key_not_literal_copy() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	assert_eq(world_map.get_node("HUD/EndTurnButton").text, "world_map.end_turn")
+	assert_eq(world_map.get_node("%EndTurnButton").text, "world_map.end_turn")
 
 
 func test_world_map_turn_label_is_built_from_translated_copy() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	assert_eq(world_map.get_node("HUD/TurnLabel").text, tr("world_map.turn") % 1)
+	assert_eq(world_map.get_node("%TurnLabel").text, tr("world_map.turn") % 1)
 
 
 func test_encampment_uses_translation_keys_not_literal_copy() -> void:
