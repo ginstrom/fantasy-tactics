@@ -87,14 +87,11 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
 
-	# Complete battle: defeat both goblins via the real board-click path (not
+	# Complete battle: defeat the goblin via the real board-click path (not
 	# the private outcome hook other battle tests use directly), so this test
 	# also proves a real kill still drives the win pipeline through to
-	# GameManager.complete_battle(). The goblin camp now fields two goblins
-	# (see BattleControllerScript.ENEMY_START_POSITIONS / EXPEDITIONS'
-	# enemy.count), and try_attack_selected_unit only allows one attack per
-	# unit per turn even with Super Power's boosted stats, so each goblin must
-	# be defeated on its own player turn.
+	# GameManager.complete_battle(). The goblin camp is a one-star site and
+	# now fields a single goblin (see GameSession.STAR_ENEMY_COMPOSITIONS).
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
@@ -102,38 +99,16 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	battlefield.grid.apply_super_power()
 
 	var warrior_start: Vector2i = BattleControllerScript.PLAYER_START_POSITIONS[0]
-	var first_goblin_start: Vector2i = BattleControllerScript.ENEMY_START_POSITIONS[0]
-	var adjacent_to_first_goblin: Vector2i = first_goblin_start + Vector2i.UP
+	var goblin_start: Vector2i = BattleControllerScript.ENEMY_START_POSITIONS[0]
+	var adjacent_to_goblin: Vector2i = goblin_start + Vector2i.UP
 	battlefield.grid._handle_tile_click(warrior_start)
-	battlefield.grid._handle_tile_click(adjacent_to_first_goblin)
-	battlefield.grid._handle_tile_click(first_goblin_start)
+	battlefield.grid._handle_tile_click(adjacent_to_goblin)
+	battlefield.grid._handle_tile_click(goblin_start)
 
-	# End the turn so the warrior's has_acted resets, then let the remaining
-	# goblin's AI turn play out before hunting it down wherever it ends up.
-	battlefield._on_end_turn_pressed()
-	while battlefield._enemy_turn_in_progress:
-		await get_tree().process_frame
-
-	var remaining_goblin = null
-	for unit in battlefield.grid.units:
-		if unit.side == BattleControllerScript.Side.ENEMY and unit.is_alive():
-			remaining_goblin = unit
-			break
-	assert_not_null(remaining_goblin, "One goblin should still be alive after the first kill")
-
-	battlefield.grid._handle_tile_click(adjacent_to_first_goblin)
-	if not remaining_goblin.grid_position in battlefield.grid.grid.get_adjacent(adjacent_to_first_goblin):
-		for candidate in battlefield.grid.grid.get_adjacent(remaining_goblin.grid_position):
-			if battlefield.grid.get_unit_at(candidate) == null:
-				battlefield.grid._handle_tile_click(candidate)
-				break
-	battlefield.grid._handle_tile_click(remaining_goblin.grid_position)
-
-	# Correctly-awarded kill XP (5 per goblin, both now counted — see
-	# BattleControllerScript.enemy_defeated firing once per kill rather than
-	# once per battle) plus the site's 10 clear XP lands the party on exactly
-	# the level 2 threshold, so a level-up modal now legitimately appears and
-	# must be dismissed before the battle-result transition can proceed.
+	# Kill XP (5) plus the site's 10 clear XP totals 15 — short of the level
+	# 2 threshold (20), so no level-up modal is expected here; the loop below
+	# still dismisses one defensively in case a future rebalance changes the
+	# math, and caps its wait so a stuck battle fails instead of hanging.
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
 		if battlefield.level_up.visible:

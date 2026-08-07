@@ -175,6 +175,9 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 
 
 func test_ready_lists_each_living_enemys_health() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
@@ -184,6 +187,9 @@ func test_ready_lists_each_living_enemys_health() -> void:
 
 
 func test_enemy_health_list_drops_a_defeated_enemy() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -291,11 +297,13 @@ func _setup_goblin_camp_battle() -> Node2D:
 	return battlefield
 
 
-func _setup_orc_outpost_battle() -> Node2D:
+func _setup_orc_outpost_battle(roll_override: Callable = Callable()) -> Node2D:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	if roll_override.is_valid():
+		GameSession.enemy_composition_roll = roll_override
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -351,10 +359,11 @@ func test_kill_xp_award_guard_prevents_a_duplicate_award_from_a_repeated_event()
 ## by a single "already awarded this battle" boolean, which silently
 ## swallowed kill XP for every enemy after the first in a multi-enemy
 ## battle. enemy_defeated now fires once per defeated unit and the guard
-## tracks awarded units individually, so both goblins' kills must each pay
-## out their kill_xp.
+## tracks awarded units individually, so both enemies' kills must each pay
+## out their kill_xp. Uses the Orc Outpost forced to its two-goblin option
+## since Goblin Camp is now a single-enemy (one-star) site.
 func test_defeating_two_enemies_in_one_battle_awards_kill_xp_for_each() -> void:
-	var battlefield := _setup_goblin_camp_battle()
+	var battlefield := _setup_orc_outpost_battle(func(_option_count: int) -> int: return 0)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var first_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var second_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[1])
@@ -366,16 +375,13 @@ func test_defeating_two_enemies_in_one_battle_awards_kill_xp_for_each() -> void:
 	battlefield.grid.hit_roll = func() -> float: return 0.0
 
 	battlefield.grid.try_attack_selected_unit(first_enemy.grid_position)
-	# A single Unit can only attack once per turn (has_acted); reset it here
-	# to land a second kill within the same battle without needing a full
-	# multi-turn combat sequence.
 	warrior.has_acted = false
 	battlefield.grid.try_attack_selected_unit(second_enemy.grid_position)
 
 	assert_eq(
 		GameSession.get_adventurer("warrior_001").progression.xp,
-		10.0,
-		"Defeating both goblins in one battle should award kill_xp (5) twice, not once"
+		20.0,
+		"Defeating both enemies in one battle should award kill_xp (10) twice, not once"
 	)
 
 

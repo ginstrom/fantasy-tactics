@@ -183,7 +183,7 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	add_child_autofree(battlefield)
 	var controller: Node2D = battlefield.grid
 
-	assert_eq(controller.units.size(), 3, "One Warrior (fallback) plus two goblins")
+	assert_eq(controller.units.size(), 2, "One Warrior (fallback) plus one goblin")
 	var warrior = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	assert_not_null(warrior, "Warrior should spawn at the first player start position")
 	assert_eq(warrior.side, BattleControllerScript.Side.PLAYER)
@@ -192,17 +192,17 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	assert_eq(warrior.attack_damage, 2)
 	assert_eq(warrior.hit_chance, 0.6)
 
-	for index in 2:
-		var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
-		assert_not_null(goblin, "A goblin should spawn at enemy start position %d" % index)
-		assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
-		assert_eq(goblin.max_health, 3)
-		assert_eq(goblin.attack_damage, 1)
-		assert_eq(goblin.hit_chance, 0.3)
-		assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
+	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	assert_not_null(goblin, "A goblin should spawn at the first enemy start position")
+	assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
+	assert_eq(goblin.max_health, 3)
+	assert_eq(goblin.attack_damage, 1)
+	assert_eq(goblin.hit_chance, 0.3)
+	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
 
-func test_ready_builds_three_orcs_when_the_orc_outpost_is_selected() -> void:
+func test_ready_builds_one_orc_when_the_orc_outpost_resolves_to_orcs() -> void:
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 1
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -212,19 +212,39 @@ func test_ready_builds_three_orcs_when_the_orc_outpost_is_selected() -> void:
 	for unit in controller.units:
 		if unit.side == BattleControllerScript.Side.ENEMY:
 			enemy_units.append(unit)
-	assert_eq(enemy_units.size(), 3, "The orc outpost should field three orcs")
+	assert_eq(enemy_units.size(), 1, "The orc-outpost's orc option fields one orc")
 
-	for index in 3:
-		var orc = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
-		assert_not_null(orc, "An orc should spawn at enemy start position %d" % index)
-		assert_eq(orc.side, BattleControllerScript.Side.ENEMY)
-		assert_eq(orc.max_health, 5)
-		assert_eq(orc.attack_damage, 2)
-		assert_eq(orc.hit_chance, 0.5)
-		assert_eq(orc.attack_name, tr("battle.enemy.orc.attack"))
+	var orc = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	assert_not_null(orc)
+	assert_eq(orc.side, BattleControllerScript.Side.ENEMY)
+	assert_eq(orc.max_health, 5)
+	assert_eq(orc.attack_damage, 2)
+	assert_eq(orc.hit_chance, 0.5)
+	assert_eq(orc.attack_name, tr("battle.enemy.orc.attack"))
 
 
-func test_ready_builds_two_goblins_when_the_goblin_camp_is_selected() -> void:
+func test_ready_builds_two_goblins_when_the_orc_outpost_resolves_to_goblins() -> void:
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var enemy_units: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			enemy_units.append(unit)
+	assert_eq(enemy_units.size(), 2, "The orc-outpost's goblins option fields two goblins")
+
+	for index in 2:
+		var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
+		assert_not_null(goblin)
+		assert_eq(goblin.max_health, 3)
+		assert_eq(goblin.attack_damage, 1)
+		assert_eq(goblin.hit_chance, 0.3)
+
+
+func test_ready_builds_one_goblin_when_the_goblin_camp_is_selected() -> void:
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -234,16 +254,14 @@ func test_ready_builds_two_goblins_when_the_goblin_camp_is_selected() -> void:
 	for unit in controller.units:
 		if unit.side == BattleControllerScript.Side.ENEMY:
 			enemy_units.append(unit)
-	assert_eq(enemy_units.size(), 2, "The goblin camp should field two goblins")
+	assert_eq(enemy_units.size(), 1, "The goblin camp should field one goblin")
 
-	for index in 2:
-		var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
-		assert_not_null(goblin, "A goblin should spawn at enemy start position %d" % index)
-		assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
-		assert_eq(goblin.max_health, 3)
-		assert_eq(goblin.attack_damage, 1)
-		assert_eq(goblin.hit_chance, 0.3)
-		assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
+	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	assert_not_null(goblin)
+	assert_eq(goblin.max_health, 3)
+	assert_eq(goblin.attack_damage, 1)
+	assert_eq(goblin.hit_chance, 0.3)
+	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
 
 ## Task 2: the player Unit is built from the selected party's first member's
