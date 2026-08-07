@@ -132,9 +132,9 @@ To then drive a real kill through the real input path (not the private
 math), replay actual clicks:
 
 ```gdscript
-battlefield.grid._handle_tile_click(battlefield.grid.WARRIOR_START)   # select
-battlefield.grid._handle_tile_click(adjacent_to_goblin)               # move
-battlefield.grid._handle_tile_click(battlefield.grid.GOBLIN_START)    # attack, kills, wins
+battlefield.grid._handle_tile_click(BattleControllerScript.PLAYER_START_POSITIONS[0])  # select
+battlefield.grid._handle_tile_click(adjacent_to_goblin)                                # move
+battlefield.grid._handle_tile_click(BattleControllerScript.ENEMY_START_POSITIONS[0])   # attack, kills, wins
 ```
 
 ### Waiting for a fire-and-forget coroutine
