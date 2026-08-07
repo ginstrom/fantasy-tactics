@@ -248,28 +248,16 @@ func test_world_map_turn_label_is_built_from_translated_copy() -> void:
 
 
 func test_encampment_uses_translation_keys_not_literal_copy() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
 
-	var deployed_member_count := 0
-	for party in GameSession.parties:
-		if party.get("deployed", false):
-			deployed_member_count += party.member_ids.size()
-	var units_count: int = GameSession.adventurers.size() - deployed_member_count
-
 	assert_eq(encampment.get_node("Body/Center/VBox/Title").text, "encampment.title")
-	assert_eq(
-		encampment.get_node("Body/Center/VBox/PopulationLabel").text,
-		tr("encampment.population") % GameSession.adventurers.size()
-	)
-	assert_eq(
-		encampment.get_node("Body/Center/VBox/PartiesLabel").text,
-		tr("encampment.parties_count") % GameSession.get_encamped_parties().size()
-	)
-	assert_eq(
-		encampment.get_node("Body/Center/VBox/UnitsLabel").text,
-		tr("encampment.units_count") % units_count
-	)
+	assert_eq(encampment.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(encampment.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
+	assert_eq(encampment.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 1)
 
 
 func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:
