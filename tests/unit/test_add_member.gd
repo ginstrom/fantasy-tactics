@@ -94,7 +94,7 @@ func test_lists_exactly_the_available_adventurers() -> void:
 func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_panel() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	var item := tree.get_root().get_first_child()
 
@@ -115,7 +115,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_pan
 func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")

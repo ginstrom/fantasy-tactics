@@ -79,7 +79,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.player_name = "Aria"
 	GameSession.gold = 25
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	assert_true(panel.get_node("Content/PlayerName").visible)
 	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")

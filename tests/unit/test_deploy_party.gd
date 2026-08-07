@@ -53,7 +53,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.gold = 25
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	assert_true(panel.get_node("Content/PlayerName").visible)
 	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")
@@ -112,7 +112,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_pan
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	var item := tree.get_root().get_first_child()
 
@@ -131,7 +131,7 @@ func test_the_panels_view_button_asks_game_manager_to_open_party_details() -> vo
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen: Control = DeployPartyScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/PartyTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")

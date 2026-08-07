@@ -47,7 +47,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.gold = 25
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	assert_true(panel.get_node("Content/PlayerName").visible)
 	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")
@@ -98,7 +98,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel(
 	GameSession.gold = 25
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	var item := tree.get_root().get_first_child()
 
@@ -132,7 +132,7 @@ func test_the_recruit_action_is_disabled_with_zero_gold() -> void:
 	GameSession.gold = 0
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
@@ -144,7 +144,7 @@ func test_the_recruit_action_is_enabled_with_ten_gold() -> void:
 	GameSession.gold = 10
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
@@ -156,7 +156,7 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster
 	GameSession.gold = 10
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
@@ -179,7 +179,7 @@ func test_a_second_purchase_attempt_of_the_same_now_gone_candidate_does_not_purc
 	GameSession.gold = 20
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
@@ -215,7 +215,7 @@ func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_
 	GameSession.gold = 25
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")

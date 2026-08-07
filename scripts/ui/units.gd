@@ -2,7 +2,7 @@ extends Control
 
 ## Units hub. Parties, Roster, and Recruitment all route to real screens.
 
-@onready var information_panel: PanelContainer = $InformationPanel
+@onready var information_panel: PanelContainer = %InformationPanel
 
 
 func _ready() -> void:

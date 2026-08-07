@@ -3,7 +3,7 @@ extends Control
 @onready var population_label: Label = $Body/Center/VBox/PopulationLabel
 @onready var parties_label: Label = $Body/Center/VBox/PartiesLabel
 @onready var units_label: Label = $Body/Center/VBox/UnitsLabel
-@onready var information_panel: PanelContainer = $InformationPanel
+@onready var information_panel: PanelContainer = %InformationPanel
 
 
 func _ready() -> void:

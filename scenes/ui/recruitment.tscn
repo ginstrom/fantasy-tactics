@@ -55,15 +55,15 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "ui.back"
 
-[node name="InformationPanel" parent="." instance=ExtResource("2_information_panel")]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -240.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = 96.0
-grow_horizontal = 0
+[node name="InformationMargin" type="MarginContainer" parent="Body"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="InformationPanel" parent="Body/InformationMargin" instance=ExtResource("2_information_panel")]
+unique_name_in_owner = true
+layout_mode = 2
 
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
