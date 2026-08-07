@@ -587,3 +587,239 @@ func test_apply_super_power_maxes_out_player_units_only() -> void:
 	assert_eq(goblin.move_range, 3, "Super Power must not affect enemy units")
 	assert_eq(goblin.attack_damage, 1, "Super Power must not affect enemy units")
 	assert_eq(goblin.hit_chance, 0.3, "Super Power must not affect enemy units")
+
+
+func test_wasd_step_moves_one_tile_and_spends_one_movement_point() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+
+	assert_true(stepped, "A step onto an empty adjacent tile should succeed")
+	assert_eq(mover.grid_position, Vector2i(2, 1))
+	assert_eq(mover.moves_remaining, 2, "A single step spends exactly one movement point")
+
+
+func test_wasd_step_is_rejected_once_movement_points_are_exhausted() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	var first_step: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+	controller.selected_unit = mover
+	var second_step: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+
+	assert_true(first_step, "The first step (spending the only movement point) should succeed")
+	assert_false(second_step, "A unit with no movement points remaining cannot step again")
+	assert_eq(mover.grid_position, Vector2i(2, 1))
+
+
+func test_wasd_step_onto_an_enemy_tile_attacks_instead_of_moving() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+
+	assert_true(stepped, "Stepping into an enemy-occupied tile should succeed as an attack")
+	assert_eq(defender.health, 1, "The step-attack applies the attacker's fixed damage")
+	assert_true(attacker.has_acted)
+	assert_eq(attacker.grid_position, Vector2i(1, 1), "An attacking step must not move the attacker")
+
+
+func test_wasd_step_is_rejected_while_input_is_locked() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	controller.input_locked = true
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+
+	assert_false(stepped, "A locked board must ignore WASD steps")
+	assert_eq(mover.grid_position, Vector2i(1, 1))
+
+
+func test_wasd_step_is_rejected_for_a_unit_on_the_inactive_side() -> void:
+	var controller := _make_controller(6, 6)
+	var enemy = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [enemy]
+	controller.selected_unit = enemy
+	controller.active_side = BattleControllerScript.Side.PLAYER
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+
+	assert_false(stepped, "A unit cannot step on the opposing side's turn")
+	assert_eq(enemy.grid_position, Vector2i(1, 1))
+
+
+func test_wasd_step_is_rejected_for_a_target_outside_the_grid() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.UP)
+
+	assert_false(stepped, "A step off the edge of the grid should be rejected")
+	assert_eq(mover.grid_position, Vector2i(0, 0))
+
+
+func test_wasd_step_and_a_click_move_share_the_same_movement_budget_in_one_turn() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+	assert_eq(mover.grid_position, Vector2i(2, 1))
+	assert_eq(mover.moves_remaining, 2)
+	controller.selected_unit = mover
+	var moved: bool = controller.try_move_selected_unit(Vector2i(4, 1))
+
+	assert_true(stepped, "The WASD step should succeed")
+	assert_true(moved, "The remaining budget should cover the multi-tile click move")
+	assert_eq(mover.grid_position, Vector2i(4, 1))
+	assert_eq(mover.moves_remaining, 0, "The full budget has been spent across the step and the click move")
+
+	controller.selected_unit = mover
+	var further_step: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
+	controller.selected_unit = mover
+	var further_move: bool = controller.try_move_selected_unit(Vector2i(5, 1))
+
+	assert_false(further_step, "No movement points remain for a further step")
+	assert_false(further_move, "No movement points remain for a further click move")
+
+
+func test_select_unit_by_adventurer_id_selects_a_living_player_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	controller.units = [warrior]
+
+	var selected: bool = controller.select_unit_by_adventurer_id("warrior_001")
+
+	assert_true(selected, "A living player unit should be selectable by its adventurer id")
+	assert_eq(controller.selected_unit, warrior)
+
+
+func test_select_unit_by_adventurer_id_is_a_no_op_for_a_defeated_or_unknown_member() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	warrior.health = 0
+	controller.units = [warrior]
+
+	var selected_defeated: bool = controller.select_unit_by_adventurer_id("warrior_001")
+	var selected_unknown: bool = controller.select_unit_by_adventurer_id("no_such_id")
+
+	assert_false(selected_defeated, "A defeated party member cannot be selected")
+	assert_false(selected_unknown, "An id with no matching unit cannot be selected")
+	assert_null(controller.selected_unit)
+
+
+func test_select_unit_by_adventurer_id_is_a_no_op_during_the_enemy_turn_or_while_locked() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	controller.units = [warrior]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+
+	var selected_during_enemy_turn: bool = controller.select_unit_by_adventurer_id("warrior_001")
+
+	assert_false(selected_during_enemy_turn, "Selection is blocked during the enemy's turn")
+	assert_null(controller.selected_unit)
+
+	controller.active_side = BattleControllerScript.Side.PLAYER
+	controller.input_locked = true
+	var selected_while_locked: bool = controller.select_unit_by_adventurer_id("warrior_001")
+
+	assert_false(selected_while_locked, "Selection is blocked while input is locked")
+	assert_null(controller.selected_unit)
+
+
+func test_select_unit_by_number_key_maps_one_based_keys_to_party_order() -> void:
+	var controller := _make_controller(6, 6)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+	)
+	controller.units = [first, second]
+	var adventurer_ids: Array[String] = ["warrior_001", "warrior_002"]
+	controller._player_adventurer_ids = adventurer_ids
+
+	var selected_first: bool = controller.select_unit_by_number_key(1)
+	assert_true(selected_first)
+	assert_eq(controller.selected_unit, first)
+
+	var selected_second: bool = controller.select_unit_by_number_key(2)
+	assert_true(selected_second)
+	assert_eq(controller.selected_unit, second)
+
+
+func test_select_unit_by_number_key_is_a_no_op_for_a_slot_beyond_the_fielded_party() -> void:
+	var controller := _make_controller(6, 6)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+	)
+	controller.units = [first]
+	var adventurer_ids: Array[String] = ["warrior_001"]
+	controller._player_adventurer_ids = adventurer_ids
+
+	var selected: bool = controller.select_unit_by_number_key(5)
+
+	assert_false(selected, "A number key beyond the fielded party's size should be a no-op")
+	assert_null(controller.selected_unit)
+
+
+func test_wasd_key_input_steps_the_selected_unit_one_tile() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+	var warrior = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	controller.selected_unit = warrior
+
+	var key_event := InputEventKey.new()
+	key_event.pressed = true
+	key_event.keycode = KEY_D
+	controller._unhandled_input(key_event)
+
+	assert_eq(
+		warrior.grid_position,
+		BattleControllerScript.PLAYER_START_POSITIONS[0] + Vector2i.RIGHT,
+		"KEY_D should step the selected unit one tile to the right"
+	)
+
+
+func test_number_key_input_selects_the_matching_fielded_party_member() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	var recruit_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(recruit_id)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var key_event := InputEventKey.new()
+	key_event.pressed = true
+	key_event.keycode = KEY_2
+	controller._unhandled_input(key_event)
+
+	assert_not_null(controller.selected_unit, "KEY_2 should select the second fielded party member")
+	assert_eq(controller.selected_unit.adventurer_id, recruit_id)

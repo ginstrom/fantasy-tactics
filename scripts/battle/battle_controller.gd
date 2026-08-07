@@ -110,18 +110,41 @@ func _get_player_adventurer_ids() -> Array[String]:
 	return party.member_ids
 
 
+const MOVE_KEY_DIRECTIONS := {
+	KEY_W: Vector2i.UP, KEY_A: Vector2i.LEFT, KEY_S: Vector2i.DOWN, KEY_D: Vector2i.RIGHT,
+}
+const NUMBER_KEYS := {KEY_1: 1, KEY_2: 2, KEY_3: 3, KEY_4: 4, KEY_5: 5}
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton):
-		return
+	if event is InputEventMouseButton:
+		_handle_mouse_input(event)
+	elif event is InputEventKey:
+		_handle_key_input(event)
+
+
+func _handle_mouse_input(event: InputEventMouseButton) -> void:
 	if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 		return
-
 	var tile_pos := _to_grid_position(get_local_mouse_position())
 	if not grid.is_in_bounds(tile_pos):
 		return
-
 	get_viewport().set_input_as_handled()
 	_handle_tile_click(tile_pos)
+
+
+func _handle_key_input(event: InputEventKey) -> void:
+	if not event.pressed or event.echo:
+		return
+	if MOVE_KEY_DIRECTIONS.has(event.keycode):
+		get_viewport().set_input_as_handled()
+		if try_step_selected_unit(MOVE_KEY_DIRECTIONS[event.keycode]):
+			_draw_units()
+			_select_unit_after_action()
+		return
+	if NUMBER_KEYS.has(event.keycode):
+		get_viewport().set_input_as_handled()
+		select_unit_by_number_key(NUMBER_KEYS[event.keycode])
 
 
 func get_unit_at(pos: Vector2i):
@@ -190,6 +213,53 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit()
 	return true
+
+
+func try_step_selected_unit(direction: Vector2i) -> bool:
+	if input_locked:
+		return false
+	if selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != active_side:
+		return false
+	var target: Vector2i = selected_unit.grid_position + direction
+	if not grid.is_in_bounds(target):
+		return false
+	var occupant = get_unit_at(target)
+	if occupant != null:
+		if occupant.side == selected_unit.side:
+			return false
+		return try_attack_selected_unit(target)
+	if selected_unit.moves_remaining <= 0:
+		return false
+	selected_unit.grid_position = target
+	selected_unit.moves_remaining -= 1
+	last_attack_result = {}
+	return true
+
+
+func select_unit_by_adventurer_id(adventurer_id: String) -> bool:
+	if input_locked or active_side != Side.PLAYER:
+		return false
+	var unit = _get_unit_by_adventurer_id(adventurer_id)
+	if unit == null or not unit.is_alive():
+		return false
+	_select_unit(unit)
+	return true
+
+
+func select_unit_by_number_key(key_number: int) -> bool:
+	var slot_index := key_number - 1
+	if slot_index < 0 or slot_index >= _player_adventurer_ids.size():
+		return false
+	return select_unit_by_adventurer_id(_player_adventurer_ids[slot_index])
+
+
+func _get_unit_by_adventurer_id(adventurer_id: String):
+	for unit in units:
+		if unit.adventurer_id == adventurer_id:
+			return unit
+	return null
 
 
 func apply_super_power() -> void:
