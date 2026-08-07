@@ -41,6 +41,8 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_encampment()},
 		{"name": "units", "action": func() -> void:
 			GameManager.go_to_units()},
+		{"name": "guild_hall", "action": func() -> void:
+			GameManager.go_to_guild_hall()},
 		{"name": "roster", "action": func() -> void:
 			GameManager.go_to_roster()},
 		{"name": "recruitment", "action": func() -> void:
