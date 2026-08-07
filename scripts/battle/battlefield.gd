@@ -4,14 +4,14 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const SIDE_NAME_KEYS := {0: "battle.side.player", 1: "battle.side.enemy"}
 const ENEMY_TURN_BEAT_SECONDS := 0.5
 
-@onready var hint: Label = $HUD/Hint
-@onready var status: Label = $HUD/Status
-@onready var enemy_health: VBoxContainer = $HUD/EnemyHealth
-@onready var round_label: Label = $HUD/RoundLabel
-@onready var end_turn_button: Button = $HUD/EndTurnButton
+@onready var hint: Label = %Hint
+@onready var status: Label = %Status
+@onready var enemy_health: VBoxContainer = %EnemyHealth
+@onready var round_label: Label = %RoundLabel
+@onready var end_turn_button: Button = %EndTurnButton
 @onready var grid: Node2D = $Grid
 @onready var level_up: Control = $HUD/LevelUp
-@onready var portrait_panel: Control = $HUD/PortraitPanel
+@onready var portrait_panel: Control = %PortraitPanel
 
 var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1

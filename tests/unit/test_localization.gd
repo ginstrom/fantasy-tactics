@@ -192,8 +192,8 @@ func test_battlefield_hud_buttons_use_translation_keys_not_literal_copy() -> voi
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
-	assert_eq(battlefield.get_node("HUD/EndTurnButton").text, "battle.end_turn")
-	assert_eq(battlefield.get_node("HUD/Status").text, "battle.status.awaiting_action")
+	assert_eq(battlefield.get_node("%EndTurnButton").text, "battle.end_turn")
+	assert_eq(battlefield.get_node("%Status").text, "battle.status.awaiting_action")
 
 
 func test_battlefield_hint_is_built_from_translated_copy() -> void:
@@ -204,7 +204,7 @@ func test_battlefield_hint_is_built_from_translated_copy() -> void:
 	# battle_controller.gd's _ready()), so the hint reflects the
 	# select-a-destination state rather than the no-selection one.
 	assert_eq(
-		battlefield.get_node("HUD/Hint").text,
+		battlefield.get_node("%Hint").text,
 		"Player's move. Click a highlighted tile to move (or use WASD), or select another unit."
 	)
 
@@ -227,7 +227,7 @@ func test_battlefield_round_label_uses_translation_key_not_literal_copy() -> voi
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
-	assert_eq(battlefield.get_node("HUD/RoundLabel").text, tr("battle.round") % 1)
+	assert_eq(battlefield.get_node("%RoundLabel").text, tr("battle.round") % 1)
 
 
 func test_world_map_hint_uses_translation_key_not_literal_copy() -> void:

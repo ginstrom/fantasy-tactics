@@ -216,6 +216,28 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 	assert_eq(battlefield.grid.selected_unit.adventurer_id, second_member_id)
 
 
+func test_hud_hint_and_status_share_the_top_left_stack() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
+	assert_eq(battlefield.enemy_health.get_parent(), battlefield.hint.get_parent())
+
+
+func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.round_label.get_parent(), battlefield.end_turn_button.get_parent())
+
+
+func test_portrait_panel_is_container_driven_not_offset_positioned() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_true(battlefield.portrait_panel.get_parent() is Container)
+
+
 func test_ready_lists_each_living_enemys_health() -> void:
 	GameSession.reset()
 	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
