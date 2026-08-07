@@ -43,7 +43,10 @@ before `GameSession._ready()` reads from it.
 
 A missing or malformed `config/game_config.json` never crashes the
 game — `GameConfig` falls back to its own built-in `DEFAULTS` (which
-mirrors the shipped file exactly) and logs a `push_error`.
+mirrors the shipped file exactly) and logs a `push_error`. Every failure
+mode (absent file, unopenable file, unparseable text) funnels through the
+single `_parse_or_default()` fallback, and `tests/unit/test_game_config.gd`
+locks `DEFAULTS` to the shipped file key by key so the two cannot drift.
 
 ## Directory map
 
@@ -207,7 +210,10 @@ use actually resolves.
 battles with no human input — `BattleBot` picks player actions with the
 same "move toward nearest living opponent, attack if adjacent" policy
 `BattleController._take_enemy_unit_actions()` already uses for the enemy
-side, and `battle_sim.gd` drives a real `battlefield.tscn` instance
+side — down to its reading-order tie-break and its "relocate to some
+legal tile whenever one exists, even a non-improving one" move rule,
+both re-implemented in `battle_bot.gd` because `battle_controller.gd`
+is never modified — and `battle_sim.gd` drives a real `battlefield.tscn` instance
 through to `GameManager.complete_battle()`/`fail_battle()`, including
 auto-resolving any level-up modal a battle's XP award queues (see
 `docs/plans/2026-08-07-config-and-automation/04-headless-battle-sim-and-logging.md`

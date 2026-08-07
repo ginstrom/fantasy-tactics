@@ -49,20 +49,32 @@ func get_float(section: String, key: String, default: float) -> float:
 	return float(_data.get(section, {}).get(key, default))
 
 
+## Reads the config file's raw text and hands it to _parse_or_default, which
+## owns the single copy of the parse-or-fall-back-to-DEFAULTS logic. Every
+## failure mode here (absent file, unreadable file, unparseable text) lands on
+## the same DEFAULTS.duplicate(true), so booting can never crash on config.
 func _load_from_disk() -> Dictionary:
 	if not FileAccess.file_exists(CONFIG_PATH):
 		push_error("GameConfig: %s not found, using built-in defaults" % CONFIG_PATH)
 		return DEFAULTS.duplicate(true)
+	# file_exists() passing does not guarantee open() succeeds — permissions or
+	# a deletion racing this read still hand back null, and calling
+	# get_as_text() on that would crash the autoload during boot.
 	var file := FileAccess.open(CONFIG_PATH, FileAccess.READ)
-	var json = JSON.new()
-	if json.parse(file.get_as_text()) != OK or typeof(json.data) != TYPE_DICTIONARY:
-		push_error("GameConfig: %s is not valid JSON, using built-in defaults" % CONFIG_PATH)
+	if file == null:
+		push_error(
+			(
+				"GameConfig: %s could not be opened (error %d), using built-in defaults"
+				% [CONFIG_PATH, FileAccess.get_open_error()]
+			)
+		)
 		return DEFAULTS.duplicate(true)
-	return json.data
+	return _parse_or_default(file.get_as_text())
 
 
 func _parse_or_default(text: String) -> Dictionary:
-	var json = JSON.new()
+	var json := JSON.new()
 	if json.parse(text) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		push_error("GameConfig: %s is not valid JSON, using built-in defaults" % CONFIG_PATH)
 		return DEFAULTS.duplicate(true)
 	return json.data

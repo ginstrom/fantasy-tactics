@@ -35,7 +35,7 @@ func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.adventurers, [GameSession.get_default_warrior()])
+	assert_eq(session.adventurers, [session.get_default_warrior()])
 	assert_eq(session.parties, [])
 	assert_eq(session.selected_party_id, "")
 
@@ -135,7 +135,7 @@ func test_available_adventurers_excludes_assigned_warrior() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.get_available_adventurers(), [GameSession.get_default_warrior()])
+	assert_eq(session.get_available_adventurers(), [session.get_default_warrior()])
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	assert_eq(session.get_available_adventurers(), [])
@@ -367,7 +367,7 @@ func test_reset_restores_a_deep_duplicated_default_warrior() -> void:
 	session.adventurers[0].name = "Changed"
 	session.reset()
 
-	assert_eq(session.adventurers, [GameSession.get_default_warrior()])
+	assert_eq(session.adventurers, [session.get_default_warrior()])
 
 
 func test_orc_outpost_id_constant_is_orc_outpost() -> void:
@@ -1155,18 +1155,18 @@ func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() 
 	var recruit: Dictionary = session.get_adventurer("warrior_002")
 	assert_eq(
 		recruit.stats.max_health,
-		GameSession.get_default_warrior().stats.max_health,
+		session.get_default_warrior().stats.max_health,
 		"A purchased recruit must start with the Warrior baseline max health, not a missing key"
 	)
 	assert_eq(
 		recruit.stats.attack,
-		GameSession.get_default_warrior().stats.attack,
+		session.get_default_warrior().stats.attack,
 		"A purchased recruit must start with the Warrior baseline Attack, not a missing key"
 	)
 	assert_eq(recruit.progression.xp, 5.0, "Awarded party XP must be stored, not silently dropped")
 	assert_eq(
 		recruit.progression.skill_points,
-		GameSession.get_default_warrior().progression.skill_points,
+		session.get_default_warrior().progression.skill_points,
 		"A purchased recruit must start with real (zero) unspent skill points, not a missing key"
 	)
 
@@ -1492,7 +1492,7 @@ func test_clearing_goblin_camp_leaves_orc_outpost_active_and_starts_one_vacancy_
 	assert_eq(active.size(), 1, "Clearing Goblin Camp should leave exactly one active encounter")
 	assert_eq(active[0].id, GameSessionScript.ORC_OUTPOST_ID, "The remaining active encounter should be Orc Outpost")
 	assert_eq(session.encounter_vacancies.size(), 1, "Clearing Goblin Camp starts exactly one vacancy clock")
-	assert_eq(session.encounter_vacancies[0].turns_remaining, GameSession.ENCOUNTER_VACANCY_TURNS, "Vacancy clock should be 15 turns")
+	assert_eq(session.encounter_vacancies[0].turns_remaining, session.ENCOUNTER_VACANCY_TURNS, "Vacancy clock should be 15 turns")
 
 
 func test_clearing_the_active_encounter_removes_it_and_starts_one_vacancy_clock() -> void:
@@ -1506,7 +1506,7 @@ func test_clearing_the_active_encounter_removes_it_and_starts_one_vacancy_clock(
 	assert_eq(active.size(), 1, "Clearing one of two sites leaves one active")
 	assert_eq(active[0].id, GameSessionScript.ORC_OUTPOST_ID, "The remaining site should be Orc Outpost")
 	assert_eq(session.encounter_vacancies.size(), 1, "Clearing a site starts exactly one vacancy clock")
-	assert_eq(session.encounter_vacancies[0].turns_remaining, GameSession.ENCOUNTER_VACANCY_TURNS)
+	assert_eq(session.encounter_vacancies[0].turns_remaining, session.ENCOUNTER_VACANCY_TURNS)
 
 
 func test_encounter_vacancy_does_not_refill_before_turn_fifteen() -> void:
@@ -1515,7 +1515,7 @@ func test_encounter_vacancy_does_not_refill_before_turn_fifteen() -> void:
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 
-	for i in GameSession.ENCOUNTER_VACANCY_TURNS - 1:
+	for i in session.ENCOUNTER_VACANCY_TURNS - 1:
 		session.end_world_turn()
 
 	var active: Array[Dictionary] = session.get_active_encounters()
@@ -1534,7 +1534,7 @@ func test_encounter_vacancy_refills_exactly_at_turn_fifteen() -> void:
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 
-	for i in GameSession.ENCOUNTER_VACANCY_TURNS:
+	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var active: Array[Dictionary] = session.get_active_encounters()
@@ -1577,7 +1577,7 @@ func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 	# is marked as previously-spawned in _used_encounter_template_ids.
 	session.enter_encounter(goblin_instance_id)
 	session.complete_current_encounter()
-	for i in GameSession.ENCOUNTER_VACANCY_TURNS:
+	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var active: Array[Dictionary] = session.get_active_encounters()
@@ -1622,7 +1622,7 @@ func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> v
 	# forcing it to keep searching rather than trivially reusing (4, 4).
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 	session.complete_current_encounter()
-	for i in GameSession.ENCOUNTER_VACANCY_TURNS:
+	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var active: Array[Dictionary] = session.get_active_encounters()
@@ -1704,7 +1704,7 @@ func test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock
 	session.purchase_recruit("warrior_002")
 
 	assert_eq(session.recruitment_vacancies.size(), 1)
-	assert_eq(session.recruitment_vacancies[0].turns_remaining, GameSession.RECRUITMENT_VACANCY_TURNS)
+	assert_eq(session.recruitment_vacancies[0].turns_remaining, session.RECRUITMENT_VACANCY_TURNS)
 
 
 func test_a_failed_purchase_starts_no_recruitment_vacancy_clock() -> void:
@@ -1722,7 +1722,7 @@ func test_recruitment_vacancy_does_not_refill_before_turn_thirty() -> void:
 	session.gold = 10
 	session.purchase_recruit("warrior_002")
 
-	for i in GameSession.RECRUITMENT_VACANCY_TURNS - 1:
+	for i in session.RECRUITMENT_VACANCY_TURNS - 1:
 		session.end_world_turn()
 
 	assert_eq(session.get_recruitment_candidates(), [] as Array[Dictionary])
@@ -1735,7 +1735,7 @@ func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> 
 	session.gold = 10
 	session.purchase_recruit("warrior_002")
 
-	for i in GameSession.RECRUITMENT_VACANCY_TURNS:
+	for i in session.RECRUITMENT_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
@@ -1802,7 +1802,7 @@ func test_generated_encounter_instance_ids_never_collide_with_historical_ones() 
 
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	for i in GameSession.ENCOUNTER_VACANCY_TURNS:
+	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var active: Array[Dictionary] = session.get_active_encounters()
@@ -1983,7 +1983,49 @@ func test_assign_adventurer_to_party_accepts_fifth_member_after_upgrade() -> voi
 	assert_eq(session.get_selected_party().member_ids.size(), 5)
 
 
-func test_balance_constants_match_the_loaded_config() -> void:
-	assert_eq(GameSession.BASE_ATTACK, GameConfig.get_int("combat", "base_attack", -1))
-	assert_eq(GameSession.GUILD_HALL_UPGRADE_COST, GameConfig.get_int("guild_hall", "upgrade_cost", -1))
-	assert_eq(GameSession.ENCOUNTER_VACANCY_TURNS, GameConfig.get_int("population", "encounter_vacancy_turns", -1))
+## _load_balance_config() is what wires GameConfig into the balance vars, and
+## it only runs from _ready(). Comparing the already-loaded singleton against
+## GameConfig would be tautological (the hardcoded initializers happen to equal
+## the shipped JSON today), so instead build a bare session that never entered
+## the tree, poison the migrated vars with an impossible sentinel, and prove
+## the call itself overwrites each one from the config.
+func test_load_balance_config_populates_every_section_from_game_config() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	const SENTINEL := -12345
+	session.BASE_MOVE_RANGE = SENTINEL
+	session.PERK_LEVEL_INTERVAL = SENTINEL
+	session.GUILD_HALL_UPGRADE_COST = SENTINEL
+	session.ENCOUNTER_VACANCY_TURNS = SENTINEL
+	session.EFFECTIVE_HIT_CHANCE_CAP = float(SENTINEL)
+
+	session._load_balance_config()
+
+	assert_eq(
+		session.BASE_MOVE_RANGE,
+		GameConfig.get_int("combat", "base_move_range", SENTINEL),
+		"combat.base_move_range must come from GameConfig, not the hardcoded initializer"
+	)
+	assert_eq(
+		session.PERK_LEVEL_INTERVAL,
+		GameConfig.get_int("progression", "perk_level_interval", SENTINEL),
+		"progression.perk_level_interval must come from GameConfig"
+	)
+	assert_eq(
+		session.GUILD_HALL_UPGRADE_COST,
+		GameConfig.get_int("guild_hall", "upgrade_cost", SENTINEL),
+		"guild_hall.upgrade_cost must come from GameConfig"
+	)
+	assert_eq(
+		session.ENCOUNTER_VACANCY_TURNS,
+		GameConfig.get_int("population", "encounter_vacancy_turns", SENTINEL),
+		"population.encounter_vacancy_turns must come from GameConfig"
+	)
+	assert_almost_eq(
+		session.EFFECTIVE_HIT_CHANCE_CAP,
+		GameConfig.get_float("combat", "effective_hit_chance_cap", float(SENTINEL)),
+		0.0001,
+		"combat.effective_hit_chance_cap must come from GameConfig"
+	)
+	assert_ne(session.BASE_MOVE_RANGE, SENTINEL, "The sentinel must have been overwritten, not left in place")

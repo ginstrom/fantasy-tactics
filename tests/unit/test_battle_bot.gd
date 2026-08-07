@@ -70,3 +70,48 @@ func test_ignores_units_that_are_already_defeated() -> void:
 
 	assert_eq(steps.size(), 0)
 	assert_eq(dead_player.grid_position, Vector2i(0, 0))
+
+
+## BattleController._nearest_living_unit() breaks distance ties with reading
+## order (top-to-bottom, left-to-right), not with units-array order. The bot
+## mirrors that policy, so the enemy listed second here still wins the tie.
+func test_equidistant_enemies_are_tie_broken_by_reading_order() -> void:
+	var controller := _make_controller(6, 6)
+	var player := UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var later_in_reading_order := UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	var earlier_in_reading_order := UnitScript.new(Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [player, later_in_reading_order, earlier_in_reading_order]
+	controller.hit_roll = func() -> float: return 0.0
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(steps.size(), 1)
+	assert_eq(steps[0].type, "attack")
+	assert_eq(
+		steps[0].defender,
+		earlier_in_reading_order,
+		"A distance tie must resolve to the enemy earliest in reading order, not the first one in units"
+	)
+
+
+## BattleController._best_move_toward() seeds has_candidate := false, so the
+## first legal move is accepted unconditionally and the unit always relocates
+## when any legal move exists — even one that does not close the gap. The bot
+## mirrors that rather than the more "sensible" stay-put behaviour.
+func test_best_move_relocates_even_when_no_legal_move_gets_closer() -> void:
+	var controller := _make_controller(4, 4)
+	var player := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	# Both tiles that would close the gap toward (0, 0) are occupied, leaving
+	# only (3, 2) and (2, 3) — each one step further away than standing still.
+	var blocker_north := UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1)
+	var blocker_west := UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1)
+	controller.units = [player, blocker_north, blocker_west]
+
+	var destination: Vector2i = BattleBot._best_move_toward(controller, player, Vector2i(0, 0))
+
+	assert_ne(destination, player.grid_position, "The enemy AI always relocates when a legal move exists")
+	assert_eq(
+		destination,
+		Vector2i(3, 2),
+		"Among equally-distant non-improving moves, reading order picks (3, 2) over (2, 3)"
+	)

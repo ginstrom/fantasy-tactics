@@ -45,6 +45,9 @@ static func _take_unit_actions(controller, unit) -> Array:
 	return steps
 
 
+## Mirror of BattleController._nearest_living_unit(), aimed at ENEMY instead of
+## PLAYER: closest by grid distance, ties broken by reading order rather than
+## by whichever unit happens to come first in the units array.
 static func _nearest_living_enemy(controller, from_pos: Vector2i):
 	var nearest = null
 	var nearest_distance := -1
@@ -52,22 +55,46 @@ static func _nearest_living_enemy(controller, from_pos: Vector2i):
 		if unit.side != BattleControllerScript.Side.ENEMY or not unit.is_alive():
 			continue
 		var distance := _grid_distance(from_pos, unit.grid_position)
-		if nearest == null or distance < nearest_distance:
+		if (
+			nearest == null
+			or distance < nearest_distance
+			or (distance == nearest_distance and _reading_order_is_earlier(unit.grid_position, nearest.grid_position))
+		):
 			nearest = unit
 			nearest_distance = distance
 	return nearest
 
 
+## Mirror of BattleController._best_move_toward(). Note the has_candidate seed:
+## like the enemy AI, the first legal move is accepted unconditionally, so the
+## unit always relocates when any legal move exists — even one that does not
+## get closer — and only a strictly closer (or equally close but earlier in
+## reading order) tile displaces it.
 static func _best_move_toward(controller, unit, target_pos: Vector2i) -> Vector2i:
 	var best: Vector2i = unit.grid_position
 	var best_distance := _grid_distance(unit.grid_position, target_pos)
+	var has_candidate := false
 	for candidate in controller.get_legal_moves(unit):
 		var candidate_distance := _grid_distance(candidate, target_pos)
-		if candidate_distance < best_distance:
+		if (
+			not has_candidate
+			or candidate_distance < best_distance
+			or (candidate_distance == best_distance and _reading_order_is_earlier(candidate, best))
+		):
 			best = candidate
 			best_distance = candidate_distance
+			has_candidate = true
 	return best
 
 
 static func _grid_distance(a: Vector2i, b: Vector2i) -> int:
 	return abs(a.x - b.x) + abs(a.y - b.y)
+
+
+## Top-to-bottom, left-to-right, matching BattleController's private helper of
+## the same name (which cannot be reused from here — battle_controller.gd is
+## never modified, and this file only touches its public API).
+static func _reading_order_is_earlier(a: Vector2i, b: Vector2i) -> bool:
+	if a.y != b.y:
+		return a.y < b.y
+	return a.x < b.x
