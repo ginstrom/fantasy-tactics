@@ -102,9 +102,7 @@ func _on_board_changed() -> void:
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
 
-	print("DEBUG _on_board_changed is_battle_won=", grid.is_battle_won(), " units=", grid.units.size())
 	if grid.is_battle_won():
-		print("DEBUG calling _resolve_battle(true)")
 		_resolve_battle(true)
 
 
@@ -159,7 +157,6 @@ func _apply_battle_outcome(victory: bool) -> void:
 ## award it twice, while a battle with multiple enemies still awards kill XP
 ## for every one of them.
 func _award_kill_xp(unit) -> void:
-	print("DEBUG _award_kill_xp called unit=", unit, " already=", _kill_xp_awarded_units.has(unit))
 	if _kill_xp_awarded_units.has(unit):
 		return
 	_kill_xp_awarded_units.append(unit)

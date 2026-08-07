@@ -129,8 +129,15 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 				break
 	battlefield.grid._handle_tile_click(remaining_goblin.grid_position)
 
+	# Correctly-awarded kill XP (5 per goblin, both now counted — see
+	# BattleControllerScript.enemy_defeated firing once per kill rather than
+	# once per battle) plus the site's 10 clear XP lands the party on exactly
+	# the level 2 threshold, so a level-up modal now legitimately appears and
+	# must be dismissed before the battle-result transition can proceed.
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
+		if battlefield.level_up.visible:
+			battlefield.level_up.continue_button.emit_signal("pressed")
 		await get_tree().process_frame
 		settle_frames += 1
 

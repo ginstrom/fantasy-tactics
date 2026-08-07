@@ -213,9 +213,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"defeated": defeated,
 	}
 	if defeated and target.side == Side.ENEMY:
-		print("DEBUG enemy_defeated emit unit=", target, " units_remaining=", units.size())
 		enemy_defeated.emit(target)
-	print("DEBUG try_attack_selected_unit returning true; is_battle_won=", is_battle_won())
 	return true
 
 
