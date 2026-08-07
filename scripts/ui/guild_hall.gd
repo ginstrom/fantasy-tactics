@@ -9,10 +9,10 @@ extends Control
 ## same "retire an action that no longer applies" pattern party_details.gd
 ## uses for Add Member on a deployed party.
 
-@onready var level_label: Label = $Center/VBox/LevelLabel
-@onready var party_size_label: Label = $Center/VBox/PartySizeLabel
-@onready var upgrade_button: Button = $Center/VBox/UpgradeButton
-@onready var max_level_label: Label = $Center/VBox/MaxLevelLabel
+@onready var level_label: Label = $Body/Center/VBox/LevelLabel
+@onready var party_size_label: Label = $Body/Center/VBox/PartySizeLabel
+@onready var upgrade_button: Button = $Body/Center/VBox/UpgradeButton
+@onready var max_level_label: Label = $Body/Center/VBox/MaxLevelLabel
 
 
 func _ready() -> void:
