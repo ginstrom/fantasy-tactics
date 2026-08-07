@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/battle/battlefield.gd" id="1_battlefield"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_battle"]
 [ext_resource type="PackedScene" path="res://scenes/ui/level_up.tscn" id="3_level_up"]
+[ext_resource type="Script" path="res://scripts/battle/portrait_panel.gd" id="4_portrait_panel"]
 
 [node name="Battlefield" type="Node2D"]
 script = ExtResource("1_battlefield")
@@ -33,17 +34,21 @@ offset_right = 640.0
 offset_bottom = 88.0
 text = "battle.status.awaiting_action"
 
-[node name="PlayerHealth" type="Label" parent="HUD"]
+[node name="EnemyHealth" type="VBoxContainer" parent="HUD"]
 offset_left = 16.0
 offset_top = 96.0
 offset_right = 400.0
-offset_bottom = 128.0
-
-[node name="EnemyHealth" type="Label" parent="HUD"]
-offset_left = 16.0
-offset_top = 128.0
-offset_right = 400.0
 offset_bottom = 160.0
+
+[node name="PortraitPanel" type="Control" parent="HUD"]
+offset_left = 16.0
+offset_top = 170.0
+offset_right = 220.0
+offset_bottom = 520.0
+script = ExtResource("4_portrait_panel")
+
+[node name="Rows" type="VBoxContainer" parent="HUD/PortraitPanel"]
+layout_mode = 2
 
 [node name="RoundLabel" type="Label" parent="HUD"]
 offset_left = 1104.0

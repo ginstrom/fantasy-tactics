@@ -2,6 +2,7 @@ extends GutTest
 
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
 
 
 func after_each() -> void:
@@ -103,19 +104,86 @@ func test_describe_step_reports_an_enemy_move() -> void:
 	assert_eq(battlefield._describe_step(step), tr("battle.status.enemy_move") % tr("battle.side.enemy"))
 
 
-func test_ready_shows_full_health_for_both_units() -> void:
+## Task 6: the left-side portrait panel (one row per fielded party member)
+## and the per-living-enemy HUD list that replaces the old aggregate
+## PlayerHealth/EnemyHealth labels.
+
+func _setup_two_member_party() -> String:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.recruit_adventurer()
+	# recruit_adventurer() mints the next warrior_NNN id that collides with
+	# neither an existing adventurer nor a still-open recruitment candidate
+	# template (warrior_002/003/004 stay open after reset()), so the newly
+	# recruited id is read back rather than assumed.
+	var second_member_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(second_member_id)
+	return second_member_id
+
+
+func test_portrait_panel_shows_one_row_per_fielded_party_member() -> void:
+	_setup_two_member_party()
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
+	assert_eq(battlefield.portrait_panel.rows.get_child_count(), 2)
+	for row in battlefield.portrait_panel.rows.get_children():
+		var health_label: Label = row.find_child("Health", true, false)
+		assert_eq(health_label.text, "3/3")
+
+
+func test_portrait_panel_shows_the_selection_ring_on_the_selected_member() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._select_unit(warrior)
+
+	var row: Node = battlefield.portrait_panel.get_node("Rows/Portrait0")
+	var ring: ColorRect = row.find_child("SelectionRing", true, false)
+	assert_true(ring.visible)
+
+
+func test_portrait_panel_dims_a_defeated_member() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	warrior.take_damage(warrior.max_health)
+	battlefield.grid.units.erase(warrior)
+
+	battlefield.portrait_panel.refresh()
+
 	assert_eq(
-		battlefield.player_health.text, tr("battle.status.health") % [tr("battle.side.player"), 3, 3]
-	)
-	assert_eq(
-		battlefield.enemy_health.text, tr("battle.status.health") % [tr("battle.side.enemy"), 3, 3]
+		battlefield.portrait_panel.get_node("Rows/Portrait0").modulate,
+		PortraitPanelScript.DEFEATED_MODULATE
 	)
 
 
-func test_health_label_shows_defeated_after_a_unit_dies() -> void:
+func test_clicking_a_portrait_selects_that_party_member() -> void:
+	var second_member_id: String = _setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.portrait_panel.get_node("Rows/Portrait1").emit_signal("pressed")
+
+	assert_eq(battlefield.grid.selected_unit.adventurer_id, second_member_id)
+
+
+func test_ready_lists_each_living_enemys_health() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.enemy_health.get_child_count(), 2)
+	for label in battlefield.enemy_health.get_children():
+		assert_eq(label.text, tr("battle.status.health") % [tr("battle.side.enemy"), 3, 3])
+
+
+func test_enemy_health_list_drops_a_defeated_enemy() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -124,7 +192,14 @@ func test_health_label_shows_defeated_after_a_unit_dies() -> void:
 
 	battlefield._update_health_labels()
 
-	assert_eq(battlefield.enemy_health.text, tr("battle.status.defeated") % tr("battle.side.enemy"))
+	assert_eq(battlefield.enemy_health.get_child_count(), 1)
+
+
+func test_player_health_label_no_longer_exists() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_false(battlefield.has_node("HUD/PlayerHealth"))
 
 
 func test_show_battle_result_names_the_won_goblin_camp_in_the_victory_message() -> void:

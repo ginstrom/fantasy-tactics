@@ -6,12 +6,12 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 
 @onready var hint: Label = $HUD/Hint
 @onready var status: Label = $HUD/Status
-@onready var player_health: Label = $HUD/PlayerHealth
-@onready var enemy_health: Label = $HUD/EnemyHealth
+@onready var enemy_health: VBoxContainer = $HUD/EnemyHealth
 @onready var round_label: Label = $HUD/RoundLabel
 @onready var end_turn_button: Button = $HUD/EndTurnButton
 @onready var grid: Node2D = $Grid
 @onready var level_up: Control = $HUD/LevelUp
+@onready var portrait_panel: Control = $HUD/PortraitPanel
 
 var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1
@@ -39,6 +39,7 @@ var _clear_xp_awarded: bool = false
 func _ready() -> void:
 	grid.enemy_defeated.connect(_award_kill_xp)
 	level_up.resolved.connect(_on_level_up_resolved)
+	portrait_panel.grid = grid
 	_on_board_changed()
 
 
@@ -92,6 +93,7 @@ func _on_board_changed() -> void:
 
 	round_label.text = tr("battle.round") % round_number
 	_update_health_labels()
+	portrait_panel.refresh()
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
 
@@ -258,22 +260,17 @@ func _describe_step(step: Dictionary) -> String:
 
 
 func _update_health_labels() -> void:
-	player_health.text = _format_health(
-		tr("battle.side.player"), _find_unit_by_side(BattleControllerScript.Side.PLAYER)
-	)
-	enemy_health.text = _format_health(
-		tr("battle.side.enemy"), _find_unit_by_side(BattleControllerScript.Side.ENEMY)
-	)
-
-
-func _find_unit_by_side(side: int):
+	# remove_child() (not just queue_free()) so a synchronous re-call (e.g.
+	# a test calling this twice back-to-back with no frame in between, or
+	# two board_changed events firing in the same frame) never counts stale
+	# labels still parented under enemy_health — queue_free() alone only
+	# detaches at end of frame.
+	for child in enemy_health.get_children():
+		enemy_health.remove_child(child)
+		child.queue_free()
 	for unit in grid.units:
-		if unit.side == side:
-			return unit
-	return null
-
-
-func _format_health(label: String, unit) -> String:
-	if unit == null or not unit.is_alive():
-		return tr("battle.status.defeated") % label
-	return tr("battle.status.health") % [label, unit.health, unit.max_health]
+		if unit.side != BattleControllerScript.Side.ENEMY:
+			continue
+		var label := Label.new()
+		label.text = tr("battle.status.health") % [tr("battle.side.enemy"), unit.health, unit.max_health]
+		enemy_health.add_child(label)
