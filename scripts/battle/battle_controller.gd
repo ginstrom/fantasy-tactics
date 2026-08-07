@@ -1,11 +1,13 @@
 extends Node2D
 
 signal board_changed
-## Emitted from try_attack_selected_unit() exactly once, at the moment an
-## enemy-side unit is defeated. Battlefield connects to this to award kill
-## XP; it is a one-shot event (not a re-inspectable state like
-## last_attack_result), so a repeated board refresh cannot re-fire it.
-signal enemy_defeated
+## Emitted from try_attack_selected_unit() exactly once per enemy-side unit,
+## at the moment it is defeated, carrying that Unit instance. Battlefield
+## connects to this to award kill XP per kill; it fires once per defeated
+## unit (not once per battle — a battle can field multiple enemies), so
+## Battlefield keys its award guard on the emitted unit's identity rather
+## than treating the signal as a single one-shot battle event.
+signal enemy_defeated(unit)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -211,7 +213,9 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"defeated": defeated,
 	}
 	if defeated and target.side == Side.ENEMY:
-		enemy_defeated.emit()
+		print("DEBUG enemy_defeated emit unit=", target, " units_remaining=", units.size())
+		enemy_defeated.emit(target)
+	print("DEBUG try_attack_selected_unit returning true; is_battle_won=", is_battle_won())
 	return true
 
 

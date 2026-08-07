@@ -32,7 +32,12 @@ var _pending_victory_completion: bool = false
 # across encounter attempts, but they do stop a repeated event (a duplicate
 # board refresh, or a repeated result-timer fire) from awarding XP twice for
 # the same kill or the same clear.
-var _kill_xp_awarded: bool = false
+# enemy_defeated now fires once per defeated enemy (a battle can field
+# multiple enemies), so the kill-XP guard tracks every already-awarded Unit
+# by reference rather than a single "already awarded this battle" flag —
+# that still blocks a repeated event for the SAME kill while allowing every
+# distinct kill in the battle to award XP.
+var _kill_xp_awarded_units: Array = []
 var _clear_xp_awarded: bool = false
 
 
@@ -97,7 +102,9 @@ func _on_board_changed() -> void:
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
 
+	print("DEBUG _on_board_changed is_battle_won=", grid.is_battle_won(), " units=", grid.units.size())
 	if grid.is_battle_won():
+		print("DEBUG calling _resolve_battle(true)")
 		_resolve_battle(true)
 
 
@@ -146,12 +153,16 @@ func _apply_battle_outcome(victory: bool) -> void:
 		GameManager.fail_battle()
 
 
-## Called once per real kill via BattleController's enemy_defeated signal.
-## Guarded by _kill_xp_awarded so a repeated event cannot award it twice.
-func _award_kill_xp() -> void:
-	if _kill_xp_awarded:
+## Called once per real kill via BattleController's enemy_defeated signal,
+## which passes the defeated Unit. Guarded by _kill_xp_awarded_units (keyed
+## on that unit's identity) so a repeated event for the same kill cannot
+## award it twice, while a battle with multiple enemies still awards kill XP
+## for every one of them.
+func _award_kill_xp(unit) -> void:
+	print("DEBUG _award_kill_xp called unit=", unit, " already=", _kill_xp_awarded_units.has(unit))
+	if _kill_xp_awarded_units.has(unit):
 		return
-	_kill_xp_awarded = true
+	_kill_xp_awarded_units.append(unit)
 	_award_party_xp(_current_expedition().get("kill_xp", 0))
 
 

@@ -823,3 +823,17 @@ func test_number_key_input_selects_the_matching_fielded_party_member() -> void:
 
 	assert_not_null(controller.selected_unit, "KEY_2 should select the second fielded party member")
 	assert_eq(controller.selected_unit.adventurer_id, recruit_id)
+
+
+## Guard-rail: nothing else enforces that the fielding cluster (start
+## positions/colors one player Unit is spawned into, see _ready()) can seat
+## every member of a party at the Guild Hall's maximum size. If
+## PLAYER_START_POSITIONS ever shrank below GUILD_HALL_LEVEL_2_PARTY_CAP,
+## _ready()'s `mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size())`
+## would silently field fewer units than the party actually has members,
+## with no error — this test exists so that regression fails loudly instead.
+func test_player_start_positions_can_seat_a_full_max_size_party() -> void:
+	assert_true(
+		BattleControllerScript.PLAYER_START_POSITIONS.size() >= GameSession.GUILD_HALL_LEVEL_2_PARTY_CAP,
+		"The fielding cluster must have at least as many start positions as the max Guild Hall party cap"
+	)

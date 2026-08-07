@@ -338,12 +338,44 @@ func test_kill_xp_award_guard_prevents_a_duplicate_award_from_a_repeated_event()
 	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
 	var xp_after_first_kill: float = GameSession.get_adventurer("warrior_001").progression.xp
 
-	battlefield._award_kill_xp()
+	battlefield._award_kill_xp(units.enemy)
 
 	assert_eq(
 		GameSession.get_adventurer("warrior_001").progression.xp,
 		xp_after_first_kill,
-		"A repeated kill event must not award XP twice"
+		"A repeated kill event (e.g. a duplicate signal) for the same already-defeated unit must not award XP twice"
+	)
+
+
+## Regression test for the finding that _award_kill_xp() used to be guarded
+## by a single "already awarded this battle" boolean, which silently
+## swallowed kill XP for every enemy after the first in a multi-enemy
+## battle. enemy_defeated now fires once per defeated unit and the guard
+## tracks awarded units individually, so both goblins' kills must each pay
+## out their kill_xp.
+func test_defeating_two_enemies_in_one_battle_awards_kill_xp_for_each() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var first_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var second_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[1])
+	first_enemy.grid_position = warrior.grid_position + Vector2i(1, 0)
+	first_enemy.health = 1
+	second_enemy.grid_position = warrior.grid_position + Vector2i(0, 1)
+	second_enemy.health = 1
+	battlefield.grid.selected_unit = warrior
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+
+	battlefield.grid.try_attack_selected_unit(first_enemy.grid_position)
+	# A single Unit can only attack once per turn (has_acted); reset it here
+	# to land a second kill within the same battle without needing a full
+	# multi-turn combat sequence.
+	warrior.has_acted = false
+	battlefield.grid.try_attack_selected_unit(second_enemy.grid_position)
+
+	assert_eq(
+		GameSession.get_adventurer("warrior_001").progression.xp,
+		10.0,
+		"Defeating both goblins in one battle should award kill_xp (5) twice, not once"
 	)
 
 

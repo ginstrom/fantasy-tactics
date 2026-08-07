@@ -21,7 +21,13 @@ func refresh() -> void:
 	for child in rows.get_children():
 		rows.remove_child(child)
 		child.queue_free()
-	var member_ids: Array = GameSession.get_selected_party().get("member_ids", [])
+	# Read from the board's own authoritative fielded-unit list rather than
+	# re-deriving from GameSession: grid._player_adventurer_ids is what was
+	# actually fielded (capped by PLAYER_START_POSITIONS.size(), with its own
+	# empty-party fallback), so the row list can never drift from the board.
+	# This also means _find_unit() == null can only mean "defeated" here,
+	# never "never fielded".
+	var member_ids: Array = grid._player_adventurer_ids
 	for index in member_ids.size():
 		rows.add_child(_build_row(index, member_ids[index]))
 
