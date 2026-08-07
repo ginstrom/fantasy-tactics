@@ -1,0 +1,26 @@
+{
+	"combat": {
+		"base_attack": 60,
+		"base_max_health": 3,
+		"base_move_range": 3,
+		"effective_hit_chance_cap": 0.95,
+		"attack_to_hit_chance_divisor": 100.0
+	},
+	"progression": {
+		"level_up_max_health_bonus": 1,
+		"level_up_skill_points": 10,
+		"perk_level_interval": 3
+	},
+	"guild_hall": {
+		"level_1_party_cap": 4,
+		"level_2_party_cap": 5,
+		"upgrade_cost": 50,
+		"max_level": 2
+	},
+	"population": {
+		"encounter_instance_cap": 2,
+		"recruitment_offer_cap": 4,
+		"encounter_vacancy_turns": 15,
+		"recruitment_vacancy_turns": 30
+	}
+}
