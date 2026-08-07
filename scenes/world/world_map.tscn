@@ -1,20 +1,27 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
 
 [node name="WorldMap" type="Node2D"]
 script = ExtResource("1_world_map")
 
-[node name="Tiles" type="Node2D" parent="."]
+[node name="Board" type="Node2D" parent="."]
 
-[node name="Highlights" type="Node2D" parent="."]
+[node name="Tiles" type="Node2D" parent="Board"]
 
-[node name="Markers" type="Node2D" parent="."]
+[node name="Highlights" type="Node2D" parent="Board"]
 
-[node name="Routes" type="Node2D" parent="."]
+[node name="Markers" type="Node2D" parent="Board"]
+
+[node name="Routes" type="Node2D" parent="Board"]
 
 [node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="CampNav" parent="HUD" instance=ExtResource("3_camp_nav")]
+offset_left = 16.0
+offset_top = 16.0
 
 [node name="FeedbackPanel" type="Panel" parent="HUD"]
 offset_left = 16.0

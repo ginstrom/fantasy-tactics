@@ -149,7 +149,7 @@ func test_repathing_mode_previews_a_new_route_alongside_the_old_one() -> void:
 	assert_eq(world_map.hover_route, [Vector2i(0, 1), Vector2i(0, 2)])
 	# Old committed route (1 segment + target + label = 3) plus the new hover
 	# preview (2 segments + target + label = 4) must both be visible at once.
-	assert_eq(world_map.get_node("Routes").get_child_count(), 7)
+	assert_eq(world_map.get_node("Board/Routes").get_child_count(), 7)
 
 
 func test_right_click_during_repathing_cancels_the_attempt_and_keeps_the_old_route() -> void:
@@ -490,7 +490,7 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 
 	# One ColorRect + one Label per active encounter instance, plus one settlement ColorRect.
 	var expected_marker_count := GameSession.get_active_encounters().size() * 2 + 1
-	assert_eq(world_map.get_node("Markers").get_child_count(), expected_marker_count)
+	assert_eq(world_map.get_node("Board/Markers").get_child_count(), expected_marker_count)
 	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
 
 
@@ -698,7 +698,7 @@ func test_route_line_remains_visible_after_a_route_is_committed() -> void:
 	world_map._handle_tile_click(Vector2i(1, 0))
 
 	assert_true(
-		world_map.get_node("Routes").get_child_count() > 0,
+		world_map.get_node("Board/Routes").get_child_count() > 0,
 		"A finalized route must remain visible on the map"
 	)
 
@@ -716,7 +716,7 @@ func test_route_line_remains_visible_after_deselecting_with_right_click() -> voi
 
 	assert_false(world_map.party_selected)
 	assert_true(
-		world_map.get_node("Routes").get_child_count() > 0,
+		world_map.get_node("Board/Routes").get_child_count() > 0,
 		"An existing route must stay visible even after the party is deselected"
 	)
 
@@ -731,7 +731,7 @@ func test_route_line_stays_visible_when_entering_repathing_mode() -> void:
 	await get_tree().process_frame
 
 	assert_eq(
-		world_map.get_node("Routes").get_child_count(), 3,
+		world_map.get_node("Board/Routes").get_child_count(), 3,
 		"The route must remain visible when entering repathing mode"
 	)
 
@@ -747,7 +747,7 @@ func test_hovering_after_a_route_is_committed_does_not_draw_a_preview() -> void:
 
 	# committed route [(1,0)]: 1 segment + target + label = 3, no hover overlay
 	assert_eq(
-		world_map.get_node("Routes").get_child_count(),
+		world_map.get_node("Board/Routes").get_child_count(),
 		3,
 		"Pathing mode ends once a route is committed, so no ghost preview should be drawn"
 	)
@@ -762,7 +762,7 @@ func test_hovering_the_current_destination_does_not_duplicate_the_route() -> voi
 	world_map._update_hover_route(Vector2i(1, 0))
 	await get_tree().process_frame
 
-	assert_eq(world_map.get_node("Routes").get_child_count(), 3)
+	assert_eq(world_map.get_node("Board/Routes").get_child_count(), 3)
 
 
 func test_pressing_end_turn_advances_the_turn_without_a_route() -> void:
@@ -855,7 +855,7 @@ func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> voi
 	GameSession.complete_current_encounter()
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
-	var before_count := world_map.get_node("Markers").get_child_count()
+	var before_count := world_map.get_node("Board/Markers").get_child_count()
 	# Advance the first 14 turns directly through GameSession (no vacancy
 	# fires yet) so the redraw-heavy assertion below only exercises a single,
 	# real End Turn press — repeatedly calling _draw_markers() synchronously
@@ -870,7 +870,7 @@ func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> voi
 	# tests in this file that already await a frame for the same reason).
 	await get_tree().process_frame
 
-	var after_count := world_map.get_node("Markers").get_child_count()
+	var after_count := world_map.get_node("Board/Markers").get_child_count()
 	assert_eq(
 		after_count,
 		before_count + 2,
@@ -879,7 +879,7 @@ func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> voi
 
 
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:
-	for marker in world_map.get_node("Markers").get_children():
+	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is ColorRect and marker.color == color:
 			return true
 	return false
@@ -917,15 +917,19 @@ func test_goblin_camp_label_position_is_unchanged_by_the_hint_bar_clamp() -> voi
 	var label := _find_expedition_label_by_position(world_map, goblin_record.position)
 
 	assert_not_null(label, "Goblin Camp's expedition label should be drawn")
+	# Board's offset shifts every descendant's on-screen (global) position, not
+	# their position local to Markers, so the rendered pixel position this test
+	# guards is global_position -- see _find_expedition_label_by_position below.
 	assert_eq(
-		label.position,
+		label.global_position,
 		Vector2(goblin_record.position) * WorldMapScript.TILE_SIZE
 			+ Vector2(WorldMapScript.TILE_SIZE * 0.1, -WorldMapScript.TILE_SIZE * 0.6)
+			+ WorldMapScript.BOARD_OFFSET
 	)
 
 
 func _find_expedition_label(world_map: Node2D, name_text: String) -> Label:
-	for marker in world_map.get_node("Markers").get_children():
+	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is Label and marker.text.find(name_text) > -1:
 			return marker
 	return null
@@ -953,7 +957,7 @@ func test_route_preview_label_stays_clear_of_the_hint_bar_at_the_top_of_the_map(
 
 
 func _find_route_label(world_map: Node2D) -> Label:
-	for child in world_map.get_node("Routes").get_children():
+	for child in world_map.get_node("Board/Routes").get_children():
 		if child is Label:
 			return child
 	return null
@@ -1003,14 +1007,30 @@ func test_encounter_labels_do_not_include_names_danger_or_reward() -> void:
 
 func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -> Label:
 	# Find a label at a given encounter position by checking all labels in Markers
-	# and matching by approximate position (within 1 pixel tolerance for floating point)
-	var expected_x := position.x * WorldMapScript.TILE_SIZE + WorldMapScript.TILE_SIZE * 0.1
+	# and matching by approximate position (within 1 pixel tolerance for floating point).
+	# Markers is drawn relative to Board's local origin (see world_map.gd's
+	# _draw_markers, unchanged by the Board offset), so the rendered on-screen
+	# position is global_position: Board's own offset plus that local position.
+	var expected_x := (
+		position.x * WorldMapScript.TILE_SIZE + WorldMapScript.TILE_SIZE * 0.1
+		+ WorldMapScript.BOARD_OFFSET.x
+	)
 	var expected_y := maxf(
 		position.y * WorldMapScript.TILE_SIZE - WorldMapScript.TILE_SIZE * 0.6,
 		WorldMapScript.EXPEDITION_LABEL_MIN_Y
 	)
-	for marker in world_map.get_node("Markers").get_children():
+	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is Label:
-			if abs(marker.position.x - expected_x) < 1.0 and abs(marker.position.y - expected_y) < 1.0:
+			if (
+				abs(marker.global_position.x - expected_x) < 1.0
+				and abs(marker.global_position.y - expected_y) < 1.0
+			):
 				return marker
 	return null
+
+
+func test_world_map_contains_the_camp_nav() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_not_null(world_map.get_node("HUD/CampNav"))
