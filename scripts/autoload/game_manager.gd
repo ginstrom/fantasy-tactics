@@ -78,7 +78,8 @@ func open_party_manager() -> Error:
 
 
 func go_to_encampment() -> Error:
-	GameSession.deposit_pending_reward()
+	if not GameSession.has_deployed_party():
+		GameSession.deposit_pending_reward()
 	return _change_scene(ENCAMPMENT_SCENE)
 
 

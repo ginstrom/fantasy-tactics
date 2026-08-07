@@ -125,6 +125,31 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	assert_eq(GameSession.pending_reward, 0)
 
 
+func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_deployed() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	var queued_reward: int = GameSession.pending_reward
+	assert_true(queued_reward > 0, "Test setup must actually queue a reward")
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.go_to_encampment()
+
+	assert_eq(GameSession.gold, 0, "Gold must not be banked while the party is still deployed away from home")
+	assert_eq(
+		GameSession.pending_reward, queued_reward,
+		"The queued reward must remain untouched until the party actually returns"
+	)
+	assert_true(
+		GameSession.has_deployed_party(),
+		"CampNav's Encampment shortcut must not silently return the party"
+	)
+
+
 func test_fail_battle_abandons_the_encounter_and_returns_the_party_home() -> void:
 	GameSession.reset()
 	GameSession.create_party()

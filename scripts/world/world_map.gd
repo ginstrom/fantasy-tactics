@@ -221,10 +221,20 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
-			# Reclicking a routed party must not discard it — it stays visible
-			# while a new one can be previewed/committed (see repathing).
-			repathing = true
-			return
+			if repathing:
+				# A second reclick while already repathing means the player wants
+				# out of the route entirely, not just to preview a new one — clear
+				# it and fall through to this tile's own activation checks below.
+				GameSession.clear_deployed_party_route()
+				repathing = false
+				hover_route = []
+				_draw_routes()
+				_update_highlights()
+			else:
+				# Reclicking a routed party must not discard it — it stays visible
+				# while a new one can be previewed/committed (see repathing).
+				repathing = true
+				return
 
 		if tile_pos == SETTLEMENT_POSITION:
 			settlement_activated.emit(SETTLEMENT_ID)

@@ -136,6 +136,29 @@ func test_reclicking_the_party_with_a_route_preserves_it_and_enables_repathing()
 	assert_true(world_map.repathing, "Reclicking a routed party should enter repathing mode")
 
 
+func test_reclicking_a_routed_party_a_third_time_clears_the_route_and_reaches_the_tiles_own_activation() -> void:
+	var world_map := _make_world_map()
+	watch_signals(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(2, 0))
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(world_map.repathing, "Second click on the party's own tile should enter repathing mode")
+	assert_false(GameSession.get_deployed_party_route().is_empty(), "Entering repathing must not clear the route")
+
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_eq(
+		GameSession.get_deployed_party_route(), [] as Array[Vector2i],
+		"A third reclick must clear the committed route entirely"
+	)
+	assert_false(world_map.repathing, "Clearing the route must also exit repathing mode")
+	assert_signal_emitted_with_parameters(
+		world_map, "settlement_activated", [WorldMapScript.SETTLEMENT_ID]
+	)
+
+
 func test_repathing_mode_previews_a_new_route_alongside_the_old_one() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
