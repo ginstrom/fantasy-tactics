@@ -2,11 +2,18 @@
 
 Not a task in this plan — these are gaps and loose ends noticed while
 delivering Tasks 1-3 (the Battlefield/World Map HUD refactor) and while
-fixing the Guild Hall CampNav bug that came up right after. None of them
-block what's already merged. Recorded here so they aren't lost; no
-commitment yet on whether/when to act on any of them.
+fixing the Guild Hall CampNav bug that came up right after. Recorded here
+so they weren't lost; all four have since been implemented (see the
+"Resolved" note under each item).
 
 ## 1. `InformationPanel` is corner-anchored, not container-driven, across ~9 Encampment-family screens
+
+**Resolved:** `InformationPanel` is now a third child of `Body` (after
+`Center`) on all 9 screens, wrapped in a small `MarginContainer`
+(`margin_top`/`margin_right`/`margin_bottom` = 16) to preserve its old
+16px inset from the corner. `unique_name_in_owner = true`, referenced via
+`%InformationPanel` from scripts and tests, matching the pattern the
+Battlefield/World Map HUDs already use.
 
 `InformationPanel` is instanced as a sibling of `Body` (not a child of it) in
 `encampment.tscn`, `units.tscn`, `roster.tscn`, `parties.tscn`,
@@ -53,6 +60,11 @@ covered by the Rule 6 "floating windows" exception. Flagging for
 completeness since it was noticed during the CanvasLayer survey for this
 plan, not because it's causing a problem.
 
+**Resolved:** left as a Rule 6 floating-window exception (no position
+change), but the implicit top-left anchor is now explicit
+(`anchors_preset = 0` plus the four `anchor_*` properties), so it no
+longer looks unanchored on inspection.
+
 ## 3. Leftover dead-weight `size_flags_horizontal = 8` on `battlefield.tscn`'s `TopRight`
 
 Task 2 found and fixed a real bug in `world_map.tscn`: `size_flags_horizontal
@@ -75,6 +87,9 @@ removed, hidden, or stopped expanding. Low risk, but worth either deleting
 the dead flag or switching to `TopRow.alignment = 2` for consistency with
 World Map's fix — a few minutes of cleanup, not investigated further here.
 
+**Resolved:** removed `size_flags_horizontal = 8` from `TopRight` and set
+`TopRow.alignment = 2`, mirroring the World Map fix exactly.
+
 ## 4. Guild Hall is missing from the screenshot tour
 
 `scripts/tools/screenshot_tour.gd` has a step for every other top-level and
@@ -87,3 +102,8 @@ couldn't have been caught by `make screenshots` diffing — only by the new
 visual) or a human looking at the actual screen. Adding a `guild_hall` step
 (`GameManager.go_to_guild_hall()`, reached from Buildings) would close that
 blind spot for future layout changes.
+
+**Resolved:** added a `guild_hall` step to `_build_steps()` (right after
+`units`), calling `GameManager.go_to_guild_hall()` directly. The tour is
+now 23 steps and `05_guild_hall.png` shows the CampNav panel correctly in
+place.

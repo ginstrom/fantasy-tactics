@@ -140,5 +140,5 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
-	var information_panel: Control = encampment.get_node("InformationPanel")
+	var information_panel: Control = encampment.get_node("%InformationPanel")
 	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 10)

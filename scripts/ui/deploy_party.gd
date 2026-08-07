@@ -16,7 +16,7 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_table: TableView = $Body/Center/VBox/PartyTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
-@onready var information_panel: PanelContainer = $InformationPanel
+@onready var information_panel: PanelContainer = %InformationPanel
 
 var selected_party_id: String = ""
 

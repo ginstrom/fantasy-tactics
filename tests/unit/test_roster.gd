@@ -29,7 +29,7 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	GameSession.gold = 25
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	assert_true(panel.get_node("Content/PlayerName").visible)
 	assert_eq(panel.get_node("Content/PlayerName").text, tr("information.player") % "Aria")
@@ -78,7 +78,7 @@ func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> voi
 func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	var item := tree.get_root().get_first_child()
 
@@ -94,7 +94,7 @@ func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> voi
 func test_the_panels_view_button_routes_to_unit_details_via_the_roster_origin() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
@@ -133,7 +133,7 @@ func test_an_empty_roster_shows_the_empty_state_without_errors() -> void:
 func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")

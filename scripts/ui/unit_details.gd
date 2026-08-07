@@ -27,7 +27,7 @@ extends Control
 @onready var assignment_explanation_label: Label = $Body/Center/VBox/AssignmentExplanationLabel
 @onready var party_picker: OptionButton = $Body/Center/VBox/PartyPicker
 @onready var add_to_party_button: Button = $Body/Center/VBox/AddToPartyButton
-@onready var information_panel: PanelContainer = $InformationPanel
+@onready var information_panel: PanelContainer = %InformationPanel
 
 var unit_id: String = ""
 var origin: String = ""

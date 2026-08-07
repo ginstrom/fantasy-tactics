@@ -73,7 +73,7 @@ func test_refresh_updates_the_counts() -> void:
 func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	GameSession.gold = 25
 	screen.refresh()
@@ -85,7 +85,7 @@ func test_encampment_never_shows_party_info_since_it_has_no_selection_concept() 
 	GameSession.create_party()
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
-	var panel: Control = screen.get_node("InformationPanel")
+	var panel: Control = screen.get_node("%InformationPanel")
 
 	screen.refresh()
 
