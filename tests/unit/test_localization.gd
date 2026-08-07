@@ -28,7 +28,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.side.enemy"), "Enemy")
 	assert_eq(
 		tr("battle.hint.select_unit") % "Player",
-		"Player's move. Click a unit to select it. Esc: menu."
+		"Player's move. Click a unit to select it, or press 1-5. Esc: menu."
 	)
 	assert_eq(
 		tr("battle.hint.already_moved") % "Player",
@@ -40,7 +40,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	)
 	assert_eq(
 		tr("battle.hint.select_destination") % "Player",
-		"Player's move. Click a highlighted tile to move, or select another unit."
+		"Player's move. Click a highlighted tile to move (or use WASD), or select another unit."
 	)
 	assert_eq(tr("battle.status.awaiting_action"), "No actions yet.")
 	assert_eq(tr("battle.status.health") % ["Warrior", 3, 3], "Warrior: 3/3 HP")
@@ -168,6 +168,11 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("level_up.attack_minus"), "-")
 	assert_eq(tr("level_up.attack_plus"), "+")
 	assert_eq(tr("level_up.continue"), "Continue")
+	assert_eq(tr("guild_hall.title"), "Guild Hall")
+	assert_eq(tr("guild_hall.level") % 1, "Guild Hall — Level 1")
+	assert_eq(tr("guild_hall.party_size") % 4, "Party size: 4")
+	assert_eq(tr("guild_hall.upgrade") % 50, "Upgrade to Level 2 — 50 gold")
+	assert_eq(tr("guild_hall.max_level"), "Max Level")
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:
@@ -196,7 +201,7 @@ func test_battlefield_hint_is_built_from_translated_copy() -> void:
 	add_child_autofree(battlefield)
 
 	assert_eq(
-		battlefield.get_node("HUD/Hint").text, "Player's move. Click a unit to select it. Esc: menu."
+		battlefield.get_node("HUD/Hint").text, "Player's move. Click a unit to select it, or press 1-5. Esc: menu."
 	)
 
 
