@@ -310,12 +310,13 @@ func _setup_orc_outpost_battle(roll_override: Callable = Callable()) -> Node2D:
 	return battlefield
 
 
-## Places the enemy adjacent to the warrior and near death so a single hit
-## defeats it, without needing a full multi-turn combat sequence.
 func _stage_a_killing_blow(battlefield: Node2D) -> Dictionary:
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
-	enemy.grid_position = warrior.grid_position + Vector2i(1, 0)
+	for candidate in battlefield.grid.grid.get_adjacent(warrior.grid_position):
+		if battlefield.grid.get_unit_at(candidate) == null:
+			enemy.grid_position = candidate
+			break
 	enemy.health = 1
 	battlefield.grid.selected_unit = warrior
 	battlefield.grid.hit_roll = func() -> float: return 0.0
