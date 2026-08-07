@@ -36,6 +36,7 @@ var grid
 var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
 var hover_route: Array[Vector2i] = []
+var repathing: bool = false
 
 @onready var tile_container: Node2D = $Tiles
 @onready var highlight_container: Node2D = $Highlights
@@ -165,14 +166,13 @@ func get_route_destination() -> Vector2i:
 
 func cancel_route_setting() -> void:
 	hover_route = []
+	repathing = false
 
 
 func _has_route_affordance() -> bool:
-	return (
-		party_selected
-		and GameSession.has_deployed_party()
-		and GameSession.get_deployed_party_route().is_empty()
-	)
+	if not party_selected or not GameSession.has_deployed_party():
+		return false
+	return GameSession.get_deployed_party_route().is_empty() or repathing
 
 
 func _update_hover_route(tile_pos: Vector2i) -> void:
@@ -213,10 +213,9 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
-			GameSession.clear_deployed_party_route()
-			hover_route = []
-			_draw_routes()
-			_update_highlights()
+			# Reclicking a routed party must not discard it — it stays visible
+			# while a new one can be previewed/committed (see repathing).
+			repathing = true
 			return
 
 		if tile_pos == SETTLEMENT_POSITION:
@@ -246,6 +245,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		if GameSession.take_next_route_step():
 			party_position = GameSession.get_deployed_party_position()
 			hover_route = []
+			repathing = false
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
@@ -255,6 +255,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	var route := build_route(party_position, tile_pos)
 	if not route.is_empty() and GameSession.set_deployed_party_route(route):
 		hover_route = []
+		repathing = false
 		_draw_markers()
 		_draw_routes()
 		_update_highlights()

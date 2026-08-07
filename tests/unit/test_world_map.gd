@@ -121,16 +121,66 @@ func test_clicking_the_committed_destination_again_takes_one_manual_step() -> vo
 	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(2, 0)])
 
 
-func test_clicking_the_party_with_a_route_again_cancels_it() -> void:
+func test_reclicking_the_party_with_a_route_preserves_it_and_enables_repathing() -> void:
 	var world_map := _make_world_map()
 	world_map._handle_tile_click(world_map.party_position)
 	world_map._handle_tile_click(Vector2i(2, 0))
 
 	world_map._handle_tile_click(world_map.party_position)
 
-	assert_eq(world_map.party_position, Vector2i(0, 0), "Canceling a route must not move the party")
-	assert_eq(GameSession.get_deployed_party_route(), [] as Array[Vector2i])
-	assert_true(world_map.party_selected, "Party should remain selected after canceling its route")
+	assert_eq(
+		GameSession.get_deployed_party_route(), [Vector2i(1, 0), Vector2i(2, 0)],
+		"Reclicking the party must not clear its existing route"
+	)
+	assert_true(world_map.party_selected, "Party should remain selected")
+	assert_true(world_map.repathing, "Reclicking a routed party should enter repathing mode")
+
+
+func test_repathing_mode_previews_a_new_route_alongside_the_old_one() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._update_hover_route(Vector2i(0, 2))
+	await get_tree().process_frame
+
+	assert_eq(world_map.hover_route, [Vector2i(0, 1), Vector2i(0, 2)])
+	# Old committed route (1 segment + target + label = 3) plus the new hover
+	# preview (2 segments + target + label = 4) must both be visible at once.
+	assert_eq(world_map.get_node("Routes").get_child_count(), 7)
+
+
+func test_right_click_during_repathing_cancels_the_attempt_and_keeps_the_old_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._update_hover_route(Vector2i(0, 2))
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+
+	world_map._unhandled_input(right_click)
+
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(1, 0)])
+	assert_false(world_map.repathing)
+
+
+func test_left_click_elsewhere_during_repathing_replaces_the_route() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(Vector2i(1, 0))
+	world_map._handle_tile_click(world_map.party_position)
+
+	world_map._handle_tile_click(Vector2i(0, 2))
+
+	assert_eq(GameSession.get_deployed_party_route(), [Vector2i(0, 1), Vector2i(0, 2)])
+	assert_false(world_map.repathing, "Committing a new route ends repathing mode")
 
 
 func test_canceling_a_route_reenables_the_hover_affordance() -> void:
@@ -671,7 +721,7 @@ func test_route_line_remains_visible_after_deselecting_with_right_click() -> voi
 	)
 
 
-func test_route_line_disappears_after_canceling_it_with_a_zero_step_route() -> void:
+func test_route_line_stays_visible_when_entering_repathing_mode() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	world_map._handle_tile_click(world_map.party_position)
@@ -680,7 +730,10 @@ func test_route_line_disappears_after_canceling_it_with_a_zero_step_route() -> v
 	world_map._handle_tile_click(world_map.party_position)
 	await get_tree().process_frame
 
-	assert_eq(world_map.get_node("Routes").get_child_count(), 0)
+	assert_eq(
+		world_map.get_node("Routes").get_child_count(), 3,
+		"The route must remain visible when entering repathing mode"
+	)
 
 
 func test_hovering_after_a_route_is_committed_does_not_draw_a_preview() -> void:
