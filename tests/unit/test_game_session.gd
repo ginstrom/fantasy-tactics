@@ -428,7 +428,7 @@ func test_get_expedition_includes_the_enemy_count_for_the_goblin_camp() -> void:
 
 	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
 
-	assert_eq(record.enemy.count, 2, "The goblin camp should field two goblins")
+	assert_eq(record.enemy.count, 1, "The goblin camp is a one-star site: a single goblin")
 
 
 func test_get_expedition_includes_the_enemy_count_for_the_orc_outpost() -> void:
@@ -437,7 +437,63 @@ func test_get_expedition_includes_the_enemy_count_for_the_orc_outpost() -> void:
 
 	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
 
-	assert_eq(record.enemy.count, 3, "The orc outpost should field three orcs")
+	assert_eq(record.enemy.count, 1, "The orc outpost's documented template default is a single orc")
+
+
+## Task: star-tier enemy composition. A one-star site has only one possible
+## composition, so it must never consult the roll callable at all.
+func test_one_star_site_always_resolves_to_a_single_goblin_regardless_of_the_roll() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int:
+		fail_test("A one-star site must not roll for its composition")
+		return 0
+
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	var record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	assert_eq(record.enemy.count, 1)
+	assert_eq(record.enemy.name_key, "battle.enemy.goblin")
+
+
+func test_two_star_site_forced_to_option_zero_resolves_to_two_goblins() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+
+	var record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+	assert_eq(record.enemy.count, 2)
+	assert_eq(record.enemy.name_key, "battle.enemy.goblin")
+
+
+func test_two_star_site_forced_to_option_one_resolves_to_one_orc() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 1
+
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+
+	var record: Dictionary = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID)
+	assert_eq(record.enemy.count, 1)
+	assert_eq(record.enemy.name_key, "battle.enemy.orc")
+
+
+func test_reentering_an_active_instance_rerolls_its_composition() -> void:
+	GameSession.reset()
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	assert_eq(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).enemy.count, 2)
+
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 1
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+
+	assert_eq(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).enemy.count, 1)
+
+
+func test_three_star_tier_defines_three_goblins_or_two_orcs_for_future_use() -> void:
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].count, 3)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].enemy.name_key, "battle.enemy.goblin")
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].count, 2)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].enemy.name_key, "battle.enemy.orc")
 
 
 func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:

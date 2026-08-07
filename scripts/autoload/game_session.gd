@@ -22,7 +22,7 @@ const EXPEDITIONS: Dictionary = {
 			"max_health": 3,
 			"attack_damage": 1,
 			"hit_chance": 0.3,
-			"count": 2,
+			"count": 1,
 		},
 	},
 	"orc_outpost": {
@@ -40,9 +40,43 @@ const EXPEDITIONS: Dictionary = {
 			"max_health": 5,
 			"attack_damage": 2,
 			"hit_chance": 0.5,
-			"count": 3,
+			"count": 1,
 		},
 	},
+}
+const GOBLIN_ENEMY_STATS: Dictionary = {
+	"name_key": "battle.enemy.goblin",
+	"attack_name_key": "battle.enemy.goblin.attack",
+	"max_health": 3,
+	"attack_damage": 1,
+	"hit_chance": 0.3,
+}
+const ORC_ENEMY_STATS: Dictionary = {
+	"name_key": "battle.enemy.orc",
+	"attack_name_key": "battle.enemy.orc.attack",
+	"max_health": 5,
+	"attack_damage": 2,
+	"hit_chance": 0.5,
+}
+# Star tier -> possible enemy compositions for an active instance at that
+# tier (see docs/plans/campaign-loop-follow-up.md's battle balancing
+# section). Tier 1 has one deterministic option; tiers 2-3 randomly resolve
+# to one of two options each time an instance is entered (see
+# enemy_composition_roll/_resolve_enemy_composition/enter_encounter) so
+# three orcs can no longer gang up on a level-1 party. Goblins-first
+# ordering in each tier's option list matches the design doc's phrasing.
+const STAR_ENEMY_COMPOSITIONS: Dictionary = {
+	1: [
+		{"enemy": GOBLIN_ENEMY_STATS, "count": 1},
+	],
+	2: [
+		{"enemy": GOBLIN_ENEMY_STATS, "count": 2},
+		{"enemy": ORC_ENEMY_STATS, "count": 1},
+	],
+	3: [
+		{"enemy": GOBLIN_ENEMY_STATS, "count": 3},
+		{"enemy": ORC_ENEMY_STATS, "count": 2},
+	],
 }
 # Progression domain constants (see docs/plans/2026-08-06-campaign-progression-and-population).
 # Cumulative XP threshold for level N is 5*N*(N+1) - 10: level 1 costs 0, level
@@ -156,6 +190,11 @@ var recruitment_vacancies: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
+# Injectable so tests can force a specific composition (see hit_roll on
+# BattleController for the same pattern) instead of depending on real
+# randomness. Never reset by reset() — every call site that needs a specific
+# outcome sets this immediately before its own enter_encounter() call.
+var enemy_composition_roll: Callable = func(option_count: int) -> int: return randi() % option_count
 var completed_encounters: Array[String] = []
 # Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
 # instance is a spawned record: {id, template_id, position, ...copied
@@ -597,8 +636,23 @@ func _grid_distance(a: Vector2i, b: Vector2i) -> int:
 	return abs(a.x - b.x) + abs(a.y - b.y)
 
 
+func _resolve_enemy_composition(difficulty: int) -> Dictionary:
+	var options: Array = STAR_ENEMY_COMPOSITIONS.get(difficulty, STAR_ENEMY_COMPOSITIONS[1])
+	var option: Dictionary = options[0]
+	if options.size() > 1:
+		option = options[enemy_composition_roll.call(options.size())]
+	var enemy: Dictionary = option.enemy.duplicate(true)
+	enemy["count"] = option.count
+	return enemy
+
+
 func enter_encounter(encounter_id: String) -> void:
 	selected_encounter = encounter_id
+	var instance_index := _get_active_encounter_index(encounter_id)
+	if instance_index != -1:
+		active_encounters[instance_index].enemy = _resolve_enemy_composition(
+			active_encounters[instance_index].difficulty
+		)
 
 
 ## Marks the current selection complete (once — a re-completion of an
