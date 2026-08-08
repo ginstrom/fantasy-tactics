@@ -5,18 +5,12 @@
 Define the first complete, repeatable campaign loop for the game. This is a
 product-design roadmap: it describes the player experience, the order in which
 systems should become playable, and the boundaries that keep the project
-small enough to learn from. It is not an implementation plan.
+small enough to learn from.
 
 The intended game is a fantasy tactics campaign: tactical, D&D-inspired local
 battles sit inside an XCOM-like cycle of party development, expeditions, and
 settlement growth. Basic Fantasy RPG rules are the primary rules reference;
 XCOM, Xenonauts, and Fallout 1/2 inform the development and management feel.
-
-This document is the single consolidated design reference for the first
-playable campaign — it supersedes and absorbs the standalone trading-system
-and game-loop-flow notes that used to live alongside it in this directory;
-their content now lives in the sections below (Trade, equipment, and loot;
-and the loop walkthrough, respectively).
 
 ## First playable campaign
 
@@ -68,8 +62,10 @@ Start Menu
      the deployed party (a modal Level-Up overlay appears if a member
      crosses a level threshold); each kill also queues gold, a mana crystal,
      and a chance of the enemy's weapon (see Trade, equipment, and loot below)
-  -> win: clear the site for its clear XP and return to the World Map
-     or lose: return the party to the Starting Settlement; site remains
+  -> win: clear the site for its clear XP. Display a summary screen with XP and loot
+     awarded, and return to the World Map
+     or 
+     -> lose: return the party to the Starting Settlement; site remains
      available
   -> return to Encampment to deposit pending gold, mana crystals, and gear;
      review XP, Attack, and any unspent skill points from Unit Details
@@ -78,12 +74,8 @@ Start Menu
      party-size cap, or at the Trading Post to buy better gear
 ```
 
-Party creation and Warrior assignment, previously reachable from an
-Encampment "Party Manager" screen, are superseded by the Milestone 4
-encampment UI shell below. Party Details now offers Add Member for an
-encamped party, restoring the ordinary in-game assignment path. Roster and
-Recruitment (below) let a new campaign grow beyond its starting Warrior
-without debug tooling.
+Party Details offers Add Member for an encamped party. Roster and
+Recruitment (below) let a new campaign grow beyond its starting single Warrior.
 
 `GameSession` owns the Warrior-only roster and each adventurer's progression
 (XP, level, Attack, unspent skill points, perks), equipment (equipped weapon
@@ -119,11 +111,13 @@ candidate at once. A campaign starts with two active encounters, the
 one-star Goblin Camp (difficulty 1) and the two-star Orc Outpost (difficulty
 2), and one active recruitment offer (a Warrior); each category still holds
 at most two active encounters or four active offers at a time. Clearing a
-site or hiring a recruit opens a vacancy; that vacancy's own 15- (encounter)
-or 30- (recruitment) World Map turn clock refills it with a new instance only
+site or hiring a recruit opens a vacancy; that vacancy's own 15 +/- 5 (encounter)
+or 30 +/- 5 (recruitment) World Map turn clock refills it with a new instance only
 if its category is still under its cap when the clock completes. A cleared
 site never reopens — a later spawn is a distinct new instance, though it may
 reuse a previously seen encounter template at a different map tile.
+
+The user can also dismiss potential recruits so that future candidates can fill available slots.
 
 The World Map marks each active encounter with a difficulty-only star badge
 (one star for Goblin Camp, two for Orc Outpost) rather than a numeric label,
@@ -136,27 +130,28 @@ active site. A cleared camp rejects entry.
 
 ### Full-party battles and the Guild Hall
 
-Every deployed party member — not just the first — is fielded on the
+Every deployed party member is fielded on the
 battlefield, at a fixed start position, alongside the site's full enemy
 count. A unit's movement is a spendable per-turn points budget (base 3
-tiles, plus one per Bonus Move perk) rather than an all-or-nothing flag, so
+tiles, plus one per Bonus Move perk), so
 WASD steps and multi-tile mouse clicks can be freely interleaved with a
-unit's one attack. The player selects a unit by mouse, WASD, or number key
-(1-5); a left portrait panel shows one square per fielded party member, with
-the unit's colour, health, a selection ring, and a dimmed state once
-defeated.
+unit's one attack. The player selects a unit by mouse, clicking on the portrait 
+in the left panel, or number key (1-5); a left portrait panel shows one 
+square per fielded party member, with the unit's colour, health, a selection ring, 
+and a dimmed state once defeated.
 
-Each site's star rating now drives a randomly resolved enemy composition
-instead of a fixed matchup: the one-star Goblin Camp always fields one
-Goblin; the two-star Orc Outpost fields two Goblins or one Orc, chosen at
-random each time the site is entered. A Warrior has 3 base health and Attack
-60 (a 60% base hit chance before armor); its damage and defensive stats now
-come from its equipped gear rather than a flat per-class number — see Trade,
+Each site's star rating drives a randomly resolved enemy composition: 
+the one-star Goblin Camp always fields one Goblin; the two-star Orc Outpost fields 
+two Goblins or one Orc, chosen at random each time the site is entered. 
+
+A Warrior has 3 base health and Attack 60 (a 60% base hit chance before armor); 
+its damage and defensive stats come from its equipped gear — see Trade,
 equipment, and loot below for how weapon and armor choice change a Warrior's
 damage range, effective hit chance, and damage taken. A Goblin has 3 health,
-a 30% hit chance, and deals 1 damage with its Short Sword; an Orc has 5
-health, a 50% hit chance, and deals 2 damage. Enemies take a visible,
-deterministic AI decision sequence after the player ends the round.
+a 30% hit chance, and deals 1-6 damage with its Short Sword; an Orc has 5
+health, a 50% hit chance, and deals 1-8 damage with its longsword. 
+Enemies take a visible, deterministic AI decision sequence after the 
+player ends the round.
 
 The Guild Hall is the game's first gold-funded building. A fresh campaign
 caps party assignment at 4 members (Guild Hall level 1); spending 50 gold at
@@ -182,8 +177,10 @@ shapes, Steel dealing one point more than Iron at both ends of its range:
 Armor grants two protections, each an integer percentage: **defense**
 subtracts directly from an attacker's hit chance (floored at a 5% minimum
 chance to hit), and **resistance** reduces incoming damage by that percent,
-rounded to the nearest whole point. Five armor tiers run from the Leather
-Armor every Warrior starts with up to Full Plate:
+rounded to the nearest whole point. The maximum resistance is capped at 95% 
+after all buffs and debuffs are applied.
+
+Five armor tiers run from the Leather Armor every Warrior starts with up to Full Plate:
 
 | Armor | Defense | Resistance | Price |
 |---|---|---|---|
@@ -193,11 +190,14 @@ Armor every Warrior starts with up to Full Plate:
 | Platemail | 15 | 30 | 200g |
 | Full plate | 15 | 35 | 500g |
 
-Every kill now queues three reward types, not just gold: a random gold
-amount, a mana crystal (tier depends on the enemy), and a 25% chance of that
-enemy's own Iron-tier weapon as gear. A Goblin kill queues 1-6 gold, a
-tier-1 mana crystal, and a chance at an Iron Shortsword; an Orc kill queues
-double gold (1-5, x2) and a tier-2 crystal and a chance at an Iron Longsword.
+Every kill now queues three reward types: 
+* a random gold amount
+* a mana crystal (tier depends on the enemy), and 
+* a 25% chance of that enemy's own Iron-tier weapon as gear. 
+
+A Goblin kill queues 1-6 gold, a tier-1 mana crystal, and a chance at an Iron Shortsword; 
+an Orc kill queues double gold (1-5, x2) and a tier-2 crystal and a chance at an Iron Longsword.
+
 Loot tables also exist for Kobolds and Hobgoblins, whose gear and crystal
 tiers are documented for a future content pass, but neither currently
 appears in any active encounter. All of it queues on victory and only banks
