@@ -48,6 +48,7 @@ func _build_steps() -> Array[Dictionary]:
 		{"name": "stores", "action": func() -> void:
 			GameSession.banked_gear = {"shortsword_iron": 1}
 			GameSession.mana_crystals = {1: 2}
+			GameSession.has_trading_post = true
 			GameManager.go_to_stores()},
 		{"name": "trading_post", "action": func() -> void:
 			GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
