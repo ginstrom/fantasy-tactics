@@ -195,5 +195,11 @@ messages = {
 "trading_post.column.type": "Type",
 "trading_post.column.price": "Price",
 "trading_post.selected": "%s — %d gold",
-"trading_post.buy": "Buy"
+"trading_post.buy": "Buy",
+"assign_equipment.title": "Assign Equipment",
+"assign_equipment.column.name": "Name",
+"assign_equipment.column.class": "Class",
+"assign_equipment.column.level": "Level",
+"assign_equipment.empty": "No adventurers have been recruited yet.",
+"assign_equipment.hint": "Double-click a row, or select it and press Enter, to equip that adventurer."
 }
