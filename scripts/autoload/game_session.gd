@@ -138,6 +138,8 @@ var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 4
 var GUILD_HALL_LEVEL_2_PARTY_CAP: int = 5
 var GUILD_HALL_UPGRADE_COST: int = 50
 var GUILD_HALL_MAX_LEVEL: int = 2
+var TRADING_POST_PURCHASE_COST: int = 50
+var TRADING_POST_INCOME_PER_TURN: int = 1
 var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
 var ATTACK_TO_HIT_CHANCE_DIVISOR: float = 100.0
 
@@ -277,6 +279,7 @@ var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
 var pending_mana_crystals: Dictionary = {}
 var pending_gear: Array[String] = []
+var has_trading_post: bool = false
 var player_name: String = DEFAULT_PLAYER_NAME
 
 
@@ -302,6 +305,8 @@ func _load_balance_config() -> void:
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_UPGRADE_COST = GameConfig.get_int("guild_hall", "upgrade_cost", GUILD_HALL_UPGRADE_COST)
 	GUILD_HALL_MAX_LEVEL = GameConfig.get_int("guild_hall", "max_level", GUILD_HALL_MAX_LEVEL)
+	TRADING_POST_PURCHASE_COST = GameConfig.get_int("trading_post", "purchase_cost", TRADING_POST_PURCHASE_COST)
+	TRADING_POST_INCOME_PER_TURN = GameConfig.get_int("trading_post", "income_per_turn", TRADING_POST_INCOME_PER_TURN)
 	ENCOUNTER_INSTANCE_CAP = GameConfig.get_int("population", "encounter_instance_cap", ENCOUNTER_INSTANCE_CAP)
 	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
 	ENCOUNTER_VACANCY_TURNS = GameConfig.get_int("population", "encounter_vacancy_turns", ENCOUNTER_VACANCY_TURNS)
@@ -336,6 +341,7 @@ func reset() -> void:
 	banked_gear = {}
 	pending_mana_crystals = {}
 	pending_gear = []
+	has_trading_post = false
 	player_name = DEFAULT_PLAYER_NAME
 
 
@@ -646,6 +652,8 @@ func end_world_turn() -> bool:
 		auto_moved = take_next_route_step()
 
 	world_turn += 1
+	if has_trading_post:
+		gold += TRADING_POST_INCOME_PER_TURN
 	if has_deployed_party():
 		parties[_get_selected_party_index()].movement_spent = false
 	_advance_encounter_vacancies()
@@ -815,6 +823,18 @@ func upgrade_guild_hall() -> bool:
 	return true
 
 
+func can_purchase_trading_post() -> bool:
+	return not has_trading_post and gold >= TRADING_POST_PURCHASE_COST
+
+
+func purchase_trading_post() -> bool:
+	if not can_purchase_trading_post():
+		return false
+	gold -= TRADING_POST_PURCHASE_COST
+	has_trading_post = true
+	return true
+
+
 func is_encounter_complete(encounter_id: String) -> bool:
 	return completed_encounters.has(encounter_id)
 
@@ -843,6 +863,81 @@ func get_item_definition(item_id: String) -> Dictionary:
 	if ARMORS.has(item_id):
 		return ARMORS[item_id].duplicate(true)
 	return {}
+
+
+const MANA_CRYSTAL_ID_PREFIX := "mana_crystal_"
+
+
+## Gear sells for half its catalog price (rounded to the nearest integer); a
+## mana crystal id ("mana_crystal_<tier>") sells for its full listed value,
+## since it was never purchased at a price to halve. An unknown id prices at
+## 0 rather than erroring, matching get_item_definition()'s not-found style.
+func get_item_sale_price(item_id: String) -> int:
+	if item_id.begins_with(MANA_CRYSTAL_ID_PREFIX):
+		var tier := int(item_id.trim_prefix(MANA_CRYSTAL_ID_PREFIX))
+		return MANA_CRYSTAL_VALUES.get(tier, 0)
+	var item := get_item_definition(item_id)
+	return 0 if item.is_empty() else int(round(item.price / 2.0))
+
+
+## Requires a Trading Post (design doc: selling is only available "if we have
+## a Trading Post") and at least `quantity` of item_id in stock (banked_gear
+## for gear, mana_crystals for a "mana_crystal_<tier>" id). Rejects and
+## mutates nothing otherwise.
+func sell_item(item_id: String, quantity: int = 1) -> bool:
+	if not has_trading_post or quantity <= 0:
+		return false
+	if item_id.begins_with(MANA_CRYSTAL_ID_PREFIX):
+		var tier := int(item_id.trim_prefix(MANA_CRYSTAL_ID_PREFIX))
+		if mana_crystals.get(tier, 0) < quantity:
+			return false
+		mana_crystals[tier] -= quantity
+		gold += get_item_sale_price(item_id) * quantity
+		return true
+	if banked_gear.get(item_id, 0) < quantity:
+		return false
+	banked_gear[item_id] -= quantity
+	gold += get_item_sale_price(item_id) * quantity
+	return true
+
+
+## Requires a Trading Post and enough gold for item_id's full catalog price.
+## Buys exactly one unit, banking it into banked_gear.
+func buy_item(item_id: String) -> bool:
+	if not has_trading_post:
+		return false
+	var item := get_item_definition(item_id)
+	if item.is_empty() or gold < int(item.price):
+		return false
+	gold -= int(item.price)
+	banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
+	return true
+
+
+## Moves one unit of item_id out of banked_gear onto adventurer_id's matching
+## equipment slot (weapon or armor, from the item's own "slot" field), and
+## returns whatever was previously equipped in that slot back to the bank —
+## equipment is a swap, not a one-way consumption, so the adventurer's
+## starting gear (or a previous purchase) is never silently lost. Rejects an
+## item not in stock, an unknown item id, or an unknown adventurer, without
+## mutating anything either way.
+func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
+	if banked_gear.get(item_id, 0) <= 0:
+		return false
+	var item := get_item_definition(item_id)
+	if item.is_empty():
+		return false
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+
+	var slot: String = item.slot
+	var previous_item_id: String = adventurers[adventurer_index].equipment.get(slot, "")
+	banked_gear[item_id] -= 1
+	adventurers[adventurer_index].equipment[slot] = item_id
+	if previous_item_id != "":
+		banked_gear[previous_item_id] = banked_gear.get(previous_item_id, 0) + 1
+	return true
 
 
 func get_active_encounters() -> Array[Dictionary]:

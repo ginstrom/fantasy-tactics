@@ -32,6 +32,10 @@ const DEFAULTS: Dictionary = {
 		"encounter_vacancy_turns": 15,
 		"recruitment_vacancy_turns": 30,
 	},
+	"trading_post": {
+		"purchase_cost": 50,
+		"income_per_turn": 1,
+	},
 }
 
 var _data: Dictionary = {}

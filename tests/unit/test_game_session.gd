@@ -2214,3 +2214,120 @@ func test_mana_crystal_values_match_the_documented_tiers() -> void:
 func test_goblin_and_orc_enemy_stats_carry_their_loot_id() -> void:
 	assert_eq(GameSessionScript.GOBLIN_ENEMY_STATS.loot_id, "goblin")
 	assert_eq(GameSessionScript.ORC_ENEMY_STATS.loot_id, "orc")
+
+
+func test_new_session_has_no_trading_post() -> void:
+	assert_false(GameSession.has_trading_post)
+
+
+func test_can_purchase_trading_post_requires_enough_gold_and_not_already_owning_one() -> void:
+	assert_false(GameSession.can_purchase_trading_post(), "No gold, cannot afford it")
+
+	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+	assert_true(GameSession.can_purchase_trading_post())
+
+	GameSession.purchase_trading_post()
+	assert_false(GameSession.can_purchase_trading_post(), "Already owning one blocks a second purchase")
+
+
+func test_purchase_trading_post_deducts_gold_and_sets_the_flag_once() -> void:
+	GameSession.reset()
+	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+
+	var purchased: bool = GameSession.purchase_trading_post()
+
+	assert_true(purchased)
+	assert_true(GameSession.has_trading_post)
+	assert_eq(GameSession.gold, 0)
+	assert_false(GameSession.purchase_trading_post(), "A second purchase must fail")
+
+
+func test_end_world_turn_adds_trading_post_income_only_once_purchased() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.end_world_turn()
+	assert_eq(GameSession.gold, 0, "No income without a Trading Post")
+
+	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+	GameSession.purchase_trading_post()
+	GameSession.end_world_turn()
+
+	assert_eq(GameSession.gold, GameSession.TRADING_POST_INCOME_PER_TURN)
+
+
+func test_get_item_sale_price_halves_gear_price_and_keeps_mana_crystal_value_full() -> void:
+	assert_eq(GameSession.get_item_sale_price("shortsword_iron"), 10, "Half of 20")
+	assert_eq(GameSession.get_item_sale_price("leather_armor"), 5, "Half of 10")
+	assert_eq(GameSession.get_item_sale_price("mana_crystal_1"), 5)
+	assert_eq(GameSession.get_item_sale_price("mana_crystal_2"), 15)
+	assert_eq(GameSession.get_item_sale_price("no_such_item"), 0)
+
+
+func test_sell_item_requires_a_trading_post_and_enough_stock() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"shortsword_iron": 1}
+
+	assert_false(GameSession.sell_item("shortsword_iron"), "No Trading Post yet")
+
+	GameSession.has_trading_post = true
+	assert_false(GameSession.sell_item("shortsword_iron", 2), "Only 1 in stock")
+
+	var sold: bool = GameSession.sell_item("shortsword_iron", 1)
+	assert_true(sold)
+	assert_eq(GameSession.banked_gear.shortsword_iron, 0)
+	assert_eq(GameSession.gold, 10)
+
+
+func test_sell_item_handles_mana_crystals() -> void:
+	GameSession.reset()
+	GameSession.has_trading_post = true
+	GameSession.mana_crystals = {1: 2}
+
+	var sold: bool = GameSession.sell_item("mana_crystal_1", 2)
+
+	assert_true(sold)
+	assert_eq(GameSession.mana_crystals[1], 0)
+	assert_eq(GameSession.gold, 10)
+
+
+func test_buy_item_requires_a_trading_post_and_enough_gold_then_banks_the_item() -> void:
+	GameSession.reset()
+	assert_false(GameSession.buy_item("dagger_iron"), "No Trading Post yet")
+
+	GameSession.has_trading_post = true
+	assert_false(GameSession.buy_item("dagger_iron"), "No gold yet")
+
+	GameSession.gold = 10
+	var bought: bool = GameSession.buy_item("dagger_iron")
+
+	assert_true(bought)
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.banked_gear.dagger_iron, 1)
+
+
+func test_equip_item_from_bank_moves_the_item_from_the_bank_onto_the_unit_and_returns_the_old_one() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_steel": 1}
+
+	var equipped: bool = GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+
+	assert_true(equipped)
+	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_steel")
+	assert_eq(GameSession.banked_gear.dagger_steel, 0)
+	assert_eq(GameSession.banked_gear.longsword_iron, 1, "The previously-equipped Iron Longsword returns to the bank")
+
+
+func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_adventurer() -> void:
+	assert_false(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel"), "Nothing in stock")
+
+	GameSession.banked_gear = {"dagger_steel": 1}
+	assert_false(GameSession.equip_item_from_bank("no_such_id", "dagger_steel"))
+	assert_eq(GameSession.banked_gear.dagger_steel, 1, "A rejected equip must not touch the bank")
+
+
+func test_reset_clears_the_trading_post() -> void:
+	GameSession.has_trading_post = true
+
+	GameSession.reset()
+
+	assert_false(GameSession.has_trading_post)
