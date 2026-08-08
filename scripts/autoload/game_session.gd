@@ -78,6 +78,29 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 		{"enemy": ORC_ENEMY_STATS, "count": 2},
 	],
 }
+# Equipment catalog (docs/plans/trading-system.md "Equipment system"). Steel is
+# +1 damage over Iron on both ends of the range. Armor's defense reduces an
+# attacker's effective hit chance; resistance reduces incoming damage by that
+# percent, rounded to the nearest integer when applied (see BattleController).
+const WEAPONS: Dictionary = {
+	"dagger_iron": {"name_key": "item.dagger", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10},
+	"dagger_steel": {"name_key": "item.dagger", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30},
+	"shortsword_iron": {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20},
+	"shortsword_steel": {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60},
+	"longsword_iron": {"name_key": "item.longsword", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30},
+	"longsword_steel": {"name_key": "item.longsword", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90},
+	"two_handed_sword_iron": {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35},
+	"two_handed_sword_steel": {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105},
+}
+const ARMORS: Dictionary = {
+	"leather_armor": {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10},
+	"chainmail_armor": {"name_key": "item.chainmail_armor", "slot": "armor", "defense": 15, "resistance": 20, "price": 30},
+	"split_armor": {"name_key": "item.split_armor", "slot": "armor", "defense": 15, "resistance": 25, "price": 50},
+	"platemail_armor": {"name_key": "item.platemail_armor", "slot": "armor", "defense": 15, "resistance": 30, "price": 200},
+	"full_plate_armor": {"name_key": "item.full_plate_armor", "slot": "armor", "defense": 15, "resistance": 35, "price": 500},
+}
+const DEFAULT_WEAPON_ID := "longsword_iron"
+const DEFAULT_ARMOR_ID := "leather_armor"
 # Progression domain constants (see docs/plans/2026-08-06-campaign-progression-and-population).
 # Cumulative XP threshold for level N is 5*N*(N+1) - 10: level 1 costs 0, level
 # 2 costs 20, level 3 costs 50, level 4 costs 90, each step costing 10 XP more
@@ -754,6 +777,17 @@ func get_expedition(encounter_id: String) -> Dictionary:
 	if not EXPEDITIONS.has(encounter_id):
 		return {}
 	return EXPEDITIONS[encounter_id].duplicate(true)
+
+
+## Looks up an item id in WEAPONS then ARMORS, returning a safe copy either
+## way (an empty Dictionary for an unknown id, matching get_adventurer()'s
+## and get_party()'s not-found convention).
+func get_item_definition(item_id: String) -> Dictionary:
+	if WEAPONS.has(item_id):
+		return WEAPONS[item_id].duplicate(true)
+	if ARMORS.has(item_id):
+		return ARMORS[item_id].duplicate(true)
+	return {}
 
 
 func get_active_encounters() -> Array[Dictionary]:

@@ -2029,3 +2029,31 @@ func test_load_balance_config_populates_every_section_from_game_config() -> void
 		"combat.effective_hit_chance_cap must come from GameConfig"
 	)
 	assert_ne(session.BASE_MOVE_RANGE, SENTINEL, "The sentinel must have been overwritten, not left in place")
+
+
+func test_weapons_catalog_has_the_documented_iron_and_steel_damage_and_price() -> void:
+	assert_eq(GameSessionScript.WEAPONS.dagger_iron, {"name_key": "item.dagger", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10})
+	assert_eq(GameSessionScript.WEAPONS.dagger_steel, {"name_key": "item.dagger", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_iron, {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_steel, {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60})
+	assert_eq(GameSessionScript.WEAPONS.longsword_iron, {"name_key": "item.longsword", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.longsword_steel, {"name_key": "item.longsword", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_iron, {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_steel, {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105})
+
+
+func test_armors_catalog_has_the_documented_defense_resistance_and_price() -> void:
+	assert_eq(GameSessionScript.ARMORS.leather_armor, {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10})
+	assert_eq(GameSessionScript.ARMORS.chainmail_armor, {"name_key": "item.chainmail_armor", "slot": "armor", "defense": 15, "resistance": 20, "price": 30})
+	assert_eq(GameSessionScript.ARMORS.split_armor, {"name_key": "item.split_armor", "slot": "armor", "defense": 15, "resistance": 25, "price": 50})
+	assert_eq(GameSessionScript.ARMORS.platemail_armor, {"name_key": "item.platemail_armor", "slot": "armor", "defense": 15, "resistance": 30, "price": 200})
+	assert_eq(GameSessionScript.ARMORS.full_plate_armor, {"name_key": "item.full_plate_armor", "slot": "armor", "defense": 15, "resistance": 35, "price": 500})
+
+
+func test_get_item_definition_finds_a_weapon_then_an_armor_then_returns_empty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_item_definition("longsword_iron"), GameSessionScript.WEAPONS.longsword_iron)
+	assert_eq(session.get_item_definition("leather_armor"), GameSessionScript.ARMORS.leather_armor)
+	assert_eq(session.get_item_definition("no_such_item"), {})
