@@ -39,7 +39,8 @@ const PLAYER_COLORS: Array[Color] = [
 	Color(0.7, 0.4, 0.85), Color(0.9, 0.6, 0.3),
 ]
 const ENEMY_START_POSITIONS: Array[Vector2i] = [
-	Vector2i(5, 5), Vector2i(4, 5), Vector2i(5, 4),
+	Vector2i(5, 5), Vector2i(4, 5), Vector2i(5, 4), Vector2i(3, 5),
+	Vector2i(4, 4), Vector2i(5, 3), Vector2i(3, 4), Vector2i(4, 3),
 ]
 const ENEMY_COLOR := Color(0.9, 0.4, 0.3)
 const MIN_HIT_CHANCE := 0.05

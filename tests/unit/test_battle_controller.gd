@@ -335,6 +335,43 @@ func test_ready_builds_one_goblin_when_the_goblin_camp_is_selected() -> void:
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
 
+func test_enemy_start_positions_supports_up_to_eight_enemies() -> void:
+	assert_eq(BattleControllerScript.ENEMY_START_POSITIONS.size(), 8)
+
+
+func test_ready_fields_up_to_eight_enemies_when_the_encounter_has_that_many() -> void:
+	GameSession.reset()
+	var enemy_stats: Dictionary = GameSession.GOBLIN_ENEMY_STATS.duplicate(true)
+	enemy_stats["count"] = 8
+	GameSession.active_encounters.append({
+		"id": "capacity_test",
+		"template_id": GameSession.GOBLIN_CAMP_ID,
+		"position": Vector2i(2, 2),
+		"name_key": "expedition.goblin_camp.name",
+		"danger_key": "expedition.danger.low",
+		"difficulty": 1,
+		"kill_xp": 5,
+		"clear_xp": 10,
+		"enemy": enemy_stats,
+	})
+	GameSession.selected_encounter = "capacity_test"
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var enemy_units: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			enemy_units.append(unit)
+	assert_eq(enemy_units.size(), 8, "All eight enemy start positions should be usable")
+
+	var seen_positions: Array[Vector2i] = []
+	for unit in enemy_units:
+		assert_true(controller.grid.is_in_bounds(unit.grid_position), "Every enemy start position must be on the board")
+		assert_false(seen_positions.has(unit.grid_position), "No two enemies should share a start tile")
+		seen_positions.append(unit.grid_position)
+
+
 ## Task 2: the player Unit is built from the selected party's first member's
 ## effective (derived) combat stats rather than fixed constants.
 func test_ready_builds_the_player_unit_from_the_first_partys_effective_stats() -> void:
