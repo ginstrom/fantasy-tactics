@@ -316,7 +316,7 @@ static func debug_scenario_target(scenario_id: String) -> DebugTarget:
 			return DebugTarget.PARTY_MANAGER
 		"world_map":
 			return DebugTarget.WORLD_MAP
-		"goblin_camp", "orc_outpost":
+		"goblin_camp", "orc_outpost", "ruined_fortress":
 			return DebugTarget.BATTLEFIELD
 		"stocked_stores":
 			return DebugTarget.STORES

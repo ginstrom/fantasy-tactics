@@ -48,6 +48,10 @@ func _on_orc_outpost_pressed() -> void:
 	_run("orc_outpost")
 
 
+func _on_ruined_fortress_pressed() -> void:
+	_run("ruined_fortress")
+
+
 func _on_stocked_stores_pressed() -> void:
 	_run("stocked_stores")
 

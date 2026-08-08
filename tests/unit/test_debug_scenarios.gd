@@ -65,6 +65,7 @@ func test_scenario_ids_are_in_display_order() -> void:
 		"world_map",
 		"goblin_camp",
 		"orc_outpost",
+		"ruined_fortress",
 		"stocked_stores",
 	])
 

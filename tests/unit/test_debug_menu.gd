@@ -8,6 +8,14 @@ func before_each() -> void:
 	GameSession.reset()
 
 
+func after_each() -> void:
+	# The Ruined Fortress scenario pins these rolls to force its maximum
+	# Kobold count; restore real randomness so later tests/files aren't
+	# affected by this singleton's leftover state.
+	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	GameSession.enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+
+
 func test_debug_menu_starts_hidden_with_eleven_stable_scenario_buttons() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
@@ -38,6 +46,32 @@ func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
 		GameSession.ORC_OUTPOST_ID,
 		"The button must drive the same run_debug_scenario('orc_outpost') path as the scenario menu"
 	)
+	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
+
+
+func test_ruined_fortress_scenario_deploys_a_staffed_party_and_fields_eight_kobolds() -> void:
+	assert_eq(GameManager.run_debug_scenario("ruined_fortress"), OK)
+
+	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var enemy_units: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			enemy_units.append(unit)
+	assert_eq(enemy_units.size(), 8, "The forced Kobold roll should field the maximum count")
+	for unit in enemy_units:
+		assert_eq(unit.max_health, 6, "Every fielded unit should be a Kobold")
+
+
+func test_ruined_fortress_button_runs_the_ruined_fortress_debug_scenario() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_ruined_fortress_pressed()
+
 	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
 
 

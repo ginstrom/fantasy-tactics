@@ -12,6 +12,7 @@ const SCENARIO_IDS := [
 	"world_map",
 	"goblin_camp",
 	"orc_outpost",
+	"ruined_fortress",
 	"stocked_stores",
 ]
 
@@ -35,6 +36,8 @@ static func apply(scenario_id: String) -> bool:
 			return _deploy_at(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 		"orc_outpost":
 			return _deploy_at(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position)
+		"ruined_fortress":
+			return _deploy_at_ruined_fortress()
 		"stocked_stores":
 			return _stock_trading_post_and_stores()
 	return false
@@ -63,5 +66,29 @@ static func _deploy_at(position: Vector2i) -> bool:
 	return (
 		_create_staffed_party()
 		and GameSession.depart_selected_party()
+		and GameSession.set_deployed_party_position(position)
+	)
+
+
+## The Ruined Fortress is never a starting active encounter (see
+## GameSession.reset()) and only otherwise appears via a power-weighted
+## vacancy refill (see GameSession._choose_encounter_template()) -- both
+## awkward to trigger from a menu click. This activates it directly at
+## its documented position and pins both composition rolls to the Kobold
+## option at its maximum count (8), so this scenario reliably exercises
+## the largest battle the game can field.
+static func _deploy_at_ruined_fortress() -> bool:
+	if not _create_staffed_party():
+		return false
+	var position: Vector2i = GameSession.get_expedition(GameSession.RUINED_FORTRESS_ID).position
+	GameSession.active_encounters.append(
+		GameSession._make_encounter_instance(
+			GameSession.RUINED_FORTRESS_ID, GameSession.RUINED_FORTRESS_ID, position
+		)
+	)
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	GameSession.enemy_count_roll = func(_min_value: int, _max_value: int) -> int: return 8
+	return (
+		GameSession.depart_selected_party()
 		and GameSession.set_deployed_party_position(position)
 	)
