@@ -43,6 +43,16 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_units()},
 		{"name": "guild_hall", "action": func() -> void:
 			GameManager.go_to_guild_hall()},
+		{"name": "trade", "action": func() -> void:
+			GameManager.go_to_trade()},
+		{"name": "stores", "action": func() -> void:
+			GameSession.banked_gear = {"shortsword_iron": 1}
+			GameSession.mana_crystals = {1: 2}
+			GameManager.go_to_stores()},
+		{"name": "trading_post", "action": func() -> void:
+			GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+			GameSession.purchase_trading_post()
+			GameManager.go_to_trading_post()},
 		{"name": "roster", "action": func() -> void:
 			GameManager.go_to_roster()},
 		{"name": "recruitment", "action": func() -> void:

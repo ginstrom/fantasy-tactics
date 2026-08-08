@@ -174,9 +174,9 @@ Deploy Party, Roster, Parties, Recruitment, Party Details, Unit Details,
 Add Member — to give a persistent left-hand nav. It is deliberately absent
 from the World Map: that screen isn't part of the Encampment, and a party
 returns home by clicking the settlement tile instead. It renders six
-buttons, but the Trade button is permanently `disabled` in
-the `.tscn` and has no `_on_trade_button_pressed()` handler; there's no
-Trade screen yet for it to route to. CampNav has no state of its own
+buttons, all enabled and routing through `GameManager` — Trade opens
+`scenes/ui/trade.tscn`, which lists Stores and (once purchased) Trading
+Post (see `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`). CampNav has no state of its own
 beyond the Deploy Party button's disabled flag (set in `refresh()` from
 `GameSession.get_deployable_encamped_parties().is_empty()`) and never
 receives a signal from its parent screen — every wired button calls a
