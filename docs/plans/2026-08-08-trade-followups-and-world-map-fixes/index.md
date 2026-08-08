@@ -82,6 +82,28 @@ guess at a fix beyond Task 02 without that evidence** — if it arrives
 before this plan is executed, replace Task 02's open item with a concrete
 fix task before starting Phase A.
 
+**Addendum (found during Task 10's manual verification):** hypothesis (a)
+was correct. Root cause: `_unhandled_input()` derived the clicked tile
+from `board.get_local_mouse_position()` — the Viewport's tracked cursor
+position, refreshed only by `MouseMotion` events — instead of the actual
+`InputEventMouseButton`'s own `.position`. Godot never emits a fresh
+`MouseMotion` event for a stationary mouse, so right after a scene
+transition (Battlefield → World Map on victory) the tracked position is
+stale from the *old* scene until the mouse physically moves, and the
+first click can resolve to the wrong tile entirely — exactly reproducing
+symptom 1. A real `InputEventMouseButton` dispatched through
+`_unhandled_input()` on a live post-victory World Map (not a direct
+`_handle_tile_click()` call, which bypasses this code path entirely)
+reproduced it deterministically. Fixed by using
+`CanvasItem.make_input_local(event)` to derive the tile from the event's
+own position; a permanent regression test
+(`test_a_real_click_event_selects_the_party_even_when_the_tracked_cursor_position_is_stale`)
+was added to `test_world_map.gd` and confirmed red-then-green against the
+fix. Symptoms 2 and 3 were not independently re-investigated after this
+fix — 3 may well have shared this same root cause (any click, not just
+the first one after a scene change, reads the same code path), but that
+needs a fresh manual verification pass to confirm.
+
 **Phase B — Trade/Equipment Follow-ups** (independent of Phase A)
 
 1. [03-split-iron-and-steel-weapon-display-names.md](03-split-iron-and-steel-weapon-display-names.md)
