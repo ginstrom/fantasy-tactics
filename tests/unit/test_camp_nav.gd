@@ -28,10 +28,15 @@ func test_shows_all_six_destinations() -> void:
 	assert_eq(nav.get_node("VBox/WorldMapButton").text, "camp_nav.world_map")
 
 
-func test_trade_is_present_but_disabled() -> void:
+func test_trade_button_is_enabled() -> void:
 	var nav := _make_nav()
 
-	assert_true(nav.get_node("VBox/TradeButton").disabled)
+	assert_false(nav.get_node("VBox/TradeButton").disabled)
+
+
+func test_trade_button_routes_via_game_manager() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/camp_nav.gd")
+	assert_string_contains(source, "GameManager.go_to_trade()")
 
 
 func test_deploy_party_is_disabled_until_a_deployable_party_exists() -> void:

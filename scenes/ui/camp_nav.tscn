@@ -26,7 +26,6 @@ text = "encampment.buildings"
 
 [node name="TradeButton" type="Button" parent="VBox"]
 layout_mode = 2
-disabled = true
 text = "encampment.trade"
 
 [node name="DeployPartyButton" type="Button" parent="VBox"]
@@ -40,5 +39,6 @@ text = "camp_nav.world_map"
 [connection signal="pressed" from="VBox/EncampmentButton" to="." method="_on_encampment_button_pressed"]
 [connection signal="pressed" from="VBox/UnitsButton" to="." method="_on_units_button_pressed"]
 [connection signal="pressed" from="VBox/BuildingsButton" to="." method="_on_buildings_button_pressed"]
+[connection signal="pressed" from="VBox/TradeButton" to="." method="_on_trade_button_pressed"]
 [connection signal="pressed" from="VBox/DeployPartyButton" to="." method="_on_deploy_party_button_pressed"]
 [connection signal="pressed" from="VBox/WorldMapButton" to="." method="_on_world_map_button_pressed"]

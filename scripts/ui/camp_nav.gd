@@ -34,6 +34,10 @@ func _on_buildings_button_pressed() -> void:
 	GameManager.go_to_buildings()
 
 
+func _on_trade_button_pressed() -> void:
+	GameManager.go_to_trade()
+
+
 func _on_deploy_party_button_pressed() -> void:
 	GameManager.go_to_deploy_party()
 
