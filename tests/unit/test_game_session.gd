@@ -495,11 +495,70 @@ func test_reentering_an_active_instance_rerolls_its_composition() -> void:
 	assert_eq(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).enemy.count, 1)
 
 
-func test_three_star_tier_defines_three_goblins_or_two_orcs_for_future_use() -> void:
-	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].count, 3)
-	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].enemy.name_key, "battle.enemy.goblin")
-	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].count, 2)
-	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].enemy.name_key, "battle.enemy.orc")
+func test_three_star_tier_offers_kobolds_goblins_orcs_or_hobgoblins() -> void:
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].count_min, 4)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].count_max, 8)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][0].enemy.name_key, "battle.enemy.kobold")
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].count_min, 3)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].count_max, 6)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][1].enemy.name_key, "battle.enemy.goblin")
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][2].count_min, 2)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][2].count_max, 4)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][2].enemy.name_key, "battle.enemy.orc")
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][3].count_min, 1)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][3].count_max, 3)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[3][3].enemy.name_key, "battle.enemy.hobgoblin")
+
+
+func test_tier_one_and_two_compositions_still_use_their_original_fixed_counts() -> void:
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[1][0].count_min, 1)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[1][0].count_max, 1)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[2][0].count_min, 2)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[2][0].count_max, 2)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[2][1].count_min, 1)
+	assert_eq(GameSessionScript.STAR_ENEMY_COMPOSITIONS[2][1].count_max, 1)
+
+
+func test_resolve_enemy_composition_rolls_the_kobold_count_within_its_range() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	session.enemy_count_roll = func(min_value: int, max_value: int) -> int:
+		assert_eq(min_value, 4)
+		assert_eq(max_value, 8)
+		return 6
+	var enemy: Dictionary = session._resolve_enemy_composition(3)
+	assert_eq(enemy.count, 6)
+	assert_eq(enemy.name_key, "battle.enemy.kobold")
+
+
+func test_resolve_enemy_composition_rolls_the_hobgoblin_count_within_its_range() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.enemy_composition_roll = func(_option_count: int) -> int: return 3
+	session.enemy_count_roll = func(min_value: int, max_value: int) -> int:
+		assert_eq(min_value, 1)
+		assert_eq(max_value, 3)
+		return 2
+	var enemy: Dictionary = session._resolve_enemy_composition(3)
+	assert_eq(enemy.count, 2)
+	assert_eq(enemy.name_key, "battle.enemy.hobgoblin")
+
+
+func test_ruined_fortress_is_a_three_star_site_at_its_documented_position() -> void:
+	var record: Dictionary = GameSession.get_expedition(GameSession.RUINED_FORTRESS_ID)
+	assert_eq(record.position, Vector2i(0, 4))
+	assert_eq(record.difficulty, 3)
+	assert_eq(record.kill_xp, 15)
+	assert_eq(record.clear_xp, 30)
+	assert_eq(record.name_key, "expedition.ruined_fortress.name")
+
+
+func test_ruined_fortress_is_not_seeded_as_an_active_encounter_on_a_fresh_campaign() -> void:
+	GameSession.reset()
+	for instance in GameSession.active_encounters:
+		assert_ne(instance.template_id, GameSession.RUINED_FORTRESS_ID)
+	assert_eq(GameSession.active_encounters.size(), 2, "A fresh campaign still starts with exactly the Goblin Camp and Orc Outpost")
 
 
 func test_get_expedition_returns_an_empty_dictionary_for_an_unknown_id() -> void:

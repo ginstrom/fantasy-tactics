@@ -4,6 +4,7 @@ const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(0, 0)
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
+const RUINED_FORTRESS_ID := "ruined_fortress"
 const EXPEDITIONS: Dictionary = {
 	"goblin_camp": {
 		"position": Vector2i(4, 4),
@@ -39,6 +40,24 @@ const EXPEDITIONS: Dictionary = {
 			"attack_damage": 3,
 			"hit_chance": 0.5,
 			"count": 1,
+		},
+	},
+	"ruined_fortress": {
+		"position": Vector2i(0, 4),
+		"name_key": "expedition.ruined_fortress.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 3,
+		# XP: 15 per kill, 30 for clearing the site, continuing the +5/+10
+		# progression from the Goblin Camp (5/10) and Orc Outpost (10/20).
+		"kill_xp": 15,
+		"clear_xp": 30,
+		"enemy": {
+			"name_key": "battle.enemy.kobold",
+			"attack_name_key": "battle.enemy.kobold.attack",
+			"max_health": 6,
+			"attack_damage": 1,
+			"hit_chance": 0.25,
+			"count": 4,
 		},
 	},
 }
@@ -83,15 +102,17 @@ const HOBGOBLIN_ENEMY_STATS: Dictionary = {
 # ordering in each tier's option list matches the design doc's phrasing.
 const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 	1: [
-		{"enemy": GOBLIN_ENEMY_STATS, "count": 1},
+		{"enemy": GOBLIN_ENEMY_STATS, "count_min": 1, "count_max": 1},
 	],
 	2: [
-		{"enemy": GOBLIN_ENEMY_STATS, "count": 2},
-		{"enemy": ORC_ENEMY_STATS, "count": 1},
+		{"enemy": GOBLIN_ENEMY_STATS, "count_min": 2, "count_max": 2},
+		{"enemy": ORC_ENEMY_STATS, "count_min": 1, "count_max": 1},
 	],
 	3: [
-		{"enemy": GOBLIN_ENEMY_STATS, "count": 3},
-		{"enemy": ORC_ENEMY_STATS, "count": 2},
+		{"enemy": KOBOLD_ENEMY_STATS, "count_min": 4, "count_max": 8},
+		{"enemy": GOBLIN_ENEMY_STATS, "count_min": 3, "count_max": 6},
+		{"enemy": ORC_ENEMY_STATS, "count_min": 2, "count_max": 4},
+		{"enemy": HOBGOBLIN_ENEMY_STATS, "count_min": 1, "count_max": 3},
 	],
 }
 # Equipment catalog (see "Trade, equipment, and loot" in
@@ -265,6 +286,11 @@ var selected_encounter: String = ""
 # randomness. Never reset by reset() — every call site that needs a specific
 # outcome sets this immediately before its own enter_encounter() call.
 var enemy_composition_roll: Callable = func(option_count: int) -> int: return randi() % option_count
+## Injectable so tests can force a specific enemy count instead of
+## depending on real randomness (see enemy_composition_roll for the same
+## pattern). Called with the resolved composition option's
+## (count_min, count_max).
+var enemy_count_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 # Injectable so tests can force deterministic loot instead of depending on
 # real randomness (see enemy_composition_roll/hit_roll for the same
 # pattern). Never reset by reset() — a test sets these immediately before
@@ -756,7 +782,7 @@ func _resolve_enemy_composition(difficulty: int) -> Dictionary:
 	if options.size() > 1:
 		option = options[enemy_composition_roll.call(options.size())]
 	var enemy: Dictionary = option.enemy.duplicate(true)
-	enemy["count"] = option.count
+	enemy["count"] = enemy_count_roll.call(option.count_min, option.count_max)
 	return enemy
 
 

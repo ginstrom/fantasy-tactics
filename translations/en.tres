@@ -155,6 +155,7 @@ messages = {
 "world_map.arrival_turns": "%d turns to arrival",
 "expedition.goblin_camp.name": "Goblin Camp",
 "expedition.orc_outpost.name": "Orc Outpost",
+"expedition.ruined_fortress.name": "Ruined Fortress",
 "battle.enemy.goblin": "Goblin",
 "battle.enemy.orc": "Orc",
 "battle.enemy.goblin.attack": "Short Sword",
