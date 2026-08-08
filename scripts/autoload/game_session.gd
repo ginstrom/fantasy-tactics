@@ -58,6 +58,22 @@ const ORC_ENEMY_STATS: Dictionary = {
 	"hit_chance": 0.5,
 	"loot_id": "orc",
 }
+const KOBOLD_ENEMY_STATS: Dictionary = {
+	"name_key": "battle.enemy.kobold",
+	"attack_name_key": "battle.enemy.kobold.attack",
+	"max_health": 6,
+	"attack_damage": 1,
+	"hit_chance": 0.25,
+	"loot_id": "kobold",
+}
+const HOBGOBLIN_ENEMY_STATS: Dictionary = {
+	"name_key": "battle.enemy.hobgoblin",
+	"attack_name_key": "battle.enemy.hobgoblin.attack",
+	"max_health": 30,
+	"attack_damage": 4,
+	"hit_chance": 0.6,
+	"loot_id": "hobgoblin",
+}
 # Star tier -> possible enemy compositions for an active instance at that
 # tier (see docs/plans/campaign-loop-follow-up.md's battle balancing
 # section). Tier 1 has one deterministic option; tiers 2-3 randomly resolve

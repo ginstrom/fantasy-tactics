@@ -2214,6 +2214,29 @@ func test_goblin_and_orc_enemy_stats_carry_their_loot_id() -> void:
 	assert_eq(GameSessionScript.ORC_ENEMY_STATS.loot_id, "orc")
 
 
+func test_kobold_enemy_stats_are_the_weakest_tier() -> void:
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.max_health, 6)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_damage, 1)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.hit_chance, 0.25)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.name_key, "battle.enemy.kobold")
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_name_key, "battle.enemy.kobold.attack")
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.loot_id, "kobold")
+
+
+func test_hobgoblin_enemy_stats_are_the_strongest_tier() -> void:
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.max_health, 30)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.attack_damage, 4)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.hit_chance, 0.6)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.name_key, "battle.enemy.hobgoblin")
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.attack_name_key, "battle.enemy.hobgoblin.attack")
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.loot_id, "hobgoblin")
+
+
+func test_kobold_and_hobgoblin_loot_ids_already_have_loot_table_rows() -> void:
+	assert_true(GameSessionScript.ENEMY_LOOT_TABLES.has(GameSessionScript.KOBOLD_ENEMY_STATS.loot_id))
+	assert_true(GameSessionScript.ENEMY_LOOT_TABLES.has(GameSessionScript.HOBGOBLIN_ENEMY_STATS.loot_id))
+
+
 func test_new_session_has_no_trading_post() -> void:
 	assert_false(GameSession.has_trading_post)
 
