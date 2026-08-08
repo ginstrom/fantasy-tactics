@@ -109,6 +109,53 @@ func test_a_real_click_event_selects_the_party_even_when_the_tracked_cursor_posi
 	)
 
 
+## Every existing "real input" regression test in this file (including the
+## one directly above) calls _unhandled_input() directly on the WorldMap
+## node. That skips Godot's actual GUI input pipeline (Viewport -> Control
+## _gui_input propagation -> _unhandled_input only if no Control consumed
+## the event first), so none of them can catch a Control silently absorbing
+## the click before _unhandled_input ever runs. This test instead pushes
+## the event through Viewport.push_input() on the fully-instantiated scene,
+## exercising the real pipeline end to end. in_local_coords=true is required
+## here: push_input's default (false) reinterprets .position as
+## screen-global and re-derives local coordinates via the viewport's own
+## transform, which in a headless test run (no real OS window) does not
+## reproduce a real click's coordinates -- true is what makes this test
+## faithfully emulate the coordinates an actual OS-delivered click carries.
+##
+## The click lands on the Goblin Camp tile (4,4), not the settlement (0,0):
+## the settlement sits under HUD/Margin/VBox/TopRow, a Container whose
+## default mouse_filter (PASS) never blocked clicks, which is why a version
+## of this test clicking the settlement would have missed the real bug --
+## HUD/Margin/VBox/Spacer is a bare Control (default mouse_filter STOP) that
+## covers the rest of the board underneath it and silently swallowed clicks
+## anywhere below the top HUD row, including every tile the party could
+## actually be deployed to after a battle.
+func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline() -> void:
+	# _ready() reads the party's position from GameSession, so it must be set
+	# before instantiation -- setting world_map.party_position afterwards
+	# would just get overwritten by _ready() when add_child_autofree() below
+	# triggers it.
+	GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	await get_tree().process_frame
+	assert_false(world_map.party_selected)
+
+	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = party_pixel_center
+
+	world_map.get_viewport().push_input(click_event, true)
+
+	assert_true(
+		world_map.party_selected,
+		"a click pushed through the real Viewport/GUI pipeline must reach _unhandled_input and select the party"
+	)
+
+
 func test_clicking_the_selected_party_marker_again_deselects_it() -> void:
 	var world_map := _make_world_map()
 	world_map.party_position = Vector2i(1, 0)

@@ -1,6 +1,7 @@
 extends GutTest
 
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const WorldMapScript := preload("res://scripts/world/world_map.gd")
 const PartiesScene := preload("res://scenes/ui/parties.tscn")
 const PartyDetailsScene := preload("res://scenes/ui/party_details.tscn")
 const AddMemberScene := preload("res://scenes/ui/add_member.tscn")
@@ -208,4 +209,73 @@ func test_the_real_post_victory_scene_change_produces_a_selectable_world_map() -
 	assert_true(
 		live_world_map.party_selected,
 		"clicking the party tile on the REAL post-victory world map must select it"
+	)
+
+
+## Same real GameManager.complete_battle() -> go_to_world_map() ->
+## change_scene_to_file() transition as the test above, but this one pushes
+## a real InputEventMouseButton through the Viewport/GUI pipeline
+## (push_input) instead of calling _handle_tile_click() directly. This is
+## the test that actually reproduced
+## docs/plans/2026-08-08-world-map-post-battle-selection-bug/index.md's
+## reported bug: the Goblin Camp is at (4,4), which sits under
+## HUD/Margin/VBox/Spacer (a bare Control, default mouse_filter STOP) in
+## world_map.tscn, so the real click was silently absorbed before
+## _unhandled_input ever ran -- exactly reproducing "the party isn't
+## selectable after a battle," since a battle always ends with the party on
+## whatever tile the encounter was at, never back at the settlement.
+func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_party() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+
+	var goblin_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.set_deployed_party_position(goblin_position)
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 1.0
+	battlefield.grid.apply_super_power()
+
+	var warrior_start: Vector2i = BattleControllerScript.PLAYER_START_POSITIONS[0]
+	var goblin_start: Vector2i = BattleControllerScript.ENEMY_START_POSITIONS[0]
+	var adjacent_to_goblin: Vector2i = goblin_start + Vector2i.UP
+	battlefield.grid._handle_tile_click(warrior_start)
+	battlefield.grid._handle_tile_click(adjacent_to_goblin)
+	battlefield.grid._handle_tile_click(goblin_start)
+
+	var settle_frames := 0
+	while GameSession.selected_encounter != "" and settle_frames < 30:
+		if battlefield.level_up.visible:
+			battlefield.level_up.continue_button.emit_signal("pressed")
+		await get_tree().process_frame
+		settle_frames += 1
+	assert_eq(GameSession.selected_encounter, "", "Victory should have resolved before the frame budget ran out")
+
+	var scene_settle_frames := 0
+	while (get_tree().current_scene == null or get_tree().current_scene.name != "WorldMap") and scene_settle_frames < 10:
+		await get_tree().process_frame
+		scene_settle_frames += 1
+
+	var live_world_map: Node = get_tree().current_scene
+	assert_not_null(live_world_map, "a real scene should be live after the post-victory transition")
+	assert_eq(live_world_map.name, "WorldMap")
+	assert_false(live_world_map.party_selected)
+
+	var party_pixel_center: Vector2 = (
+		Vector2(live_world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = party_pixel_center
+	live_world_map.get_viewport().push_input(click_event, true)
+
+	assert_true(
+		live_world_map.party_selected,
+		"a click pushed through the real pipeline on the REAL post-victory world map must select the party"
 	)

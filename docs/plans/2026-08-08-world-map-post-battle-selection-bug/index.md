@@ -1,10 +1,67 @@
 # Investigation: World Map party still not selectable after a battle
 
-**Status:** OPEN. A real, confirmed bug in the same area was found and fixed
-(see "What was found and fixed" below), but the user has verified the
-original symptom still reproduces after that fix. This document exists so
-the next session doesn't have to re-derive the last two weeks of
-investigation from scratch.
+**Status:** RESOLVED. The real root cause was found and fixed -- see "The
+actual root cause and fix" below, added after the session that picked this
+investigation back up. The stale-cursor-position bug documented in "What
+was found and fixed" was also real and worth keeping, but it was not what
+the user was hitting; this document is kept for the full trail.
+
+## The actual root cause and fix
+
+**Confirmed via `Viewport.push_input()` on a fully-instantiated scene**
+(exactly the "concrete next step" this doc had proposed, see below): a real
+click, pushed through Godot's actual GUI input pipeline rather than calling
+`_unhandled_input()` directly, silently failed to reach `world_map.gd`'s
+`_unhandled_input()` at all when the party sat anywhere on the board except
+the top strip near the settlement. `gui_get_hovered_control()` after the
+push showed the culprit directly: `HUD/Margin/VBox/Spacer`.
+
+`Spacer`, in `scenes/world/world_map.tscn`, is declared `type="Control"` --
+a bare `Control`, not a layout container. Bare `Control`'s default
+`mouse_filter` is `MOUSE_FILTER_STOP`. Every *container* in the same HUD
+chain (`Margin` a `MarginContainer`, `VBox` a `VBoxContainer`, `TopRow` an
+`HBoxContainer`, etc.) defaults to `MOUSE_FILTER_PASS` instead, which is why
+the Control-absorption hypothesis below looked plausible but a synthetic
+test clicking the *settlement* tile (0,0) kept passing even before any fix
+-- (0,0) sits under `TopRow`, a container, which never blocked anything.
+`Spacer` has `size_flags_vertical = 3` (expand-to-fill) and covers the rest
+of the VBox's vertical space beneath `TopRow`, which in practice is most of
+the board underneath it, including every encounter tile. A battle always
+ends with the party sitting on the encounter tile, never back at the
+settlement -- so this bug was invisible from the very first tile the game
+puts the party on, and every earlier click-based repro attempt in this
+investigation happened to test the one safe tile.
+
+**Fixed** by adding `mouse_filter = 2` (`MOUSE_FILTER_IGNORE`) to `Spacer`
+in `scenes/world/world_map.tscn` -- a one-line scene change. A repo-wide
+grep confirmed no other scene has this pattern: every other bare
+`type="Control"` node in `scenes/` is the root of a full-screen UI scene,
+where blocking clicks is the correct, intended behavior.
+
+**Regression coverage**, both using `Viewport.push_input(event, true)` (the
+`true` is required -- `push_input`'s default `in_local_coords=false`
+re-derives local coordinates from the viewport's screen transform, which
+does not reproduce real click coordinates in a headless test run):
+- `test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline`
+  in `tests/unit/test_world_map.gd` -- a synthetic scene, party moved to the
+  Goblin Camp tile (4,4) specifically so the click lands under `Spacer`.
+- `test_a_real_click_after_the_real_post_victory_scene_change_selects_the_party`
+  in `tests/unit/test_first_campaign_ui_flow.gd` -- the test that actually
+  reproduced the bug: a real battle fought to victory, a real
+  `change_scene_to_file()` transition, then a real pushed click on the live
+  post-victory World Map.
+
+Both were verified with a genuine red/green cycle (stashed the `Spacer`
+fix, confirmed both fail; restored it, confirmed both pass). Full suite:
+734/734 passing.
+
+## Original investigation (kept for the trail)
+
+**Original status when this section was written:** OPEN. A real, confirmed
+bug in the same area was found and fixed (see "What was found and fixed"
+below), but the user has verified the original symptom still reproduces
+after that fix. This document exists so the next session doesn't have to
+re-derive the last two weeks of investigation from scratch.
 
 ## The symptom
 
