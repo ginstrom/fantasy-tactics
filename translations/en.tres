@@ -169,6 +169,7 @@ messages = {
 "debug.world_map": "Party on World Map",
 "debug.goblin_camp": "Goblin Camp Battle",
 "debug.orc_outpost": "Orc Outpost Battle",
+"debug.stocked_stores": "Stocked Trading Post + Stores",
 "debug.super_power": "Super Power",
 "debug.recruit": "Recruit Adventurer",
 "guild_hall.title": "Guild Hall",

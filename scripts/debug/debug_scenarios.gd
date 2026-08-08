@@ -12,6 +12,7 @@ const SCENARIO_IDS := [
 	"world_map",
 	"goblin_camp",
 	"orc_outpost",
+	"stocked_stores",
 ]
 
 
@@ -34,6 +35,8 @@ static func apply(scenario_id: String) -> bool:
 			return _deploy_at(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 		"orc_outpost":
 			return _deploy_at(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position)
+		"stocked_stores":
+			return _stock_trading_post_and_stores()
 	return false
 
 
@@ -42,6 +45,18 @@ static func _create_staffed_party() -> bool:
 		GameSession.create_party()
 		and GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	)
+
+
+## For testing the Trade loop directly: a staffed encamped party, a Trading
+## Post already owned (so Stores' Sell button is enabled), and Stores
+## pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword.
+static func _stock_trading_post_and_stores() -> bool:
+	if not _create_staffed_party():
+		return false
+	GameSession.has_trading_post = true
+	GameSession.mana_crystals = {1: 2}
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	return true
 
 
 static func _deploy_at(position: Vector2i) -> bool:

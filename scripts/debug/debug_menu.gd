@@ -48,6 +48,10 @@ func _on_orc_outpost_pressed() -> void:
 	_run("orc_outpost")
 
 
+func _on_stocked_stores_pressed() -> void:
+	_run("stocked_stores")
+
+
 func _on_super_power_pressed() -> void:
 	if GameManager.apply_super_power() == OK:
 		visible = false

@@ -15,7 +15,7 @@ anchor_bottom = 0.0
 offset_left = 24.0
 offset_top = 24.0
 offset_right = 324.0
-offset_bottom = 462.0
+offset_bottom = 500.0
 
 [node name="Rows" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
@@ -63,6 +63,10 @@ text = "debug.goblin_camp"
 layout_mode = 2
 text = "debug.orc_outpost"
 
+[node name="StockedStoresButton" type="Button" parent="Panel/Rows"]
+layout_mode = 2
+text = "debug.stocked_stores"
+
 [node name="SuperPowerButton" type="Button" parent="Panel/Rows"]
 layout_mode = 2
 text = "debug.super_power"
@@ -79,5 +83,6 @@ text = "debug.recruit"
 [connection signal="pressed" from="Panel/Rows/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Panel/Rows/GoblinCampButton" to="." method="_on_goblin_camp_pressed"]
 [connection signal="pressed" from="Panel/Rows/OrcOutpostButton" to="." method="_on_orc_outpost_pressed"]
+[connection signal="pressed" from="Panel/Rows/StockedStoresButton" to="." method="_on_stocked_stores_pressed"]
 [connection signal="pressed" from="Panel/Rows/SuperPowerButton" to="." method="_on_super_power_pressed"]
 [connection signal="pressed" from="Panel/Rows/RecruitButton" to="." method="_on_recruit_pressed"]

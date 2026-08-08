@@ -8,7 +8,7 @@ func before_each() -> void:
 	GameSession.reset()
 
 
-func test_debug_menu_starts_hidden_with_ten_stable_scenario_buttons() -> void:
+func test_debug_menu_starts_hidden_with_eleven_stable_scenario_buttons() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 
@@ -21,6 +21,7 @@ func test_debug_menu_starts_hidden_with_ten_stable_scenario_buttons() -> void:
 	assert_eq(menu.get_node("Panel/Rows/WorldMapButton").text, "debug.world_map")
 	assert_eq(menu.get_node("Panel/Rows/GoblinCampButton").text, "debug.goblin_camp")
 	assert_eq(menu.get_node("Panel/Rows/OrcOutpostButton").text, "debug.orc_outpost")
+	assert_eq(menu.get_node("Panel/Rows/StockedStoresButton").text, "debug.stocked_stores")
 	assert_eq(menu.get_node("Panel/Rows/SuperPowerButton").text, "debug.super_power")
 	assert_eq(menu.get_node("Panel/Rows/RecruitButton").text, "debug.recruit")
 
@@ -37,6 +38,19 @@ func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
 		GameSession.ORC_OUTPOST_ID,
 		"The button must drive the same run_debug_scenario('orc_outpost') path as the scenario menu"
 	)
+	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
+
+
+func test_stocked_stores_button_populates_the_trading_post_and_routes_to_stores() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	menu._on_stocked_stores_pressed()
+
+	assert_true(GameSession.has_trading_post)
+	assert_eq(GameSession.mana_crystals, {1: 2})
+	assert_eq(GameSession.banked_gear, {"shortsword_iron": 1})
 	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
 
 

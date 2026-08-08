@@ -50,7 +50,7 @@ var add_member_return_party_id: String = ""
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
 
-enum DebugTarget { NONE, SETTLEMENT, ENCAMPMENT, PARTY_MANAGER, WORLD_MAP, BATTLEFIELD }
+enum DebugTarget { NONE, SETTLEMENT, ENCAMPMENT, PARTY_MANAGER, WORLD_MAP, BATTLEFIELD, STORES }
 
 
 func _ready() -> void:
@@ -318,6 +318,8 @@ static func debug_scenario_target(scenario_id: String) -> DebugTarget:
 			return DebugTarget.WORLD_MAP
 		"goblin_camp", "orc_outpost":
 			return DebugTarget.BATTLEFIELD
+		"stocked_stores":
+			return DebugTarget.STORES
 	return DebugTarget.NONE
 
 
@@ -338,6 +340,8 @@ func run_debug_scenario(scenario_id: String) -> Error:
 			return go_to_world_map()
 		DebugTarget.BATTLEFIELD:
 			return enter_battle(scenario_id)
+		DebugTarget.STORES:
+			return go_to_stores()
 	return ERR_INVALID_DATA
 
 

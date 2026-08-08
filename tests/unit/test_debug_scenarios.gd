@@ -47,6 +47,14 @@ func test_unknown_scenario_fails_after_reset_without_creating_a_party() -> void:
 	assert_eq(GameSession.parties, [])
 
 
+func test_stocked_stores_creates_a_staffed_party_with_a_trading_post_and_banked_items() -> void:
+	assert_true(DebugScenarios.apply("stocked_stores"))
+	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
+	assert_true(GameSession.has_trading_post)
+	assert_eq(GameSession.mana_crystals, {1: 2})
+	assert_eq(GameSession.banked_gear, {"shortsword_iron": 1})
+
+
 func test_scenario_ids_are_in_display_order() -> void:
 	assert_eq(DebugScenarios.scenario_ids(), [
 		"new_campaign",
@@ -57,6 +65,7 @@ func test_scenario_ids_are_in_display_order() -> void:
 		"world_map",
 		"goblin_camp",
 		"orc_outpost",
+		"stocked_stores",
 	])
 
 
