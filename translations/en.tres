@@ -175,5 +175,18 @@ messages = {
 "trade.column.name": "Name",
 "trade.stores": "Stores",
 "trade.trading_post": "Trading Post",
-"trade.purchase_trading_post": "Purchase Trading Post (%d gold)"
+"trade.purchase_trading_post": "Purchase Trading Post (%d gold)",
+"stores.title": "Stores",
+"stores.column.name": "Name",
+"stores.column.type": "Type",
+"stores.column.count": "Count",
+"stores.column.price": "Price",
+"stores.type.weapon": "Weapon",
+"stores.type.armor": "Armor",
+"stores.type.mana_crystal": "Mana Crystal",
+"stores.mana_crystal": "Mana Crystal (Tier %d)",
+"stores.empty": "Nothing in storage yet.",
+"stores.selected": "%s — %d in stock, sells for %d gold",
+"stores.sell": "Sell",
+"stores.assign": "Assign to Unit"
 }
