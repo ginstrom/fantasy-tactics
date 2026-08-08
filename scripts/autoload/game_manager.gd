@@ -18,6 +18,10 @@ const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
 const BUILDINGS_SCENE := "res://scenes/ui/buildings.tscn"
 const GUILD_HALL_SCENE := "res://scenes/ui/guild_hall.tscn"
+const TRADE_SCENE := "res://scenes/ui/trade.tscn"
+const STORES_SCENE := "res://scenes/ui/stores.tscn"
+const TRADING_POST_SCENE := "res://scenes/ui/trading_post.tscn"
+const ASSIGN_EQUIPMENT_SCENE := "res://scenes/ui/assign_equipment.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
@@ -158,6 +162,34 @@ func go_to_buildings() -> Error:
 func go_to_guild_hall() -> Error:
 	_clear_detail_context()
 	return _change_scene(GUILD_HALL_SCENE)
+
+
+func go_to_trade() -> Error:
+	_clear_detail_context()
+	return _change_scene(TRADE_SCENE)
+
+
+func go_to_stores() -> Error:
+	_clear_detail_context()
+	return _change_scene(STORES_SCENE)
+
+
+func go_to_trading_post() -> Error:
+	_clear_detail_context()
+	return _change_scene(TRADING_POST_SCENE)
+
+
+## Mirrors go_to_unit_details()'s validate-then-route shape: an unknown item
+## id clears the detail context and reports ERR_INVALID_DATA instead of
+## routing to a screen with nothing to show.
+func go_to_assign_equipment(item_id: String) -> Error:
+	if GameSession.get_item_definition(item_id).is_empty():
+		_clear_detail_context()
+		return ERR_INVALID_DATA
+	route_context_id = item_id
+	unit_details_origin = ""
+	add_member_return_party_id = ""
+	return _change_scene(ASSIGN_EQUIPMENT_SCENE)
 
 
 func go_to_party_details(party_id: String) -> Error:

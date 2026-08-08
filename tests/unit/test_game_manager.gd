@@ -569,3 +569,45 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_eq(GameSession.adventurers.size(), 2)
 	assert_eq(GameSession.adventurers[1].id, "warrior_002")
 	assert_eq(GameSession.get_recruitment_candidates().size(), 0)
+
+
+func test_go_to_trade_changes_scene_and_clears_detail_context() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale"
+
+	assert_eq(manager.go_to_trade(), OK)
+	assert_eq(manager.route_context_id, "")
+
+
+func test_go_to_stores_changes_scene() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(manager.go_to_stores(), OK)
+
+
+func test_go_to_trading_post_changes_scene() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(manager.go_to_trading_post(), OK)
+
+
+func test_go_to_assign_equipment_sets_route_context_and_changes_scene_for_a_known_item() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(manager.go_to_assign_equipment("dagger_iron"), OK)
+	assert_eq(manager.route_context_id, "dagger_iron")
+
+
+func test_go_to_assign_equipment_rejects_an_unknown_item_id() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale"
+
+	assert_eq(manager.go_to_assign_equipment("no_such_item"), ERR_INVALID_DATA)
+	assert_eq(manager.route_context_id, "")
