@@ -2057,3 +2057,45 @@ func test_get_item_definition_finds_a_weapon_then_an_armor_then_returns_empty() 
 	assert_eq(session.get_item_definition("longsword_iron"), GameSessionScript.WEAPONS.longsword_iron)
 	assert_eq(session.get_item_definition("leather_armor"), GameSessionScript.ARMORS.leather_armor)
 	assert_eq(session.get_item_definition("no_such_item"), {})
+
+
+func test_default_warrior_starts_with_an_iron_longsword_and_leather_armor() -> void:
+	var warrior: Dictionary = GameSession.get_default_warrior()
+
+	assert_eq(warrior.equipment, {"weapon": "longsword_iron", "armor": "leather_armor"})
+
+
+func test_effective_weapon_damage_range_and_name_come_from_the_equipped_weapon() -> void:
+	assert_eq(GameSession.get_effective_weapon_damage_range(GameSession.WARRIOR_ID), Vector2i(1, 8))
+	assert_eq(GameSession.get_effective_weapon_name(GameSession.WARRIOR_ID), "Longsword")
+
+
+func test_effective_defense_and_resistance_come_from_the_equipped_armor() -> void:
+	assert_eq(GameSession.get_effective_defense(GameSession.WARRIOR_ID), 10)
+	assert_eq(GameSession.get_effective_resistance(GameSession.WARRIOR_ID), 10)
+
+
+func test_effective_equipment_getters_return_zero_for_an_unknown_adventurer() -> void:
+	assert_eq(GameSession.get_effective_weapon_damage_range("no_such_id"), Vector2i.ZERO)
+	assert_eq(GameSession.get_effective_weapon_name("no_such_id"), "")
+	assert_eq(GameSession.get_effective_defense("no_such_id"), 0)
+	assert_eq(GameSession.get_effective_resistance("no_such_id"), 0)
+
+
+func test_set_adventurer_weapon_changes_the_equipped_weapon_and_rejects_an_unknown_item_or_adventurer() -> void:
+	var changed: bool = GameSession.set_adventurer_weapon(GameSession.WARRIOR_ID, "dagger_steel")
+	assert_true(changed)
+	assert_eq(GameSession.get_effective_weapon_damage_range(GameSession.WARRIOR_ID), Vector2i(2, 5))
+
+	assert_false(GameSession.set_adventurer_weapon(GameSession.WARRIOR_ID, "leather_armor"), "An armor id is not a valid weapon")
+	assert_false(GameSession.set_adventurer_weapon("no_such_id", "dagger_iron"), "An unknown adventurer cannot be equipped")
+
+
+func test_set_adventurer_armor_changes_the_equipped_armor_and_rejects_an_unknown_item_or_adventurer() -> void:
+	var changed: bool = GameSession.set_adventurer_armor(GameSession.WARRIOR_ID, "platemail_armor")
+	assert_true(changed)
+	assert_eq(GameSession.get_effective_defense(GameSession.WARRIOR_ID), 15)
+	assert_eq(GameSession.get_effective_resistance(GameSession.WARRIOR_ID), 30)
+
+	assert_false(GameSession.set_adventurer_armor(GameSession.WARRIOR_ID, "dagger_iron"), "A weapon id is not a valid armor")
+	assert_false(GameSession.set_adventurer_armor("no_such_id", "leather_armor"), "An unknown adventurer cannot be equipped")

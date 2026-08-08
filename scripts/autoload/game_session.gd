@@ -152,7 +152,7 @@ func get_default_warrior() -> Dictionary:
 		"id": WARRIOR_ID,
 		"name": "Warrior",
 		"class": "warrior",
-		"weapon": "sword",
+		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
 		"level": 1,
 		"availability_status": "available",
 		# Authored base combat values; effective values (hit chance, max health,
@@ -188,7 +188,7 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_002",
 		"name": "Warrior 2",
 		"class": "warrior",
-		"weapon": "sword",
+		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -197,7 +197,7 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_003",
 		"name": "Warrior 3",
 		"class": "warrior",
-		"weapon": "sword",
+		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -206,7 +206,7 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_004",
 		"name": "Warrior 4",
 		"class": "warrior",
-		"weapon": "sword",
+		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -1117,3 +1117,63 @@ func get_effective_move_range(adventurer_id: String) -> int:
 		return 0
 	var bonus := 1 if adventurer.progression.perks.has(BONUS_MOVE_PERK_ID) else 0
 	return adventurer.stats.move_range + bonus
+
+
+## Returns (damage_min, damage_max) from the adventurer's equipped weapon, or
+## Vector2i.ZERO for an unknown adventurer or an equipped weapon id that has
+## fallen out of WEAPONS (should not happen outside of hand-edited state).
+func get_effective_weapon_damage_range(adventurer_id: String) -> Vector2i:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return Vector2i.ZERO
+	var weapon: Dictionary = WEAPONS.get(adventurer.equipment.weapon, {})
+	if weapon.is_empty():
+		return Vector2i.ZERO
+	return Vector2i(weapon.damage_min, weapon.damage_max)
+
+
+func get_effective_weapon_name(adventurer_id: String) -> String:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return ""
+	var weapon: Dictionary = WEAPONS.get(adventurer.equipment.weapon, {})
+	return "" if weapon.is_empty() else tr(weapon.name_key)
+
+
+func get_effective_defense(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	return 0 if armor.is_empty() else int(armor.defense)
+
+
+func get_effective_resistance(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	return 0 if armor.is_empty() else int(armor.resistance)
+
+
+## Equips weapon_id into adventurer_id's weapon slot. Rejects an id that is not
+## in WEAPONS (including a valid armor id) and an unknown adventurer, without
+## mutating anything either way.
+func set_adventurer_weapon(adventurer_id: String, weapon_id: String) -> bool:
+	if not WEAPONS.has(weapon_id):
+		return false
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	adventurers[adventurer_index].equipment.weapon = weapon_id
+	return true
+
+
+func set_adventurer_armor(adventurer_id: String, armor_id: String) -> bool:
+	if not ARMORS.has(armor_id):
+		return false
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	adventurers[adventurer_index].equipment.armor = armor_id
+	return true
