@@ -132,7 +132,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _handle_mouse_input(event: InputEventMouseButton) -> void:
 	if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 		return
-	var tile_pos := _to_grid_position(get_local_mouse_position())
+	var tile_pos := _to_grid_position(make_input_local(event).position)
 	if not grid.is_in_bounds(tile_pos):
 		return
 	get_viewport().set_input_as_handled()

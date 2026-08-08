@@ -897,6 +897,53 @@ func test_wasd_key_input_steps_the_selected_unit_one_tile() -> void:
 	)
 
 
+## Regression test for the same bug class fixed in world_map.gd: reading
+## get_local_mouse_position() (the Viewport's tracked cursor position,
+## refreshed only by MouseMotion events, and offset by this node's own
+## global_position since BattleController itself -- not a separate Board
+## child -- is the CanvasItem) instead of the click event's own .position
+## meant a click could resolve to the wrong tile if the mouse hadn't
+## physically moved since a scene transition. The first player unit is
+## auto-selected at battle start (_select_unit_after_action's turn-start
+## call), so this test deliberately clicks a SECOND unit -- selection must
+## change to it, which only happens if the click resolves to the correct
+## tile; the buggy code's wildly-out-of-bounds tile_pos would leave the
+## auto-selected first unit untouched instead.
+func test_a_real_click_event_selects_the_correct_unit_even_when_the_tracked_cursor_position_is_stale() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	var recruit_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(recruit_id)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+	var warrior = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var recruit = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[1])
+	assert_eq(controller.selected_unit, warrior, "sanity check: the first player unit auto-selects at battle start")
+
+	# InputEventMouseButton.position is in viewport (screen) space, so the
+	# controller's own on-screen offset (battlefield.tscn centers the Grid
+	# node, not at the origin) must be added -- exactly what a real click
+	# reports and what make_input_local() expects to convert back from.
+	var recruit_pixel_center := (
+		controller.global_position
+		+ Vector2(BattleControllerScript.PLAYER_START_POSITIONS[1]) * BattleControllerScript.TILE_SIZE
+		+ Vector2(32, 32)
+	)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = recruit_pixel_center
+
+	controller._unhandled_input(click_event)
+
+	assert_eq(
+		controller.selected_unit, recruit,
+		"a real click event carrying its own position must select the unit under it, regardless of the Viewport's separately-tracked (possibly stale) cursor position -- the buggy code leaves the auto-selected warrior selected instead"
+	)
+
+
 func test_number_key_input_selects_the_matching_fielded_party_member() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
