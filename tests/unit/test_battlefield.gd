@@ -319,6 +319,8 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 1.0
 	GameSession.enter_encounter("goblin_camp")
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -326,7 +328,7 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	battlefield._apply_battle_outcome(true)
 
 	assert_true(GameSession.is_encounter_complete("goblin_camp"))
-	assert_eq(GameSession.pending_reward, 10, "Victory should queue the goblin camp's fixed reward")
+	assert_eq(GameSession.pending_reward, 1, "Victory should queue the goblin camp's rolled reward")
 	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 

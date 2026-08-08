@@ -109,6 +109,8 @@ func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void
 
 func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	GameSession.reset()
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 1.0
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
@@ -116,12 +118,12 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 10, "Entering the encampment must bank the queued reward")
+	assert_eq(GameSession.gold, 1, "Entering the encampment must bank the queued reward")
 	assert_eq(GameSession.pending_reward, 0)
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 10, "A second visit must not pay the reward again")
+	assert_eq(GameSession.gold, 1, "A second visit must not pay the reward again")
 	assert_eq(GameSession.pending_reward, 0)
 
 

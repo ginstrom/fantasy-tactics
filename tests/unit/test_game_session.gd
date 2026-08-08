@@ -381,7 +381,6 @@ func test_get_expedition_returns_the_documented_goblin_camp_record() -> void:
 	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
 
 	assert_eq(record.position, Vector2i(4, 4))
-	assert_eq(record.reward, 10)
 	assert_eq(record.enemy.max_health, 3)
 	assert_eq(record.enemy.attack_damage, 1)
 	assert_eq(record.enemy.hit_chance, 0.3)
@@ -395,7 +394,6 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
 
 	assert_eq(record.position, Vector2i(4, 0))
-	assert_eq(record.reward, 25)
 	assert_eq(record.enemy.max_health, 5)
 	assert_eq(record.enemy.attack_damage, 2)
 	assert_eq(record.enemy.hit_chance, 0.5)
@@ -508,11 +506,11 @@ func test_get_expedition_returns_a_record_that_can_be_mutated_without_affecting_
 	autofree(session)
 
 	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
-	record.reward = 999
+	record.position = Vector2i(99, 99)
 	record.enemy.max_health = 999
 
 	var second_record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
-	assert_eq(second_record.reward, 10, "Mutating a returned record must not affect the catalog")
+	assert_eq(second_record.position, Vector2i(4, 4), "Mutating a returned record must not affect the catalog")
 	assert_eq(
 		second_record.enemy.max_health,
 		3,
@@ -543,11 +541,13 @@ func test_reset_clears_gold_and_pending_reward() -> void:
 func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_gold() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_reward, 10, "Victory should queue the goblin camp's fixed reward")
+	assert_eq(session.pending_reward, 1, "Victory should queue the goblin camp's rolled reward")
 	assert_eq(session.gold, 0, "Completing an encounter must not bank gold directly")
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
 
@@ -555,24 +555,28 @@ func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_go
 func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 
 	var deposited: int = session.deposit_pending_reward()
 
-	assert_eq(deposited, 10)
-	assert_eq(session.gold, 10)
+	assert_eq(deposited, 1)
+	assert_eq(session.gold, 1)
 	assert_eq(session.pending_reward, 0)
 
 	var second_deposit: int = session.deposit_pending_reward()
 
 	assert_eq(second_deposit, 0, "A second deposit must not pay again")
-	assert_eq(session.gold, 10, "Gold must not change on a second deposit")
+	assert_eq(session.gold, 1, "Gold must not change on a second deposit")
 
 
 func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
@@ -581,7 +585,7 @@ func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -
 
 	assert_eq(
 		session.pending_reward,
-		35,
+		3,
 		"Both rewards should accumulate when banking happens after both victories"
 	)
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
@@ -591,6 +595,8 @@ func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -
 func test_depositing_after_chained_victories_banks_the_combined_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
@@ -598,14 +604,16 @@ func test_depositing_after_chained_victories_banks_the_combined_reward() -> void
 
 	var deposited: int = session.deposit_pending_reward()
 
-	assert_eq(deposited, 35)
-	assert_eq(session.gold, 35)
+	assert_eq(deposited, 3)
+	assert_eq(session.gold, 3)
 	assert_eq(session.pending_reward, 0)
 
 
 func test_completing_an_already_completed_encounter_does_not_requeue_its_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 	session.deposit_pending_reward()
@@ -618,7 +626,98 @@ func test_completing_an_already_completed_encounter_does_not_requeue_its_reward(
 		0,
 		"Re-completing an already-completed site must not requeue its reward"
 	)
-	assert_eq(session.gold, 10, "Gold already banked must be unaffected by re-completing a finished site")
+	assert_eq(session.gold, 1, "Gold already banked must be unaffected by re-completing a finished site")
+
+
+func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when_the_gear_roll_misses() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(session.pending_reward, 1, "One goblin kill: randi_range(1, 6) stubbed to the min (1) times multiplier 1")
+	assert_eq(session.pending_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
+	assert_eq(session.pending_gear, [], "A gear roll of 1.0 must never clear the 25% drop chance")
+
+
+func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 0.0
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(session.pending_gear, ["shortsword_iron"], "A gear roll of 0.0 must always clear the 25% drop chance")
+
+
+func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 1.0
+	# The orc outpost is a two-star site: force its composition roll to option
+	# 1 (a single orc) rather than leaving it to real randomness, which would
+	# make this test flaky against the other valid composition (two goblins).
+	session.enemy_composition_roll = func(_option_count: int) -> int: return 1
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(session.pending_reward, 2, "One orc kill: randi_range(1, 5) stubbed to the min (1) times multiplier 2")
+	assert_eq(session.pending_mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
+
+
+func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 0.0
+	session.enemy_composition_roll = func(_option_count: int) -> int: return 0
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(session.pending_reward, 2, "Two goblin kills: 1 gold each, multiplier 1")
+	assert_eq(session.pending_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
+	assert_eq(session.pending_gear, ["shortsword_iron", "shortsword_iron"], "A guaranteed-hit gear roll fires once per kill")
+
+
+func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	session.loot_gear_roll = func() -> float: return 0.0
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	session.deposit_pending_reward()
+
+	assert_eq(session.gold, 1)
+	assert_eq(session.mana_crystals, {1: 1})
+	assert_eq(session.banked_gear, {"shortsword_iron": 1})
+	assert_eq(session.pending_mana_crystals, {})
+	assert_eq(session.pending_gear, [])
+
+
+func test_reset_clears_loot_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.mana_crystals = {1: 3}
+	session.banked_gear = {"shortsword_iron": 2}
+	session.pending_mana_crystals = {1: 1}
+	session.pending_gear = ["dagger_iron"] as Array[String]
+
+	session.reset()
+
+	assert_eq(session.mana_crystals, {})
+	assert_eq(session.banked_gear, {})
+	assert_eq(session.pending_mana_crystals, {})
+	assert_eq(session.pending_gear, [])
 
 
 func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:

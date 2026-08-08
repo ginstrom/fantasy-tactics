@@ -10,7 +10,6 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.goblin_camp.name",
 		"danger_key": "expedition.danger.low",
 		"difficulty": 1,
-		"reward": 10,
 		# XP: 5 for a Goblin kill, 10 for clearing its site (see the campaign
 		# progression design doc). BattleController/Battlefield read these
 		# rather than hard-coding the values a second time.
@@ -30,7 +29,6 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.orc_outpost.name",
 		"danger_key": "expedition.danger.high",
 		"difficulty": 2,
-		"reward": 25,
 		# XP: 10 for an Orc kill, 20 for clearing its site.
 		"kill_xp": 10,
 		"clear_xp": 20,
@@ -275,6 +273,10 @@ var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
 var pending_reward: int = 0
+var mana_crystals: Dictionary = {}
+var banked_gear: Dictionary = {}
+var pending_mana_crystals: Dictionary = {}
+var pending_gear: Array[String] = []
 var player_name: String = DEFAULT_PLAYER_NAME
 
 
@@ -330,6 +332,10 @@ func reset() -> void:
 	gold = 0
 	guild_hall_level = 1
 	pending_reward = 0
+	mana_crystals = {}
+	banked_gear = {}
+	pending_mana_crystals = {}
+	pending_gear = []
 	player_name = DEFAULT_PLAYER_NAME
 
 
@@ -750,9 +756,28 @@ func complete_current_encounter() -> void:
 	var expedition := get_expedition(selected_encounter)
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
-		pending_reward += expedition.get("reward", 0)
+		_roll_and_queue_loot(expedition.get("enemy", {}))
 		_clear_active_encounter(selected_encounter)
 	selected_encounter = ""
+
+
+## Rolls loot once per kill in the resolved enemy composition (a battle can
+# only complete once every fielded enemy is dead, so "once per kill" and
+# "kill_count times at completion" are equivalent). A loot_id with no
+# ENEMY_LOOT_TABLES row (should not happen for a real expedition's enemy)
+# queues nothing rather than erroring.
+func _roll_and_queue_loot(enemy: Dictionary) -> void:
+	var loot_id: String = enemy.get("loot_id", "")
+	if not ENEMY_LOOT_TABLES.has(loot_id):
+		return
+	var table: Dictionary = ENEMY_LOOT_TABLES[loot_id]
+	var kill_count: int = enemy.get("count", 1)
+	for _kill in kill_count:
+		pending_reward += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
+		var crystal_tier: int = table.mana_crystal_tier
+		pending_mana_crystals[crystal_tier] = pending_mana_crystals.get(crystal_tier, 0) + 1
+		if loot_gear_roll.call() < GEAR_DROP_CHANCE:
+			pending_gear.append(table.gear_item_id)
 
 
 func abandon_current_encounter() -> void:
@@ -763,6 +788,12 @@ func deposit_pending_reward() -> int:
 	var deposited := pending_reward
 	gold += deposited
 	pending_reward = 0
+	for tier in pending_mana_crystals:
+		mana_crystals[tier] = mana_crystals.get(tier, 0) + pending_mana_crystals[tier]
+	pending_mana_crystals = {}
+	for item_id in pending_gear:
+		banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
+	pending_gear = []
 	return deposited
 
 

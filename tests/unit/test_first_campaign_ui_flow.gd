@@ -96,6 +96,8 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 1.0
 	battlefield.grid.apply_super_power()
 
 	var warrior_start: Vector2i = BattleControllerScript.PLAYER_START_POSITIONS[0]
@@ -118,7 +120,7 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
 	assert_eq(GameSession.selected_encounter, "", "Victory should clear the encounter selection")
-	assert_eq(GameSession.pending_reward, 10, "The goblin camp's reward should be queued but not yet banked")
+	assert_eq(GameSession.pending_reward, 1, "The goblin camp's rolled reward should be queued but not yet banked")
 	assert_eq(GameSession.gold, 0, "Winning the battle alone must not bank the reward")
 
 	# Move party back to encampment, bank reward: walk the party home (again
@@ -135,10 +137,10 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	return_map._handle_tile_click(return_map.party_position)
 
 	assert_false(GameSession.has_deployed_party())
-	assert_eq(GameSession.gold, 10, "Returning to the encampment must bank the queued reward")
+	assert_eq(GameSession.gold, 1, "Returning to the encampment must bank the queued reward")
 	assert_eq(GameSession.pending_reward, 0)
 
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
 	var information_panel: Control = encampment.get_node("%InformationPanel")
-	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 10)
+	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 1)
