@@ -2099,3 +2099,19 @@ func test_set_adventurer_armor_changes_the_equipped_armor_and_rejects_an_unknown
 
 	assert_false(GameSession.set_adventurer_armor(GameSession.WARRIOR_ID, "dagger_iron"), "A weapon id is not a valid armor")
 	assert_false(GameSession.set_adventurer_armor("no_such_id", "leather_armor"), "An unknown adventurer cannot be equipped")
+
+
+func test_enemy_loot_tables_match_the_documented_gold_mana_crystal_tier_and_gear() -> void:
+	assert_eq(GameSessionScript.ENEMY_LOOT_TABLES.kobold, {"gold_min": 0, "gold_max": 5, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "dagger_iron"})
+	assert_eq(GameSessionScript.ENEMY_LOOT_TABLES.goblin, {"gold_min": 1, "gold_max": 6, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "shortsword_iron"})
+	assert_eq(GameSessionScript.ENEMY_LOOT_TABLES.orc, {"gold_min": 1, "gold_max": 5, "gold_multiplier": 2, "mana_crystal_tier": 2, "gear_item_id": "longsword_iron"})
+	assert_eq(GameSessionScript.ENEMY_LOOT_TABLES.hobgoblin, {"gold_min": 1, "gold_max": 4, "gold_multiplier": 3, "mana_crystal_tier": 2, "gear_item_id": "two_handed_sword_iron"})
+
+
+func test_mana_crystal_values_match_the_documented_tiers() -> void:
+	assert_eq(GameSessionScript.MANA_CRYSTAL_VALUES, {1: 5, 2: 15})
+
+
+func test_goblin_and_orc_enemy_stats_carry_their_loot_id() -> void:
+	assert_eq(GameSessionScript.GOBLIN_ENEMY_STATS.loot_id, "goblin")
+	assert_eq(GameSessionScript.ORC_ENEMY_STATS.loot_id, "orc")

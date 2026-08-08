@@ -50,6 +50,7 @@ const GOBLIN_ENEMY_STATS: Dictionary = {
 	"max_health": 3,
 	"attack_damage": 1,
 	"hit_chance": 0.3,
+	"loot_id": "goblin",
 }
 const ORC_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.orc",
@@ -57,6 +58,7 @@ const ORC_ENEMY_STATS: Dictionary = {
 	"max_health": 5,
 	"attack_damage": 2,
 	"hit_chance": 0.5,
+	"loot_id": "orc",
 }
 # Star tier -> possible enemy compositions for an active instance at that
 # tier (see docs/plans/campaign-loop-follow-up.md's battle balancing
@@ -99,6 +101,22 @@ const ARMORS: Dictionary = {
 	"platemail_armor": {"name_key": "item.platemail_armor", "slot": "armor", "defense": 15, "resistance": 30, "price": 200},
 	"full_plate_armor": {"name_key": "item.full_plate_armor", "slot": "armor", "defense": 15, "resistance": 35, "price": 500},
 }
+# Loot tables (docs/plans/trading-system.md "Loot"). Gold per kill is
+# randi_range(gold_min, gold_max) * gold_multiplier. gear_item_id is always
+# the enemy's documented Iron-tier weapon (see WEAPONS above); it drops with
+# GEAR_DROP_CHANCE probability, independent of the (always-granted) mana
+# crystal. Kobold and hobgoblin are documented here to match the design doc
+# exactly, but neither currently appears in any active encounter (see
+# STAR_ENEMY_COMPOSITIONS) — their rows are unreachable until a future
+# content plan adds them as fightable enemies.
+const ENEMY_LOOT_TABLES: Dictionary = {
+	"kobold": {"gold_min": 0, "gold_max": 5, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "dagger_iron"},
+	"goblin": {"gold_min": 1, "gold_max": 6, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "shortsword_iron"},
+	"orc": {"gold_min": 1, "gold_max": 5, "gold_multiplier": 2, "mana_crystal_tier": 2, "gear_item_id": "longsword_iron"},
+	"hobgoblin": {"gold_min": 1, "gold_max": 4, "gold_multiplier": 3, "mana_crystal_tier": 2, "gear_item_id": "two_handed_sword_iron"},
+}
+const MANA_CRYSTAL_VALUES: Dictionary = {1: 5, 2: 15}
+const GEAR_DROP_CHANCE := 0.25
 const DEFAULT_WEAPON_ID := "longsword_iron"
 const DEFAULT_ARMOR_ID := "leather_armor"
 # Progression domain constants (see docs/plans/2026-08-06-campaign-progression-and-population).
@@ -229,6 +247,12 @@ var selected_encounter: String = ""
 # randomness. Never reset by reset() — every call site that needs a specific
 # outcome sets this immediately before its own enter_encounter() call.
 var enemy_composition_roll: Callable = func(option_count: int) -> int: return randi() % option_count
+# Injectable so tests can force deterministic loot instead of depending on
+# real randomness (see enemy_composition_roll/hit_roll for the same
+# pattern). Never reset by reset() — a test sets these immediately before
+# its own complete_current_encounter() call, same as enemy_composition_roll.
+var loot_gold_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+var loot_gear_roll: Callable = func() -> float: return randf()
 var completed_encounters: Array[String] = []
 # Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
 # instance is a spawned record: {id, template_id, position, ...copied
