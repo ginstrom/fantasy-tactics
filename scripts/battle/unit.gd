@@ -23,6 +23,9 @@ var adventurer_id: String
 # this plan's Phase A architecture note).
 var defense: int
 var resistance: int
+# XP awarded to the party when this unit is the one defeated (see
+# GameSession.*_ENEMY_STATS.kill_xp). 0 and unused for player-side units.
+var kill_xp: int = 0
 
 
 func _init(
@@ -37,7 +40,8 @@ func _init(
 	p_attack_name: String = "Attack",
 	p_adventurer_id: String = "",
 	p_defense: int = 0,
-	p_resistance: int = 0
+	p_resistance: int = 0,
+	p_kill_xp: int = 0
 ) -> void:
 	grid_position = p_grid_position
 	color = p_color
@@ -53,6 +57,7 @@ func _init(
 	adventurer_id = p_adventurer_id
 	defense = p_defense
 	resistance = p_resistance
+	kill_xp = p_kill_xp
 
 
 func is_alive() -> bool:

@@ -86,7 +86,7 @@ func _ready() -> void:
 		units.append(UnitScript.new(
 			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.attack_damage, enemy_stats.hit_chance,
-			tr(enemy_stats.attack_name_key)
+			tr(enemy_stats.attack_name_key), "", 0, 0, enemy_stats.get("kill_xp", 0)
 		))
 	# Round one is a new round too: open it with the first party member
 	# already selected rather than forcing a manual pick.

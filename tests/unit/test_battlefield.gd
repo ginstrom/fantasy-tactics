@@ -450,8 +450,8 @@ func test_defeating_two_enemies_in_one_battle_awards_kill_xp_for_each() -> void:
 
 	assert_eq(
 		GameSession.get_adventurer("warrior_001").progression.xp,
-		20.0,
-		"Defeating both enemies in one battle should award kill_xp (10) twice, not once"
+		10.0,
+		"Each Goblin should award its own kill_xp (5) regardless of which site it's fought at, not the site's flat kill_xp"
 	)
 
 

@@ -11,10 +11,9 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.goblin_camp.name",
 		"danger_key": "expedition.danger.low",
 		"difficulty": 1,
-		# XP: 5 for a Goblin kill, 10 for clearing its site (see the campaign
-		# progression design doc). BattleController/Battlefield read these
-		# rather than hard-coding the values a second time.
-		"kill_xp": 5,
+		# Clear XP: 10 for clearing its site (see the campaign progression
+		# design doc). Kill XP now lives on each enemy's own *_ENEMY_STATS
+		# const instead — see GOBLIN_ENEMY_STATS.kill_xp.
 		"clear_xp": 10,
 		"enemy": {
 			"name_key": "battle.enemy.goblin",
@@ -30,8 +29,9 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.orc_outpost.name",
 		"danger_key": "expedition.danger.high",
 		"difficulty": 2,
-		# XP: 10 for an Orc kill, 20 for clearing its site.
-		"kill_xp": 10,
+		# Clear XP: 20 for clearing its site. Kill XP lives on
+		# GOBLIN_ENEMY_STATS/ORC_ENEMY_STATS depending on which composition
+		# resolves.
 		"clear_xp": 20,
 		"enemy": {
 			"name_key": "battle.enemy.orc",
@@ -47,9 +47,9 @@ const EXPEDITIONS: Dictionary = {
 		"name_key": "expedition.ruined_fortress.name",
 		"danger_key": "expedition.danger.extreme",
 		"difficulty": 3,
-		# XP: 15 per kill, 30 for clearing the site, continuing the +5/+10
-		# progression from the Goblin Camp (5/10) and Orc Outpost (10/20).
-		"kill_xp": 15,
+		# Clear XP: 30 for clearing the site. Kill XP lives on each
+		# composition option's own enemy stats — see the reward table in
+		# docs/plans/2026-08-08-monster-tiers-and-weighted-encounters/08-per-monster-kill-xp.md.
 		"clear_xp": 30,
 		"enemy": {
 			"name_key": "battle.enemy.kobold",
@@ -67,6 +67,7 @@ const GOBLIN_ENEMY_STATS: Dictionary = {
 	"max_health": 13,
 	"attack_damage": 2,
 	"hit_chance": 0.3,
+	"kill_xp": 5,
 	"loot_id": "goblin",
 }
 const ORC_ENEMY_STATS: Dictionary = {
@@ -75,6 +76,7 @@ const ORC_ENEMY_STATS: Dictionary = {
 	"max_health": 22,
 	"attack_damage": 3,
 	"hit_chance": 0.5,
+	"kill_xp": 10,
 	"loot_id": "orc",
 }
 const KOBOLD_ENEMY_STATS: Dictionary = {
@@ -83,6 +85,7 @@ const KOBOLD_ENEMY_STATS: Dictionary = {
 	"max_health": 6,
 	"attack_damage": 1,
 	"hit_chance": 0.25,
+	"kill_xp": 3,
 	"loot_id": "kobold",
 }
 const HOBGOBLIN_ENEMY_STATS: Dictionary = {
@@ -91,6 +94,7 @@ const HOBGOBLIN_ENEMY_STATS: Dictionary = {
 	"max_health": 30,
 	"attack_damage": 4,
 	"hit_chance": 0.6,
+	"kill_xp": 20,
 	"loot_id": "hobgoblin",
 }
 # Star tier -> possible enemy compositions for an active instance at that

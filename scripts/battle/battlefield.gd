@@ -160,7 +160,7 @@ func _award_kill_xp(unit) -> void:
 	if _kill_xp_awarded_units.has(unit):
 		return
 	_kill_xp_awarded_units.append(unit)
-	_award_party_xp(_current_expedition().get("kill_xp", 0))
+	_award_party_xp(unit.kill_xp)
 
 
 ## Guarded by _clear_xp_awarded so a repeated call (e.g. a repeated

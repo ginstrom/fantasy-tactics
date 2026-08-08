@@ -409,23 +409,21 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	assert_eq(record.enemy.attack_name_key, "battle.enemy.orc.attack")
 
 
-func test_get_expedition_includes_kill_and_clear_xp_for_the_goblin_camp() -> void:
+func test_get_expedition_includes_clear_xp_for_the_goblin_camp() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
 
-	assert_eq(record.kill_xp, 5, "A goblin kill should award 5 XP")
 	assert_eq(record.clear_xp, 10, "Clearing the goblin camp should award 10 XP")
 
 
-func test_get_expedition_includes_kill_and_clear_xp_for_the_orc_outpost() -> void:
+func test_get_expedition_includes_clear_xp_for_the_orc_outpost() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
 
-	assert_eq(record.kill_xp, 10, "An orc kill should award 10 XP")
 	assert_eq(record.clear_xp, 20, "Clearing the orc outpost should award 20 XP")
 
 
@@ -550,7 +548,6 @@ func test_ruined_fortress_is_a_three_star_site_at_its_documented_position() -> v
 	var record: Dictionary = GameSession.get_expedition(GameSession.RUINED_FORTRESS_ID)
 	assert_eq(record.position, Vector2i(0, 4))
 	assert_eq(record.difficulty, 3)
-	assert_eq(record.kill_xp, 15)
 	assert_eq(record.clear_xp, 30)
 	assert_eq(record.name_key, "expedition.ruined_fortress.name")
 
@@ -2292,6 +2289,11 @@ func test_goblin_and_orc_enemy_stats_carry_their_loot_id() -> void:
 	assert_eq(GameSessionScript.ORC_ENEMY_STATS.loot_id, "orc")
 
 
+func test_goblin_and_orc_enemy_stats_carry_their_kill_xp() -> void:
+	assert_eq(GameSessionScript.GOBLIN_ENEMY_STATS.kill_xp, 5)
+	assert_eq(GameSessionScript.ORC_ENEMY_STATS.kill_xp, 10)
+
+
 func test_kobold_enemy_stats_are_the_weakest_tier() -> void:
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.max_health, 6)
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_damage, 1)
@@ -2299,6 +2301,7 @@ func test_kobold_enemy_stats_are_the_weakest_tier() -> void:
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.name_key, "battle.enemy.kobold")
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_name_key, "battle.enemy.kobold.attack")
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.loot_id, "kobold")
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.kill_xp, 3)
 
 
 func test_hobgoblin_enemy_stats_are_the_strongest_tier() -> void:
@@ -2308,6 +2311,7 @@ func test_hobgoblin_enemy_stats_are_the_strongest_tier() -> void:
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.name_key, "battle.enemy.hobgoblin")
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.attack_name_key, "battle.enemy.hobgoblin.attack")
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.loot_id, "hobgoblin")
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.kill_xp, 20)
 
 
 func test_kobold_and_hobgoblin_loot_ids_already_have_loot_table_rows() -> void:
