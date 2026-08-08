@@ -2189,24 +2189,6 @@ func test_effective_equipment_getters_return_zero_for_an_unknown_adventurer() ->
 	assert_eq(GameSession.get_effective_resistance("no_such_id"), 0)
 
 
-func test_set_adventurer_weapon_changes_the_equipped_weapon_and_rejects_an_unknown_item_or_adventurer() -> void:
-	var changed: bool = GameSession.set_adventurer_weapon(GameSession.WARRIOR_ID, "dagger_steel")
-	assert_true(changed)
-	assert_eq(GameSession.get_effective_weapon_damage_range(GameSession.WARRIOR_ID), Vector2i(2, 5))
-
-	assert_false(GameSession.set_adventurer_weapon(GameSession.WARRIOR_ID, "leather_armor"), "An armor id is not a valid weapon")
-	assert_false(GameSession.set_adventurer_weapon("no_such_id", "dagger_iron"), "An unknown adventurer cannot be equipped")
-
-
-func test_set_adventurer_armor_changes_the_equipped_armor_and_rejects_an_unknown_item_or_adventurer() -> void:
-	var changed: bool = GameSession.set_adventurer_armor(GameSession.WARRIOR_ID, "platemail_armor")
-	assert_true(changed)
-	assert_eq(GameSession.get_effective_defense(GameSession.WARRIOR_ID), 15)
-	assert_eq(GameSession.get_effective_resistance(GameSession.WARRIOR_ID), 30)
-
-	assert_false(GameSession.set_adventurer_armor(GameSession.WARRIOR_ID, "dagger_iron"), "A weapon id is not a valid armor")
-	assert_false(GameSession.set_adventurer_armor("no_such_id", "leather_armor"), "An unknown adventurer cannot be equipped")
-
 
 func test_enemy_loot_tables_match_the_documented_gold_mana_crystal_tier_and_gear() -> void:
 	assert_eq(GameSessionScript.ENEMY_LOOT_TABLES.kobold, {"gold_min": 0, "gold_max": 5, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "dagger_iron"})

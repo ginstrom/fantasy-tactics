@@ -1314,24 +1314,3 @@ func get_effective_resistance(adventurer_id: String) -> int:
 	return 0 if armor.is_empty() else int(armor.resistance)
 
 
-## Equips weapon_id into adventurer_id's weapon slot. Rejects an id that is not
-## in WEAPONS (including a valid armor id) and an unknown adventurer, without
-## mutating anything either way.
-func set_adventurer_weapon(adventurer_id: String, weapon_id: String) -> bool:
-	if not WEAPONS.has(weapon_id):
-		return false
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	adventurers[adventurer_index].equipment.weapon = weapon_id
-	return true
-
-
-func set_adventurer_armor(adventurer_id: String, armor_id: String) -> bool:
-	if not ARMORS.has(armor_id):
-		return false
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	adventurers[adventurer_index].equipment.armor = armor_id
-	return true
