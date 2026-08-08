@@ -307,3 +307,37 @@ func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instea
 		1,
 		"The panel must never remove the candidate by itself"
 	)
+
+
+func test_refresh_party_shows_carried_loot_when_pending_loot_exists() -> void:
+	GameSession.create_party()
+	GameSession.pending_mana_crystals = {1: 2, 2: 1}
+	GameSession.pending_gear = ["shortsword_iron", "shortsword_iron", "dagger_iron"]
+	var panel: PanelContainer = InformationPanelScene.instantiate()
+	add_child_autofree(panel)
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	var label: Label = panel.get_node("Content/CarriedLoot")
+	assert_true(label.visible)
+	assert_eq(label.text, tr("information.carried_loot") % [3, 3], "3 mana crystals (2+1) and 3 gear pieces")
+
+
+func test_refresh_party_hides_carried_loot_when_there_is_none() -> void:
+	GameSession.create_party()
+	var panel: PanelContainer = InformationPanelScene.instantiate()
+	add_child_autofree(panel)
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	assert_false(panel.get_node("Content/CarriedLoot").visible)
+
+
+func test_a_bare_refresh_hides_carried_loot_too() -> void:
+	GameSession.pending_gear = ["dagger_iron"]
+	var panel: PanelContainer = InformationPanelScene.instantiate()
+	add_child_autofree(panel)
+
+	panel.refresh()
+
+	assert_false(panel.get_node("Content/CarriedLoot").visible)

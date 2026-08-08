@@ -48,6 +48,7 @@ messages = {
 "information.level": "Level: %d",
 "information.gold": "Gold: %d",
 "information.pending_reward": "Unbanked reward: %d gold",
+"information.carried_loot": "Carried loot: %d mana crystals, %d gear",
 "information.view": "View",
 "information.view_party": "View Party",
 "information.recruitment_cost": "Cost:",

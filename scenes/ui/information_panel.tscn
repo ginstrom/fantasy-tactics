@@ -39,6 +39,10 @@ text = "information.members"
 layout_mode = 2
 visible = false
 
+[node name="CarriedLoot" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
 [node name="PartyViewButton" type="Button" parent="Content"]
 layout_mode = 2
 visible = false
