@@ -157,10 +157,10 @@ func test_end_turn_switches_the_active_side_and_resets_movement() -> void:
 func test_end_turn_selects_the_first_living_player_unit_when_a_new_round_starts() -> void:
 	var controller := _make_controller(6, 6)
 	var first = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	var second = UnitScript.new(
-		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_002"
 	)
 	var enemy_unit = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 2)
 	controller.units = [first, second, enemy_unit]
@@ -183,10 +183,10 @@ func test_end_turn_selects_the_first_living_player_unit_when_a_new_round_starts(
 func test_end_turn_skips_a_defeated_party_member_when_selecting_at_round_start() -> void:
 	var controller := _make_controller(6, 6)
 	var first = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	var second = UnitScript.new(
-		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_002"
 	)
 	var enemy_unit = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 2)
 	first.health = 0
@@ -251,14 +251,16 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	assert_eq(warrior.side, BattleControllerScript.Side.PLAYER)
 	assert_eq(warrior.max_health, 3)
 	assert_eq(warrior.move_range, 3)
-	assert_eq(warrior.attack_damage, 2)
+	assert_eq(warrior.damage_min, 1)
+	assert_eq(warrior.damage_max, 8)
 	assert_eq(warrior.hit_chance, 0.6)
 
 	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	assert_not_null(goblin, "A goblin should spawn at the first enemy start position")
 	assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
 	assert_eq(goblin.max_health, 3)
-	assert_eq(goblin.attack_damage, 1)
+	assert_eq(goblin.damage_min, 1)
+	assert_eq(goblin.damage_max, 1)
 	assert_eq(goblin.hit_chance, 0.3)
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
@@ -280,7 +282,8 @@ func test_ready_builds_one_orc_when_the_orc_outpost_resolves_to_orcs() -> void:
 	assert_not_null(orc)
 	assert_eq(orc.side, BattleControllerScript.Side.ENEMY)
 	assert_eq(orc.max_health, 5)
-	assert_eq(orc.attack_damage, 2)
+	assert_eq(orc.damage_min, 2)
+	assert_eq(orc.damage_max, 2)
 	assert_eq(orc.hit_chance, 0.5)
 	assert_eq(orc.attack_name, tr("battle.enemy.orc.attack"))
 
@@ -302,7 +305,8 @@ func test_ready_builds_two_goblins_when_the_orc_outpost_resolves_to_goblins() ->
 		var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
 		assert_not_null(goblin)
 		assert_eq(goblin.max_health, 3)
-		assert_eq(goblin.attack_damage, 1)
+		assert_eq(goblin.damage_min, 1)
+		assert_eq(goblin.damage_max, 1)
 		assert_eq(goblin.hit_chance, 0.3)
 
 
@@ -321,7 +325,8 @@ func test_ready_builds_one_goblin_when_the_goblin_camp_is_selected() -> void:
 	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	assert_not_null(goblin)
 	assert_eq(goblin.max_health, 3)
-	assert_eq(goblin.attack_damage, 1)
+	assert_eq(goblin.damage_min, 1)
+	assert_eq(goblin.damage_max, 1)
 	assert_eq(goblin.hit_chance, 0.3)
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
@@ -388,10 +393,10 @@ func test_ready_falls_back_to_the_default_warrior_when_no_party_is_selected() ->
 func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	var defender = UnitScript.new(
-		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
 	)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -407,10 +412,10 @@ func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> vo
 func test_attack_misses_and_deals_no_damage_when_the_roll_is_at_or_above_hit_chance() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	var defender = UnitScript.new(
-		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
 	)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -425,10 +430,10 @@ func test_attack_misses_and_deals_no_damage_when_the_roll_is_at_or_above_hit_cha
 func test_attack_defeats_and_removes_the_target_when_health_reaches_zero() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	var defender = UnitScript.new(
-		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 1, 1, 0.3, "Short Sword"
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 1, 1, 1, 0.3, "Short Sword"
 	)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -565,10 +570,10 @@ func test_run_enemy_turn_moves_the_goblin_toward_the_nearest_player_unit() -> vo
 func test_run_enemy_turn_attacks_without_moving_when_already_adjacent() -> void:
 	var controller := _make_controller(6, 6)
 	var goblin = UnitScript.new(
-		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
 	)
 	var player_unit = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	controller.units = [goblin, player_unit]
 	controller.active_side = BattleControllerScript.Side.ENEMY
@@ -587,10 +592,10 @@ func test_run_enemy_turn_attacks_without_moving_when_already_adjacent() -> void:
 func test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap() -> void:
 	var controller := _make_controller(6, 6)
 	var goblin = UnitScript.new(
-		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
 	)
 	var player_unit = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	controller.units = [goblin, player_unit]
 	controller.active_side = BattleControllerScript.Side.ENEMY
@@ -652,20 +657,22 @@ func test_locked_input_is_ignored_by_handle_tile_click() -> void:
 func test_apply_super_power_maxes_out_player_units_only() -> void:
 	var controller := _make_controller(6, 6)
 	var warrior = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6
 	)
 	var goblin = UnitScript.new(
-		Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3
+		Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3
 	)
 	controller.units = [warrior, goblin]
 
 	controller.apply_super_power()
 
 	assert_eq(warrior.move_range, BattleControllerScript.SUPER_POWER_MOVE_RANGE)
-	assert_eq(warrior.attack_damage, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
+	assert_eq(warrior.damage_min, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
+	assert_eq(warrior.damage_max, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
 	assert_eq(warrior.hit_chance, BattleControllerScript.SUPER_POWER_HIT_CHANCE)
 	assert_eq(goblin.move_range, 3, "Super Power must not affect enemy units")
-	assert_eq(goblin.attack_damage, 1, "Super Power must not affect enemy units")
+	assert_eq(goblin.damage_min, 1, "Super Power must not affect enemy units")
+	assert_eq(goblin.damage_max, 1, "Super Power must not affect enemy units")
 	assert_eq(goblin.hit_chance, 0.3, "Super Power must not affect enemy units")
 
 
@@ -700,10 +707,10 @@ func test_wasd_step_is_rejected_once_movement_points_are_exhausted() -> void:
 func test_wasd_step_onto_an_enemy_tile_attacks_instead_of_moving() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
 	)
 	var defender = UnitScript.new(
-		Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Short Sword"
+		Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
 	)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -784,7 +791,7 @@ func test_wasd_step_and_a_click_move_share_the_same_movement_budget_in_one_turn(
 func test_select_unit_by_adventurer_id_selects_a_living_player_unit() -> void:
 	var controller := _make_controller(6, 6)
 	var warrior = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	controller.units = [warrior]
 
@@ -797,7 +804,7 @@ func test_select_unit_by_adventurer_id_selects_a_living_player_unit() -> void:
 func test_select_unit_by_adventurer_id_is_a_no_op_for_a_defeated_or_unknown_member() -> void:
 	var controller := _make_controller(6, 6)
 	var warrior = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	warrior.health = 0
 	controller.units = [warrior]
@@ -813,7 +820,7 @@ func test_select_unit_by_adventurer_id_is_a_no_op_for_a_defeated_or_unknown_memb
 func test_select_unit_by_adventurer_id_is_a_no_op_during_the_enemy_turn_or_while_locked() -> void:
 	var controller := _make_controller(6, 6)
 	var warrior = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	controller.units = [warrior]
 	controller.active_side = BattleControllerScript.Side.ENEMY
@@ -834,10 +841,10 @@ func test_select_unit_by_adventurer_id_is_a_no_op_during_the_enemy_turn_or_while
 func test_select_unit_by_number_key_maps_one_based_keys_to_party_order() -> void:
 	var controller := _make_controller(6, 6)
 	var first = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	var second = UnitScript.new(
-		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_002"
+		Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_002"
 	)
 	controller.units = [first, second]
 	var adventurer_ids: Array[String] = ["warrior_001", "warrior_002"]
@@ -855,7 +862,7 @@ func test_select_unit_by_number_key_maps_one_based_keys_to_party_order() -> void
 func test_select_unit_by_number_key_is_a_no_op_for_a_slot_beyond_the_fielded_party() -> void:
 	var controller := _make_controller(6, 6)
 	var first = UnitScript.new(
-		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 0.6, "Sword", "warrior_001"
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
 	)
 	controller.units = [first]
 	var adventurer_ids: Array[String] = ["warrior_001"]
@@ -921,7 +928,7 @@ func test_player_start_positions_can_seat_a_full_max_size_party() -> void:
 
 func test_select_unit_by_adventurer_id_rejects_a_non_player_unit() -> void:
 	var controller := _make_controller(4, 4)
-	var enemy = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 0.3, "Claw")
+	var enemy = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Claw")
 	enemy.adventurer_id = "not_really_an_adventurer"
 	controller.units = [enemy]
 
@@ -929,3 +936,68 @@ func test_select_unit_by_adventurer_id_rejects_a_non_player_unit() -> void:
 
 	assert_false(selected)
 	assert_null(controller.selected_unit)
+
+
+func test_attack_damage_is_rolled_between_the_attackers_min_and_max() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 8, 0.6, "Longsword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 20, 1, 1, 0.3, "Short Sword"
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.damage_roll = func(min_value: int, max_value: int) -> int:
+		assert_eq(min_value, 2)
+		assert_eq(max_value, 8)
+		return 5
+
+	controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_eq(defender.health, 15, "A rolled damage of 5 with no resistance should apply in full")
+
+
+func test_attack_applies_the_defenders_resistance_rounded_to_the_nearest_integer() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 10, 10, 0.6, "Longsword"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 20, 1, 1, 0.3, "Short Sword", "", 0, 10
+	)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.damage_roll = func(_min_value: int, _max_value: int) -> int: return 10
+
+	controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_eq(defender.health, 11, "10% resistance turns 10 damage into 9 (round(10 * 0.9) = 9)")
+
+
+func test_attack_hit_chance_is_reduced_by_the_defenders_defense_but_floors_at_the_minimum() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.3, "Dagger"
+	)
+	var defender = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 20, 1, 1, 0.3, "Short Sword", "", 0, 0
+	)
+	defender.defense = 50
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	var observed_threshold := 0.0
+	controller.hit_roll = func() -> float:
+		observed_threshold = 0.1
+		return observed_threshold
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(
+		defender.health,
+		20,
+		"0.3 hit chance minus 50 defense floors at 0.05; a 0.1 roll clears the floor and must still miss"
+	)

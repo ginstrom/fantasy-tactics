@@ -42,11 +42,7 @@ const ENEMY_START_POSITIONS: Array[Vector2i] = [
 	Vector2i(5, 5), Vector2i(4, 5), Vector2i(5, 4),
 ]
 const ENEMY_COLOR := Color(0.9, 0.4, 0.3)
-# Attack damage is a fixed weapon value, not derived from progression (only
-# hit chance and max health/move range are; see GameSession's effective_*
-# getters and the campaign progression design doc).
-const WARRIOR_ATTACK_DAMAGE := 2
-const WARRIOR_ATTACK_NAME := "Sword"
+const MIN_HIT_CHANCE := 0.05
 
 var grid
 var units: Array = []
@@ -55,6 +51,7 @@ var selected_unit = null
 var active_side: int = Side.PLAYER
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
+var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var last_attack_result: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
@@ -70,20 +67,24 @@ func _ready() -> void:
 	units = []
 	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
 		var adventurer_id: String = _player_adventurer_ids[index]
+		var damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
 		units.append(UnitScript.new(
 			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
 			GameSession.get_effective_move_range(adventurer_id),
 			GameSession.get_effective_max_health(adventurer_id),
-			WARRIOR_ATTACK_DAMAGE,
+			damage_range.x,
+			damage_range.y,
 			GameSession.get_effective_hit_chance(adventurer_id),
-			WARRIOR_ATTACK_NAME,
-			adventurer_id
+			GameSession.get_effective_weapon_name(adventurer_id),
+			adventurer_id,
+			GameSession.get_effective_defense(adventurer_id),
+			GameSession.get_effective_resistance(adventurer_id)
 		))
 	var enemy_count: int = enemy_stats.get("count", 1)
 	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
 		units.append(UnitScript.new(
 			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
-			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.hit_chance,
+			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.attack_damage, enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key)
 		))
 	# Round one is a new round too: open it with the first party member
@@ -202,9 +203,12 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		return false
 
 	selected_unit.has_acted = true
-	var hit: bool = hit_roll.call() < selected_unit.hit_chance
-	var damage: int = selected_unit.attack_damage if hit else 0
+	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
+	var hit: bool = hit_roll.call() < effective_hit_chance
+	var damage: int = 0
 	if hit:
+		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max)
+		damage = int(round(raw_damage * (1.0 - target.resistance / 100.0)))
 		target.take_damage(damage)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
@@ -275,7 +279,8 @@ func apply_super_power() -> void:
 		if unit.side == Side.PLAYER:
 			unit.move_range = SUPER_POWER_MOVE_RANGE
 			unit.moves_remaining = SUPER_POWER_MOVE_RANGE
-			unit.attack_damage = SUPER_POWER_ATTACK_DAMAGE
+			unit.damage_min = SUPER_POWER_ATTACK_DAMAGE
+			unit.damage_max = SUPER_POWER_ATTACK_DAMAGE
 			unit.hit_chance = SUPER_POWER_HIT_CHANCE
 	_update_highlights()
 	board_changed.emit()
