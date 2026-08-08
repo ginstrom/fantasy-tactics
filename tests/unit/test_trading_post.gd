@@ -47,6 +47,16 @@ func test_buy_table_lists_every_weapon_and_armor() -> void:
 	)
 
 
+func test_type_column_uses_trading_posts_own_translation_keys() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/BuyTable/Tree")
+
+	var row_values := UiTestHelpers.tree_row_values(tree, 1)
+	assert_true(row_values.has(tr("trading_post.type.weapon")))
+	assert_true(row_values.has(tr("trading_post.type.armor")))
+
+
 func test_selecting_a_row_shows_its_detail_and_the_buy_button() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)

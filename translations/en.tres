@@ -199,6 +199,8 @@ messages = {
 "trading_post.column.name": "Name",
 "trading_post.column.type": "Type",
 "trading_post.column.price": "Price",
+"trading_post.type.weapon": "Weapon",
+"trading_post.type.armor": "Armor",
 "trading_post.selected": "%s — %d gold",
 "trading_post.buy": "Buy",
 "assign_equipment.title": "Assign Equipment",

@@ -53,7 +53,7 @@ func _build_rows() -> Array[Dictionary]:
 
 
 func _row_for(item_id: String, item: Dictionary) -> Dictionary:
-	return {"id": item_id, "name": tr(item.name_key), "type": tr("stores.type.%s" % item.slot), "price": item.price}
+	return {"id": item_id, "name": tr(item.name_key), "type": tr("trading_post.type.%s" % item.slot), "price": item.price}
 
 
 func _refresh_selection() -> void:
