@@ -77,6 +77,38 @@ func test_clicking_the_party_marker_selects_it() -> void:
 	assert_true(world_map.party_selected, "Clicking the party marker should select it")
 
 
+## Regression test for a real bug: _unhandled_input() used to derive the
+## clicked tile from board.get_local_mouse_position() -- the Viewport's
+## tracked cursor position, refreshed only by MouseMotion events -- instead
+## of from the InputEventMouseButton's own .position. Right after a scene
+## transition (e.g. Battlefield -> World Map on victory), if the player's
+## mouse hasn't physically moved since their last click on the OLD scene,
+## Godot never emits a fresh MouseMotion event, so the tracked position is
+## stale and can resolve to a tile far from where the player actually
+## clicked -- exactly reproducing "the party isn't selectable after a
+## battle." This test dispatches a real InputEventMouseButton (not a direct
+## _handle_tile_click() call, which bypasses the bug entirely) through the
+## real _unhandled_input() path on a fully-instantiated scene, so it
+## exercises the same position-resolution code a real click goes through.
+func test_a_real_click_event_selects_the_party_even_when_the_tracked_cursor_position_is_stale() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_false(world_map.party_selected)
+
+	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = party_pixel_center
+
+	world_map._unhandled_input(click_event)
+
+	assert_true(
+		world_map.party_selected,
+		"a real click event carrying its own position must select the party regardless of the Viewport's separately-tracked (possibly stale) cursor position"
+	)
+
+
 func test_clicking_the_selected_party_marker_again_deselects_it() -> void:
 	var world_map := _make_world_map()
 	world_map.party_position = Vector2i(1, 0)

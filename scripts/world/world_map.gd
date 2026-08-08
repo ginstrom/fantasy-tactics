@@ -68,7 +68,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseMotion:
-		_update_hover_route(_to_grid_position(board.get_local_mouse_position()))
+		_update_hover_route(_to_grid_position(board.make_input_local(event).position))
 		return
 
 	if not (event is InputEventMouseButton) or not event.pressed:
@@ -87,7 +87,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 
-	var tile_pos := _to_grid_position(board.get_local_mouse_position())
+	var click_local_pos: Vector2 = board.make_input_local(event).position
+	var tile_pos := _to_grid_position(click_local_pos)
 	if not grid.is_in_bounds(tile_pos):
 		return
 
@@ -96,7 +97,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		print(
 			"[world_map click] mouse_local=%s tile_pos=%s party_position=%s party_selected=%s has_deployed_party=%s route=%s"
 			% [
-				board.get_local_mouse_position(), tile_pos, party_position, party_selected,
+				click_local_pos, tile_pos, party_position, party_selected,
 				GameSession.has_deployed_party(), GameSession.get_deployed_party_route()
 			]
 		)
