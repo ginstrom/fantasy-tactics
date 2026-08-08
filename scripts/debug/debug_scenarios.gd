@@ -23,6 +23,7 @@ static func scenario_ids() -> Array[String]:
 
 static func apply(scenario_id: String) -> bool:
 	GameSession.start_new_game()
+	GameSession.reset_injectable_rolls()
 	match scenario_id:
 		"new_campaign", "encampment", "party_manager":
 			return true

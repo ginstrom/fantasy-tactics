@@ -122,10 +122,14 @@ and Orc Outpost, but it is never one of the campaign's two starting sites.
 Which template an encounter vacancy's refill produces is chosen at random,
 weighted toward higher star tiers as the player's power (adventurer count
 plus Guild Hall level) grows, rather than deterministically cycling through
-every known template. At a fresh campaign's starting power, a refill is
-roughly 44% one-star, 44% two-star, and 11% three-star; by the time a
-player has recruited several adventurers and maxed the Guild Hall, those
-odds shift toward roughly 8% / 62% / 31%. No tier's odds ever reach zero.
+every known template, among the templates with no currently-active instance
+(in the common single-vacancy case, only two of the three tiers are ever
+candidates, so the odds split between just those two). At a fresh
+campaign's starting power, assuming all three templates are simultaneously
+eligible, a refill is roughly 44% one-star, 44% two-star, and 11%
+three-star; by the time a player has recruited several adventurers and
+maxed the Guild Hall, those odds shift toward roughly 8% / 62% / 31%. No
+tier's odds ever reach zero.
 
 The user can also dismiss potential recruits so that future candidates can fill available slots.
 
@@ -360,7 +364,8 @@ licence, including temporary assets.
 
 ## Milestone 2: Tactical encounter loop
 
-**Status: completed for the Goblin Camp and Orc Outpost.** The implemented
+**Status: completed, now exercised by all three sites (Goblin Camp, Orc
+Outpost, Ruined Fortress).** The implemented
 battle has the full-party setup described in Full-party battles and the
 Guild Hall above, real win/loss detection, visible enemy pacing, and
 campaign outcomes: victory clears the site and returns to the map; defeat

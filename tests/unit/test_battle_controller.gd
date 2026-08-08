@@ -11,7 +11,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	GameSession.reset_injectable_rolls()
 
 
 func _make_controller(width: int, height: int) -> Node2D:

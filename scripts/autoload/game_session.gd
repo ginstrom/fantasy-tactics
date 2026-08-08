@@ -99,11 +99,13 @@ const HOBGOBLIN_ENEMY_STATS: Dictionary = {
 }
 # Star tier -> possible enemy compositions for an active instance at that
 # tier (see docs/plans/campaign-loop-follow-up.md's battle balancing
-# section). Tier 1 has one deterministic option; tiers 2-3 randomly resolve
-# to one of two options each time an instance is entered (see
+# section). Tier 1 has one option, tier 2 has two, and tier 3 has four;
+# whenever a tier has more than one option, entering an instance at that
+# tier randomly resolves to one of them (see
 # enemy_composition_roll/_resolve_enemy_composition/enter_encounter) so
-# three orcs can no longer gang up on a level-1 party. Goblins-first
-# ordering in each tier's option list matches the design doc's phrasing.
+# three orcs can no longer gang up on a level-1 party. Ordering within each
+# tier's option list follows the design doc's phrasing for that tier: tiers
+# 1-2 are Goblin-first, while tier 3 is Kobold-first, ascending danger.
 const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 	1: [
 		{"enemy": GOBLIN_ENEMY_STATS, "count_min": 1, "count_max": 1},
@@ -127,14 +129,6 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 const STAR_WEIGHT_BASE: Dictionary = {1: 6, 2: 2, 3: -2}
 const STAR_WEIGHT_PER_POWER: Dictionary = {1: -1, 2: 1, 3: 1}
 const STAR_WEIGHT_MIN: int = 1
-
-
-func _player_power() -> int:
-	return adventurers.size() + guild_hall_level
-
-
-func _star_tier_weight(tier: int, power: int) -> int:
-	return maxi(STAR_WEIGHT_MIN, STAR_WEIGHT_BASE[tier] + STAR_WEIGHT_PER_POWER[tier] * power)
 # Equipment catalog (see "Trade, equipment, and loot" in
 # docs/plans/first-playable-campaign/game-design.md). Steel is
 # +1 damage over Iron on both ends of the range. Armor's defense reduces an
@@ -162,10 +156,9 @@ const ARMORS: Dictionary = {
 # randi_range(gold_min, gold_max) * gold_multiplier. gear_item_id is always
 # the enemy's documented Iron-tier weapon (see WEAPONS above); it drops with
 # GEAR_DROP_CHANCE probability, independent of the (always-granted) mana
-# crystal. Kobold and hobgoblin are documented here to match the design doc
-# exactly, but neither currently appears in any active encounter (see
-# STAR_ENEMY_COMPOSITIONS) — their rows are unreachable until a future
-# content plan adds them as fightable enemies.
+# crystal. Kobold and hobgoblin are both fightable via the Ruined Fortress
+# (see STAR_ENEMY_COMPOSITIONS[3]), so their rows resolve for real loot
+# whenever either is killed there, same as goblin/orc elsewhere.
 const ENEMY_LOOT_TABLES: Dictionary = {
 	"kobold": {"gold_min": 0, "gold_max": 5, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "dagger_iron"},
 	"goblin": {"gold_min": 1, "gold_max": 6, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "shortsword_iron"},
@@ -212,8 +205,10 @@ var ENCOUNTER_INSTANCE_CAP: int = 2
 var RECRUITMENT_OFFER_CAP: int = 4
 var ENCOUNTER_VACANCY_TURNS: int = 15
 var RECRUITMENT_VACANCY_TURNS: int = 30
-# Deterministic template cycling order for encounter refills. Must mirror
-# EXPEDITIONS' keys exactly (order matters for repeatable tests/screenshots).
+# The pool of candidate templates a refill's power-weighted picker chooses
+# among (see _choose_encounter_template()) -- order no longer determines
+# which template gets picked, only which is enumerated first when weights
+# tie. Must mirror EXPEDITIONS' keys exactly.
 const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost", "ruined_fortress"]
 # Mirrors world_map.gd's GRID_WIDTH/GRID_HEIGHT. Duplicated here (rather than
 # cross-referenced) because GameSession is an autoload with no dependency on
@@ -317,6 +312,21 @@ var star_weight_roll: Callable = func(total_weight: int) -> int: return randi() 
 ## pattern). Called with the resolved composition option's
 ## (count_min, count_max).
 var enemy_count_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+
+
+## Restores enemy_composition_roll, enemy_count_roll, and star_weight_roll
+## to their real-random default implementations. Deliberately NOT called by
+## reset() -- these Callables are intentionally never touched by reset() (see
+## each var's own doc comment) so a test can pin one, then call reset() for
+## unrelated setup, without losing its pin. Call sites that need a guaranteed
+## clean slate (a fresh debug scenario, a test's after_each) call this
+## explicitly instead.
+func reset_injectable_rolls() -> void:
+	enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
+
+
 # Injectable so tests can force deterministic loot instead of depending on
 # real randomness (see enemy_composition_roll/hit_roll for the same
 # pattern). Never reset by reset() — a test sets these immediately before
@@ -1086,6 +1096,15 @@ func _spawn_next_encounter_instance() -> Dictionary:
 ## refill the Ruined Fortress would otherwise be the only unseen
 ## template and would always be forced in regardless of power, defeating
 ## the point of weighting it down for a weak party.
+func _player_power() -> int:
+	return adventurers.size() + guild_hall_level
+
+
+func _star_tier_weight(tier: int, power: int) -> int:
+	var clamped_tier: int = clampi(tier, 1, 3)
+	return maxi(STAR_WEIGHT_MIN, STAR_WEIGHT_BASE[clamped_tier] + STAR_WEIGHT_PER_POWER[clamped_tier] * power)
+
+
 func _choose_encounter_template() -> String:
 	var candidates: Array[String] = []
 	for template_id in ENCOUNTER_TEMPLATE_ORDER:
@@ -1133,19 +1152,27 @@ func _is_encounter_template_active(template_id: String) -> bool:
 ## position is unique to it.
 ##
 ## The scan itself walks the grid far-corner-first (descending y, then
-## descending x) rather than row-major from the settlement corner. Both
-## templates' own documented tiles — (4, 4) and (4, 0) — already sit in that
-## far region, so scanning outward from there keeps fallback refills
-## requiring meaningful travel instead of landing 1-2 tiles from
+## descending x) rather than row-major from the settlement corner. The Goblin
+## Camp and Orc Outpost's own documented tiles — (4, 4) and (4, 0) — already
+## sit in that far region, so scanning outward from there keeps fallback
+## refills requiring meaningful travel instead of landing 1-2 tiles from
 ## STARTING_SETTLEMENT_WORLD_POSITION at (0, 0), which a settlement-first scan
-## would otherwise hand out on literally every refill (both templates are
-## marked previously-spawned from turn one, per reset()). The scan also
-## explicitly skips the current template's own documented_position: left in,
-## the far-corner-first order would otherwise re-select that exact tile
-## whenever it happens to be free (most notably Goblin Camp's, which *is* the
-## far corner scanned first), reopening the same "respawns on the tile it was
-## just cleared from" problem the template_previously_spawned guard above
-## exists to prevent.
+## would otherwise hand out on literally every refill (both of those two
+## sites are marked previously-spawned from turn one, per reset()). The
+## Ruined Fortress's own documented position, (0, 4), is a different corner
+## this far-corner-first reasoning does not cover — but it does not need to:
+## the Ruined Fortress is never a starting site, so it is NOT marked
+## previously-spawned at reset() time, and its own first-ever spawn (always a
+## refill) takes the "documented position, not yet occupied, not yet used"
+## fast path near the top of this function rather than reaching this scan at
+## all. This scan applies to the Ruined Fortress exactly as described above
+## once it has been used once (i.e. on its second and later refills). The
+## scan also explicitly skips the current template's own documented_position:
+## left in, the far-corner-first order would otherwise re-select that exact
+## tile whenever it happens to be free (most notably Goblin Camp's, which
+## *is* the far corner scanned first), reopening the same "respawns on the
+## tile it was just cleared from" problem the template_previously_spawned
+## guard above exists to prevent.
 func _choose_encounter_position(template_id: String) -> Vector2i:
 	var documented_position: Vector2i = EXPEDITIONS[template_id].position
 	var template_previously_spawned := _used_encounter_template_ids.has(template_id)

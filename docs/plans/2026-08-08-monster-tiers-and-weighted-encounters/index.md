@@ -106,7 +106,11 @@ The floor of 1 means no tier's odds ever hit exactly zero — a maxed-out
 campaign can still rarely see a one-star site, and a brand-new one can still
 rarely see a three-star site. Worked examples (probabilities are each
 tier's weight over the sum of all *currently inactive* tiers' weights, since
-a template that already has a live instance is never re-selected):
+a template that already has a live instance is never re-selected). The table
+below assumes all three templates are simultaneously eligible (no site
+currently active); the far more common case is exactly one vacancy open
+while the other two sites are still active, so only two tiers are ever
+candidates and the odds split between just those two:
 
 | Power | 1-star weight | 2-star weight | 3-star weight | 1★ / 2★ / 3★ odds |
 |---|---|---|---|---|

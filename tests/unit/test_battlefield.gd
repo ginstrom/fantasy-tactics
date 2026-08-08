@@ -7,7 +7,7 @@ const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
 
 func after_each() -> void:
 	GameManager.close_game_menu()
-	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	GameSession.reset_injectable_rolls()
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
 
@@ -402,7 +402,10 @@ func test_defeating_the_goblin_awards_its_five_point_kill_xp() -> void:
 
 
 func test_defeating_the_orc_awards_its_ten_point_kill_xp() -> void:
-	var battlefield := _setup_orc_outpost_battle()
+	# Pin to the Orc option (index 1): the Orc Outpost's tier-2 composition
+	# randomly resolves to Goblins or an Orc (see STAR_ENEMY_COMPOSITIONS), so
+	# leaving this unpinned made the test a real coin flip between 5 and 10 XP.
+	var battlefield := _setup_orc_outpost_battle(func(_option_count: int) -> int: return 1)
 	var units := _stage_a_killing_blow(battlefield)
 
 	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)

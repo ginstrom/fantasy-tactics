@@ -12,8 +12,7 @@ func after_each() -> void:
 	# The Ruined Fortress scenario pins these rolls to force its maximum
 	# Kobold count; restore real randomness so later tests/files aren't
 	# affected by this singleton's leftover state.
-	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
-	GameSession.enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+	GameSession.reset_injectable_rolls()
 
 
 func test_debug_menu_starts_hidden_with_eleven_stable_scenario_buttons() -> void:
@@ -63,6 +62,31 @@ func test_ruined_fortress_scenario_deploys_a_staffed_party_and_fields_eight_kobo
 	assert_eq(enemy_units.size(), 8, "The forced Kobold roll should field the maximum count")
 	for unit in enemy_units:
 		assert_eq(unit.max_health, 6, "Every fielded unit should be a Kobold")
+
+
+## Regression test for a real leak: the Ruined Fortress scenario used to pin
+## enemy_composition_roll/enemy_count_roll on the GameSession singleton and
+## never restore them, so a later scenario in the same running game (e.g.
+## Goblin Camp) would inherit those pins and also field 8 Kobolds/Goblins
+## instead of its own real-random composition. DebugScenarios.apply() now
+## calls GameSession.reset_injectable_rolls() before every scenario's own
+## setup (see debug_scenarios.gd), so the pins from an earlier scenario must
+## not survive into this one.
+func test_ruined_fortress_scenario_does_not_leak_its_pinned_rolls_into_a_later_scenario() -> void:
+	assert_eq(GameManager.run_debug_scenario("ruined_fortress"), OK)
+	assert_eq(GameManager.run_debug_scenario("goblin_camp"), OK)
+
+	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var enemy_units: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			enemy_units.append(unit)
+	assert_eq(enemy_units.size(), 1, "The Goblin Camp should field its own 1 Goblin, not the leaked pinned count")
+	for unit in enemy_units:
+		assert_eq(unit.max_health, 13, "The fielded enemy should be a Goblin, not a leaked Kobold")
 
 
 func test_ruined_fortress_button_runs_the_ruined_fortress_debug_scenario() -> void:

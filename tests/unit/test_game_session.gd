@@ -32,8 +32,7 @@ func _adventurer(adventurer_id: String, availability_status: String) -> Dictiona
 
 
 func after_each() -> void:
-	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
-	GameSession.star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
+	GameSession.reset_injectable_rolls()
 
 
 func before_each() -> void:
@@ -2466,6 +2465,16 @@ func test_star_tier_weight_never_drops_to_zero_no_matter_how_high_power_gets() -
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	assert_eq(session._star_tier_weight(1, 1000), 1)
+
+
+func test_star_tier_weight_clamps_an_out_of_range_tier_instead_of_crashing() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(
+		session._star_tier_weight(4, 2),
+		session._star_tier_weight(3, 2),
+		"An out-of-range tier should clamp down to the highest documented tier (3)"
+	)
 
 
 ## At starting power (2), candidates [goblin_camp, ruined_fortress] (orc_outpost
