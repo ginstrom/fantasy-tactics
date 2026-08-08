@@ -92,6 +92,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	get_viewport().set_input_as_handled()
+	if OS.is_debug_build():
+		print(
+			"[world_map click] mouse_local=%s tile_pos=%s party_position=%s party_selected=%s has_deployed_party=%s route=%s"
+			% [
+				board.get_local_mouse_position(), tile_pos, party_position, party_selected,
+				GameSession.has_deployed_party(), GameSession.get_deployed_party_route()
+			]
+		)
 	_handle_tile_click(tile_pos)
 
 
@@ -187,8 +195,18 @@ func _update_hover_route(tile_pos: Vector2i) -> void:
 func _on_end_turn_pressed() -> void:
 	if GameSession.selected_encounter != "":
 		return
+	if OS.is_debug_build():
+		print(
+			"[world_map end_turn] before: party_position=%s route=%s"
+			% [party_position, GameSession.get_deployed_party_route()]
+		)
 	GameSession.end_world_turn()
 	party_position = GameSession.get_deployed_party_position()
+	if OS.is_debug_build():
+		print(
+			"[world_map end_turn] after: party_position=%s route=%s"
+			% [party_position, GameSession.get_deployed_party_route()]
+		)
 	_draw_markers()
 	_draw_routes()
 	_update_highlights()
