@@ -389,8 +389,8 @@ func test_get_expedition_returns_the_documented_goblin_camp_record() -> void:
 	var record: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
 
 	assert_eq(record.position, Vector2i(4, 4))
-	assert_eq(record.enemy.max_health, 3)
-	assert_eq(record.enemy.attack_damage, 1)
+	assert_eq(record.enemy.max_health, 13)
+	assert_eq(record.enemy.attack_damage, 2)
 	assert_eq(record.enemy.hit_chance, 0.3)
 	assert_eq(record.enemy.attack_name_key, "battle.enemy.goblin.attack")
 
@@ -402,8 +402,8 @@ func test_get_expedition_returns_the_documented_orc_outpost_record() -> void:
 	var record: Dictionary = session.get_expedition(GameSessionScript.ORC_OUTPOST_ID)
 
 	assert_eq(record.position, Vector2i(4, 0))
-	assert_eq(record.enemy.max_health, 5)
-	assert_eq(record.enemy.attack_damage, 2)
+	assert_eq(record.enemy.max_health, 22)
+	assert_eq(record.enemy.attack_damage, 3)
 	assert_eq(record.enemy.hit_chance, 0.5)
 	assert_eq(record.enemy.attack_name_key, "battle.enemy.orc.attack")
 
@@ -521,7 +521,7 @@ func test_get_expedition_returns_a_record_that_can_be_mutated_without_affecting_
 	assert_eq(second_record.position, Vector2i(4, 4), "Mutating a returned record must not affect the catalog")
 	assert_eq(
 		second_record.enemy.max_health,
-		3,
+		13,
 		"Mutating a nested dictionary in a returned record must not affect the catalog"
 	)
 
@@ -765,7 +765,7 @@ func test_default_warrior_starts_with_a_complete_progression_state() -> void:
 	assert_eq(warrior.stats.attack, 60)
 	assert_eq(warrior.progression.skill_points, 0, "A fresh Warrior has no unspent points")
 	assert_eq(warrior.progression.perks, [], "A fresh Warrior has chosen no perks")
-	assert_eq(warrior.stats.max_health, 3)
+	assert_eq(warrior.stats.max_health, 10)
 
 
 func test_get_adventurer_returns_a_copy_whose_nested_progression_cannot_mutate_session_state() -> void:
@@ -1384,7 +1384,7 @@ func test_each_level_gained_adds_one_max_health_and_ten_skill_points() -> void:
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
 	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.stats.max_health, 4, "Leveling once should add exactly one max health")
+	assert_eq(warrior.stats.max_health, 11, "Leveling once should add exactly one max health")
 	assert_eq(warrior.progression.skill_points, 10, "Leveling once should add exactly ten skill points")
 
 
@@ -1495,11 +1495,11 @@ func test_get_effective_max_health_reflects_leveling() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 
-	assert_eq(session.get_effective_max_health("warrior_001"), 3)
+	assert_eq(session.get_effective_max_health("warrior_001"), 10)
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
-	assert_eq(session.get_effective_max_health("warrior_001"), 4)
+	assert_eq(session.get_effective_max_health("warrior_001"), 11)
 
 
 func test_get_effective_move_range_adds_the_bonus_move_perk() -> void:

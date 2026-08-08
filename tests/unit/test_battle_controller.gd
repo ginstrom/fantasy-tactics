@@ -253,7 +253,7 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	var warrior = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	assert_not_null(warrior, "Warrior should spawn at the first player start position")
 	assert_eq(warrior.side, BattleControllerScript.Side.PLAYER)
-	assert_eq(warrior.max_health, 3)
+	assert_eq(warrior.max_health, 10)
 	assert_eq(warrior.move_range, 3)
 	assert_eq(warrior.damage_min, 1)
 	assert_eq(warrior.damage_max, 8)
@@ -262,9 +262,9 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	assert_not_null(goblin, "A goblin should spawn at the first enemy start position")
 	assert_eq(goblin.side, BattleControllerScript.Side.ENEMY)
-	assert_eq(goblin.max_health, 3)
-	assert_eq(goblin.damage_min, 1)
-	assert_eq(goblin.damage_max, 1)
+	assert_eq(goblin.max_health, 13)
+	assert_eq(goblin.damage_min, 2)
+	assert_eq(goblin.damage_max, 2)
 	assert_eq(goblin.hit_chance, 0.3)
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
@@ -285,9 +285,9 @@ func test_ready_builds_one_orc_when_the_orc_outpost_resolves_to_orcs() -> void:
 	var orc = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	assert_not_null(orc)
 	assert_eq(orc.side, BattleControllerScript.Side.ENEMY)
-	assert_eq(orc.max_health, 5)
-	assert_eq(orc.damage_min, 2)
-	assert_eq(orc.damage_max, 2)
+	assert_eq(orc.max_health, 22)
+	assert_eq(orc.damage_min, 3)
+	assert_eq(orc.damage_max, 3)
 	assert_eq(orc.hit_chance, 0.5)
 	assert_eq(orc.attack_name, tr("battle.enemy.orc.attack"))
 
@@ -308,9 +308,9 @@ func test_ready_builds_two_goblins_when_the_orc_outpost_resolves_to_goblins() ->
 	for index in 2:
 		var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[index])
 		assert_not_null(goblin)
-		assert_eq(goblin.max_health, 3)
-		assert_eq(goblin.damage_min, 1)
-		assert_eq(goblin.damage_max, 1)
+		assert_eq(goblin.max_health, 13)
+		assert_eq(goblin.damage_min, 2)
+		assert_eq(goblin.damage_max, 2)
 		assert_eq(goblin.hit_chance, 0.3)
 
 
@@ -328,9 +328,9 @@ func test_ready_builds_one_goblin_when_the_goblin_camp_is_selected() -> void:
 
 	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	assert_not_null(goblin)
-	assert_eq(goblin.max_health, 3)
-	assert_eq(goblin.damage_min, 1)
-	assert_eq(goblin.damage_max, 1)
+	assert_eq(goblin.max_health, 13)
+	assert_eq(goblin.damage_min, 2)
+	assert_eq(goblin.damage_max, 2)
 	assert_eq(goblin.hit_chance, 0.3)
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
@@ -351,8 +351,8 @@ func test_ready_builds_the_player_unit_from_the_first_partys_effective_stats() -
 		GameSession.get_effective_max_health(GameSession.WARRIOR_ID),
 		"The unit's max health must come from GameSession's derived value"
 	)
-	assert_eq(warrior.max_health, 4, "One level up should have added one max health")
-	assert_eq(warrior.health, 4, "A fresh unit starts at full (derived) health")
+	assert_eq(warrior.max_health, 11, "One level up should have added one max health")
+	assert_eq(warrior.health, 11, "A fresh unit starts at full (derived) health")
 
 
 func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_when_raw_attack_reaches_one_hundred() -> void:

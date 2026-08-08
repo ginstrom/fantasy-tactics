@@ -24,12 +24,12 @@ func _open_level_up(adventurer_id: String, health_before: int) -> Control:
 
 func test_shows_xp_level_health_gain_attack_and_skill_points_after_a_level_up() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 10)
 
 	assert_eq(level_up.name_label.text, "Warrior")
 	assert_eq(level_up.xp_label.text, tr("level_up.xp") % 20)
 	assert_eq(level_up.level_label.text, tr("level_up.level") % 2)
-	assert_eq(level_up.health_gain_label.text, tr("level_up.health_gain") % [4, 1])
+	assert_eq(level_up.health_gain_label.text, tr("level_up.health_gain") % [11, 1])
 	assert_eq(level_up.attack_label.text, tr("level_up.attack") % [60, 60])
 	assert_eq(level_up.skill_points_label.text, tr("level_up.skill_points") % 10)
 	assert_true(level_up.visible)

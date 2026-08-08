@@ -1,7 +1,7 @@
 {
 	"combat": {
 		"base_attack": 60,
-		"base_max_health": 3,
+		"base_max_health": 10,
 		"base_move_range": 3,
 		"effective_hit_chance_cap": 0.95,
 		"attack_to_hit_chance_divisor": 100.0

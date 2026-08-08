@@ -18,8 +18,8 @@ const EXPEDITIONS: Dictionary = {
 		"enemy": {
 			"name_key": "battle.enemy.goblin",
 			"attack_name_key": "battle.enemy.goblin.attack",
-			"max_health": 3,
-			"attack_damage": 1,
+			"max_health": 13,
+			"attack_damage": 2,
 			"hit_chance": 0.3,
 			"count": 1,
 		},
@@ -35,8 +35,8 @@ const EXPEDITIONS: Dictionary = {
 		"enemy": {
 			"name_key": "battle.enemy.orc",
 			"attack_name_key": "battle.enemy.orc.attack",
-			"max_health": 5,
-			"attack_damage": 2,
+			"max_health": 22,
+			"attack_damage": 3,
 			"hit_chance": 0.5,
 			"count": 1,
 		},
@@ -45,16 +45,16 @@ const EXPEDITIONS: Dictionary = {
 const GOBLIN_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.goblin",
 	"attack_name_key": "battle.enemy.goblin.attack",
-	"max_health": 3,
-	"attack_damage": 1,
+	"max_health": 13,
+	"attack_damage": 2,
 	"hit_chance": 0.3,
 	"loot_id": "goblin",
 }
 const ORC_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.orc",
 	"attack_name_key": "battle.enemy.orc.attack",
-	"max_health": 5,
-	"attack_damage": 2,
+	"max_health": 22,
+	"attack_damage": 3,
 	"hit_chance": 0.5,
 	"loot_id": "orc",
 }
@@ -130,7 +130,7 @@ const DEFAULT_ARMOR_ID := "leather_armor"
 # GameSession.SOME_CONSTANT call site keeps working unchanged — GDScript
 # exposes both consts and vars the same way through a singleton instance.
 var BASE_ATTACK: int = 60
-var BASE_MAX_HEALTH: int = 3
+var BASE_MAX_HEALTH: int = 10
 var BASE_MOVE_RANGE: int = 3
 var LEVEL_UP_MAX_HEALTH_BONUS: int = 1
 var LEVEL_UP_SKILL_POINTS: int = 10
