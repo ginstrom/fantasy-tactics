@@ -117,12 +117,22 @@ if its category is still under its cap when the clock completes. A cleared
 site never reopens — a later spawn is a distinct new instance, though it may
 reuse a previously seen encounter template at a different map tile.
 
+A three-star Ruined Fortress template now exists alongside the Goblin Camp
+and Orc Outpost, but it is never one of the campaign's two starting sites.
+Which template an encounter vacancy's refill produces is chosen at random,
+weighted toward higher star tiers as the player's power (adventurer count
+plus Guild Hall level) grows, rather than deterministically cycling through
+every known template. At a fresh campaign's starting power, a refill is
+roughly 44% one-star, 44% two-star, and 11% three-star; by the time a
+player has recruited several adventurers and maxed the Guild Hall, those
+odds shift toward roughly 8% / 62% / 31%. No tier's odds ever reach zero.
+
 The user can also dismiss potential recruits so that future candidates can fill available slots.
 
 The World Map marks each active encounter with a difficulty-only star badge
-(one star for Goblin Camp, two for Orc Outpost) rather than a numeric label,
-so the player can compare expedition risk at a glance before committing a
-route.
+(one star for Goblin Camp, two for Orc Outpost, three for the Ruined
+Fortress) rather than a numeric label, so the player can compare expedition
+risk at a glance before committing a route.
 
 Site entry retains selection-before-activation. The first click selects the
 party, so it can still move away; a second click enters the settlement or an
@@ -140,17 +150,32 @@ in the left panel, or number key (1-5); a left portrait panel shows one
 square per fielded party member, with the unit's colour, health, a selection ring, 
 and a dimmed state once defeated.
 
-Each site's star rating drives a randomly resolved enemy composition: 
-the one-star Goblin Camp always fields one Goblin; the two-star Orc Outpost fields 
-two Goblins or one Orc, chosen at random each time the site is entered. 
+Each site's star rating drives a randomly resolved enemy composition: the
+one-star Goblin Camp always fields one Goblin; the two-star Orc Outpost
+fields two Goblins or one Orc; the three-star Ruined Fortress fields 4-8
+Kobolds, 3-6 Goblins, 2-4 Orcs, or 1-3 Hobgoblins. Both which option and,
+for the Ruined Fortress, the exact count within its range are chosen at
+random each time the site is entered. The battlefield can field up to 8
+enemies at once (up from 3), so the Ruined Fortress's Kobold swarm is the
+first fight to use the board's full width.
 
-A Warrior has 3 base health and Attack 60 (a 60% base hit chance before armor); 
-its damage and defensive stats come from its equipped gear — see Trade,
-equipment, and loot below for how weapon and armor choice change a Warrior's
-damage range, effective hit chance, and damage taken. A Goblin has 3 health,
-a 30% hit chance, and deals 1-6 damage with its Short Sword; an Orc has 5
-health, a 50% hit chance, and deals 1-8 damage with its longsword. 
-Enemies take a visible, deterministic AI decision sequence after the 
+A Warrior has 10 base health and Attack 60 (a 60% base hit chance before
+armor); its damage and defensive stats come from its equipped gear — see
+Trade, equipment, and loot below for how weapon and armor choice change a
+Warrior's damage range, effective hit chance, and damage taken. Monster HP
+and damage are tuned around that 10 HP baseline so a level-1 Warrior is in
+a roughly even solo fight against a single Orc (see
+[docs/plans/2026-08-08-monster-tiers-and-weighted-encounters/index.md](../../2026-08-08-monster-tiers-and-weighted-encounters/index.md)
+for the expected-rounds-to-kill math this was tuned against):
+
+| Monster | Health | Hit chance | Damage | Weapon |
+|---|---|---|---|---|
+| Kobold | 6 | 25% | 1 | Rusty Dagger |
+| Goblin | 13 | 30% | 2 | Short Sword |
+| Orc | 22 | 50% | 3 | War Axe |
+| Hobgoblin | 30 | 60% | 4 | Two-Handed Sword |
+
+Enemies take a visible, deterministic AI decision sequence after the
 player ends the round.
 
 The Guild Hall is the game's first gold-funded building. A fresh campaign
@@ -198,9 +223,11 @@ Every kill now queues three reward types:
 A Goblin kill queues 1-6 gold, a tier-1 mana crystal, and a chance at an Iron Shortsword; 
 an Orc kill queues double gold (1-5, x2) and a tier-2 crystal and a chance at an Iron Longsword.
 
-Loot tables also exist for Kobolds and Hobgoblins, whose gear and crystal
-tiers are documented for a future content pass, but neither currently
-appears in any active encounter. All of it queues on victory and only banks
+A Kobold kill (fought at the Ruined Fortress) queues 0-5 gold and a tier-1
+mana crystal, plus a chance at an Iron Dagger; a Hobgoblin kill there
+queues triple gold (1-4, x3) and a tier-2 crystal, plus a chance at an Iron
+Two-Handed Sword — the catalogue's top loot tier, matching its status as
+the toughest monster in the game. All of it queues on victory and only banks
 into the Encampment's stores once the party returns home, alongside gold —
 mana crystals sell for a flat 5 (tier 1) or 15 (tier 2) gold each; gear
 sells for half its catalog price.
@@ -249,21 +276,20 @@ scenario list.
 ## Next work
 
 The prototype now fields a full party against a full, star-tier-randomized
-enemy composition; the Guild Hall and the Trading Post give players their
-first two gold-funded tactical decisions (a larger party, and better gear);
-and loot (gold, mana crystals, gear) joins XP as expedition rewards. The next
+enemy composition, up to 8 enemies strong; the Guild Hall and the Trading
+Post give players their first two gold-funded tactical decisions (a larger
+party, and better gear); loot (gold, mana crystals, gear) joins XP as
+expedition rewards; and the encounter catalogue now spans three star tiers
+and four monster types (Goblin, Orc, Kobold, Hobgoblin), with a refill's
+tier chosen at random, weighted by the player's growing power. The next
 implementation work should focus on these unfinished outcomes, in order:
 
-1. Broaden the encounter catalogue beyond the Goblin Camp and Orc Outpost
-   templates so expedition choice differs by more than star rating alone —
-   Milestone 3's remaining gap. This is also what Milestone 5's "several
-   expeditions" slice is still waiting on, now that a second building has
-   landed.
-2. Add save/load now that the expedition, reward, and upgrade loop is
+1. Add save/load now that the expedition, reward, and upgrade loop is
    repeatable; then enable the existing Continue and Load UI.
-3. Assemble Milestone 5's first campaign slice — onboarding and pacing —
-   once the encounter catalogue has broadened.
-4. Add durable presentation assets only when their associated gameplay choices
+2. Assemble Milestone 5's first campaign slice — onboarding and pacing —
+   now that both the encounter catalogue and the upgrade path have several
+   options each.
+3. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
@@ -374,20 +400,19 @@ not only appearance.
 
 ## Milestone 3: Expedition and reward loop
 
-**Status: reward, replacement, and full-party tactical loops shipped;
-catalogue breadth is incomplete.** Every expedition now pays out three
-reward types: gold and mana crystals (banked on return to Encampment),
-individual adventurer XP (awarded immediately per kill and per clear; see
-Adventurer progression above), and a chance of the killed enemy's own
-weapon as gear (see Trade, equipment, and loot above). Cleared sites are
-persistent but not permanent — each vacancy refills on its own 15-turn clock
-under a two-site cap, so the world map keeps changing within a campaign
-rather than only accumulating grey markers. Each site's star rating also now
-resolves to a randomized enemy composition (see Full-party battles and the
-Guild Hall above), so the two templates already produce more than one
-tactical setup. The encounter catalogue itself is still just the Goblin Camp
-and Orc Outpost templates; any travel-time or resource cost beyond World Map
-turns remains future work.
+**Status: completed.** Every expedition now pays out three reward types:
+gold and mana crystals (banked on return to Encampment), individual
+adventurer XP (awarded immediately per kill and per clear; see Adventurer
+progression above), and a chance of the killed enemy's own weapon as gear
+(see Trade, equipment, and loot above). Cleared sites are persistent but
+not permanent — each vacancy refills on its own 15-turn clock under a
+two-site cap, so the world map keeps changing within a campaign rather
+than only accumulating grey markers. The encounter catalogue now spans
+three star tiers (Goblin Camp, Orc Outpost, Ruined Fortress) and four
+monster types, with both the enemy composition and, for the Ruined
+Fortress, the fielded count resolved at random each time a site is
+entered (see Full-party battles and the Guild Hall above); any
+travel-time or resource cost beyond World Map turns remains future work.
 
 ### Player outcome
 
@@ -533,12 +558,12 @@ prototype's single Warrior immediately usable.
 
 ## Milestone 5: First campaign slice
 
-**Status: not started.** The reward and upgrade loop now exists (gold, mana
-crystals, gear, XP, the Guild Hall, the Trading Post, and randomized site
-compositions), but this milestone still waits on the catalogue gap called
-out in Next work above — two encounter templates are not yet the "several
-expeditions" this milestone asks for, even though the "several upgrades"
-half is now satisfied by two buildings.
+**Status: not started, no longer blocked.** The reward and upgrade loop now
+exists (gold, mana crystals, gear, XP, the Guild Hall, the Trading Post,
+and randomized site compositions), and the encounter catalogue now spans
+three star tiers and four monster types — both halves of this milestone's
+"several expeditions, several upgrades" precondition (see Next work above)
+are satisfied. What remains is assembling and playtesting the slice itself.
 
 ### Player outcome
 

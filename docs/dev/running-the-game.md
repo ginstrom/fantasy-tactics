@@ -55,6 +55,7 @@ non-debug export build.
    | Party on World Map | World Map | Staffed party deployed at a fixed World Map tile, away from both encounter sites |
    | Goblin Camp Battle | Battlefield | Staffed party deployed directly onto, and battling, the Goblin Camp encounter |
    | Orc Outpost Battle | Battlefield | Staffed party deployed directly onto, and battling, the Orc Outpost encounter |
+   | Ruined Fortress Battle | Battlefield | Staffed party deployed directly onto, and battling, the Ruined Fortress encounter, forced to its maximum eight-Kobold composition |
    | Stocked Trading Post + Stores | Encampment | Staffed encamped party; Trading Post already owned; Stores pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword — for exercising the Trade loop (Stores/Trading Post/Assign Equipment) without playing through a battle first |
 
 4. Two more buttons act on the *current* state rather than resetting it:
