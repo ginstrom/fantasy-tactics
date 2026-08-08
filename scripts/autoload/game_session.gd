@@ -115,6 +115,22 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 		{"enemy": HOBGOBLIN_ENEMY_STATS, "count_min": 1, "count_max": 3},
 	],
 }
+## Star-tier selection weight for a refill candidate at a given player
+## power (see docs/plans/first-playable-campaign/game-design.md's
+## "Vacancy-timed encounter and recruitment population" section for the
+## worked example table). Floors at STAR_WEIGHT_MIN so no tier's odds
+## ever reach exactly zero.
+const STAR_WEIGHT_BASE: Dictionary = {1: 6, 2: 2, 3: -2}
+const STAR_WEIGHT_PER_POWER: Dictionary = {1: -1, 2: 1, 3: 1}
+const STAR_WEIGHT_MIN: int = 1
+
+
+func _player_power() -> int:
+	return adventurers.size() + guild_hall_level
+
+
+func _star_tier_weight(tier: int, power: int) -> int:
+	return maxi(STAR_WEIGHT_MIN, STAR_WEIGHT_BASE[tier] + STAR_WEIGHT_PER_POWER[tier] * power)
 # Equipment catalog (see "Trade, equipment, and loot" in
 # docs/plans/first-playable-campaign/game-design.md). Steel is
 # +1 damage over Iron on both ends of the range. Armor's defense reduces an
@@ -194,7 +210,7 @@ var ENCOUNTER_VACANCY_TURNS: int = 15
 var RECRUITMENT_VACANCY_TURNS: int = 30
 # Deterministic template cycling order for encounter refills. Must mirror
 # EXPEDITIONS' keys exactly (order matters for repeatable tests/screenshots).
-const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost"]
+const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost", "ruined_fortress"]
 # Mirrors world_map.gd's GRID_WIDTH/GRID_HEIGHT. Duplicated here (rather than
 # cross-referenced) because GameSession is an autoload with no dependency on
 # the world scene script; keep both in sync if the map grid ever resizes.
@@ -286,6 +302,12 @@ var selected_encounter: String = ""
 # randomness. Never reset by reset() — every call site that needs a specific
 # outcome sets this immediately before its own enter_encounter() call.
 var enemy_composition_roll: Callable = func(option_count: int) -> int: return randi() % option_count
+## Injectable so tests can force a specific weighted-tier outcome instead
+## of depending on real randomness (see enemy_composition_roll for the
+## same pattern). Takes the candidates' total weight and returns a value
+## in [0, total_weight) -- _choose_encounter_template() maps it onto each
+## candidate's weight bucket via a cumulative sum.
+var star_weight_roll: Callable = func(total_weight: int) -> int: return randi() % total_weight
 ## Injectable so tests can force a specific enemy count instead of
 ## depending on real randomness (see enemy_composition_roll for the same
 ## pattern). Called with the resolved composition option's
@@ -309,8 +331,10 @@ var active_encounters: Array[Dictionary] = []
 # One pending clock per open encounter vacancy: {"turns_remaining": int}.
 var encounter_vacancies: Array[Dictionary] = []
 # Every template id ever spawned as an active instance (initial seed plus
-# every refill), so a refill prefers a template variety has not yet shown the
-# player before falling back to reusing one (see _choose_encounter_template).
+# every refill). _choose_encounter_position() uses this to avoid handing a
+# refill the exact tile a template's earlier instance was just cleared
+# from (see that function's docstring) -- it no longer influences which
+# template a refill chooses; see _choose_encounter_template() for that.
 # Recruitment offers do not need an equivalent: a purchased offer's id lives
 # on in the roster forever, so _is_warrior_id_taken already answers "has this
 # template been used" for that category.
@@ -1049,24 +1073,38 @@ func _spawn_next_encounter_instance() -> Dictionary:
 	return _make_encounter_instance(_mint_encounter_instance_id(), template_id, position)
 
 
-## Deterministic and two-tiered: prefer the first template in
-## ENCOUNTER_TEMPLATE_ORDER that is both not currently active AND has never
-## been spawned before (so the player sees each known site at least once
-## before any is reused). Once every known template has been seen at least
-## once, fall back to the first merely-not-currently-active template (a
-## previously seen template reused at a fresh instance, per design.md). Falls
-## back to the first template outright if every known one is already active
-## (cannot happen while ENCOUNTER_INSTANCE_CAP <= ENCOUNTER_TEMPLATE_ORDER.
-## size(), but keeps this deterministic rather than failing outright if that
-## ever changes).
+## Weighted-random by star tier, favoring higher tiers as the player's
+## power (adventurer count plus Guild Hall level -- see _player_power())
+## grows. Only a template with no currently-active instance is eligible,
+## so a refill never activates a second live instance of an
+## already-active template. Deliberately replaces the old "show every
+## template once before reuse" guarantee: at a fresh campaign's first
+## refill the Ruined Fortress would otherwise be the only unseen
+## template and would always be forced in regardless of power, defeating
+## the point of weighting it down for a weak party.
 func _choose_encounter_template() -> String:
-	for template_id in ENCOUNTER_TEMPLATE_ORDER:
-		if not _is_encounter_template_active(template_id) and not _used_encounter_template_ids.has(template_id):
-			return template_id
+	var candidates: Array[String] = []
 	for template_id in ENCOUNTER_TEMPLATE_ORDER:
 		if not _is_encounter_template_active(template_id):
-			return template_id
-	return ENCOUNTER_TEMPLATE_ORDER[0]
+			candidates.append(template_id)
+	if candidates.is_empty():
+		return ENCOUNTER_TEMPLATE_ORDER[0]
+
+	var power := _player_power()
+	var weights: Array[int] = []
+	var total_weight := 0
+	for template_id in candidates:
+		var weight := _star_tier_weight(EXPEDITIONS[template_id].difficulty, power)
+		weights.append(weight)
+		total_weight += weight
+
+	var roll: int = star_weight_roll.call(total_weight)
+	var cumulative := 0
+	for index in candidates.size():
+		cumulative += weights[index]
+		if roll < cumulative:
+			return candidates[index]
+	return candidates[-1]
 
 
 func _is_encounter_template_active(template_id: String) -> bool:

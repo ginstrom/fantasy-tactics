@@ -33,6 +33,7 @@ func _adventurer(adventurer_id: String, availability_status: String) -> Dictiona
 
 func after_each() -> void:
 	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	GameSession.star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 
 
 func before_each() -> void:
@@ -1699,6 +1700,10 @@ func test_encounter_vacancy_refills_exactly_at_turn_fifteen() -> void:
 	autofree(session)
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	# Force the weighted refill toward goblin_camp (the tier-1 candidate) so
+	# this test stays deterministic rather than depending on
+	# _choose_encounter_template()'s real randomness (see star_weight_roll).
+	session.star_weight_roll = func(_total_weight: int) -> int: return 0
 
 	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
@@ -1743,6 +1748,10 @@ func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 	# is marked as previously-spawned in _used_encounter_template_ids.
 	session.enter_encounter(goblin_instance_id)
 	session.complete_current_encounter()
+	# Force the weighted refill toward goblin_camp (the tier-1 candidate) so
+	# this test stays deterministic rather than depending on
+	# _choose_encounter_template()'s real randomness (see star_weight_roll).
+	session.star_weight_roll = func(_total_weight: int) -> int: return 0
 	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
@@ -1788,6 +1797,11 @@ func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> v
 	# forcing it to keep searching rather than trivially reusing (4, 4).
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 	session.complete_current_encounter()
+	# Force the weighted refill toward orc_outpost (the tier-2 candidate, first
+	# in ENCOUNTER_TEMPLATE_ORDER once goblin_camp is excluded as already
+	# active) so this test stays deterministic rather than depending on
+	# _choose_encounter_template()'s real randomness (see star_weight_roll).
+	session.star_weight_roll = func(_total_weight: int) -> int: return 0
 	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
@@ -1968,6 +1982,11 @@ func test_generated_encounter_instance_ids_never_collide_with_historical_ones() 
 
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	# Force the weighted refill toward the lowest star tier (goblin_camp is the
+	# only tier-1 candidate once Orc Outpost is excluded as already active) so
+	# this id-collision test stays deterministic rather than depending on
+	# _choose_encounter_template()'s real randomness (see star_weight_roll).
+	session.star_weight_roll = func(_total_weight: int) -> int: return 0
 	for i in session.ENCOUNTER_VACANCY_TURNS:
 		session.end_world_turn()
 
@@ -2412,3 +2431,69 @@ func test_reset_clears_the_trading_post() -> void:
 	GameSession.reset()
 
 	assert_false(GameSession.has_trading_post)
+
+
+func test_player_power_is_adventurer_count_plus_guild_hall_level() -> void:
+	GameSession.reset()
+	assert_eq(GameSession._player_power(), 2, "One starting adventurer plus Guild Hall level 1")
+	GameSession.recruit_adventurer()
+	assert_eq(GameSession._player_power(), 3)
+	GameSession.guild_hall_level = 2
+	assert_eq(GameSession._player_power(), 4)
+
+
+func test_star_tier_weight_matches_the_documented_table_at_starting_power() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(session._star_tier_weight(1, 2), 4)
+	assert_eq(session._star_tier_weight(2, 2), 4)
+	assert_eq(session._star_tier_weight(3, 2), 1)
+
+
+func test_star_tier_weight_shifts_toward_higher_tiers_as_power_grows() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(session._star_tier_weight(1, 6), 1)
+	assert_eq(session._star_tier_weight(2, 6), 8)
+	assert_eq(session._star_tier_weight(3, 6), 4)
+
+
+func test_star_tier_weight_never_drops_to_zero_no_matter_how_high_power_gets() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(session._star_tier_weight(1, 1000), 1)
+
+
+## At starting power (2), candidates [goblin_camp, ruined_fortress] (orc_outpost
+## stays active) weight to [4, 1] -- a total of 5. Rolls 0-3 land on
+## goblin_camp's bucket, roll 4 lands on ruined_fortress's.
+func test_choose_encounter_template_maps_the_weighted_roll_onto_the_right_candidate() -> void:
+	GameSession.reset()
+	GameSession.active_encounters = [GameSession.active_encounters[1]]
+
+	GameSession.star_weight_roll = func(_total_weight: int) -> int: return 0
+	assert_eq(GameSession._choose_encounter_template(), GameSession.GOBLIN_CAMP_ID)
+
+	GameSession.star_weight_roll = func(_total_weight: int) -> int: return 4
+	assert_eq(GameSession._choose_encounter_template(), GameSession.RUINED_FORTRESS_ID)
+
+
+func test_choose_encounter_template_never_offers_a_currently_active_template() -> void:
+	GameSession.reset()
+	# Both starting templates are active; only the Ruined Fortress can be chosen.
+	GameSession.star_weight_roll = func(_total_weight: int) -> int: return 0
+	assert_eq(GameSession._choose_encounter_template(), GameSession.RUINED_FORTRESS_ID)
+
+
+func test_a_vacancy_refill_can_produce_the_ruined_fortress() -> void:
+	GameSession.reset()
+	GameSession.active_encounters = [GameSession.active_encounters[1]]
+	GameSession.encounter_vacancies = [{"turns_remaining": 1}]
+	GameSession.star_weight_roll = func(_total_weight: int) -> int: return 4
+
+	GameSession._advance_encounter_vacancies()
+
+	var template_ids: Array = []
+	for instance in GameSession.active_encounters:
+		template_ids.append(instance.template_id)
+	assert_true(template_ids.has(GameSession.RUINED_FORTRESS_ID))
