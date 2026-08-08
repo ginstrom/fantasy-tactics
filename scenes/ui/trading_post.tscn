@@ -1,0 +1,66 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/trading_post.gd" id="1_trading_post"]
+[ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="2_table_view"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
+
+[node name="TradingPost" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_trading_post")
+
+[node name="Body" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+
+[node name="CampNav" parent="Body" instance=ExtResource("3_camp_nav")]
+layout_mode = 2
+
+[node name="Center" type="CenterContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Body/Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "trading_post.title"
+horizontal_alignment = 1
+
+[node name="IncomeLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="BuyTable" type="VBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(560, 280)
+script = ExtResource("2_table_view")
+
+[node name="SelectedItemLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+horizontal_alignment = 1
+
+[node name="BuyButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+text = "trading_post.buy"
+
+[node name="BackButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[connection signal="pressed" from="Body/Center/VBox/BuyButton" to="." method="_on_buy_button_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

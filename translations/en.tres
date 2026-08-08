@@ -188,5 +188,12 @@ messages = {
 "stores.empty": "Nothing in storage yet.",
 "stores.selected": "%s — %d in stock, sells for %d gold",
 "stores.sell": "Sell",
-"stores.assign": "Assign to Unit"
+"stores.assign": "Assign to Unit",
+"trading_post.title": "Trading Post",
+"trading_post.income": "Passive income: %d gold per turn",
+"trading_post.column.name": "Name",
+"trading_post.column.type": "Type",
+"trading_post.column.price": "Price",
+"trading_post.selected": "%s — %d gold",
+"trading_post.buy": "Buy"
 }
