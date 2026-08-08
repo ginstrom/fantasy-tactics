@@ -10,8 +10,6 @@ extends Control
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
-const MANA_CRYSTAL_ID_PREFIX := "mana_crystal_"
-
 @onready var stores_table: TableView = $Body/Center/VBox/StoresTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
 @onready var selected_item_label: Label = $Body/Center/VBox/SelectedItemLabel
@@ -68,7 +66,7 @@ func _build_rows() -> Array[Dictionary]:
 		var count: int = GameSession.mana_crystals[tier]
 		if count <= 0:
 			continue
-		var item_id: String = "%s%d" % [MANA_CRYSTAL_ID_PREFIX, tier]
+		var item_id: String = "%s%d" % [GameSession.MANA_CRYSTAL_ID_PREFIX, tier]
 		rows.append({
 			"id": item_id,
 			"name": tr("stores.mana_crystal") % tier,
@@ -96,7 +94,7 @@ func _refresh_selection(rows: Array[Dictionary]) -> void:
 	selected_item_label.text = tr("stores.selected") % [row.name, row.count, row.price]
 	sell_button.visible = true
 	sell_button.disabled = not GameSession.has_trading_post
-	assign_button.visible = not selected_item_id.begins_with(MANA_CRYSTAL_ID_PREFIX)
+	assign_button.visible = not selected_item_id.begins_with(GameSession.MANA_CRYSTAL_ID_PREFIX)
 
 
 func _find_row(rows: Array[Dictionary], item_id: String) -> Dictionary:

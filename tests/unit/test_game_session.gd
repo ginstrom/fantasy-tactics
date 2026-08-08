@@ -2318,6 +2318,7 @@ func test_equip_item_from_bank_moves_the_item_from_the_bank_onto_the_unit_and_re
 
 
 func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_adventurer() -> void:
+	GameSession.reset()
 	assert_false(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel"), "Nothing in stock")
 
 	GameSession.banked_gear = {"dagger_steel": 1}

@@ -29,11 +29,11 @@ A third autoload, `GameConfig` (`scripts/autoload/game_config.gd`),
 loads `config/game_config.json` once at startup and exposes typed
 `get_int(section, key, default)`/`get_float(section, key, default)`
 accessors. It owns no gameplay state and is never mutated at runtime.
-`GameSession` reads sixteen balance constants from it in its own
+`GameSession` reads eighteen balance constants from it in its own
 `_ready()` (combat formula inputs, level-up growth, Guild Hall
 caps/cost, population caps/timers — see
 `docs/plans/2026-08-07-config-and-automation/02-migrate-balance-constants-to-config.md`
-for the exact list and why those sixteen and not others). Every other
+for the exact list and why those eighteen and not others). Every other
 `GameSession` constant (ids, the `EXPEDITIONS`/`STAR_ENEMY_COMPOSITIONS`
 content tables, grid dimensions) is still a plain code constant — only
 genuinely tunable difficulty/balance numbers moved. `GameConfig` is
@@ -61,11 +61,15 @@ scenes/                          scripts/
 │    deploy_party, roster,       ├── debug/       F9 debug menu + scenario definitions
 │    recruitment, units,         ├── local/       starting_settlement.gd (pre-Encampment intro screen)
 │    unit_details, start_menu,   ├── tools/       screenshot_tour (non-test tooling)
-│    game_menu, information_     ├── ui/          one script per scenes/ui/ scene, plus shared
-│    panel, party_manager,       │                widgets (table_view.gd, table_column.gd) —
-│    level_up, buildings,        │                note: portrait_panel.gd lives in scripts/battle/
-│    guild_hall, camp_nav)       │                above, not here
-├── world/                       └── world/       world_map.gd
+│    game_menu,                  ├── ui/          one script per scenes/ui/ scene, plus shared
+│    information_panel,          │                widgets (table_view.gd, table_column.gd) —
+│    party_manager, level_up,    │                note: portrait_panel.gd lives in scripts/battle/
+│    buildings, guild_hall,      │                above, not here
+│    trade, stores,              └── world/       world_map.gd
+│    trading_post,
+│    assign_equipment,
+│    camp_nav)
+├── world/
 ├── local/
 ├── battle/
 └── debug/
@@ -89,7 +93,7 @@ often more precise than its own source comments.
   `location_id`, `world_position: Vector2i`, `deployed: bool`,
   `travel_route: Array[Vector2i]`, `movement_spent: bool`.
 - **`EXPEDITIONS: Dictionary`** (constant) — the two encounter *templates*
-  (`goblin_camp`, `orc_outpost`): fixed `position`, `reward`, `kill_xp`,
+  (`goblin_camp`, `orc_outpost`): fixed `position`, `kill_xp`,
   `clear_xp`, `difficulty` (star tier), and a documented-default `enemy`.
   A live *active instance*'s `enemy` is re-resolved from
   `STAR_ENEMY_COMPOSITIONS[difficulty]` every time it's entered (see
@@ -111,11 +115,20 @@ often more precise than its own source comments.
   immediately; it only moves to `gold` when the party reaches the
   Encampment (`deposit_pending_reward()`, called from
   `GameManager.go_to_encampment()`).
+- **`mana_crystals` / `banked_gear`** — permanent loot storage, populated by
+  `deposit_pending_reward()` from the matching `pending_mana_crystals` /
+  `pending_gear` fields queued on encounter victory (see
+  `_roll_and_queue_loot()`). `has_trading_post` gates selling
+  (`sell_item()`) and buying (`buy_item()`); `WEAPONS`/`ARMORS`/
+  `ENEMY_LOOT_TABLES` are the backing content tables (see
+  `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`).
 
 **Effective vs. base stats**: `adventurers[i].stats` holds base values.
 Always read combat/display stats through `GameSession.get_effective_*()`
 (`get_effective_hit_chance`, `get_effective_max_health`,
-`get_effective_move_range`) — these apply the attack→hit-chance formula and
+`get_effective_move_range`, `get_effective_weapon_damage_range`,
+`get_effective_weapon_name`, `get_effective_defense`,
+`get_effective_resistance`) — these apply the attack→hit-chance formula and
 perk bonuses (e.g. the `bonus_move` perk) that the raw stats dict doesn't
 reflect on its own.
 

@@ -49,7 +49,7 @@ strings against this page depends on it.
 - **Adventurer** — a unit in the player's roster (`GameSession.adventurers`),
   whether or not it's assigned to a party.
 - **Expedition** — the *template* data for an encounter site (`GameSession.EXPEDITIONS`):
-  fixed stats, reward, XP values. Never mutated at runtime.
+  fixed stats, XP values. Never mutated at runtime.
 - **Encounter** (or **encounter instance**) — a *spawned, live* copy of an
   expedition sitting on the World Map (`GameSession.active_encounters`), with
   its own id and position. Clearing one removes it permanently; a new
