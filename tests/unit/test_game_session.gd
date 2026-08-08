@@ -2131,14 +2131,14 @@ func test_load_balance_config_populates_every_section_from_game_config() -> void
 
 
 func test_weapons_catalog_has_the_documented_iron_and_steel_damage_and_price() -> void:
-	assert_eq(GameSessionScript.WEAPONS.dagger_iron, {"name_key": "item.dagger", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10})
-	assert_eq(GameSessionScript.WEAPONS.dagger_steel, {"name_key": "item.dagger", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30})
-	assert_eq(GameSessionScript.WEAPONS.shortsword_iron, {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20})
-	assert_eq(GameSessionScript.WEAPONS.shortsword_steel, {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60})
-	assert_eq(GameSessionScript.WEAPONS.longsword_iron, {"name_key": "item.longsword", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30})
-	assert_eq(GameSessionScript.WEAPONS.longsword_steel, {"name_key": "item.longsword", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90})
-	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_iron, {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35})
-	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_steel, {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105})
+	assert_eq(GameSessionScript.WEAPONS.dagger_iron, {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10})
+	assert_eq(GameSessionScript.WEAPONS.dagger_steel, {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_iron, {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_steel, {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60})
+	assert_eq(GameSessionScript.WEAPONS.longsword_iron, {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.longsword_steel, {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_iron, {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_steel, {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105})
 
 
 func test_armors_catalog_has_the_documented_defense_resistance_and_price() -> void:
@@ -2166,7 +2166,7 @@ func test_default_warrior_starts_with_an_iron_longsword_and_leather_armor() -> v
 
 func test_effective_weapon_damage_range_and_name_come_from_the_equipped_weapon() -> void:
 	assert_eq(GameSession.get_effective_weapon_damage_range(GameSession.WARRIOR_ID), Vector2i(1, 8))
-	assert_eq(GameSession.get_effective_weapon_name(GameSession.WARRIOR_ID), "Longsword")
+	assert_eq(GameSession.get_effective_weapon_name(GameSession.WARRIOR_ID), "Iron Longsword")
 
 
 func test_effective_defense_and_resistance_come_from_the_equipped_armor() -> void:

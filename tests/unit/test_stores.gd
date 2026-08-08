@@ -46,7 +46,7 @@ func test_table_shows_a_gear_row_and_a_mana_crystal_row() -> void:
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/StoresTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Shortsword", "Mana Crystal (Tier 1)"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Iron Shortsword", "Mana Crystal (Tier 1)"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Weapon", "Mana Crystal"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["3", "2"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["10", "5"])
@@ -64,7 +64,7 @@ func test_selecting_a_gear_row_shows_its_detail_and_both_actions() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/SelectedItemLabel").text,
-		tr("stores.selected") % ["Shortsword", 3, 10]
+		tr("stores.selected") % ["Iron Shortsword", 3, 10]
 	)
 	assert_true(screen.get_node("Body/Center/VBox/SellButton").visible)
 	assert_true(screen.get_node("Body/Center/VBox/AssignButton").visible)

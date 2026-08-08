@@ -83,14 +83,14 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 # attacker's effective hit chance; resistance reduces incoming damage by that
 # percent, rounded to the nearest integer when applied (see BattleController).
 const WEAPONS: Dictionary = {
-	"dagger_iron": {"name_key": "item.dagger", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10},
-	"dagger_steel": {"name_key": "item.dagger", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30},
-	"shortsword_iron": {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20},
-	"shortsword_steel": {"name_key": "item.shortsword", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60},
-	"longsword_iron": {"name_key": "item.longsword", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30},
-	"longsword_steel": {"name_key": "item.longsword", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90},
-	"two_handed_sword_iron": {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35},
-	"two_handed_sword_steel": {"name_key": "item.two_handed_sword", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105},
+	"dagger_iron": {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10},
+	"dagger_steel": {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30},
+	"shortsword_iron": {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20},
+	"shortsword_steel": {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60},
+	"longsword_iron": {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30},
+	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90},
+	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35},
+	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105},
 }
 const ARMORS: Dictionary = {
 	"leather_armor": {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10},
