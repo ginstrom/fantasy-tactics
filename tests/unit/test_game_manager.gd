@@ -8,6 +8,8 @@ func after_each() -> void:
 	# close_game_menu() cleanup, leaving the tree paused for later tests.
 	get_tree().paused = false
 	GameManager.add_member_return_party_id = ""
+	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+	GameSession.loot_gear_roll = func() -> float: return randf()
 
 
 func test_battle_route_uses_battlefield_scene() -> void:

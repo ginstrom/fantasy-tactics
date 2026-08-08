@@ -17,6 +17,11 @@ func before_each() -> void:
 	GameManager.add_member_return_party_id = ""
 
 
+func after_each() -> void:
+	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+	GameSession.loot_gear_roll = func() -> float: return randf()
+
+
 func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	assert_eq(GameSession.parties.size(), 0)
 	var parties: Control = PartiesScene.instantiate()

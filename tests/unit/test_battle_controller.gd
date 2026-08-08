@@ -10,6 +10,10 @@ func before_each() -> void:
 	GameSession.reset()
 
 
+func after_each() -> void:
+	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+
+
 func _make_controller(width: int, height: int) -> Node2D:
 	var controller: Node2D = BattleControllerScript.new()
 	controller.grid = GridScript.new(width, height)

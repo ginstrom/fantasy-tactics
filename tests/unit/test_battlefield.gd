@@ -7,6 +7,9 @@ const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
+	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+	GameSession.loot_gear_roll = func() -> float: return randf()
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
