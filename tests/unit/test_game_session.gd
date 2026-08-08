@@ -2169,6 +2169,14 @@ func test_effective_weapon_damage_range_and_name_come_from_the_equipped_weapon()
 	assert_eq(GameSession.get_effective_weapon_name(GameSession.WARRIOR_ID), "Iron Longsword")
 
 
+func test_effective_armor_name_comes_from_the_equipped_armor() -> void:
+	assert_eq(GameSession.get_effective_armor_name(GameSession.WARRIOR_ID), "Leather Armor")
+
+
+func test_effective_armor_name_returns_empty_for_an_unknown_adventurer() -> void:
+	assert_eq(GameSession.get_effective_armor_name("no_such_id"), "")
+
+
 func test_effective_defense_and_resistance_come_from_the_equipped_armor() -> void:
 	assert_eq(GameSession.get_effective_defense(GameSession.WARRIOR_ID), 10)
 	assert_eq(GameSession.get_effective_resistance(GameSession.WARRIOR_ID), 10)

@@ -100,6 +100,7 @@ messages = {
 "unit_details.perk_status.learned": "Bonus Move learned",
 "unit_details.perk_status.not_learned": "Bonus Move not yet learned",
 "unit_details.stats": "XP: %d / %d — Attack: %d raw / %d%% hit chance — Health: %d",
+"unit_details.equipment": "Weapon: %s (%d-%d damage) — Armor: %s (%d%% defense / %d%% resistance)",
 "unit_details.not_found": "Unit not found.",
 "unit_details.no_eligible_party": "No encamped party is available to join.",
 "unit_details.add_to_party": "Add to Party",

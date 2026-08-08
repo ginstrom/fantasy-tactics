@@ -147,6 +147,28 @@ func test_stats_label_reflects_leveling_xp_attack_and_health_changes() -> void:
 	)
 
 
+func test_equipment_label_shows_the_equipped_weapon_and_armor() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/EquipmentLabel").text,
+		tr("unit_details.equipment") % ["Iron Longsword", 1, 8, "Leather Armor", 10, 10],
+		"A fresh Warrior wears the default Iron Longsword (1-8 damage) and Leather Armor (10% defense / 10% resistance)"
+	)
+	assert_true(screen.get_node("Body/Center/VBox/EquipmentLabel").visible)
+
+
+func test_equipment_label_reflects_a_changed_weapon() -> void:
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/EquipmentLabel").text,
+		tr("unit_details.equipment") % ["Steel Dagger", 2, 5, "Leather Armor", 10, 10]
+	)
+
+
 func test_skills_label_shows_unspent_skill_points() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
@@ -192,6 +214,7 @@ func test_an_unknown_unit_id_shows_a_not_found_message_and_hides_detail_rows() -
 	assert_false(screen.get_node("Body/Center/VBox/SkillsLabel").visible)
 	assert_false(screen.get_node("Body/Center/VBox/PerksLabel").visible)
 	assert_false(screen.get_node("Body/Center/VBox/StatsLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/EquipmentLabel").visible)
 
 
 func test_an_unknown_unit_id_still_has_a_safe_working_back_button() -> void:

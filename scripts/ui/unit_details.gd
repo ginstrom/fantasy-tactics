@@ -23,6 +23,7 @@ extends Control
 @onready var skills_label: Label = $Body/Center/VBox/SkillsLabel
 @onready var perks_label: Label = $Body/Center/VBox/PerksLabel
 @onready var stats_label: Label = $Body/Center/VBox/StatsLabel
+@onready var equipment_label: Label = $Body/Center/VBox/EquipmentLabel
 @onready var not_found_label: Label = $Body/Center/VBox/NotFoundLabel
 @onready var assignment_explanation_label: Label = $Body/Center/VBox/AssignmentExplanationLabel
 @onready var party_picker: OptionButton = $Body/Center/VBox/PartyPicker
@@ -78,6 +79,16 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 		% [xp_display, xp_to_next_level, raw_attack, hit_chance_percent, effective_max_health]
 	)
 
+	var weapon_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
+	equipment_label.text = (
+		tr("unit_details.equipment")
+		% [
+			GameSession.get_effective_weapon_name(adventurer_id), weapon_range.x, weapon_range.y,
+			GameSession.get_effective_armor_name(adventurer_id),
+			GameSession.get_effective_defense(adventurer_id), GameSession.get_effective_resistance(adventurer_id),
+		]
+	)
+
 	skills_label.text = tr("unit_details.skills") % adventurer.progression.skill_points
 
 	var has_bonus_move: bool = adventurer.progression.perks.has(GameSession.BONUS_MOVE_PERK_ID)
@@ -86,13 +97,13 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	)
 	perks_label.text = tr("unit_details.perks") % tr(perk_status_key)
 
-	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label]:
+	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label, equipment_label]:
 		label.visible = true
 
 
 func _show_not_found() -> void:
 	not_found_label.visible = true
-	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label]:
+	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label, equipment_label]:
 		label.visible = false
 	_hide_assignment_section()
 

@@ -1290,6 +1290,14 @@ func get_effective_weapon_name(adventurer_id: String) -> String:
 	return "" if weapon.is_empty() else tr(weapon.name_key)
 
 
+func get_effective_armor_name(adventurer_id: String) -> String:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return ""
+	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	return "" if armor.is_empty() else tr(armor.name_key)
+
+
 func get_effective_defense(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
