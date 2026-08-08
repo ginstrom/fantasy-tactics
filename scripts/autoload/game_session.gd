@@ -1312,5 +1312,3 @@ func get_effective_resistance(adventurer_id: String) -> int:
 		return 0
 	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
 	return 0 if armor.is_empty() else int(armor.resistance)
-
-
