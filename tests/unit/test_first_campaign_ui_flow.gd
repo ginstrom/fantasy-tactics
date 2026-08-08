@@ -63,8 +63,9 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	assert_eq(GameManager.route_context_id, "")
 
 
-## Covers the rest of docs/plans/first-playable-campaign/game-loop-flow.md:
-## move to an encounter, enter it, win the battle, then walk the party home
+## Covers the rest of the minimal loop (see "First playable campaign" in
+## docs/plans/first-playable-campaign/game-design.md): move to an encounter,
+## enter it, win the battle, then walk the party home
 ## and bank the reward. Party formation/deployment (the first half of the
 ## flow) is exercised step-by-step above; movement mechanics themselves (turn
 ## by turn routing) are covered exhaustively by test_world_map.gd, so this

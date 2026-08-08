@@ -78,7 +78,8 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 		{"enemy": ORC_ENEMY_STATS, "count": 2},
 	],
 }
-# Equipment catalog (docs/plans/trading-system.md "Equipment system"). Steel is
+# Equipment catalog (see "Trade, equipment, and loot" in
+# docs/plans/first-playable-campaign/game-design.md). Steel is
 # +1 damage over Iron on both ends of the range. Armor's defense reduces an
 # attacker's effective hit chance; resistance reduces incoming damage by that
 # percent, rounded to the nearest integer when applied (see BattleController).
@@ -99,7 +100,8 @@ const ARMORS: Dictionary = {
 	"platemail_armor": {"name_key": "item.platemail_armor", "slot": "armor", "defense": 15, "resistance": 30, "price": 200},
 	"full_plate_armor": {"name_key": "item.full_plate_armor", "slot": "armor", "defense": 15, "resistance": 35, "price": 500},
 }
-# Loot tables (docs/plans/trading-system.md "Loot"). Gold per kill is
+# Loot tables (see "Trade, equipment, and loot" in
+# docs/plans/first-playable-campaign/game-design.md). Gold per kill is
 # randi_range(gold_min, gold_max) * gold_multiplier. gear_item_id is always
 # the enemy's documented Iron-tier weapon (see WEAPONS above); it drops with
 # GEAR_DROP_CHANCE probability, independent of the (always-granted) mana

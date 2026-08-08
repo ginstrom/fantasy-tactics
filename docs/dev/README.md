@@ -68,7 +68,13 @@ See [code-map.md](code-map.md) for how these fit together in code.
 
 ## Further reading
 
-- [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md) — the design doc these systems implement.
-- [`docs/plans/first-playable-campaign/game-loop-flow.md`](../plans/first-playable-campaign/game-loop-flow.md) — the minimal end-to-end loop the game must support.
-- [`docs/plans/2026-08-06-campaign-progression-and-population/design.md`](../plans/2026-08-06-campaign-progression-and-population/design.md) — XP/leveling and vacancy-timed population rules.
+- [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md) — the design doc these systems implement, including the minimal end-to-end loop, XP/leveling and vacancy-timed population rules, and the Trade/equipment/loot system.
 - [`AGENTS.md`](../../AGENTS.md) (repo root) — branching and plan-writing workflow for this project.
+
+Dated directories under `docs/plans/` (e.g. `docs/plans/2026-08-07-guild-hall-and-full-party-battles/`,
+written per `AGENTS.md`'s "Writing implementation plans" section) are
+per-feature implementation plans; in practice they get deleted once merged
+to `main` rather than kept around, so don't expect a link to one of these to
+stay valid — check git history if you need one. `game-design.md` above is
+the durable exception: it's kept up to date rather than deleted, so it's
+always the current reference for what's shipped and what's next.

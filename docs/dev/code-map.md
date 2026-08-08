@@ -29,17 +29,16 @@ A third autoload, `GameConfig` (`scripts/autoload/game_config.gd`),
 loads `config/game_config.json` once at startup and exposes typed
 `get_int(section, key, default)`/`get_float(section, key, default)`
 accessors. It owns no gameplay state and is never mutated at runtime.
-`GameSession` reads eighteen balance constants from it in its own
-`_ready()` (combat formula inputs, level-up growth, Guild Hall
-caps/cost, population caps/timers — see
-`docs/plans/2026-08-07-config-and-automation/02-migrate-balance-constants-to-config.md`
-for the exact list and why those eighteen and not others). Every other
-`GameSession` constant (ids, the `EXPEDITIONS`/`STAR_ENEMY_COMPOSITIONS`
-content tables, grid dimensions) is still a plain code constant — only
-genuinely tunable difficulty/balance numbers moved. `GameConfig` is
-declared first in `project.godot`'s `[autoload]` list, before
-`GameManager`/`GameSession`, specifically so it's fully constructed
-before `GameSession._ready()` reads from it.
+`GameSession._load_balance_config()` reads every tunable balance constant
+from it in `_ready()` — combat formula inputs, level-up growth, Guild Hall
+and Trading Post caps/costs, population caps/timers (see that function for
+the exact list). Every other `GameSession` constant (ids, the `EXPEDITIONS`/
+`STAR_ENEMY_COMPOSITIONS`/`WEAPONS`/`ARMORS`/`ENEMY_LOOT_TABLES` content
+tables, grid dimensions) is still a plain code constant — only genuinely
+tunable difficulty/balance numbers moved. `GameConfig` is declared first in
+`project.godot`'s `[autoload]` list, before `GameManager`/`GameSession`,
+specifically so it's fully constructed before `GameSession._ready()` reads
+from it.
 
 A missing or malformed `config/game_config.json` never crashes the
 game — `GameConfig` falls back to its own built-in `DEFAULTS` (which
@@ -84,8 +83,10 @@ often more precise than its own source comments.
 - **`adventurers: Array[Dictionary]`** — the full roster, whether or not a
   member is assigned to a party. Each entry: `id`, `name`, `class`,
   `equipment` (`{weapon: String, armor: String}` — item ids into
-  `GameSession.WEAPONS`/`GameSession.ARMORS`, see
-  `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`), `level`,
+  `GameSession.WEAPONS`/`GameSession.ARMORS`; see "Trade, equipment, and
+  loot" in
+  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
+  for the shipped catalog and combat formulas), `level`,
   `availability_status`, `stats` (`max_health`, `attack`, `move_range` —
   base values), `progression` (`xp: float`, `skill_points`, `perks: Array`).
 - **`parties: Array[Dictionary]`** — currently always at most one
@@ -108,9 +109,10 @@ often more precise than its own source comments.
   — the vacancy-timed population system: a cleared encounter or purchased
   recruit starts a countdown (`ENCOUNTER_VACANCY_TURNS` / `RECRUITMENT_VACANCY_TURNS`
   world turns) that refills the slot once it expires, capped at
-  `ENCOUNTER_INSTANCE_CAP` / `RECRUITMENT_OFFER_CAP`. See
-  `docs/plans/2026-08-06-campaign-progression-and-population/design.md` for
-  the rules this implements.
+  `ENCOUNTER_INSTANCE_CAP` / `RECRUITMENT_OFFER_CAP`. See "Vacancy-timed
+  encounter and recruitment population" in
+  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
+  for the rules this implements.
 - **`gold` / `pending_reward`** — a battle win adds to `pending_reward`
   immediately; it only moves to `gold` when the party reaches the
   Encampment (`deposit_pending_reward()`, called from
@@ -120,8 +122,9 @@ often more precise than its own source comments.
   `pending_gear` fields queued on encounter victory (see
   `_roll_and_queue_loot()`). `has_trading_post` gates selling
   (`sell_item()`) and buying (`buy_item()`); `WEAPONS`/`ARMORS`/
-  `ENEMY_LOOT_TABLES` are the backing content tables (see
-  `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`).
+  `ENEMY_LOOT_TABLES` are the backing content tables — see "Trade,
+  equipment, and loot" in
+  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md).
 
 **Effective vs. base stats**: `adventurers[i].stats` holds base values.
 Always read combat/display stats through `GameSession.get_effective_*()`
@@ -179,6 +182,28 @@ Standing on an encounter tile and clicking it again activates it
 `_on_encounter_activated()` → `GameManager.enter_battle()`). The settlement
 tile works the same way for returning home.
 
+### Gotcha: a bare `Control` defaults to blocking clicks under it
+
+A two-week bug (party unselectable on the World Map after a battle) traced
+back to `scenes/world/world_map.tscn`'s `Spacer` node: `type="Control"`, a
+bare `Control` rather than a layout container. Every *container* type
+(`VBoxContainer`, `HBoxContainer`, `MarginContainer`, ...) defaults its
+`mouse_filter` to `MOUSE_FILTER_PASS`, but a bare `Control`'s default is
+`MOUSE_FILTER_STOP` — it silently absorbs the click before
+`_unhandled_input()` ever sees it. `Spacer` covered most of the board
+underneath the HUD's top row, so every tile except the one nearest the
+settlement was unclickable. Fixed with one line, `mouse_filter = 2`
+(`MOUSE_FILTER_IGNORE`), on the offending node. If a click-driven scene
+stops responding under part of its layout, check for a bare `type="Control"`
+node placed there for spacing rather than a `Control`-derived layout
+container, and check `gui_get_hovered_control()` to confirm which node is
+actually eating the input before assuming the bug is in the handler logic.
+Regression coverage uses `Viewport.push_input(event, true)` — the real GUI
+input pipeline — rather than calling `_unhandled_input()` directly, which is
+what let this bug hide from every earlier test in the same area (see
+`test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline`
+in `tests/unit/test_world_map.gd`).
+
 ## Camp navigation: CampNav is a reusable shell, not a router
 
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
@@ -189,7 +214,9 @@ from the World Map: that screen isn't part of the Encampment, and a party
 returns home by clicking the settlement tile instead. It renders six
 buttons, all enabled and routing through `GameManager` — Trade opens
 `scenes/ui/trade.tscn`, which lists Stores and (once purchased) Trading
-Post (see `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`). CampNav has no state of its own
+Post (see "Trade, equipment, and loot" in
+[`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)).
+CampNav has no state of its own
 beyond the Deploy Party button's disabled flag (set in `refresh()` from
 `GameSession.get_deployable_encamped_parties().is_empty()`) and never
 receives a signal from its parent screen — every wired button calls a
@@ -233,10 +260,9 @@ legal tile whenever one exists, even a non-improving one" move rule,
 both re-implemented in `battle_bot.gd` because `battle_controller.gd`
 is never modified — and `battle_sim.gd` drives a real `battlefield.tscn` instance
 through to `GameManager.complete_battle()`/`fail_battle()`, including
-auto-resolving any level-up modal a battle's XP award queues (see
-`docs/plans/2026-08-07-config-and-automation/04-headless-battle-sim-and-logging.md`
-for why that's necessary — Orc Outpost's kill+clear XP always crosses
-the level-2 threshold). Run via `make simulate`; see
+auto-resolving any level-up modal a battle's XP award queues (necessary
+because Orc Outpost's kill+clear XP always crosses the level-2 threshold).
+Run via `make simulate`; see
 [running-the-game.md](running-the-game.md#run-the-headless-battle-simulator).
 This exists for balance/AI-tuning data (damage/kills/gold per battle),
 not for testing — `tests/unit/test_battle_bot.gd` already covers

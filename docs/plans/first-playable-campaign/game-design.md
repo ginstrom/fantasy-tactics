@@ -12,6 +12,12 @@ battles sit inside an XCOM-like cycle of party development, expeditions, and
 settlement growth. Basic Fantasy RPG rules are the primary rules reference;
 XCOM, Xenonauts, and Fallout 1/2 inform the development and management feel.
 
+This document is the single consolidated design reference for the first
+playable campaign — it supersedes and absorbs the standalone trading-system
+and game-loop-flow notes that used to live alongside it in this directory;
+their content now lives in the sections below (Trade, equipment, and loot;
+and the loop walkthrough, respectively).
+
 ## First playable campaign
 
 The first campaign is successful when a player can repeat this loop and make
@@ -27,6 +33,12 @@ Encampment
   -> improve the party or encampment
   -> choose the next expedition
 ```
+
+The minimal version of this loop — create a party, add a unit, deploy it,
+move to an encounter, fight it, and bank the reward back at the encampment —
+is playable manually today; see "Completed first playable foundation" below
+for the full route, including everything the minimal loop leaves out (XP,
+recruitment, Trade, the Guild Hall).
 
 The full first campaign target has one party of four, a small local area,
 several encounters, gold as its first economy currency, and a small number of
@@ -54,14 +66,16 @@ Start Menu
      spending a shared per-unit movement-points budget
   -> defeat each enemy: resolve its kill XP immediately, split evenly across
      the deployed party (a modal Level-Up overlay appears if a member
-     crosses a level threshold)
+     crosses a level threshold); each kill also queues gold, a mana crystal,
+     and a chance of the enemy's weapon (see Trade, equipment, and loot below)
   -> win: clear the site for its clear XP and return to the World Map
      or lose: return the party to the Starting Settlement; site remains
      available
-  -> return to Encampment to deposit pending gold; review XP, Attack, and any
-     unspent skill points from Unit Details (skill points are spent from the
-     in-battle Level-Up overlay, not from Unit Details); optionally spend
-     gold at the Guild Hall to raise the party-size cap
+  -> return to Encampment to deposit pending gold, mana crystals, and gear;
+     review XP, Attack, and any unspent skill points from Unit Details
+     (skill points are spent from the in-battle Level-Up overlay, not from
+     Unit Details); optionally spend gold at the Guild Hall to raise the
+     party-size cap, or at the Trading Post to buy better gear
 ```
 
 Party creation and Warrior assignment, previously reachable from an
@@ -72,15 +86,17 @@ Recruitment (below) let a new campaign grow beyond its starting Warrior
 without debug tooling.
 
 `GameSession` owns the Warrior-only roster and each adventurer's progression
-(XP, level, Attack, unspent skill points, perks), player-created parties and
-their deployment state, world position, committed travel route, movement
-spent, world turn, encounter completion, active encounter/recruitment
-instances and their vacancy-refill clocks, and the Guild Hall's level and
-resulting party-size cap. `GameManager` owns named scene transitions. A party
-is visible and movable only while deployed. World-map travel is deliberately
-simple: an in-bounds, empty-grid Manhattan route moves one tile per World Map
-turn; no terrain costs, obstacles, waypoints, or multi-party scheduling are
-implied yet — one party is deployed and battled at a time.
+(XP, level, Attack, unspent skill points, perks), equipment (equipped weapon
+and armor ids), player-created parties and their deployment state, world
+position, committed travel route, movement spent, world turn, encounter
+completion, active encounter/recruitment instances and their vacancy-refill
+clocks, banked gold/mana crystals/gear, and the Guild Hall's and Trading
+Post's level/ownership and resulting effects. `GameManager` owns named scene
+transitions. A party is visible and movable only while deployed. World-map
+travel is deliberately simple: an in-bounds, empty-grid Manhattan route moves
+one tile per World Map turn; no terrain costs, obstacles, waypoints, or
+multi-party scheduling are implied yet — one party is deployed and battled at
+a time.
 
 ### Adventurer progression
 
@@ -94,7 +110,7 @@ resolves immediately, before further input or a battle-result transition.
 Attack starts at 60 and has no cap, though its derived hit chance caps at 95%.
 Every third level requires a perk choice; the first available perk, Bonus
 Move, grants one extra tile of movement range. The same XP, Attack, health,
-and perk data is legible outside battle from Unit Details.
+equipment, and perk data is legible outside battle from Unit Details.
 
 ### Vacancy-timed encounter and recruitment population
 
@@ -112,9 +128,7 @@ reuse a previously seen encounter template at a different map tile.
 The World Map marks each active encounter with a difficulty-only star badge
 (one star for Goblin Camp, two for Orc Outpost) rather than a numeric label,
 so the player can compare expedition risk at a glance before committing a
-route. The approved rationale for starting with two simultaneous expedition
-choices and for star-only markers is recorded in
-[Two Starting Encounters Design](../2026-08-06-two-starting-encounters-design.md).
+route.
 
 Site entry retains selection-before-activation. The first click selects the
 party, so it can still move away; a second click enters the settlement or an
@@ -135,9 +149,12 @@ defeated.
 Each site's star rating now drives a randomly resolved enemy composition
 instead of a fixed matchup: the one-star Goblin Camp always fields one
 Goblin; the two-star Orc Outpost fields two Goblins or one Orc, chosen at
-random each time the site is entered. A Warrior has 3 health, Attack 60 (a
-60% hit chance), and deals 2 damage with its Sword; a Goblin has 3 health, a
-30% hit chance, and deals 1 damage with its Short Sword; an Orc has 5
+random each time the site is entered. A Warrior has 3 base health and Attack
+60 (a 60% base hit chance before armor); its damage and defensive stats now
+come from its equipped gear rather than a flat per-class number — see Trade,
+equipment, and loot below for how weapon and armor choice change a Warrior's
+damage range, effective hit chance, and damage taken. A Goblin has 3 health,
+a 30% hit chance, and deals 1 damage with its Short Sword; an Orc has 5
 health, a 50% hit chance, and deals 2 damage. Enemies take a visible,
 deterministic AI decision sequence after the player ends the round.
 
@@ -145,10 +162,71 @@ The Guild Hall is the game's first gold-funded building. A fresh campaign
 caps party assignment at 4 members (Guild Hall level 1); spending 50 gold at
 the Guild Hall raises the cap to 5 (level 2, the max for this slice).
 `party_details.gd` and `unit_details.gd` both reject an assignment past the
-current cap rather than silently failing it. The approved spec for this
-slice — fielding, movement points, selection, the portrait panel, and the
-Guild Hall cap — is recorded in
-[Guild Hall and Full-Party Battles Design](../2026-08-07-guild-hall-and-full-party-battles-design.md).
+current cap rather than silently failing it.
+
+### Trade, equipment, and loot
+
+Damage is a function of a unit's equipped weapon rather than a fixed
+per-class number. Every adventurer carries an `equipment` record (`weapon`,
+`armor`) alongside their stats; a fresh Warrior starts with an Iron
+Longsword and Leather Armor. Two damage tiers exist for each of four weapon
+shapes, Steel dealing one point more than Iron at both ends of its range:
+
+| Weapon | Iron damage | Steel damage | Iron price | Steel price |
+|---|---|---|---|---|
+| Dagger | 1-4 | 2-5 | 10g | 30g |
+| Shortsword | 1-6 | 2-7 | 20g | 60g |
+| Longsword | 1-8 | 2-9 | 30g | 90g |
+| Two-handed sword | 1-10 | 2-11 | 35g | 105g |
+
+Armor grants two protections, each an integer percentage: **defense**
+subtracts directly from an attacker's hit chance (floored at a 5% minimum
+chance to hit), and **resistance** reduces incoming damage by that percent,
+rounded to the nearest whole point. Five armor tiers run from the Leather
+Armor every Warrior starts with up to Full Plate:
+
+| Armor | Defense | Resistance | Price |
+|---|---|---|---|
+| Leather | 10 | 10 | 10g |
+| Chainmail | 15 | 20 | 30g |
+| Split | 15 | 25 | 50g |
+| Platemail | 15 | 30 | 200g |
+| Full plate | 15 | 35 | 500g |
+
+Every kill now queues three reward types, not just gold: a random gold
+amount, a mana crystal (tier depends on the enemy), and a 25% chance of that
+enemy's own Iron-tier weapon as gear. A Goblin kill queues 1-6 gold, a
+tier-1 mana crystal, and a chance at an Iron Shortsword; an Orc kill queues
+double gold (1-5, x2) and a tier-2 crystal and a chance at an Iron Longsword.
+Loot tables also exist for Kobolds and Hobgoblins, whose gear and crystal
+tiers are documented for a future content pass, but neither currently
+appears in any active encounter. All of it queues on victory and only banks
+into the Encampment's stores once the party returns home, alongside gold —
+mana crystals sell for a flat 5 (tier 1) or 15 (tier 2) gold each; gear
+sells for half its catalog price.
+
+Trade is a new, permanent Encampment nav destination (alongside Units,
+Buildings, and Deploy Party) with two screens:
+
+- **Stores** lists everything banked — gear and mana crystals — as a table
+  with name, type, count, and sale price. Selecting a row offers **Sell**
+  (gated on owning a Trading Post) and, for gear, **Assign**, which opens a
+  roster list; activating an adventurer there equips the item immediately.
+  Equipping is a swap, not a one-way consumption — whatever was in that slot
+  returns to the bank rather than being lost.
+- **Trading Post** is the game's second gold-funded building: a one-time
+  50-gold purchase (bought from the Trade screen, not from Buildings) that
+  grants 1 gold of passive income per World Map turn and unlocks buying and
+  selling. Its Buy table lists every weapon and armor in the catalog above,
+  gated on affordability.
+
+This gives players a second expedition-facing spend beyond the Guild Hall's
+party-size cap: better gear changes a Warrior's damage range and survivability
+in the very next battle. The Trading Post has no upgrade tiers yet (unlike
+the Guild Hall's two levels), and mana crystals cannot yet be crafted into
+magical items — both remain future work, to be added only once this first
+buy/sell/equip loop has been playtested (see the asset and scope-expansion
+principles below).
 
 The player-facing shell is also in place: New Game begins at the settlement;
 Continue and Load are intentionally disabled until a save system exists; and
@@ -161,34 +239,31 @@ resolves.
 
 For fast development checks, a debug-only F9 scenario menu can open a fresh
 campaign at the settlement, encampment, party manager, a ready-to-depart
-party, the world map, or the Goblin Camp battle. It uses the same public
-campaign APIs and scene routes as ordinary play and is unavailable in release
-builds.
-
-The completed implementation plans are historical delivery records. The
-enduring design reference for the settlement/party boundaries is
-[Settlement and First Party Design](settlement-and-first-party-design.md).
+party, the world map, or a battle at either site, as well as a party stocked
+with a Trading Post and pre-banked stores for exercising the Trade loop
+directly. It uses the same public campaign APIs and scene routes as ordinary
+play and is unavailable in release builds; see
+[docs/dev/running-the-game.md](../../dev/running-the-game.md) for the full
+scenario list.
 
 ## Next work
 
 The prototype now fields a full party against a full, star-tier-randomized
-enemy composition, and the Guild Hall gives players their first gold-funded
-tactical decision (a larger party). Recruitment, XP, and gold all feed that
-loop already. The next implementation work should focus on these unfinished
-outcomes, in order:
+enemy composition; the Guild Hall and the Trading Post give players their
+first two gold-funded tactical decisions (a larger party, and better gear);
+and loot (gold, mana crystals, gear) joins XP as expedition rewards. The next
+implementation work should focus on these unfinished outcomes, in order:
 
-1. Give players a second gold-funded, expedition-facing decision beyond
-   party size. Buildings currently offers only the Guild Hall and Trade is
-   still unimplemented, so an equipment or Trade improvement (e.g. a
-   blacksmith upgrading the Warrior's Sword) is the natural next building.
-2. Broaden the encounter catalogue beyond the Goblin Camp and Orc Outpost
+1. Broaden the encounter catalogue beyond the Goblin Camp and Orc Outpost
    templates so expedition choice differs by more than star rating alone —
-   Milestone 3's remaining gap.
-3. Add save/load now that the expedition, reward, and upgrade loop is
+   Milestone 3's remaining gap. This is also what Milestone 5's "several
+   expeditions" slice is still waiting on, now that a second building has
+   landed.
+2. Add save/load now that the expedition, reward, and upgrade loop is
    repeatable; then enable the existing Continue and Load UI.
-4. Assemble Milestone 5's first campaign slice — onboarding and pacing —
-   once at least one more building and encounter type have landed.
-5. Add durable presentation assets only when their associated gameplay choices
+3. Assemble Milestone 5's first campaign slice — onboarding and pacing —
+   once the encounter catalogue has broadened.
+4. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
@@ -300,18 +375,19 @@ not only appearance.
 ## Milestone 3: Expedition and reward loop
 
 **Status: reward, replacement, and full-party tactical loops shipped;
-catalogue breadth is incomplete.** Every expedition now pays out two reward
-types: gold (banked on return to Encampment) and individual adventurer XP
-(awarded immediately per kill and per clear; see Adventurer progression
-above). Cleared sites are persistent but not permanent — each vacancy
-refills on its own 15-turn clock under a two-site cap, so the world map
-keeps changing within a campaign rather than only accumulating grey markers.
-Each site's star rating also now resolves to a randomized enemy composition
-(see Full-party battles and the Guild Hall above), so the two templates
-already produce more than one tactical setup. The encounter catalogue
-itself is still just the Goblin Camp and Orc Outpost templates; a broader
-roster of encounter types, and any travel-time or resource cost beyond
-World Map turns, remain future work.
+catalogue breadth is incomplete.** Every expedition now pays out three
+reward types: gold and mana crystals (banked on return to Encampment),
+individual adventurer XP (awarded immediately per kill and per clear; see
+Adventurer progression above), and a chance of the killed enemy's own
+weapon as gear (see Trade, equipment, and loot above). Cleared sites are
+persistent but not permanent — each vacancy refills on its own 15-turn clock
+under a two-site cap, so the world map keeps changing within a campaign
+rather than only accumulating grey markers. Each site's star rating also now
+resolves to a randomized enemy composition (see Full-party battles and the
+Guild Hall above), so the two templates already produce more than one
+tactical setup. The encounter catalogue itself is still just the Goblin Camp
+and Orc Outpost templates; any travel-time or resource cost beyond World Map
+turns remains future work.
 
 ### Player outcome
 
@@ -324,7 +400,9 @@ camp with a reason to plan the next trip differently.
 - Define a small encounter catalogue, beginning with clear roles such as
   bandits, wandering monsters, or a dungeon entrance.
 - Add gold as the first reward and spending currency. Any first item reward
-  should have one simple, observable effect.
+  should have one simple, observable effect. *(Done: gear from loot has an
+  observable effect the moment it's equipped — see Trade, equipment, and
+  loot above.)*
 - Make world-map changes persistent within a campaign: cleared sites, newly
   available routes, or changed local threats.
 - Keep travel time, supplies, injuries, and random events minimal until the
@@ -346,8 +424,8 @@ language rather than creating bespoke art for every prototype variation.
 ## Milestone 4: Encampment and party management
 
 **Status: encampment UI, party browsing/deployment, recruitment, individual
-adventurer progression, and the first gold-funded building are shipped;
-equipment and Trade are not.** The prototype has an encampment UI shell
+adventurer progression, and two gold-funded buildings (Guild Hall and
+Trading Post) are shipped.** The prototype has an encampment UI shell
 (Units, Buildings, Trade, Deploy Party) and Units -> Parties -> Party Details
 -> Unit Details browsing with deliberate party deployment. An encamped party
 can use Add Member to assign an existing available adventurer, or Roster can
@@ -355,10 +433,11 @@ assign one directly from Unit Details, up to the Guild Hall's current
 party-size cap (see Full-party battles and the Guild Hall above). Recruitment
 offers a small, vacancy-timed pool of gold-costed Warrior candidates (see
 Vacancy-timed encounter and recruitment population above) rather than a fixed
-catalogue. Adventurers gain XP, levels, Attack points, and perks from
-expeditions (see Adventurer progression above), legible from Unit Details.
-Buildings currently offers only the Guild Hall; it does not yet offer
-equipment, Trade, or any other settlement investment.
+catalogue. Adventurers gain XP, levels, Attack points, equipment, and perks
+from expeditions (see Adventurer progression and Trade, equipment, and loot
+above), legible from Unit Details. Buildings still offers only the Guild
+Hall; Trade is its own top-level destination (see Trade, equipment, and loot
+above) rather than a Buildings entry.
 
 ### Player outcome
 
@@ -388,12 +467,15 @@ encampment investment that changes future expeditions.
   chosen party to the World Map. This intentionally excludes empty parties
   and future parties whose members are all dead or incapacitated.
 - Add an intentionally small development choice, such as one recruit,
-  training option, skill point, or equipment improvement.
+  training option, skill point, or equipment improvement. *(Done: the
+  Trading Post's buy/sell/equip loop — see Trade, equipment, and loot
+  above.)*
 - Present town growth as card-like buildings and services. Start with one or
   two meaningful options, such as a blacksmith or a temple.
 - Each town choice must state and deliver an expedition-facing benefit. A
   temple may attract a cleric or unlock training; a blacksmith may improve
-  equipment.
+  equipment. *(Done for gear: the Trading Post sells better weapons and
+  armor, which changes a Warrior's damage range and survivability directly.)*
 - Do not build a freeform city-construction interface.
 
 ### Completion criteria
@@ -414,17 +496,21 @@ characterful, durable assets are justified.
 
 The encampment UI shell shows these destinations early to establish the
 campaign's shape, but this first UI slice implements only Units -> Parties ->
-Party Details -> Unit Details and Deploy Party. The remaining destinations
-remain visibly unavailable or labelled TBD; they must not simulate systems
-that do not exist yet.
+Party Details -> Unit Details, Deploy Party, and Trade -> Stores/Trading Post.
+The remaining destinations remain visibly unavailable or labelled TBD; they
+must not simulate systems that do not exist yet.
 
-- **Buildings:** the Guild Hall is the first building card, with a real cost
-  (50 gold), an upgrade level (1-2), and a service effect (a raised
-  party-size cap). Further building cards, construction prerequisites, and
-  associated art remain TBD; implement each after its expedition-facing
-  benefit is proven.
-- **Trade:** buy/sell inventory, prices, stock, and equipment ownership are
-  TBD. Do not invent an item economy before the first improvement loop.
+- **Buildings:** the Guild Hall is the only building card there, with a real
+  cost (50 gold), an upgrade level (1-2), and a service effect (a raised
+  party-size cap). The Trading Post is bought and used from Trade instead of
+  Buildings (see Trade, equipment, and loot above). Further building cards,
+  construction prerequisites, and associated art remain TBD; implement each
+  after its expedition-facing benefit is proven.
+- **Trade:** Stores and the Trading Post are shipped (see Trade, equipment,
+  and loot above): buy/sell inventory, prices, stock, and equipment
+  ownership are all real. Trading Post upgrade tiers and crafting mana
+  crystals into magical items remain TBD — do not add either before the
+  current buy/sell/equip loop has been playtested.
 - **Roster and Recruitment growth:** this slice intentionally has no search,
   pagination, town-size rules, building prerequisites, or class-specific
   combat behavior. Refill timing and caps are deterministic, not random.
@@ -439,19 +525,20 @@ that do not exist yet.
 The durable model direction is deliberately modest. Parties keep stable IDs,
 display names, member IDs, location/deployment state, and placeholder fields
 for party-level progression. Adventurers keep stable IDs, display name, class,
-level, availability status, and placeholder combat/progression fields. A
-deployability query—not a UI-specific special case—decides whether an
-encamped party is shown for deployment. This supports future dead,
+level, availability status, equipment, and placeholder combat/progression
+fields. A deployability query—not a UI-specific special case—decides whether
+an encamped party is shown for deployment. This supports future dead,
 incapacitated, and otherwise unavailable members while keeping the current
 prototype's single Warrior immediately usable.
 
 ## Milestone 5: First campaign slice
 
-**Status: not started.** The reward and upgrade loop now exists (gold, XP,
-the Guild Hall, and randomized site compositions), but this milestone still
-waits on the catalogue and Trade/equipment gaps called out in Next work
-above — one building and two encounter templates are not yet the "several
-expeditions, several upgrades" this milestone asks for.
+**Status: not started.** The reward and upgrade loop now exists (gold, mana
+crystals, gear, XP, the Guild Hall, the Trading Post, and randomized site
+compositions), but this milestone still waits on the catalogue gap called
+out in Next work above — two encounter templates are not yet the "several
+expeditions" this milestone asks for, even though the "several upgrades"
+half is now satisfied by two buildings.
 
 ### Player outcome
 
@@ -491,10 +578,13 @@ required to validate the first campaign:
 
 - Multiple simultaneously active parties, specialised party roles, and their
   management UI
-- Deep class, spell, skill-tree, and equipment systems
+- Deep class, spell, and skill-tree systems; equipment depth beyond the
+  current weapon/armor swap (crafting mana crystals into magical items,
+  Trading Post upgrade tiers, unique or found-only items)
 - Broad enemy, item, and encounter catalogues
 - Procedural maps or generated content
-- Full supplies, injuries, permadeath, trade-route, and diplomacy systems
+- Full supplies, injuries, permadeath, trade-route/caravan, and diplomacy
+  systems
 - Self-sustaining settlement income and conflict with neighbouring cities
 - Save/load, long-term balance, accessibility, and production-grade polish
 
