@@ -170,5 +170,10 @@ messages = {
 "guild_hall.level": "Guild Hall — Level %d",
 "guild_hall.party_size": "Party size: %d",
 "guild_hall.upgrade": "Upgrade to Level 2 — %d gold",
-"guild_hall.max_level": "Max Level"
+"guild_hall.max_level": "Max Level",
+"trade.title": "Trade",
+"trade.column.name": "Name",
+"trade.stores": "Stores",
+"trade.trading_post": "Trading Post",
+"trade.purchase_trading_post": "Purchase Trading Post (%d gold)"
 }
