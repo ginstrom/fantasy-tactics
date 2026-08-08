@@ -47,6 +47,22 @@ func test_buy_table_lists_every_weapon_and_armor() -> void:
 	)
 
 
+func test_every_weapon_and_armor_name_in_the_buy_table_is_distinct() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/BuyTable/Tree")
+
+	var names: Array = UiTestHelpers.tree_row_values(tree, 0)
+	var unique_names := {}
+	for name in names:
+		unique_names[name] = true
+
+	assert_eq(
+		unique_names.size(), names.size(),
+		"every weapon/armor name in the Trading Post catalog must be distinct, e.g. Iron Dagger vs. Steel Dagger, not two rows both reading 'Dagger'"
+	)
+
+
 func test_type_column_uses_trading_posts_own_translation_keys() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)

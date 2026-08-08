@@ -22,6 +22,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	GameSession.reset()
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 

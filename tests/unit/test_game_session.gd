@@ -35,6 +35,10 @@ func after_each() -> void:
 	GameSession.enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
 
 
+func before_each() -> void:
+	GameSession.reset()
+
+
 func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

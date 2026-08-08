@@ -128,9 +128,9 @@ Always read combat/display stats through `GameSession.get_effective_*()`
 (`get_effective_hit_chance`, `get_effective_max_health`,
 `get_effective_move_range`, `get_effective_weapon_damage_range`,
 `get_effective_weapon_name`, `get_effective_defense`,
-`get_effective_resistance`) — these apply the attack→hit-chance formula and
-perk bonuses (e.g. the `bonus_move` perk) that the raw stats dict doesn't
-reflect on its own.
+`get_effective_resistance`, `get_effective_armor_name`) — these apply the
+attack→hit-chance formula and perk bonuses (e.g. the `bonus_move` perk) that
+the raw stats dict doesn't reflect on its own.
 
 ## The battle scene: two "grid" objects, not one
 
