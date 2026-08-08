@@ -79,9 +79,11 @@ often more precise than its own source comments.
 
 - **`adventurers: Array[Dictionary]`** — the full roster, whether or not a
   member is assigned to a party. Each entry: `id`, `name`, `class`,
-  `weapon`, `level`, `availability_status`, `stats` (`max_health`, `attack`,
-  `move_range` — base values), `progression` (`xp: float`, `skill_points`,
-  `perks: Array`).
+  `equipment` (`{weapon: String, armor: String}` — item ids into
+  `GameSession.WEAPONS`/`GameSession.ARMORS`, see
+  `docs/plans/2026-08-08-trade-equipment-loot-and-ui/`), `level`,
+  `availability_status`, `stats` (`max_health`, `attack`, `move_range` —
+  base values), `progression` (`xp: float`, `skill_points`, `perks: Array`).
 - **`parties: Array[Dictionary]`** — currently always at most one
   (`FIRST_PARTY_ID = "party_001"`). Each entry: `id`, `member_ids`,
   `location_id`, `world_position: Vector2i`, `deployed: bool`,
