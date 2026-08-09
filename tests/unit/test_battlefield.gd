@@ -225,13 +225,38 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 ## test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel) --
 ## not stacked above the left portrait panel, where a tall enemy health list
 ## (up to 8 entries, see BattleController.ENEMY_START_POSITIONS) used to
-## crowd it out.
+## crowd it out. EnemyHealth's own parent is a ScrollContainer (see
+## test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container
+## below), not the shared BottomContent stack directly -- Hint and Status
+## still share that stack, and the scroll container is what's actually
+## parented alongside them.
 func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
-	assert_eq(battlefield.enemy_health.get_parent(), battlefield.hint.get_parent())
+	assert_eq(battlefield.enemy_health.get_parent().get_parent(), battlefield.hint.get_parent())
+
+
+## Regression test for a real bug found via a real screenshot: with a full
+## 8-enemy Ruined Fortress fight, an unbounded EnemyHealth list grew tall
+## enough to visually cover the bottom two rows of the battle grid. Wrapping
+## it in a ScrollContainer with a fixed height budget means the panel's
+## total height can never grow past that budget no matter how many enemies
+## are fielded -- extra entries scroll instead of pushing the panel taller.
+func test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var scroll_container: Control = battlefield.enemy_health.get_parent()
+	assert_true(
+		scroll_container is ScrollContainer,
+		"The enemy health list must scroll instead of growing without a height bound"
+	)
+	assert_gt(
+		scroll_container.custom_minimum_size.y, 0.0,
+		"The scroll container needs a fixed, non-zero height budget so a full 8-enemy list cannot grow into the battle grid"
+	)
 
 
 func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() -> void:
