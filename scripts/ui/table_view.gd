@@ -204,7 +204,8 @@ func _render() -> void:
 				item.set_cell_mode(tree_column_index, TreeItem.CELL_MODE_CHECK)
 				item.set_checked(tree_column_index, bool(row.get(column.key, false)))
 			if column.type == TableColumn.Type.BUTTON:
-				item.add_button(tree_column_index, _button_icon, column_index, false, column.title)
+				if not column.button_visible.is_valid() or column.button_visible.call(row):
+					item.add_button(tree_column_index, _button_icon, column_index, false, column.title)
 		item.set_metadata(0, row.get(row_id_key, null))
 		_item_to_row[item] = row
 

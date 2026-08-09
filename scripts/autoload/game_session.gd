@@ -962,6 +962,41 @@ func get_item_sale_price(item_id: String) -> int:
 	return 0 if item.is_empty() else int(round(item.price / 2.0))
 
 
+## The shared loot-row shape (id/name/type/count/price) every loot-listing
+## screen renders through LootTable — Stores (banked_gear/mana_crystals),
+## the victory summary, and the World Map's Party Details screen
+## (pending_gear/pending_mana_crystals), each backed by a different pair of
+## GameSession fields but sharing this exact row shape and this exact
+## pricing/naming logic.
+func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	for item_id in gear_counts:
+		var count: int = gear_counts[item_id]
+		if count <= 0:
+			continue
+		var item := get_item_definition(item_id)
+		rows.append({
+			"id": item_id,
+			"name": tr(item.name_key),
+			"type": tr("stores.type.%s" % item.slot),
+			"count": count,
+			"price": get_item_sale_price(item_id),
+		})
+	for tier in mana_crystal_counts:
+		var count: int = mana_crystal_counts[tier]
+		if count <= 0:
+			continue
+		var item_id: String = "%s%d" % [MANA_CRYSTAL_ID_PREFIX, tier]
+		rows.append({
+			"id": item_id,
+			"name": tr("stores.mana_crystal") % tier,
+			"type": tr("stores.type.mana_crystal"),
+			"count": count,
+			"price": get_item_sale_price(item_id),
+		})
+	return rows
+
+
 ## Requires a Trading Post (design doc: selling is only available "if we have
 ## a Trading Post") and at least `quantity` of item_id in stock (banked_gear
 ## for gear, mana_crystals for a "mana_crystal_<tier>" id). Rejects and

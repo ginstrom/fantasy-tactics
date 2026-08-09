@@ -72,6 +72,21 @@ func test_button_column_creates_a_native_tree_button_with_its_source_column_id()
 	assert_eq(item.get_button_id(0, 0), 0)
 
 
+func test_button_visible_callable_hides_the_button_on_rows_it_rejects() -> void:
+	var table: Variant = await _make_table()
+	var action_column := TableColumnDescriptor.new(&"action", "Action", TableColumnDescriptor.Type.BUTTON)
+	action_column.button_visible = func(row: Dictionary) -> bool: return row.id != "borin"
+
+	table.set_columns([action_column])
+	table.set_rows([{"id": "alin", "action": ""}, {"id": "borin", "action": ""}])
+
+	var tree: Tree = table.get_node("Tree")
+	var first_item := tree.get_root().get_first_child()
+	var second_item := first_item.get_next()
+	assert_eq(first_item.get_button_count(0), 1)
+	assert_eq(second_item.get_button_count(0), 0)
+
+
 func test_column_titles_and_layout_configuration_follow_the_descriptors() -> void:
 	var table: Variant = await _make_table()
 	var tree: Tree = table.get_node("Tree")

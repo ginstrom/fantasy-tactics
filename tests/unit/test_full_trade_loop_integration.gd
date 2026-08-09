@@ -49,15 +49,15 @@ func test_full_trade_loop_buy_assign_and_fight_with_new_equipment() -> void:
 	assert_eq(GameSession.banked_gear.get("dagger_steel", 0), 1, "the bought dagger lands in the bank")
 	assert_eq(GameSession.gold, 0)
 
-	# Stores -> select the Steel Dagger, confirm its detail is correct, then
-	# route to Assign Equipment the same way the real Assign button does.
+	# Stores -> confirm the Steel Dagger row shows an Equip button, then
+	# route to Assign Equipment the same way the real Equip button does.
 	var stores_screen: Control = StoresScene.instantiate()
 	add_child_autofree(stores_screen)
-	var stores_tree: Tree = stores_screen.get_node("Body/Center/VBox/StoresTable/Tree")
-	stores_tree.get_root().get_first_child().select(0)
-	stores_tree.emit_signal("item_selected")
-	assert_eq(stores_screen.selected_item_id, "dagger_steel")
-	assert_true(stores_screen.get_node("Body/Center/VBox/AssignButton").visible)
+	var stores_tree: Tree = stores_screen.get_node("Body/Center/VBox/LootTable/Table/Tree")
+	var dagger_item := stores_tree.get_root().get_first_child()
+	# Columns with Stores' show_sell=true, show_equip=true: name=0, type=1,
+	# count=2, price=3, sell=4, equip=5.
+	assert_eq(dagger_item.get_button_count(5), 1, "the gear row shows an Equip button")
 	GameManager.route_context_id = "dagger_steel"
 
 	# Assign Equipment -> equip the Warrior.

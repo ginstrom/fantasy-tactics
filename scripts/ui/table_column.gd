@@ -23,6 +23,7 @@ var alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT
 var formatter: Callable = Callable()
 var comparator: Callable = Callable()
 var button_text: Callable = Callable()
+var button_visible: Callable = Callable()
 
 
 func _init(column_key: StringName, column_title: String, column_type: Type = Type.TEXT) -> void:

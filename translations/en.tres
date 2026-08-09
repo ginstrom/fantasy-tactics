@@ -219,9 +219,6 @@ messages = {
 "stores.type.mana_crystal": "Mana Crystal",
 "stores.mana_crystal": "Mana Crystal (Tier %d)",
 "stores.empty": "Nothing in storage yet.",
-"stores.selected": "%s — %d in stock, sells for %d gold",
-"stores.sell": "Sell",
-"stores.assign": "Assign to Unit",
 "trading_post.title": "Trading Post",
 "trading_post.income": "Passive income: %d gold per turn",
 "trading_post.column.name": "Name",
@@ -236,5 +233,16 @@ messages = {
 "assign_equipment.column.class": "Class",
 "assign_equipment.column.level": "Level",
 "assign_equipment.empty": "No adventurers have been recruited yet.",
-"assign_equipment.hint": "Double-click a row, or select it and press Enter, to equip that adventurer."
+"assign_equipment.hint": "Double-click a row, or select it and press Enter, to equip that adventurer.",
+"sell_quantity_dialog.total": "Total: %d gold",
+"sell_quantity_dialog.all": "ALL",
+"sell_quantity_dialog.cancel": "Cancel",
+"sell_quantity_dialog.ok": "OK",
+"loot_table.column.name": "Name",
+"loot_table.column.type": "Type",
+"loot_table.column.count": "Count",
+"loot_table.column.price": "Price",
+"loot_table.sell": "Sell",
+"loot_table.equip": "Equip",
+"loot_table.empty": "Nothing here yet."
 }

@@ -1,7 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/stores.gd" id="1_stores"]
-[ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="2_table_view"]
+[ext_resource type="PackedScene" path="res://scenes/ui/loot_table.tscn" id="2_loot_table"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
 
 [node name="Stores" type="Control"]
@@ -39,36 +39,12 @@ layout_mode = 2
 text = "stores.title"
 horizontal_alignment = 1
 
-[node name="StoresTable" type="VBoxContainer" parent="Body/Center/VBox"]
+[node name="LootTable" parent="Body/Center/VBox" instance=ExtResource("2_loot_table")]
 layout_mode = 2
-custom_minimum_size = Vector2(560, 280)
-script = ExtResource("2_table_view")
-
-[node name="EmptyLabel" type="Label" parent="Body/Center/VBox"]
-layout_mode = 2
-visible = false
-text = "stores.empty"
-horizontal_alignment = 1
-
-[node name="SelectedItemLabel" type="Label" parent="Body/Center/VBox"]
-layout_mode = 2
-visible = false
-horizontal_alignment = 1
-
-[node name="SellButton" type="Button" parent="Body/Center/VBox"]
-layout_mode = 2
-visible = false
-text = "stores.sell"
-
-[node name="AssignButton" type="Button" parent="Body/Center/VBox"]
-layout_mode = 2
-visible = false
-text = "stores.assign"
+custom_minimum_size = Vector2(640, 280)
 
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
 
-[connection signal="pressed" from="Body/Center/VBox/SellButton" to="." method="_on_sell_button_pressed"]
-[connection signal="pressed" from="Body/Center/VBox/AssignButton" to="." method="_on_assign_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

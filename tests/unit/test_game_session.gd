@@ -2402,6 +2402,29 @@ func test_get_item_sale_price_halves_gear_price_and_keeps_mana_crystal_value_ful
 	assert_eq(GameSession.get_item_sale_price("no_such_item"), 0)
 
 
+func test_build_loot_rows_builds_a_gear_row_and_a_mana_crystal_row() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var rows: Array[Dictionary] = session.build_loot_rows({"shortsword_iron": 3}, {1: 2})
+
+	assert_eq(rows.size(), 2)
+	assert_eq(rows[0], {"id": "shortsword_iron", "name": "Iron Shortsword", "type": "Weapon", "count": 3, "price": 10})
+	assert_eq(
+		rows[1],
+		{"id": "mana_crystal_1", "name": "Mana Crystal (Tier 1)", "type": "Mana Crystal", "count": 2, "price": 5}
+	)
+
+
+func test_build_loot_rows_skips_zero_and_negative_counts() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var rows: Array[Dictionary] = session.build_loot_rows({"shortsword_iron": 0}, {1: -1})
+
+	assert_eq(rows, [] as Array[Dictionary])
+
+
 func test_sell_item_requires_a_trading_post_and_enough_stock() -> void:
 	GameSession.reset()
 	GameSession.banked_gear = {"shortsword_iron": 1}
