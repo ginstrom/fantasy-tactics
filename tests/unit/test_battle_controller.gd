@@ -853,6 +853,96 @@ func test_wasd_step_is_rejected_for_a_target_outside_the_grid() -> void:
 	assert_eq(mover.grid_position, Vector2i(0, 0))
 
 
+func _motion_event_over(controller: Node2D, grid_pos: Vector2i) -> InputEventMouseMotion:
+	var motion_event := InputEventMouseMotion.new()
+	motion_event.position = (
+		controller.global_position + Vector2(grid_pos) * BattleControllerScript.TILE_SIZE + Vector2(32, 32)
+	)
+	return motion_event
+
+
+func test_hovering_a_tile_with_a_unit_sets_hovered_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [enemy]
+
+	controller._unhandled_input(_motion_event_over(controller, Vector2i(2, 2)))
+
+	assert_eq(controller.hovered_unit, enemy)
+
+
+func test_hovering_empty_ground_clears_hovered_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [enemy]
+	controller._unhandled_input(_motion_event_over(controller, Vector2i(2, 2)))
+
+	controller._unhandled_input(_motion_event_over(controller, Vector2i(0, 0)))
+
+	assert_null(controller.hovered_unit)
+
+
+func test_clicking_an_out_of_range_enemy_pins_it_without_attacking() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, enemy]
+	controller.selected_unit = attacker
+
+	controller._handle_tile_click(enemy.grid_position)
+
+	assert_eq(controller.inspected_unit, enemy)
+	assert_true(enemy.is_alive(), "Clicking an out-of-range enemy must not attack it")
+
+
+func test_clicking_an_attackable_enemy_still_attacks_instead_of_pinning() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, enemy]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	controller._handle_tile_click(enemy.grid_position)
+
+	assert_true(attacker.has_acted, "An in-range click must still resolve as an attack, unchanged")
+
+
+func test_selecting_a_unit_pins_it_as_the_inspected_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [warrior]
+
+	controller._select_unit(warrior)
+
+	assert_eq(controller.inspected_unit, warrior)
+
+
+func test_get_focused_unit_prefers_the_live_hover_over_the_pinned_click() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [warrior, enemy]
+	controller._select_unit(warrior)
+	assert_eq(controller.get_focused_unit(), warrior, "With nothing hovered, the pinned selection shows")
+
+	controller._unhandled_input(_motion_event_over(controller, Vector2i(2, 2)))
+
+	assert_eq(controller.get_focused_unit(), enemy, "A live hover must take priority over the pinned click")
+
+
+func test_unit_focus_changed_emits_when_the_focused_unit_changes() -> void:
+	var controller := _make_controller(6, 6)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [enemy]
+	var received: Array = []
+	controller.unit_focus_changed.connect(func(unit) -> void: received.append(unit))
+
+	controller._unhandled_input(_motion_event_over(controller, Vector2i(2, 2)))
+
+	assert_eq(received, [enemy])
+
+
 func test_wasd_step_and_a_click_move_share_the_same_movement_budget_in_one_turn() -> void:
 	var controller := _make_controller(6, 6)
 	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)

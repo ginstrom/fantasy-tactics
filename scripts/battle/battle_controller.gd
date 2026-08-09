@@ -8,6 +8,13 @@ signal board_changed
 ## Battlefield keys its award guard on the emitted unit's identity rather
 ## than treating the signal as a single one-shot battle event.
 signal enemy_defeated(unit)
+## Emitted whenever get_focused_unit()'s result changes -- either a live
+## hover moved onto/off of a unit, or the pinned inspected_unit changed
+## (see _select_unit()/_handle_tile_click()). Carries the new focused unit,
+## or null when nothing is focused. Battlefield connects this to drive the
+## new right-side unit detail panel; it never affects selection, movement,
+## or combat.
+signal unit_focus_changed(unit)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -49,6 +56,8 @@ var grid
 var units: Array = []
 var _player_adventurer_ids: Array[String] = []
 var selected_unit = null
+var hovered_unit = null
+var inspected_unit = null
 var active_side: int = Side.PLAYER
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
@@ -132,6 +141,8 @@ const NUMBER_KEYS := {KEY_1: 1, KEY_2: 2, KEY_3: 3, KEY_4: 4, KEY_5: 5}
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		_handle_mouse_input(event)
+	elif event is InputEventMouseMotion:
+		_handle_mouse_motion(event)
 	elif event is InputEventKey:
 		_handle_key_input(event)
 
@@ -144,6 +155,44 @@ func _handle_mouse_input(event: InputEventMouseButton) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	_handle_tile_click(tile_pos)
+
+
+func _handle_mouse_motion(event: InputEventMouseMotion) -> void:
+	# make_input_local() requires tree membership; unit tests exercise this
+	# against a bare BattleController built via script (see _make_controller()
+	# in test_battle_controller.gd), which never enters the tree. Its events
+	# are already expressed in this node's local space (see that helper's
+	# _motion_event_over()), so falling back to the raw position is correct
+	# there and never taken in real play, where the controller is always in
+	# the tree by the time input reaches it.
+	var local_pos: Vector2 = make_input_local(event).position if is_inside_tree() else event.position
+	var tile_pos := _to_grid_position(local_pos)
+	var unit = get_unit_at(tile_pos) if grid.is_in_bounds(tile_pos) else null
+	_set_hovered_unit(unit)
+
+
+func _set_hovered_unit(unit) -> void:
+	if unit == hovered_unit:
+		return
+	hovered_unit = unit
+	_emit_focus_changed()
+
+
+## Only called from the one _handle_tile_click() branch where a click
+## neither selects your own unit nor resolves as an attack (see that
+## method) -- every selection path instead goes through _select_unit(),
+## which pins the same way for free.
+func _set_inspected_unit(unit) -> void:
+	inspected_unit = unit
+	_emit_focus_changed()
+
+
+func get_focused_unit():
+	return hovered_unit if hovered_unit != null else inspected_unit
+
+
+func _emit_focus_changed() -> void:
+	unit_focus_changed.emit(get_focused_unit())
 
 
 func _handle_key_input(event: InputEventKey) -> void:
@@ -412,6 +461,8 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		if selected_unit != null and try_attack_selected_unit(tile_pos):
 			_draw_units()
 			_select_unit_after_action()
+			return
+		_set_inspected_unit(clicked_unit)
 		return
 
 	if try_move_selected_unit(tile_pos):
@@ -431,6 +482,7 @@ func _select_unit_after_action() -> void:
 
 func _select_unit(unit) -> void:
 	selected_unit = unit
+	_set_inspected_unit(unit)
 	_update_highlights()
 	board_changed.emit()
 
@@ -454,6 +506,11 @@ func _draw_tiles() -> void:
 
 
 func _draw_units() -> void:
+	# Mirrors _update_highlights()'s guard below: unit tests build a bare
+	# BattleController via script (not the battlefield scene), so it never
+	# enters the tree and its @onready containers are never resolved.
+	if not is_inside_tree():
+		return
 	for child in unit_container.get_children():
 		child.queue_free()
 
