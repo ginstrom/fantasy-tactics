@@ -21,7 +21,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.save"), "Save")
 	assert_eq(tr("menu.not_implemented"), "Not implemented yet")
 	assert_eq(tr("menu.enter_name"), "Enter your name:")
-	assert_eq(tr("menu.random"), "Random")
+	assert_eq(tr("menu.random"), "🎲 Random")
 	assert_eq(tr("menu.begin"), "Begin")
 	assert_eq(tr("battle.end_turn"), "End Turn")
 	assert_eq(tr("battle.round") % 1, "Round 1")

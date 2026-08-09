@@ -70,7 +70,7 @@ layout_mode = 2
 
 [node name="RandomButton" type="Button" parent="Body/Center/VBox/PartyNameEntry"]
 layout_mode = 2
-text = "🎲 menu.random"
+text = "menu.random"
 
 [node name="ConfirmButton" type="Button" parent="Body/Center/VBox/PartyNameEntry"]
 layout_mode = 2

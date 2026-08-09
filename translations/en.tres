@@ -13,7 +13,7 @@ messages = {
 "menu.save": "Save",
 "menu.not_implemented": "Not implemented yet",
 "menu.enter_name": "Enter your name:",
-"menu.random": "Random",
+"menu.random": "🎲 Random",
 "menu.begin": "Begin",
 "party.title": "Party Manager",
 "party.warrior.summary": "Warrior — warrior, sword",
