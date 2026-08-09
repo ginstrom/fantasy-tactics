@@ -631,7 +631,7 @@ func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_go
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_reward, 1, "Victory should queue the goblin camp's rolled reward")
+	assert_eq(session.battle_reward, 1, "Victory should queue the goblin camp's rolled reward in the battle store")
 	assert_eq(session.gold, 0, "Completing an encounter must not bank gold directly")
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
 
@@ -643,6 +643,7 @@ func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() 
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 
 	var deposited: int = session.deposit_pending_reward()
 
@@ -663,9 +664,11 @@ func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 
 	assert_eq(
 		session.pending_reward,
@@ -683,8 +686,10 @@ func test_depositing_after_chained_victories_banks_the_combined_reward() -> void
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 
 	var deposited: int = session.deposit_pending_reward()
 
@@ -700,13 +705,14 @@ func test_completing_an_already_completed_encounter_does_not_requeue_its_reward(
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 	session.deposit_pending_reward()
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.complete_current_encounter()
 
 	assert_eq(
-		session.pending_reward,
+		session.battle_reward,
 		0,
 		"Re-completing an already-completed site must not requeue its reward"
 	)
@@ -722,9 +728,9 @@ func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_reward, 1, "One goblin kill: randi_range(1, 6) stubbed to the min (1) times multiplier 1")
-	assert_eq(session.pending_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
-	assert_eq(session.pending_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
+	assert_eq(session.battle_reward, 1, "One goblin kill: randi_range(1, 6) stubbed to the min (1) times multiplier 1")
+	assert_eq(session.battle_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
+	assert_eq(session.battle_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
 
 
 func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> void:
@@ -736,7 +742,7 @@ func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> vo
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_gear, {"shortsword_iron": 1}, "A gear roll of 0.0 must always clear the 25% drop chance")
+	assert_eq(session.battle_gear, {"shortsword_iron": 1}, "A gear roll of 0.0 must always clear the 25% drop chance")
 
 
 func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() -> void:
@@ -752,8 +758,8 @@ func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() ->
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_reward, 2, "One orc kill: randi_range(1, 5) stubbed to the min (1) times multiplier 2")
-	assert_eq(session.pending_mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
+	assert_eq(session.battle_reward, 2, "One orc kill: randi_range(1, 5) stubbed to the min (1) times multiplier 2")
+	assert_eq(session.battle_mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
 
 
 func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
@@ -766,9 +772,9 @@ func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_reward, 2, "Two goblin kills: 1 gold each, multiplier 1")
-	assert_eq(session.pending_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
-	assert_eq(session.pending_gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
+	assert_eq(session.battle_reward, 2, "Two goblin kills: 1 gold each, multiplier 1")
+	assert_eq(session.battle_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
+	assert_eq(session.battle_gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
 
 
 func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() -> void:
@@ -785,7 +791,7 @@ func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() 
 
 	# Kill gold: one orc, randi_range(1, 5) stubbed to max (5) * multiplier 2 = 10.
 	# Encounter bonus: randi_range(0, 5) stubbed to max (5) * difficulty 2 = 10.
-	assert_eq(session.pending_reward, 20, "Kill gold (10) plus the encounter bonus (10) at 2-star difficulty")
+	assert_eq(session.battle_reward, 20, "Kill gold (10) plus the encounter bonus (10) at 2-star difficulty")
 
 
 func test_recompleting_an_already_completed_encounter_does_not_requeue_the_bonus() -> void:
@@ -795,13 +801,14 @@ func test_recompleting_an_already_completed_encounter_does_not_requeue_the_bonus
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 	session.deposit_pending_reward()
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.complete_current_encounter()
 
 	assert_eq(
-		session.pending_reward, 0,
+		session.battle_reward, 0,
 		"Re-completing an already-completed site must not requeue its gold bonus either"
 	)
 
@@ -813,6 +820,7 @@ func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
 	session.loot_gear_roll = func() -> float: return 0.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
+	session.merge_battle_loot_into_party()
 
 	session.deposit_pending_reward()
 
@@ -886,6 +894,7 @@ func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward
 
 	assert_eq(session.gold, 0)
 	assert_eq(session.pending_reward, 0)
+	assert_eq(session.battle_reward, 0)
 	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")
 
 

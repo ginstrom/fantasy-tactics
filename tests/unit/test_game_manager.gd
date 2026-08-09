@@ -118,6 +118,24 @@ func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void
 	assert_eq(GameSession.gold, 15, "Returning to the encampment must bank any queued reward")
 
 
+func test_go_to_world_map_merges_the_battle_store_into_the_party_store() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.battle_gear = {"dagger_iron": 1}
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.go_to_world_map()
+
+	assert_eq(GameSession.pending_reward, 5)
+	assert_eq(GameSession.pending_mana_crystals, {1: 1})
+	assert_eq(GameSession.pending_gear, {"dagger_iron": 1})
+	assert_eq(GameSession.battle_reward, 0)
+	assert_eq(GameSession.battle_mana_crystals, {})
+	assert_eq(GameSession.battle_gear, {})
+
+
 func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	GameSession.reset()
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
@@ -126,6 +144,7 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	GameSession.complete_current_encounter()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
+	manager.go_to_world_map()
 
 	manager.go_to_encampment()
 
@@ -145,7 +164,7 @@ func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_dep
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	var queued_reward: int = GameSession.pending_reward
+	var queued_reward: int = GameSession.battle_reward
 	assert_true(queued_reward > 0, "Test setup must actually queue a reward")
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
@@ -154,7 +173,7 @@ func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_dep
 
 	assert_eq(GameSession.gold, 0, "Gold must not be banked while the party is still deployed away from home")
 	assert_eq(
-		GameSession.pending_reward, queued_reward,
+		GameSession.battle_reward, queued_reward,
 		"The queued reward must remain untouched until the party actually returns"
 	)
 	assert_true(

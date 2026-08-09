@@ -867,7 +867,7 @@ func complete_current_encounter() -> void:
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
 		_roll_and_queue_loot(expedition.get("enemy", {}))
-		pending_reward += loot_gold_roll.call(0, 5) * int(expedition.get("difficulty", 1))
+		battle_reward += loot_gold_roll.call(0, 5) * int(expedition.get("difficulty", 1))
 		_clear_active_encounter(selected_encounter)
 	selected_encounter = ""
 
@@ -884,11 +884,11 @@ func _roll_and_queue_loot(enemy: Dictionary) -> void:
 	var table: Dictionary = ENEMY_LOOT_TABLES[loot_id]
 	var kill_count: int = enemy.get("count", 1)
 	for _kill in kill_count:
-		pending_reward += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
+		battle_reward += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
 		var crystal_tier: int = table.mana_crystal_tier
-		pending_mana_crystals[crystal_tier] = pending_mana_crystals.get(crystal_tier, 0) + 1
+		battle_mana_crystals[crystal_tier] = battle_mana_crystals.get(crystal_tier, 0) + 1
 		if loot_gear_roll.call() < GEAR_DROP_CHANCE:
-			pending_gear[table.gear_item_id] = pending_gear.get(table.gear_item_id, 0) + 1
+			battle_gear[table.gear_item_id] = battle_gear.get(table.gear_item_id, 0) + 1
 
 
 func abandon_current_encounter() -> void:
@@ -1010,10 +1010,10 @@ func get_item_sale_price(item_id: String) -> int:
 
 ## The shared loot-row shape (id/name/type/count/price) every loot-listing
 ## screen renders through LootTable — Stores (banked_gear/mana_crystals),
-## the victory summary, and the World Map's Party Details screen
-## (pending_gear/pending_mana_crystals), each backed by a different pair of
-## GameSession fields but sharing this exact row shape and this exact
-## pricing/naming logic.
+## the victory summary (battle_gear/battle_mana_crystals), and the World
+## Map's Party Details screen (pending_gear/pending_mana_crystals), each
+## backed by a different pair of GameSession fields but sharing this exact
+## row shape and this exact pricing/naming logic.
 func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	for item_id in gear_counts:

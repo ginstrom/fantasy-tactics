@@ -280,18 +280,17 @@ func _on_level_up_queue_drained() -> void:
 	_finish_victory()
 
 
-## Rolls this battle's loot into GameSession's pending_* fields (see
+## Rolls this battle's loot into GameSession's battle_* store (see
 ## GameSession.complete_current_encounter() -> _roll_and_queue_loot()) and
 ## routes to the victory summary screen with everything this battle
-## accumulated. Unlike GameManager.complete_battle() (still used by
-## scripts/tools/screenshot_tour.gd to skip straight to the World Map),
-## this is the real gameplay path -- it shows the summary before the
-## player ever reaches the World Map.
+## accumulated. The battle store stays separate from the party's own
+## pending_* store until the player leaves this summary screen for the
+## World Map (see GameManager.go_to_world_map() -> GameSession.merge_
+## battle_loot_into_party()) -- including via GameManager.complete_battle()
+## (still used by scripts/tools/screenshot_tour.gd to skip straight to the
+## World Map), which also routes through go_to_world_map() and so also
+## merges correctly.
 func _finish_victory() -> void:
-	var gold_before: int = GameSession.pending_reward
-	var mana_crystal_counts_before: Dictionary = GameSession.pending_mana_crystals.duplicate()
-	var gear_counts_before: Dictionary = GameSession.pending_gear.duplicate()
-
 	GameSession.complete_current_encounter()
 
 	var party := GameSession.get_party(GameSession.selected_party_id)
@@ -300,29 +299,14 @@ func _finish_victory() -> void:
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
-		# This battle's own loot only, not the party's full pending_* totals --
-		# those accumulate across every encounter cleared before returning to
-		# the settlement, but this summary screen is titled for just this
-		# battle (see battle_result.gd).
-		"loot_gold": GameSession.pending_reward - gold_before,
-		"loot_mana_crystal_counts": _dict_counts_delta(mana_crystal_counts_before, GameSession.pending_mana_crystals),
-		"loot_gear_counts": _dict_counts_delta(gear_counts_before, GameSession.pending_gear),
+		# Read straight from the battle store -- this battle's own loot only,
+		# never merged into the party's full running totals until the player
+		# leaves this screen (see the docstring above).
+		"loot_gold": GameSession.battle_reward,
+		"loot_mana_crystal_counts": GameSession.battle_mana_crystals.duplicate(),
+		"loot_gear_counts": GameSession.battle_gear.duplicate(),
 	}
 	GameManager.go_to_battle_result(summary)
-
-
-## Computes this battle's own additions to a pending_* counts dict as a
-## before/after delta. pending_mana_crystals (tier -> count) and
-## pending_gear (item id -> count) now share this exact shape, so one
-## helper covers both -- see GameSession.pending_gear's docstring for why
-## it moved from an Array to this Dictionary shape.
-func _dict_counts_delta(counts_before: Dictionary, counts_after: Dictionary) -> Dictionary:
-	var delta: Dictionary = {}
-	for key in counts_after:
-		var gained: int = counts_after[key] - counts_before.get(key, 0)
-		if gained > 0:
-			delta[key] = gained
-	return delta
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

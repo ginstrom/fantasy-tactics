@@ -107,7 +107,14 @@ func go_to_encampment() -> Error:
 	return _change_scene(ENCAMPMENT_SCENE)
 
 
+## Merges the battle store into the party's own store before ever showing
+## the World Map -- see GameSession.merge_battle_loot_into_party(). This is
+## the single call site both the real "leave the victory summary" path
+## (battle_result.gd's OK button) and the screenshot-tour shortcut
+## (complete_battle()) route through, so the merge lives here rather than
+## in battle_result.gd itself.
 func go_to_world_map() -> Error:
+	GameSession.merge_battle_loot_into_party()
 	_clear_detail_context()
 	return _change_scene(WORLD_MAP_SCENE)
 

@@ -7,15 +7,18 @@ extends Control
 ## that summary dict ("loot_gold" plus the itemized
 ## "loot_gear_counts"/"loot_mana_crystal_counts") -- reading
 ## GameSession.pending_reward/pending_mana_crystals/pending_gear directly
-## would show every encounter a deployed party has cleared so far this
-## deployment, not just this battle's own loot (see _finish_victory()'s
-## before/after delta). The gear/mana-crystal table reuses LootTable, but
-## purely as a read-only record: no [Sell] (loot only sells once banked
-## at the Encampment) and no [Equip] either -- this is a frozen snapshot
-## of what this battle dropped, taken once and never re-read, so letting
-## the player mutate live state (GameSession.pending_gear) through it
-## would silently desync the two. Equipping happens once the party is
-## back on the World Map (Party Details, which reads pending_gear live).
+## would show the party's full running totals for the deployment, not just
+## this battle's own loot; the summary instead carries a snapshot of
+## GameSession's battle_reward/battle_mana_crystals/battle_gear (the battle
+## store -- see GameSession.merge_battle_loot_into_party()), which holds
+## only this battle's own drops until the player leaves this screen. The
+## gear/mana-crystal table reuses LootTable, but purely as a read-only
+## record: no [Sell] (loot only sells once banked at the Encampment) and no
+## [Equip] either -- this is a frozen snapshot, taken once and never
+## re-read, so letting the player mutate live state through it would
+## silently desync the two. Equipping happens once the party is back on the
+## World Map (Party Details, which reads pending_gear live, after the
+## battle store has already merged into it).
 
 @onready var kills_label: Label = $Center/VBox/KillsLabel
 @onready var xp_label: Label = $Center/VBox/XpLabel

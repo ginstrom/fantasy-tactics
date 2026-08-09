@@ -678,7 +678,7 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	battlefield._apply_battle_outcome(true)
 
 	assert_true(GameSession.is_encounter_complete("goblin_camp"))
-	assert_eq(GameSession.pending_reward, 1, "Victory should queue the goblin camp's rolled reward")
+	assert_eq(GameSession.battle_reward, 1, "Victory should queue the goblin camp's rolled reward in the battle store")
 	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 
@@ -1053,16 +1053,20 @@ func test_a_victorious_battle_with_no_level_up_reports_an_empty_leveled_up_list(
 	assert_eq(GameManager.battle_result_summary.leveled_up_ids, [])
 
 
-## Regression test: GameSession.pending_reward/pending_mana_crystals/
-## pending_gear accumulate across every encounter a deployed party clears
-## before returning to the settlement (see GameSession.deposit_pending_
-## reward()), so a party's second victory in one deployment must not report
-## the first battle's already-carried loot alongside its own in the summary
-## -- only what this battle itself dropped.
+## Regression test: the battle store (GameSession.battle_reward/battle_
+## mana_crystals/battle_gear) holds only the current battle's own loot,
+## separate from the party's own running totals (pending_reward/pending_
+## mana_crystals/pending_gear) until the player leaves the summary screen
+## (see GameSession.merge_battle_loot_into_party()) -- so a party's second
+## victory in one deployment must not report the first battle's already-
+## carried loot alongside its own in the summary, and must not touch the
+## party's own totals at all until that merge happens.
 func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void:
 	var battlefield := _setup_goblin_camp_battle()
-	# Simulate an earlier battle's loot already carried in pending_* this same
-	# deployment, not yet deposited back at the settlement.
+	# Simulate an earlier battle's loot already merged into the party's own
+	# store this deployment (see GameManager.go_to_world_map() ->
+	# GameSession.merge_battle_loot_into_party()), not yet deposited back at
+	# the settlement.
 	GameSession.pending_reward = 50
 	GameSession.pending_mana_crystals = {1: 3}
 	GameSession.pending_gear = {"dagger_iron": 1, "buckler_wood": 1}
@@ -1073,7 +1077,8 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 
 	# Goblin camp's single goblin: gold_min 1 * multiplier 1, one mana
 	# crystal, and (since loot_gear_roll always rolls below GEAR_DROP_CHANCE
-	# here) one gear drop -- this battle's own loot only.
+	# here) one gear drop -- this battle's own loot, freshly rolled into the
+	# battle store and reported straight from there.
 	assert_eq(
 		GameManager.battle_result_summary.loot_gold, 1,
 		"Only this battle's own gold, not the 50 already carried over"
@@ -1086,14 +1091,12 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 		GameManager.battle_result_summary.loot_gear_counts, {"shortsword_iron": 1},
 		"Only this battle's own gear, not the 2 pieces already carried over"
 	)
-	# Sanity check: the combined totals really did accumulate underneath --
-	# the summary is deliberately reporting less than GameSession's own totals.
-	assert_eq(GameSession.pending_reward, 51)
-	assert_eq(GameSession.pending_mana_crystals[1], 4)
-	var total_gear_pieces := 0
-	for item_id in GameSession.pending_gear:
-		total_gear_pieces += GameSession.pending_gear[item_id]
-	assert_eq(total_gear_pieces, 3)
+	# The battle store and the party's own store stay separate until the
+	# player leaves the summary screen for the World Map -- so the
+	# pre-seeded party totals above must still read exactly as seeded.
+	assert_eq(GameSession.pending_reward, 50)
+	assert_eq(GameSession.pending_mana_crystals, {1: 3})
+	assert_eq(GameSession.pending_gear, {"dagger_iron": 1, "buckler_wood": 1})
 
 
 func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary() -> void:
