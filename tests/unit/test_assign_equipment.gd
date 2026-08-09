@@ -37,11 +37,6 @@ func test_back_button_returns_to_stores() -> void:
 	assert_string_contains(source, "GameManager.go_to_stores()")
 
 
-func test_back_returns_to_battle_result_when_that_was_the_origin() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/assign_equipment.gd")
-	assert_string_contains(source, "GameManager.go_to_battle_result(GameManager.battle_result_summary)")
-
-
 func test_back_returns_to_party_details_when_that_was_the_origin() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/ui/assign_equipment.gd")
 	assert_string_contains(source, "GameManager.go_to_party_details(GameManager.assign_equipment_party_id)")

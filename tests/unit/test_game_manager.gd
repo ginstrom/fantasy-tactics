@@ -633,13 +633,13 @@ func test_go_to_assign_equipment_with_a_party_id_scopes_and_records_the_origin()
 
 	assert_eq(
 		manager.go_to_assign_equipment(
-			"dagger_iron", GameSession.FIRST_PARTY_ID, manager.AssignEquipmentOrigin.BATTLE_RESULT
+			"dagger_iron", GameSession.FIRST_PARTY_ID, manager.AssignEquipmentOrigin.PARTY_DETAILS
 		),
 		OK
 	)
 	assert_eq(manager.route_context_id, "dagger_iron")
 	assert_eq(manager.assign_equipment_party_id, GameSession.FIRST_PARTY_ID)
-	assert_eq(manager.assign_equipment_origin, manager.AssignEquipmentOrigin.BATTLE_RESULT)
+	assert_eq(manager.assign_equipment_origin, manager.AssignEquipmentOrigin.PARTY_DETAILS)
 
 
 func test_go_to_assign_equipment_rejects_an_unknown_party_id() -> void:

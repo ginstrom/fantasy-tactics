@@ -4,14 +4,15 @@ extends Control
 ## (see stores.gd/battle_result.gd/party_details.gd, each of which sets it
 ## before routing here) — every adventurer when
 ## GameManager.assign_equipment_party_id is empty (Stores' unscoped Equip),
-## or only that party's own members when it's set (the victory summary and
-## World Map Party Details' Equip — both scoped to the current party).
+## or only that party's own members when it's set (World Map Party
+## Details' Equip, scoped to the current party — the victory summary has
+## no Equip action at all, see battle_result.gd).
 ## Activating a row equips that adventurer immediately — via
 ## GameSession.equip_item_from_party_store() when this screen is scoped to
-## a party (the victory summary's and World Map Party Details' Equip, both
-## about a deployed party's own not-yet-banked loot), or via
-## GameSession.equip_item_from_bank() when unscoped (Stores' Equip, always
-## from the bank) — then returns to whichever screen sent us here
+## a party (World Map Party Details' Equip, about a deployed party's own
+## not-yet-banked loot), or via GameSession.equip_item_from_bank() when
+## unscoped (Stores' Equip, always from the bank) — then returns to
+## whichever screen sent us here
 ## (GameManager.assign_equipment_origin), mirroring add_member.gd's
 ## "activating a row is the action itself" pattern. A row that has gone
 ## stale (the item was sold/carried away elsewhere while this screen was
@@ -97,8 +98,6 @@ func _on_back_pressed() -> void:
 
 func _return_to_origin() -> void:
 	match GameManager.assign_equipment_origin:
-		GameManager.AssignEquipmentOrigin.BATTLE_RESULT:
-			GameManager.go_to_battle_result(GameManager.battle_result_summary)
 		GameManager.AssignEquipmentOrigin.PARTY_DETAILS:
 			GameManager.go_to_party_details(GameManager.assign_equipment_party_id)
 		_:

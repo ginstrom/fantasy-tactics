@@ -9,9 +9,13 @@ extends Control
 ## GameSession.pending_reward/pending_mana_crystals/pending_gear directly
 ## would show every encounter a deployed party has cleared so far this
 ## deployment, not just this battle's own loot (see _finish_victory()'s
-## before/after delta). The gear/mana-crystal table reuses LootTable,
-## scoped to this battle's own party (summary.party_id) for its [Equip]
-## action -- no [Sell] here, loot only sells once banked at the Encampment.
+## before/after delta). The gear/mana-crystal table reuses LootTable, but
+## purely as a read-only record: no [Sell] (loot only sells once banked
+## at the Encampment) and no [Equip] either -- this is a frozen snapshot
+## of what this battle dropped, taken once and never re-read, so letting
+## the player mutate live state (GameSession.pending_gear) through it
+## would silently desync the two. Equipping happens once the party is
+## back on the World Map (Party Details, which reads pending_gear live).
 
 @onready var kills_label: Label = $Center/VBox/KillsLabel
 @onready var xp_label: Label = $Center/VBox/XpLabel
@@ -22,8 +26,7 @@ extends Control
 
 
 func _ready() -> void:
-	loot_table.configure(false, true)
-	loot_table.equip_requested.connect(_on_equip_requested)
+	loot_table.configure(false, false)
 	_refresh()
 
 
@@ -57,14 +60,6 @@ func _format_kills(kills_by_type: Dictionary) -> String:
 	for type_name in kills_by_type:
 		parts.append("%s x%d" % [type_name, kills_by_type[type_name]])
 	return tr("battle_result.kills") % ", ".join(parts)
-
-
-func _on_equip_requested(item_id: String) -> void:
-	GameManager.go_to_assign_equipment(
-		item_id,
-		GameManager.battle_result_summary.get("party_id", ""),
-		GameManager.AssignEquipmentOrigin.BATTLE_RESULT
-	)
 
 
 func _on_ok_pressed() -> void:

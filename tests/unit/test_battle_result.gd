@@ -87,14 +87,9 @@ func test_shows_this_battles_loot_as_a_table() -> void:
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "2"])
 
 
-## LootTable no longer puts Sell/Equip in per-row Tree buttons -- selecting
-## a row and clicking [View] (or double-clicking it) opens LootDetailPanel,
-## a real PanelContainer with real, text-labeled Sell/Equip buttons (see
-## scripts/ui/loot_table.gd/loot_detail_panel.gd; this redesign landed
-## during Step 4's manual verification, after this step was originally
-## drafted). configure(false, true) means the detail panel's Equip button
-## shows for a gear row and its Sell button never does.
-func test_loot_table_has_an_equip_action_but_no_sell_action() -> void:
+## Columns with show_sell=false, show_equip=false: name=0, type=1,
+## count=2, price=3 -- 4 total, no Sell or Equip column exists.
+func test_loot_table_has_neither_a_sell_nor_an_equip_action() -> void:
 	var screen := _open_battle_result({
 		"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1, "leveled_up_ids": [],
 		"loot_gear_counts": {"shortsword_iron": 1},
@@ -107,14 +102,8 @@ func test_loot_table_has_an_equip_action_but_no_sell_action() -> void:
 
 	var detail_panel: Control = screen.get_node("Center/VBox/LootTable/LootDetailPanel")
 	assert_true(detail_panel.visible)
-	assert_true(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
+	assert_false(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
 	assert_false(detail_panel.get_node("Content/ButtonRow/SellButton").visible)
-
-
-func test_equip_routes_via_game_manager_scoped_to_this_battles_party() -> void:
-	var source := FileAccess.get_file_as_string("res://scripts/ui/battle_result.gd")
-	assert_string_contains(source, "GameManager.go_to_assign_equipment(")
-	assert_string_contains(source, "GameManager.AssignEquipmentOrigin.BATTLE_RESULT")
 
 
 func test_ok_button_returns_to_the_world_map() -> void:

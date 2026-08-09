@@ -300,7 +300,6 @@ func _finish_victory() -> void:
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
-		"party_id": GameSession.selected_party_id,
 		# This battle's own loot only, not the party's full pending_* totals --
 		# those accumulate across every encounter cleared before returning to
 		# the settlement, but this summary screen is titled for just this

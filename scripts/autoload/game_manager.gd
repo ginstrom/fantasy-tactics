@@ -56,7 +56,7 @@ var assign_equipment_party_id: String = ""
 
 ## Which screen opened Assign Equipment, so its Back action (and a
 ## successful equip) can return there instead of always landing on Stores.
-enum AssignEquipmentOrigin { STORES, BATTLE_RESULT, PARTY_DETAILS }
+enum AssignEquipmentOrigin { STORES, PARTY_DETAILS }
 var assign_equipment_origin: AssignEquipmentOrigin = AssignEquipmentOrigin.STORES
 
 # Transient victory-summary payload, mirroring route_context_id's "set
