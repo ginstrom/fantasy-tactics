@@ -129,4 +129,4 @@ func _on_party_name_cancel_pressed() -> void:
 
 
 func _on_back_pressed() -> void:
-	GameManager.go_to_encampment()
+	GameManager.go_to_units()

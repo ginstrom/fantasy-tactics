@@ -21,9 +21,9 @@ func test_parties_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
-func test_back_button_returns_to_the_encampment() -> void:
+func test_back_button_returns_to_units() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/ui/parties.gd")
-	assert_string_contains(source, "GameManager.go_to_encampment()")
+	assert_string_contains(source, "GameManager.go_to_units()")
 
 
 func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
