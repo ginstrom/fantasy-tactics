@@ -72,6 +72,24 @@ visible = false
 layout_mode = 2
 visible = false
 
+[node name="WeaponsLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.weapons"
+
+[node name="WeaponsList" type="VBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="ArmorLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.armor"
+
+[node name="ArmorList" type="VBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
 [node name="NotFoundLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false

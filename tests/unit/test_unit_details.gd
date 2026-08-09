@@ -169,6 +169,88 @@ func test_equipment_label_reflects_a_changed_weapon() -> void:
 	)
 
 
+func test_weapons_list_shows_the_lone_carried_weapon_as_equipped_with_no_action_buttons() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var weapons_list: VBoxContainer = screen.get_node("Body/Center/VBox/WeaponsList")
+
+	assert_eq(weapons_list.get_child_count(), 1)
+	var row := weapons_list.get_child(0)
+	assert_eq(row.get_node("NameLabel").text, tr("unit_details.equipped_marker") % "Iron Longsword")
+	assert_null(row.get_node_or_null("ActivateButton"))
+	assert_null(row.get_node_or_null("UnequipButton"))
+
+
+func test_armor_list_shows_the_lone_carried_armor_as_equipped_with_no_action_buttons() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var armor_list: VBoxContainer = screen.get_node("Body/Center/VBox/ArmorList")
+
+	assert_eq(armor_list.get_child_count(), 1)
+	var row := armor_list.get_child(0)
+	assert_eq(row.get_node("NameLabel").text, tr("unit_details.equipped_marker") % "Leather Armor")
+	assert_null(row.get_node_or_null("ActivateButton"))
+
+
+func test_weapons_list_shows_a_non_active_carried_weapon_with_activate_and_unequip() -> void:
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var weapons_list: VBoxContainer = screen.get_node("Body/Center/VBox/WeaponsList")
+
+	assert_eq(weapons_list.get_child_count(), 2)
+	var inactive_row := weapons_list.get_child(0)
+	assert_eq(inactive_row.get_node("NameLabel").text, "Iron Longsword")
+	assert_not_null(inactive_row.get_node_or_null("ActivateButton"))
+	assert_not_null(inactive_row.get_node_or_null("UnequipButton"))
+	var active_row := weapons_list.get_child(1)
+	assert_eq(active_row.get_node("NameLabel").text, tr("unit_details.equipped_marker") % "Steel Dagger")
+	assert_null(active_row.get_node_or_null("ActivateButton"))
+	assert_null(active_row.get_node_or_null("UnequipButton"))
+
+
+func test_pressing_activate_switches_the_active_weapon_and_refreshes_the_screen() -> void:
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var weapons_list: VBoxContainer = screen.get_node("Body/Center/VBox/WeaponsList")
+	var activate_button: Button = weapons_list.get_child(0).get_node("ActivateButton")
+
+	activate_button.emit_signal("pressed")
+
+	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "longsword_iron")
+	assert_eq(
+		screen.get_node("Body/Center/VBox/WeaponsList").get_child(0).get_node("NameLabel").text,
+		tr("unit_details.equipped_marker") % "Iron Longsword",
+		"The screen must refresh in place to show the new active item"
+	)
+
+
+func test_pressing_unequip_returns_the_item_to_the_bank_and_refreshes_the_list() -> void:
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+	var weapons_list: VBoxContainer = screen.get_node("Body/Center/VBox/WeaponsList")
+	var unequip_button: Button = weapons_list.get_child(0).get_node("UnequipButton")
+
+	unequip_button.emit_signal("pressed")
+
+	assert_eq(GameSession.banked_gear.longsword_iron, 1)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/WeaponsList").get_child_count(), 1,
+		"The list must refresh in place after unequipping"
+	)
+
+
+func test_weapons_and_armor_lists_are_hidden_for_an_unknown_unit() -> void:
+	GameManager.route_context_id = "no_such_id"
+	var screen: Control = UnitDetailsScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("Body/Center/VBox/WeaponsList").visible)
+	assert_false(screen.get_node("Body/Center/VBox/ArmorList").visible)
+	assert_false(screen.get_node("Body/Center/VBox/WeaponsLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/ArmorLabel").visible)
+
+
 func test_skills_label_shows_unspent_skill_points() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
