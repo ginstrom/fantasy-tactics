@@ -5,6 +5,8 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const PORTRAIT_SIZE := 48
 const DEFEATED_MODULATE := Color(1, 1, 1, 0.35)
 const LIVING_MODULATE := Color(1, 1, 1, 1)
+const HEALTH_LABEL_HEIGHT := 16
+const HEALTH_BACKING_COLOR := Color(0, 0, 0, 0.55)
 
 @onready var rows: VBoxContainer = $Rows
 
@@ -51,21 +53,38 @@ func _build_row(index: int, adventurer_id: String) -> Button:
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(hbox)
 
+	var swatch_stack := Control.new()
+	swatch_stack.name = "SwatchStack"
+	swatch_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	swatch_stack.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+	hbox.add_child(swatch_stack)
+
 	var swatch := ColorRect.new()
 	swatch.name = "Swatch"
 	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	swatch.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+	swatch.size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
 	swatch.color = BattleControllerScript.PLAYER_COLORS[index % BattleControllerScript.PLAYER_COLORS.size()]
-	hbox.add_child(swatch)
+	swatch_stack.add_child(swatch)
+
+	var health_backing := ColorRect.new()
+	health_backing.name = "HealthBacking"
+	health_backing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health_backing.color = HEALTH_BACKING_COLOR
+	health_backing.position = Vector2(0, PORTRAIT_SIZE - HEALTH_LABEL_HEIGHT)
+	health_backing.size = Vector2(PORTRAIT_SIZE, HEALTH_LABEL_HEIGHT)
+	swatch_stack.add_child(health_backing)
 
 	var health_label := Label.new()
 	health_label.name = "Health"
 	health_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	health_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	health_label.position = Vector2(0, PORTRAIT_SIZE - HEALTH_LABEL_HEIGHT)
+	health_label.size = Vector2(PORTRAIT_SIZE, HEALTH_LABEL_HEIGHT)
 	health_label.text = (
 		"%d/%d" % [unit.health, unit.max_health] if unit != null
 		else tr("battle.status.defeated") % GameSession.get_adventurer(adventurer_id).get("name", "")
 	)
-	hbox.add_child(health_label)
+	swatch_stack.add_child(health_label)
 
 	var ring := ColorRect.new()
 	ring.name = "SelectionRing"

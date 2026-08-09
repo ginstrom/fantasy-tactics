@@ -209,6 +209,25 @@ func test_portrait_row_decorative_children_do_not_intercept_clicks() -> void:
 		)
 
 
+func test_portrait_health_label_overlays_the_swatch_instead_of_sitting_beside_it() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
+	var swatch: Control = row.find_child("Swatch", true, false)
+	var health_label: Label = row.find_child("Health", true, false)
+
+	assert_eq(
+		health_label.get_parent(), swatch.get_parent(),
+		"The HP label must live in the same stack as the swatch, not as its sibling in the row's HBoxContainer"
+	)
+	assert_false(
+		health_label.get_parent() is HBoxContainer,
+		"The HP label must no longer be a direct child of the row's top-level HBoxContainer"
+	)
+	assert_eq(health_label.text, "10/10")
+
+
 func test_clicking_a_portrait_selects_that_party_member() -> void:
 	var second_member_id: String = _setup_two_member_party()
 	var battlefield: Node2D = BattlefieldScene.instantiate()
