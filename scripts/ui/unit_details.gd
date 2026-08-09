@@ -24,6 +24,10 @@ extends Control
 @onready var perks_label: Label = $Body/Center/VBox/PerksLabel
 @onready var stats_label: Label = $Body/Center/VBox/StatsLabel
 @onready var equipment_label: Label = $Body/Center/VBox/EquipmentLabel
+@onready var weapons_label: Label = $Body/Center/VBox/WeaponsLabel
+@onready var weapons_list: VBoxContainer = $Body/Center/VBox/WeaponsList
+@onready var armor_label: Label = $Body/Center/VBox/ArmorLabel
+@onready var armor_list: VBoxContainer = $Body/Center/VBox/ArmorList
 @onready var not_found_label: Label = $Body/Center/VBox/NotFoundLabel
 @onready var assignment_explanation_label: Label = $Body/Center/VBox/AssignmentExplanationLabel
 @onready var party_picker: OptionButton = $Body/Center/VBox/PartyPicker
@@ -97,15 +101,88 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	)
 	perks_label.text = tr("unit_details.perks") % tr(perk_status_key)
 
-	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label, equipment_label]:
+	_refresh_equipment_sections(adventurer)
+
+	for label in [
+		name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label,
+		equipment_label, weapons_label, weapons_list, armor_label, armor_list,
+	]:
 		label.visible = true
 
 
 func _show_not_found() -> void:
 	not_found_label.visible = true
-	for label in [name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label, equipment_label]:
+	for label in [
+		name_label, class_label, level_label, status_label, skills_label, perks_label, stats_label,
+		equipment_label, weapons_label, weapons_list, armor_label, armor_list,
+	]:
 		label.visible = false
 	_hide_assignment_section()
+
+
+## Rebuilds one slot's row list from scratch on every refresh — item_ids is
+## typically 1-4 entries, so a full rebuild is simpler and cheap enough
+## compared to diffing against the previous render. Each row is a plain
+## HBoxContainer (not TableView/Tree), because Tree's per-row buttons are
+## icon-only — see LootDetailPanel in scripts/ui/loot_detail_panel.gd for
+## the same constraint solved the same way. Node names (NameLabel/
+## ActivateButton/UnequipButton) are fixed so tests can address rows by
+## path; ActivateButton/UnequipButton are omitted entirely (not merely
+## hidden) on the active row, since there's nothing to activate and it
+## can't be unequipped until another item takes its place.
+func _refresh_equipment_sections(adventurer: Dictionary) -> void:
+	var equipment: Dictionary = adventurer.equipment
+	_populate_inventory_list(weapons_list, equipment.weapon_inventory, equipment.weapon, "weapon")
+	_populate_inventory_list(armor_list, equipment.armor_inventory, equipment.armor, "armor")
+
+
+func _populate_inventory_list(
+	list_container: VBoxContainer, item_ids: Array, active_item_id: String, slot: String
+) -> void:
+	# remove_child() (not just queue_free()) so a synchronous re-refresh (e.g.
+	# a test pressing Activate/Unequip, which calls refresh() with no frame
+	# in between) never counts stale rows still parented under
+	# list_container — queue_free() alone only detaches at end of frame, the
+	# same gotcha documented in portrait_panel.gd/battlefield.gd.
+	for child in list_container.get_children():
+		list_container.remove_child(child)
+		child.queue_free()
+
+	for item_id in item_ids:
+		var row := HBoxContainer.new()
+		var is_active: bool = item_id == active_item_id
+		var item := GameSession.get_item_definition(item_id)
+		var item_name: String = tr(item.name_key) if not item.is_empty() else item_id
+
+		var name_label := Label.new()
+		name_label.name = "NameLabel"
+		name_label.text = tr("unit_details.equipped_marker") % item_name if is_active else item_name
+		row.add_child(name_label)
+
+		if not is_active:
+			var activate_button := Button.new()
+			activate_button.name = "ActivateButton"
+			activate_button.text = tr("unit_details.activate")
+			activate_button.pressed.connect(_on_activate_pressed.bind(slot, item_id))
+			row.add_child(activate_button)
+
+			var unequip_button := Button.new()
+			unequip_button.name = "UnequipButton"
+			unequip_button.text = tr("unit_details.unequip")
+			unequip_button.pressed.connect(_on_unequip_pressed.bind(slot, item_id))
+			row.add_child(unequip_button)
+
+		list_container.add_child(row)
+
+
+func _on_activate_pressed(slot: String, item_id: String) -> void:
+	GameSession.activate_carried_item(unit_id, slot, item_id)
+	refresh()
+
+
+func _on_unequip_pressed(slot: String, item_id: String) -> void:
+	GameSession.unequip_to_bank(unit_id, slot, item_id)
+	refresh()
 
 
 ## Shown only when this screen was opened via Roster for an adventurer that
