@@ -113,9 +113,12 @@ often more precise than its own source comments.
   encounter and recruitment population" in
   [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
   for the rules this implements.
-- **`gold` / `pending_reward`** — a battle win adds to `pending_reward`
-  immediately; it only moves to `gold` when the party reaches the
-  Encampment (`deposit_pending_reward()`, called from
+- **`gold` / `pending_reward` / `battle_reward`** — a battle win adds to
+  `battle_reward` (the current battle's own, not-yet-shared loot); it moves
+  to `pending_reward` when the player leaves the victory summary for the
+  World Map (`merge_battle_loot_into_party()`, called from
+  `GameManager.go_to_world_map()`), and from there to `gold` only once the
+  party reaches the Encampment (`deposit_pending_reward()`, called from
   `GameManager.go_to_encampment()`).
 - **`mana_crystals` / `banked_gear`** — permanent loot storage, populated by
   `deposit_pending_reward()` from the matching `pending_mana_crystals` /

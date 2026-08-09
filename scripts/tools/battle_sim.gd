@@ -82,7 +82,7 @@ func _play_one_battle(encounter_id: String) -> Dictionary:
 		"rounds": rounds,
 		"damage_dealt": damage_dealt,
 		"kills": kills,
-		"gold_earned": GameSession.pending_reward,
+		"gold_earned": GameSession.battle_reward,
 	}
 
 	battlefield.queue_free()

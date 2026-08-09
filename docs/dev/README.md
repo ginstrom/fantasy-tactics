@@ -55,9 +55,11 @@ strings against this page depends on it.
   its own id and position. Clearing one removes it permanently; a new
   instance (same or different expedition) may spawn later to refill the
   vacancy.
-- **Reward** — gold queued in `GameSession.pending_reward` on victory, and
-  only added to `GameSession.gold` once the party returns to the Encampment
-  (`GameSession.deposit_pending_reward`).
+- **Reward** — gold queued in `GameSession.battle_reward` on victory, moved
+  to `GameSession.pending_reward` once the player leaves the victory
+  summary for the World Map (`GameSession.merge_battle_loot_into_party`),
+  and only added to `GameSession.gold` once the party returns to the
+  Encampment (`GameSession.deposit_pending_reward`).
 - **GameManager** — the autoload owning navigation (scene changes) and
   thin validation wrappers. Never owns durable game state.
 - **GameSession** — the autoload owning all durable session state and game
