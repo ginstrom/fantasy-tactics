@@ -51,6 +51,26 @@ static func _create_staffed_party() -> bool:
 	)
 
 
+## A lone Warrior is not a representative test of the Ruined Fortress's up to
+## 8 fielded enemies (see _deploy_at_ruined_fortress()), so that scenario
+## stages three level-1 Warriors instead of the single-Warrior party every
+## other scenario uses -- recruit_adventurer() mints a fresh level-1 Warrior
+## for free, bypassing the gold cost and recruitment-offer flow, same as the
+## debug menu's own "Recruit Adventurer" button. Three members is within the
+## Guild Hall's level-1 cap (4), so no Guild Hall upgrade is needed here.
+static func _create_three_warrior_party() -> bool:
+	if not GameSession.create_party():
+		return false
+	if not GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID):
+		return false
+	for _extra_warrior in 2:
+		GameSession.recruit_adventurer()
+		var recruit_id: String = GameSession.adventurers[-1].id
+		if not GameSession.assign_adventurer_to_selected_party(recruit_id):
+			return false
+	return true
+
+
 ## For testing the Trade loop directly: a staffed encamped party, a Trading
 ## Post already owned (so Stores' Sell button is enabled), and Stores
 ## pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword.
@@ -79,7 +99,7 @@ static func _deploy_at(position: Vector2i) -> bool:
 ## option at its maximum count (8), so this scenario reliably exercises
 ## the largest battle the game can field.
 static func _deploy_at_ruined_fortress() -> bool:
-	if not _create_staffed_party():
+	if not _create_three_warrior_party():
 		return false
 	var position: Vector2i = GameSession.get_expedition(GameSession.RUINED_FORTRESS_ID).position
 	GameSession.active_encounters.append(

@@ -56,12 +56,22 @@ func test_ruined_fortress_scenario_deploys_a_staffed_party_and_fields_eight_kobo
 	var controller: Node2D = battlefield.grid
 
 	var enemy_units: Array = []
+	var player_units: Array = []
 	for unit in controller.units:
 		if unit.side == BattleControllerScript.Side.ENEMY:
 			enemy_units.append(unit)
+		else:
+			player_units.append(unit)
 	assert_eq(enemy_units.size(), 8, "The forced Kobold roll should field the maximum count")
 	for unit in enemy_units:
 		assert_eq(unit.max_health, 6, "Every fielded unit should be a Kobold")
+
+	# A lone Warrior is not a representative test of an 8-enemy fight -- this
+	# scenario stages three level-1 Warriors instead of the single-Warrior
+	# party every other debug scenario uses (see _create_staffed_party()).
+	assert_eq(player_units.size(), 3, "The Ruined Fortress debug scenario should field three Warriors, not one")
+	for unit in player_units:
+		assert_eq(unit.max_health, 10, "Every fielded Warrior should be a fresh level-1 Warrior")
 
 
 ## Regression test for a real leak: the Ruined Fortress scenario used to pin
