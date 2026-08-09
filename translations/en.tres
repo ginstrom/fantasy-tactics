@@ -242,7 +242,10 @@ messages = {
 "loot_table.column.type": "Type",
 "loot_table.column.count": "Count",
 "loot_table.column.price": "Price",
-"loot_table.sell": "Sell",
-"loot_table.equip": "Equip",
-"loot_table.empty": "Nothing here yet."
+"loot_table.view": "View",
+"loot_table.empty": "Nothing here yet.",
+"loot_detail_panel.detail": "%s — %d in stock, sells for %d gold",
+"loot_detail_panel.sell": "Sell",
+"loot_detail_panel.equip": "Equip",
+"loot_detail_panel.close": "Close"
 }
