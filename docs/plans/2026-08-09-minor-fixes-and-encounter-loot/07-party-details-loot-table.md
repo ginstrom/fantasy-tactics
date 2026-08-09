@@ -86,7 +86,7 @@ func test_a_deployed_partys_loot_table_shows_everything_it_is_carrying() -> void
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
 	GameSession.pending_mana_crystals = {1: 2}
-	GameSession.pending_gear = ["dagger_iron", "dagger_iron"]
+	GameSession.pending_gear = {"dagger_iron": 2}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
 
@@ -106,7 +106,7 @@ func test_deployed_loot_table_has_an_equip_action_but_no_sell_action() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	GameSession.pending_gear = ["dagger_iron"]
+	GameSession.pending_gear = {"dagger_iron": 1}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
 	var item := tree.get_root().get_first_child()
@@ -212,7 +212,7 @@ func refresh() -> void:
 	var deployed: bool = party.get("deployed", false)
 	loot_table.visible = deployed
 	if deployed:
-		loot_table.set_rows(GameSession.build_loot_rows(_pending_gear_counts(), GameSession.pending_mana_crystals))
+		loot_table.set_rows(GameSession.build_loot_rows(GameSession.pending_gear, GameSession.pending_mana_crystals))
 	var rows := _build_rows(party)
 	member_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
@@ -253,13 +253,6 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 			"level": adventurer.level,
 		})
 	return rows
-
-
-func _pending_gear_counts() -> Dictionary:
-	var counts: Dictionary = {}
-	for item_id in GameSession.pending_gear:
-		counts[item_id] = counts.get(item_id, 0) + 1
-	return counts
 
 
 ## A selection is only valid while it names a current member of this party
@@ -315,10 +308,14 @@ func _on_back_pressed() -> void:
 ```
 
 (Everything from `_refresh_selection()` through `_on_back_pressed()` is
-unchanged from today's file — only `refresh()`'s body, the new
-`_pending_gear_counts()` helper, and the new `_on_equip_requested()` are
-new. The old `_banked_mana_crystal_count()`/`_banked_gear_count()` helpers
-are deleted; nothing else calls them.)
+unchanged from today's file — only `refresh()`'s body and the new
+`_on_equip_requested()` are new. The old `_banked_mana_crystal_count()`/
+`_banked_gear_count()` helpers are deleted; nothing else calls them.
+`GameSession.pending_gear` is passed straight to `build_loot_rows()` with
+no conversion needed — it's already a `Dictionary` of item id to count,
+the same shape `GameSession.build_loot_rows()` expects and the same shape
+`banked_gear` uses, per the fix applied during Step 6's manual
+verification; see that step's notes if you need the full rationale.)
 
 ## Step 5: Update `scenes/ui/party_details.tscn`
 
