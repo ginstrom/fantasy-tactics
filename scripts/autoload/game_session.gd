@@ -1,7 +1,7 @@
 extends Node
 
 const STARTING_SETTLEMENT_ID := "starting_settlement"
-const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(0, 0)
+const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
 const RUINED_FORTRESS_ID := "ruined_fortress"
@@ -213,8 +213,8 @@ const ENCOUNTER_TEMPLATE_ORDER := ["goblin_camp", "orc_outpost", "ruined_fortres
 # Mirrors world_map.gd's GRID_WIDTH/GRID_HEIGHT. Duplicated here (rather than
 # cross-referenced) because GameSession is an autoload with no dependency on
 # the world scene script; keep both in sync if the map grid ever resizes.
-const WORLD_GRID_WIDTH := 5
-const WORLD_GRID_HEIGHT := 5
+const WORLD_GRID_WIDTH := 7
+const WORLD_GRID_HEIGHT := 7
 
 const WARRIOR_ID := "warrior_001"
 
@@ -1156,11 +1156,12 @@ func _is_encounter_template_active(template_id: String) -> bool:
 ## Camp and Orc Outpost's own documented tiles — (4, 4) and (4, 0) — already
 ## sit in that far region, so scanning outward from there keeps fallback
 ## refills requiring meaningful travel instead of landing 1-2 tiles from
-## STARTING_SETTLEMENT_WORLD_POSITION at (0, 0), which a settlement-first scan
-## would otherwise hand out on literally every refill (both of those two
-## sites are marked previously-spawned from turn one, per reset()). The
-## Ruined Fortress's own documented position, (0, 4), is a different corner
-## this far-corner-first reasoning does not cover — but it does not need to:
+## STARTING_SETTLEMENT_WORLD_POSITION, now at the map's center, which a
+## settlement-first scan would otherwise hand out on literally every refill
+## (both of those two sites are marked previously-spawned from turn one, per
+## reset()). The Ruined Fortress's own documented position, (0, 4), is a
+## different corner this far-corner-first reasoning does not cover — but it
+## does not need to:
 ## the Ruined Fortress is never a starting site, so it is NOT marked
 ## previously-spawned at reset() time, and its own first-ever spawn (always a
 ## refill) takes the "documented position, not yet occupied, not yet used"

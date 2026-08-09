@@ -6,13 +6,13 @@ signal settlement_activated(location_id: String)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 
-const GRID_WIDTH := 5
-const GRID_HEIGHT := 5
+const GRID_WIDTH := 7
+const GRID_HEIGHT := 7
 const TILE_SIZE := 64
 const PARTY_MOVE_RANGE := 1
 
 const SETTLEMENT_ID := "starting_settlement"
-const SETTLEMENT_POSITION := Vector2i(0, 0)
+const SETTLEMENT_POSITION := Vector2i(3, 3)
 const PARTY_START := SETTLEMENT_POSITION
 
 const TILE_COLOR_LIGHT := Color(0.2, 0.3, 0.2)

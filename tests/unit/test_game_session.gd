@@ -8,7 +8,7 @@ func _party(party_id: String, member_ids: Array[String], location_id: String, de
 		"id": party_id,
 		"member_ids": member_ids,
 		"location_id": location_id,
-		"world_position": Vector2i(0, 0),
+		"world_position": GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION,
 		"deployed": deployed,
 		"travel_route": [] as Array[Vector2i],
 		"movement_spent": false,
@@ -95,7 +95,7 @@ func test_deploy_and_return_change_only_the_selected_party_state() -> void:
 	session.assign_adventurer_to_selected_party("warrior_001")
 	assert_true(session.depart_selected_party())
 	assert_true(session.has_deployed_party())
-	assert_eq(session.get_deployed_party_position(), Vector2i(0, 0))
+	assert_eq(session.get_deployed_party_position(), GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION)
 	session.set_deployed_party_position(Vector2i(1, 0))
 	session.return_deployed_party_to_settlement()
 	assert_false(session.has_deployed_party())
@@ -197,12 +197,19 @@ func test_setting_a_valid_adjacent_route_persists_it_without_moving() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	var route: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
+	var route: Array[Vector2i] = [
+		GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0),
+		GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(2, 0),
+	]
 
 	assert_true(session.set_deployed_party_route(route))
 
 	assert_eq(session.get_deployed_party_route(), route)
-	assert_eq(session.get_deployed_party_position(), Vector2i(0, 0), "Saving a route must not move the party")
+	assert_eq(
+		session.get_deployed_party_position(),
+		GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION,
+		"Saving a route must not move the party"
+	)
 
 
 func test_setting_an_empty_route_is_rejected() -> void:
@@ -232,13 +239,15 @@ func test_take_next_route_step_moves_one_tile_and_spends_movement() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0), Vector2i(2, 0)] as Array[Vector2i])
+	var step_one: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)
+	var step_two: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(2, 0)
+	session.set_deployed_party_route([step_one, step_two] as Array[Vector2i])
 
 	var moved: bool = session.take_next_route_step()
 
 	assert_true(moved)
-	assert_eq(session.get_deployed_party_position(), Vector2i(1, 0))
-	assert_eq(session.get_deployed_party_route(), [Vector2i(2, 0)])
+	assert_eq(session.get_deployed_party_position(), step_one)
+	assert_eq(session.get_deployed_party_route(), [step_two])
 	assert_true(session.get_selected_party().movement_spent)
 
 
@@ -248,13 +257,15 @@ func test_take_next_route_step_refuses_a_second_step_in_the_same_turn() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0), Vector2i(2, 0)] as Array[Vector2i])
+	var step_one: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)
+	var step_two: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(2, 0)
+	session.set_deployed_party_route([step_one, step_two] as Array[Vector2i])
 	session.take_next_route_step()
 
 	var moved_again: bool = session.take_next_route_step()
 
 	assert_false(moved_again)
-	assert_eq(session.get_deployed_party_position(), Vector2i(1, 0))
+	assert_eq(session.get_deployed_party_position(), step_one)
 
 
 func test_route_is_empty_after_the_final_step_completes_it() -> void:
@@ -263,7 +274,9 @@ func test_route_is_empty_after_the_final_step_completes_it() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i])
+	session.set_deployed_party_route(
+		[GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)] as Array[Vector2i]
+	)
 
 	session.take_next_route_step()
 
@@ -276,12 +289,13 @@ func test_end_world_turn_auto_steps_when_movement_is_unused() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i])
+	var step_one: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)
+	session.set_deployed_party_route([step_one] as Array[Vector2i])
 
 	var auto_moved: bool = session.end_world_turn()
 
 	assert_true(auto_moved)
-	assert_eq(session.get_deployed_party_position(), Vector2i(1, 0))
+	assert_eq(session.get_deployed_party_position(), step_one)
 	assert_eq(session.world_turn, 2)
 	assert_false(
 		session.get_selected_party().movement_spent, "Movement should be available again next turn"
@@ -294,7 +308,9 @@ func test_end_world_turn_does_not_move_again_after_a_manual_step() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0), Vector2i(2, 0)] as Array[Vector2i])
+	var step_one: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)
+	var step_two: Vector2i = GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(2, 0)
+	session.set_deployed_party_route([step_one, step_two] as Array[Vector2i])
 	session.take_next_route_step()
 
 	var auto_moved: bool = session.end_world_turn()
@@ -302,7 +318,7 @@ func test_end_world_turn_does_not_move_again_after_a_manual_step() -> void:
 	assert_false(auto_moved)
 	assert_eq(
 		session.get_deployed_party_position(),
-		Vector2i(1, 0),
+		step_one,
 		"End Turn must not add a second move after a manual step"
 	)
 	assert_eq(session.world_turn, 2)
@@ -314,7 +330,9 @@ func test_returning_home_clears_the_route() -> void:
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.depart_selected_party()
-	session.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i])
+	session.set_deployed_party_route(
+		[GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION + Vector2i(1, 0)] as Array[Vector2i]
+	)
 
 	session.return_deployed_party_to_settlement()
 	session.depart_selected_party()
@@ -1801,7 +1819,8 @@ func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 ## STARTING_SETTLEMENT_WORLD_POSITION at (0, 0) — even though both documented
 ## encounter positions, (4, 4) and (4, 0), sit at the far side of the grid.
 ## The scan must instead search far-corner-first so a refilled site keeps
-## costing meaningful travel time rather than landing next to the settlement.
+## landing away from the map's center — where the Encampment now sits —
+## rather than immediately adjacent to it.
 func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -1828,17 +1847,17 @@ func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> v
 
 	assert_eq(
 		new_orc_position,
-		Vector2i(3, 4),
-		"A far-corner-first fallback scan should land the refill beside the far corner, not the settlement"
+		Vector2i(6, 6),
+		"A far-corner-first fallback scan should land the refill at the far corner it starts from"
 	)
 	assert_ne(
 		new_orc_position,
-		Vector2i(1, 0),
+		Vector2i(4, 3),
 		"The refill must not land one tile from the settlement"
 	)
 	assert_ne(
 		new_orc_position,
-		Vector2i(0, 1),
+		Vector2i(3, 4),
 		"The refill must not land one tile from the settlement"
 	)
 
