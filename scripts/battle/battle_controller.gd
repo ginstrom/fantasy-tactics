@@ -69,7 +69,7 @@ func _ready() -> void:
 	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
 		var adventurer_id: String = _player_adventurer_ids[index]
 		var damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
-		units.append(UnitScript.new(
+		var player_unit := UnitScript.new(
 			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
 			GameSession.get_effective_move_range(adventurer_id),
 			GameSession.get_effective_max_health(adventurer_id),
@@ -80,14 +80,20 @@ func _ready() -> void:
 			adventurer_id,
 			GameSession.get_effective_defense(adventurer_id),
 			GameSession.get_effective_resistance(adventurer_id)
-		))
+		)
+		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
+		units.append(player_unit)
 	var enemy_count: int = enemy_stats.get("count", 1)
+	var enemy_type_name: String = tr(enemy_stats.name_key)
 	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
-		units.append(UnitScript.new(
+		var enemy_unit := UnitScript.new(
 			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.attack_damage, enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key), "", 0, 0, enemy_stats.get("kill_xp", 0)
-		))
+		)
+		enemy_unit.display_name = "%s %d" % [enemy_type_name, index + 1]
+		enemy_unit.enemy_type_name = enemy_type_name
+		units.append(enemy_unit)
 	# Round one is a new round too: open it with the first party member
 	# already selected rather than forcing a manual pick.
 	selected_unit = _first_living_player_unit()

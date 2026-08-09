@@ -26,6 +26,20 @@ var resistance: int
 # XP awarded to the party when this unit is the one defeated (see
 # GameSession.*_ENEMY_STATS.kill_xp). 0 and unused for player-side units.
 var kill_xp: int = 0
+# Human-readable label for logs/detail panels. "Warrior"/"Warrior 2" for a
+# player unit (copied from the adventurer's own name — already unique per
+# party member). "Kobold 1"/"Kobold 2" for an enemy unit: always indexed,
+# even when only one of that type is fielded, because a battle only ever
+# fields one enemy species (see GameSession.STAR_ENEMY_COMPOSITIONS) so the
+# index alone already disambiguates. Empty until BattleController assigns
+# it in _ready() — the constructor is intentionally not touched here (every
+# existing call site constructs Unit.new() positionally; these two fields
+# follow this file's existing pattern of being set directly on the
+# instance instead, see e.g. defense/resistance in the tests).
+var display_name: String = ""
+# "Kobold" for an enemy unit (its species name, with no index) -- used to
+# group kills by type. Empty for a player unit.
+var enemy_type_name: String = ""
 
 
 func _init(

@@ -431,6 +431,56 @@ func test_ready_falls_back_to_the_default_warrior_when_no_party_is_selected() ->
 	assert_eq(warrior.move_range, GameSession.get_effective_move_range(GameSession.WARRIOR_ID))
 
 
+func test_ready_assigns_the_adventurers_name_as_the_player_units_display_name() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	assert_eq(warrior.display_name, "Warrior")
+	assert_eq(warrior.enemy_type_name, "", "Player units have no enemy type name")
+
+
+func test_ready_indexes_even_a_solo_enemy() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+
+	assert_eq(goblin.display_name, "Goblin 1", "Enemies are always indexed, even the only one fielded")
+	assert_eq(goblin.enemy_type_name, "Goblin")
+
+
+func test_ready_assigns_stable_indexed_display_names_to_same_type_enemies() -> void:
+	GameSession.reset()
+	var enemy_stats: Dictionary = GameSession.KOBOLD_ENEMY_STATS.duplicate(true)
+	enemy_stats["count"] = 3
+	GameSession.active_encounters.append({
+		"id": "capacity_test",
+		"template_id": GameSession.RUINED_FORTRESS_ID,
+		"position": Vector2i(2, 2),
+		"name_key": "expedition.ruined_fortress.name",
+		"danger_key": "expedition.danger.high",
+		"difficulty": 3,
+		"kill_xp": 3,
+		"clear_xp": 30,
+		"enemy": enemy_stats,
+	})
+	GameSession.selected_encounter = "capacity_test"
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var names: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			names.append(unit.display_name)
+			assert_eq(unit.enemy_type_name, "Kobold")
+	names.sort()
+	assert_eq(names, ["Kobold 1", "Kobold 2", "Kobold 3"])
+
+
 func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(
