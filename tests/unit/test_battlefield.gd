@@ -281,6 +281,23 @@ func test_bottom_panel_does_not_share_a_parent_with_the_portrait_panel() -> void
 	)
 
 
+func test_combat_log_shares_the_bottom_panel_stack_and_starts_empty() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.log_list.get_parent().get_parent(), battlefield.hint.get_parent())
+	assert_eq(battlefield.log_list.get_child_count(), 0)
+
+
+func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var scroll_container: Control = battlefield.log_list.get_parent()
+	assert_true(scroll_container is ScrollContainer)
+	assert_gt(scroll_container.custom_minimum_size.y, 0.0)
+
+
 func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
