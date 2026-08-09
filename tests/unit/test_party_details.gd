@@ -125,6 +125,39 @@ func test_party_details_shows_zero_gold_on_a_fresh_session() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
 
 
+func test_a_deployed_partys_pending_reward_shows_next_to_gold() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.pending_reward = 15
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_true(screen.get_node("Body/Center/VBox/PendingRewardLabel").visible)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/PendingRewardLabel").text,
+		tr("information.pending_reward") % 15
+	)
+
+
+func test_pending_reward_row_is_hidden_when_zero_or_the_party_is_encamped() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var deployed_screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	assert_false(
+		deployed_screen.get_node("Body/Center/VBox/PendingRewardLabel").visible,
+		"Zero pending reward must not show an empty row"
+	)
+
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.pending_reward = 5
+	var encamped_screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	assert_false(
+		encamped_screen.get_node("Body/Center/VBox/PendingRewardLabel").visible,
+		"An encamped party must not show a pending reward row even if one is somehow still queued"
+	)
+
+
 func test_a_deployed_partys_loot_table_shows_everything_it_is_carrying() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

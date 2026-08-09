@@ -16,13 +16,17 @@ extends Control
 ## table at all — deposit_pending_reward() has already moved that loot
 ## into GameSession.banked_gear/mana_crystals (Stores' inventory) by the
 ## time a party is back at the Encampment. GoldLabel always shows
-## GameSession.gold (banked gold) regardless of deployment state — that's
-## unchanged, pre-existing behavior this screen doesn't touch.
+## GameSession.gold (banked gold) regardless of deployment state.
+## PendingRewardLabel shows GameSession.pending_reward alongside it,
+## visible only while deployed with a nonzero amount queued — the same
+## "Unbanked reward: N gold" row/translation key InformationPanel already
+## uses on the World Map (information_panel.gd's refresh_party()).
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
 @onready var gold_label: Label = $Body/Center/VBox/GoldLabel
+@onready var pending_reward_label: Label = $Body/Center/VBox/PendingRewardLabel
 @onready var loot_table: LootTable = $Body/Center/VBox/LootTable
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
@@ -55,6 +59,9 @@ func refresh() -> void:
 	party_name_label.text = "" if party.is_empty() else party.name
 	gold_label.text = tr("party_details.gold") % GameSession.gold
 	var deployed: bool = party.get("deployed", false)
+	pending_reward_label.visible = deployed and GameSession.pending_reward > 0
+	if pending_reward_label.visible:
+		pending_reward_label.text = tr("information.pending_reward") % GameSession.pending_reward
 	loot_table.visible = deployed
 	if deployed:
 		loot_table.set_rows(GameSession.build_loot_rows(GameSession.pending_gear, GameSession.pending_mana_crystals))
