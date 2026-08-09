@@ -9,12 +9,21 @@ extends Control
 ## party, since you can't add a member to a party that's out in the field,
 ## and disabled for an encamped party with no available adventurer left to
 ## add.
+##
+## Loot: a deployed party's LootTable shows everything it's carrying
+## (GameSession.pending_gear/pending_mana_crystals, itemized) with a
+## party-scoped [Equip] and no [Sell]. An encamped party shows no loot
+## table at all — deposit_pending_reward() has already moved that loot
+## into GameSession.banked_gear/mana_crystals (Stores' inventory) by the
+## time a party is back at the Encampment. GoldLabel always shows
+## GameSession.gold (banked gold) regardless of deployment state — that's
+## unchanged, pre-existing behavior this screen doesn't touch.
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
 @onready var gold_label: Label = $Body/Center/VBox/GoldLabel
-@onready var loot_label: Label = $Body/Center/VBox/LootLabel
+@onready var loot_table: LootTable = $Body/Center/VBox/LootTable
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
 @onready var add_member_button: Button = $Body/Center/VBox/AddMemberButton
@@ -30,6 +39,8 @@ func _ready() -> void:
 	member_table.row_selected.connect(_on_row_selected)
 	member_table.row_activated.connect(_on_row_activated)
 	member_table.set_columns(_build_columns())
+	loot_table.configure(false, true)
+	loot_table.equip_requested.connect(_on_equip_requested)
 	refresh()
 
 
@@ -43,7 +54,10 @@ func refresh() -> void:
 	var party := GameSession.get_party(party_id)
 	party_name_label.text = "" if party.is_empty() else party.name
 	gold_label.text = tr("party_details.gold") % GameSession.gold
-	loot_label.text = tr("party_details.loot") % [_banked_mana_crystal_count(), _banked_gear_count()]
+	var deployed: bool = party.get("deployed", false)
+	loot_table.visible = deployed
+	if deployed:
+		loot_table.set_rows(GameSession.build_loot_rows(GameSession.pending_gear, GameSession.pending_mana_crystals))
 	var rows := _build_rows(party)
 	member_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
@@ -51,7 +65,7 @@ func refresh() -> void:
 	# sense to offer, so it disappears entirely rather than merely staying
 	# disabled. An encamped party with nobody left to recruit keeps the
 	# button visible but disabled, so its presence isn't a mystery.
-	add_member_button.visible = not party.get("deployed", false)
+	add_member_button.visible = not deployed
 	add_member_button.disabled = (
 		GameSession.get_available_adventurers().is_empty()
 		or party.get("member_ids", []).size() >= GameSession.get_max_party_size()
@@ -86,20 +100,6 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 	return rows
 
 
-func _banked_mana_crystal_count() -> int:
-	var total := 0
-	for tier in GameSession.mana_crystals:
-		total += GameSession.mana_crystals[tier]
-	return total
-
-
-func _banked_gear_count() -> int:
-	var total := 0
-	for item_id in GameSession.banked_gear:
-		total += GameSession.banked_gear[item_id]
-	return total
-
-
 ## A selection is only valid while it names a current member of this party
 ## (not merely an adventurer that still exists somewhere): the party may have
 ## been reset out from under this screen, or the member may have left the
@@ -130,6 +130,10 @@ func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
 
 func _on_add_member_pressed() -> void:
 	GameManager.go_to_add_member(party_id)
+
+
+func _on_equip_requested(item_id: String) -> void:
+	GameManager.go_to_assign_equipment(item_id, party_id, GameManager.AssignEquipmentOrigin.PARTY_DETAILS)
 
 
 ## Reachable from both Parties (an encamped party) and, since World Map's

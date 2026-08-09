@@ -101,27 +101,73 @@ func test_reads_the_party_id_from_route_context() -> void:
 	assert_eq(screen.party_id, GameSession.FIRST_PARTY_ID)
 
 
-func test_party_details_shows_gold_and_banked_loot() -> void:
+func test_party_details_shows_gold_and_hides_the_loot_table_for_an_encamped_party() -> void:
 	GameSession.create_party()
 	GameSession.gold = 250
+	# Banked (not pending) loot -- Stores' inventory, not this party's own.
+	# An encamped party has already deposited everything it carried; the
+	# loot table must not show Stores' inventory here at all.
 	GameSession.mana_crystals = {1: 2, 2: 1}
 	GameSession.banked_gear = {"dagger_iron": 1, "leather_armor": 2}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 250)
-	assert_eq(
-		screen.get_node("Body/Center/VBox/LootLabel").text,
-		tr("party_details.loot") % [3, 3],
-		"3 mana crystals (2 tier-1 + 1 tier-2) and 3 gear pieces (1 dagger + 2 armor)"
+	assert_false(
+		screen.get_node("Body/Center/VBox/LootTable").visible,
+		"Loot has already banked into Stores by the time a party is back at the Encampment"
 	)
 
 
-func test_party_details_shows_zero_gold_and_loot_on_a_fresh_session() -> void:
+func test_party_details_shows_zero_gold_on_a_fresh_session() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
-	assert_eq(screen.get_node("Body/Center/VBox/LootLabel").text, tr("party_details.loot") % [0, 0])
+
+
+func test_a_deployed_partys_loot_table_shows_everything_it_is_carrying() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.pending_mana_crystals = {1: 2}
+	GameSession.pending_gear = {"dagger_iron": 2}
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
+
+	assert_true(screen.get_node("Body/Center/VBox/LootTable").visible)
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Iron Dagger", "Mana Crystal (Tier 1)"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["2", "2"])
+
+
+## LootTable no longer puts Sell/Equip in per-row Tree buttons -- selecting
+## a row and clicking [View] (or double-clicking it) opens LootDetailPanel,
+## a real PanelContainer with real, text-labeled Sell/Equip buttons (see
+## scripts/ui/loot_table.gd/loot_detail_panel.gd; this redesign landed
+## during Step 4's manual verification, after this step was originally
+## drafted). configure(false, true) means the detail panel's Equip button
+## shows for a gear row and its Sell button never does.
+func test_deployed_loot_table_has_an_equip_action_but_no_sell_action() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.pending_gear = {"dagger_iron": 1}
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
+	var item := tree.get_root().get_first_child()
+	item.select(0)
+	tree.emit_signal("item_selected")
+	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
+
+	var detail_panel: Control = screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel")
+	assert_true(detail_panel.visible)
+	assert_true(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
+	assert_false(detail_panel.get_node("Content/ButtonRow/SellButton").visible)
+
+
+func test_equip_routes_via_game_manager_scoped_to_this_party() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/party_details.gd")
+	assert_string_contains(source, "GameManager.go_to_assign_equipment(item_id, party_id")
+	assert_string_contains(source, "GameManager.AssignEquipmentOrigin.PARTY_DETAILS")
 
 
 func test_an_empty_party_shows_the_empty_state_without_errors() -> void:

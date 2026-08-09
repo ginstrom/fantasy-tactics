@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/party_details.gd" id="1_party_details"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 [ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="3_table_view"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="4_camp_nav"]
+[ext_resource type="PackedScene" path="res://scenes/ui/loot_table.tscn" id="5_loot_table"]
 
 [node name="PartyDetails" type="Control"]
 layout_mode = 3
@@ -48,9 +49,10 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="LootLabel" type="Label" parent="Body/Center/VBox"]
+[node name="LootTable" parent="Body/Center/VBox" instance=ExtResource("5_loot_table")]
+visible = false
 layout_mode = 2
-horizontal_alignment = 1
+custom_minimum_size = Vector2(520, 160)
 
 [node name="MembersLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
