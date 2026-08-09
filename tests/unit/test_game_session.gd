@@ -613,11 +613,13 @@ func test_reset_clears_gold_and_pending_reward() -> void:
 	autofree(session)
 	session.gold = 5
 	session.pending_reward = 5
+	session.battle_reward = 5
 
 	session.reset()
 
 	assert_eq(session.gold, 0)
 	assert_eq(session.pending_reward, 0)
+	assert_eq(session.battle_reward, 0)
 
 
 func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_gold() -> void:
@@ -821,6 +823,40 @@ func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
 	assert_eq(session.pending_gear, {})
 
 
+func test_merge_battle_loot_into_party_moves_the_battle_store_into_the_partys_own() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_reward = 5
+	session.battle_mana_crystals = {1: 2}
+	session.battle_gear = {"dagger_iron": 1}
+	session.pending_reward = 10
+	session.pending_mana_crystals = {1: 1}
+	session.pending_gear = {"buckler_wood": 1}
+
+	session.merge_battle_loot_into_party()
+
+	assert_eq(session.pending_reward, 15)
+	assert_eq(session.pending_mana_crystals, {1: 3})
+	assert_eq(session.pending_gear, {"dagger_iron": 1, "buckler_wood": 1})
+	assert_eq(session.battle_reward, 0)
+	assert_eq(session.battle_mana_crystals, {})
+	assert_eq(session.battle_gear, {})
+
+
+func test_merge_battle_loot_into_party_is_a_no_op_when_the_battle_store_is_empty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.pending_reward = 10
+	session.pending_mana_crystals = {1: 1}
+	session.pending_gear = {"buckler_wood": 1}
+
+	session.merge_battle_loot_into_party()
+
+	assert_eq(session.pending_reward, 10)
+	assert_eq(session.pending_mana_crystals, {1: 1})
+	assert_eq(session.pending_gear, {"buckler_wood": 1})
+
+
 func test_reset_clears_loot_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -828,6 +864,8 @@ func test_reset_clears_loot_state() -> void:
 	session.banked_gear = {"shortsword_iron": 2}
 	session.pending_mana_crystals = {1: 1}
 	session.pending_gear = {"dagger_iron": 1}
+	session.battle_mana_crystals = {1: 1}
+	session.battle_gear = {"dagger_iron": 1}
 
 	session.reset()
 
@@ -835,6 +873,8 @@ func test_reset_clears_loot_state() -> void:
 	assert_eq(session.banked_gear, {})
 	assert_eq(session.pending_mana_crystals, {})
 	assert_eq(session.pending_gear, {})
+	assert_eq(session.battle_mana_crystals, {})
+	assert_eq(session.battle_gear, {})
 
 
 func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:

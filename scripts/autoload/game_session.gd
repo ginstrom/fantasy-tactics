@@ -373,6 +373,9 @@ var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
 var pending_mana_crystals: Dictionary = {}
 var pending_gear: Dictionary = {}
+var battle_reward: int = 0
+var battle_mana_crystals: Dictionary = {}
+var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
 var player_name: String = DEFAULT_PLAYER_NAME
 
@@ -435,6 +438,9 @@ func reset() -> void:
 	banked_gear = {}
 	pending_mana_crystals = {}
 	pending_gear = {}
+	battle_reward = 0
+	battle_mana_crystals = {}
+	battle_gear = {}
 	has_trading_post = false
 	player_name = DEFAULT_PLAYER_NAME
 
@@ -889,16 +895,41 @@ func abandon_current_encounter() -> void:
 	selected_encounter = ""
 
 
+## Adds every count in source into dest in place -- both id/tier -> count
+## Dictionaries sharing the exact shape battle_gear/pending_gear/banked_gear
+## (and their mana-crystal counterparts) all use. The one function shared by
+## both loot-store merges: battle -> party (merge_battle_loot_into_party())
+## and party -> encampment (deposit_pending_reward()).
+func _merge_counts(source: Dictionary, dest: Dictionary) -> void:
+	for key in source:
+		dest[key] = dest.get(key, 0) + source[key]
+
+
+## Merges this battle's own loot store into the party's carried store. Called
+## once the player leaves the victory summary screen for the World Map (see
+## GameManager.go_to_world_map()) -- a no-op if the battle store is already
+## empty, e.g. when go_to_world_map() is reached from anywhere other than
+## straight out of a battle.
+func merge_battle_loot_into_party() -> void:
+	pending_reward += battle_reward
+	battle_reward = 0
+	_merge_counts(battle_gear, pending_gear)
+	_merge_counts(battle_mana_crystals, pending_mana_crystals)
+	battle_gear = {}
+	battle_mana_crystals = {}
+
+
+## Merges the party's carried store into the Encampment's bank -- the other
+## half of the shared _merge_counts() pair (see merge_battle_loot_into_
+## party() for the battle -> party merge).
 func deposit_pending_reward() -> int:
 	var deposited := pending_reward
 	gold += deposited
 	pending_reward = 0
-	for tier in pending_mana_crystals:
-		mana_crystals[tier] = mana_crystals.get(tier, 0) + pending_mana_crystals[tier]
-	pending_mana_crystals = {}
-	for item_id in pending_gear:
-		banked_gear[item_id] = banked_gear.get(item_id, 0) + pending_gear[item_id]
+	_merge_counts(pending_gear, banked_gear)
+	_merge_counts(pending_mana_crystals, mana_crystals)
 	pending_gear = {}
+	pending_mana_crystals = {}
 	return deposited
 
 
