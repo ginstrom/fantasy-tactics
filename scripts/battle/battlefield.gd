@@ -41,6 +41,13 @@ var _pending_victory_completion: bool = false
 # distinct kill in the battle to award XP.
 var _kill_xp_awarded_units: Array = []
 var _clear_xp_awarded: bool = false
+# Identity guard so a repeated board_changed event for the same attack (see
+# _on_board_changed()) can't append the same log line twice. Compared with
+# is_same() rather than == because try_attack_selected_unit() always
+# assigns last_attack_result a brand-new Dictionary literal per attack, so
+# reference identity alone already distinguishes "already logged this" from
+# "a genuinely new attack" -- no need to compare field-by-field.
+var _last_logged_attack_result: Dictionary = {}
 
 
 func _ready() -> void:
@@ -71,6 +78,8 @@ func _play_enemy_turn() -> void:
 		grid._draw_units()
 		grid._update_highlights()
 		status.text = _describe_step(step)
+		if step.type == "attack":
+			_log_attack(step)
 		await get_tree().create_timer(enemy_turn_beat_seconds).timeout
 
 	if grid.is_battle_lost():
@@ -103,6 +112,7 @@ func _on_board_changed() -> void:
 	portrait_panel.refresh()
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
+		_log_attack(grid.last_attack_result)
 
 	if grid.is_battle_won():
 		_resolve_battle(true)
@@ -267,6 +277,36 @@ func _describe_step(step: Dictionary) -> String:
 
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
+
+
+func _log_attack(step: Dictionary) -> void:
+	if is_same(_last_logged_attack_result, step):
+		return
+	_last_logged_attack_result = step
+	_append_log_line(_describe_log_entry(step))
+
+
+func _describe_log_entry(step: Dictionary) -> String:
+	var attacker_name: String = step.attacker.display_name
+	var defender_name: String = step.defender.display_name
+	if not step.hit:
+		return tr("battle.log.miss") % [attacker_name, defender_name]
+	var line: String = tr("battle.log.hit") % [attacker_name, defender_name, step.damage]
+	if step.defeated:
+		line += " " + tr("battle.log.defeated") % defender_name
+	return line
+
+
+func _append_log_line(text: String) -> void:
+	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.text = text
+	log_list.add_child(label)
+	call_deferred("_scroll_log_to_bottom")
+
+
+func _scroll_log_to_bottom() -> void:
+	log_scroll.scroll_vertical = int(log_scroll.get_v_scroll_bar().max_value)
 
 
 func _update_health_labels() -> void:

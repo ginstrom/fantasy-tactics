@@ -298,6 +298,129 @@ func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
 	assert_gt(scroll_container.custom_minimum_size.y, 0.0)
 
 
+func _stage_an_adjacent_pair(battlefield: Node2D) -> Dictionary:
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.grid_position = warrior.grid_position + Vector2i(1, 0)
+	battlefield.grid.selected_unit = warrior
+	return {"warrior": warrior, "goblin": goblin}
+
+
+func test_a_hit_appends_a_detailed_line_naming_both_units_and_the_damage() -> void:
+	# Earlier tests in this file leave a two-member party selected without
+	# resetting it (see _setup_two_member_party() callers above); reset so the
+	# staged pair below gets the single-Warrior fallback fielding it assumes
+	# -- otherwise the second party member would already occupy the tile
+	# _stage_an_adjacent_pair() moves the goblin onto.
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 3
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.hit") % [units.warrior.display_name, units.goblin.display_name, 3]
+	)
+
+
+func test_a_miss_appends_a_miss_line_naming_both_units() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.99
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.miss") % [units.warrior.display_name, units.goblin.display_name]
+	)
+
+
+func test_a_killing_blow_appends_a_defeated_suffix() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.health = 1
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_string_contains(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.defeated") % units.goblin.display_name
+	)
+
+
+func test_a_repeated_board_changed_event_does_not_duplicate_the_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	battlefield._on_board_changed()
+
+	assert_eq(
+		battlefield.log_list.get_child_count(), 1,
+		"A repeated board_changed for the same already-logged attack must not re-log it"
+	)
+
+
+func test_enemy_turn_attacks_are_appended_to_the_log() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.grid_position = warrior.grid_position + Vector2i(1, 0)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield._on_end_turn_pressed()
+
+	while battlefield._enemy_turn_in_progress:
+		await get_tree().process_frame
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		# GOBLIN_ENEMY_STATS.attack_damage is 2 (min == max, so deterministic
+		# once hit_roll is forced to 0.0) -- see game_session.gd.
+		tr("battle.log.hit") % [goblin.display_name, warrior.display_name, 2]
+	)
+
+
+func test_enemy_turn_moves_are_not_logged() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	# The default fallback fielding (no party assigned) puts the Warrior at
+	# PLAYER_START_POSITIONS[0] and the goblin at ENEMY_START_POSITIONS[0],
+	# which are not adjacent -- see test_run_enemy_turn_moves_the_goblin_
+	# toward_the_nearest_player_unit for the same non-adjacent setup, so this
+	# enemy turn is guaranteed to be a move with no attack.
+	battlefield._on_end_turn_pressed()
+
+	while battlefield._enemy_turn_in_progress:
+		await get_tree().process_frame
+
+	assert_eq(battlefield.log_list.get_child_count(), 0, "A move-only enemy turn must not add any log line")
+
+
 func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
