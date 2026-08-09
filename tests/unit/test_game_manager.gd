@@ -8,6 +8,7 @@ func after_each() -> void:
 	# close_game_menu() cleanup, leaving the tree paused for later tests.
 	get_tree().paused = false
 	GameManager.add_member_return_party_id = ""
+	GameManager.battle_result_summary = {}
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
 
@@ -613,3 +614,15 @@ func test_go_to_assign_equipment_rejects_an_unknown_item_id() -> void:
 
 	assert_eq(manager.go_to_assign_equipment("no_such_item"), ERR_INVALID_DATA)
 	assert_eq(manager.route_context_id, "")
+
+
+func test_go_to_battle_result_stores_the_summary_dictionary() -> void:
+	var summary := {"kills_by_type": {"Goblin": 1}, "total_xp": 15.0, "party_member_count": 1, "leveled_up_ids": []}
+
+	GameManager.go_to_battle_result(summary)
+
+	assert_eq(GameManager.battle_result_summary, summary)
+
+
+func test_battle_result_summary_starts_empty() -> void:
+	assert_eq(GameManager.battle_result_summary, {})

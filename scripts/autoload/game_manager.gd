@@ -22,6 +22,7 @@ const TRADE_SCENE := "res://scenes/ui/trade.tscn"
 const STORES_SCENE := "res://scenes/ui/stores.tscn"
 const TRADING_POST_SCENE := "res://scenes/ui/trading_post.tscn"
 const ASSIGN_EQUIPMENT_SCENE := "res://scenes/ui/assign_equipment.tscn"
+const BATTLE_RESULT_SCENE := "res://scenes/ui/battle_result.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
@@ -46,6 +47,14 @@ var route_context_id: String = ""
 # route rather than left to go stale.
 var unit_details_origin: String = ""
 var add_member_return_party_id: String = ""
+
+# Transient victory-summary payload, mirroring route_context_id's "set
+# right before navigating, read once in the destination scene's _ready()"
+# pattern. Battlefield builds this from data no other system durably
+# tracks (this battle's kills/XP/level-ups), so — unlike route_context_id,
+# which always names something GameSession already owns — there is no
+# live GameSession id to re-validate on the way in.
+var battle_result_summary: Dictionary = {}
 
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
@@ -200,6 +209,11 @@ func go_to_party_details(party_id: String) -> Error:
 	unit_details_origin = ""
 	add_member_return_party_id = ""
 	return _change_scene(PARTY_DETAILS_SCENE)
+
+
+func go_to_battle_result(summary: Dictionary) -> Error:
+	battle_result_summary = summary
+	return _change_scene(BATTLE_RESULT_SCENE)
 
 
 ## The pre-Roster entry path: unit_details_origin is always cleared here, so
