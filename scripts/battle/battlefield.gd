@@ -42,6 +42,22 @@ var _pending_victory_completion: bool = false
 # distinct kill in the battle to award XP.
 var _kill_xp_awarded_units: Array = []
 var _clear_xp_awarded: bool = false
+# Populated over the course of the battle for the victory summary screen
+# (see _finish_victory()). Keyed by Unit.enemy_type_name (Step 2) rather
+# than display_name, since the summary groups "2 Goblins", not "Goblin 1"
+# and "Goblin 2" separately -- and a battle only ever fields one enemy
+# species (see GameSession.STAR_ENEMY_COMPOSITIONS), so this dict never
+# holds more than one key in practice today.
+var _kills_by_type: Dictionary = {}
+# Every _award_party_xp() call (kill or clear) adds its amount here, so the
+# summary can show a true battle total regardless of how many separate
+# awards produced it.
+var _total_xp_awarded: float = 0.0
+# Deduplicated: a member can level up once from a kill-triggered award and
+# again from the clear-triggered award in the same battle (each call to
+# GameSession.award_party_xp() only reports members who crossed a
+# threshold *during that call*), so this must not just concatenate.
+var _leveled_up_ids: Array[String] = []
 # Identity guard so a repeated board_changed event for the same attack (see
 # _on_board_changed()) can't append the same log line twice. Compared with
 # is_same() rather than == because try_attack_selected_unit() always
@@ -155,16 +171,16 @@ func _current_expedition() -> Dictionary:
 func _apply_battle_outcome(victory: bool) -> void:
 	if victory:
 		# Clear XP only on victory, and only while selected_encounter (read by
-		# _current_expedition()) is still set — GameManager.complete_battle()
-		# clears it right after.
+		# _current_expedition()) is still set — _finish_victory() clears it
+		# right after via GameSession.complete_current_encounter().
 		_award_clear_xp()
 		# _award_clear_xp() may have just queued a level-up (on top of any
-		# still-showing kill-triggered one): the battle-result scene
-		# transition must wait for the whole queue to resolve first.
+		# still-showing kill-triggered one): the summary-screen transition
+		# must wait for the whole queue to resolve first.
 		if _level_up_active:
 			_pending_victory_completion = true
 			return
-		GameManager.complete_battle()
+		_finish_victory()
 	else:
 		GameManager.fail_battle()
 
@@ -178,6 +194,7 @@ func _award_kill_xp(unit) -> void:
 	if _kill_xp_awarded_units.has(unit):
 		return
 	_kill_xp_awarded_units.append(unit)
+	_kills_by_type[unit.enemy_type_name] = _kills_by_type.get(unit.enemy_type_name, 0) + 1
 	_award_party_xp(unit.kill_xp)
 
 
@@ -194,6 +211,7 @@ func _award_clear_xp() -> void:
 func _award_party_xp(amount: float) -> void:
 	if amount <= 0:
 		return
+	_total_xp_awarded += amount
 	# Captured before GameSession.award_party_xp() mutates anything, so each
 	# leveled member's health-gain can be shown later even though GameSession
 	# already applies the increase as part of this same call.
@@ -205,6 +223,8 @@ func _award_party_xp(amount: float) -> void:
 	for adventurer_id in leveled_up:
 		_refresh_unit_health(adventurer_id)
 		_queue_level_up(adventurer_id, health_before.get(adventurer_id, 0))
+		if not _leveled_up_ids.has(adventurer_id):
+			_leveled_up_ids.append(adventurer_id)
 
 
 ## Applies a mid-battle level-up's health increase to the matching on-field
@@ -251,7 +271,26 @@ func _on_level_up_queue_drained() -> void:
 	if not _pending_victory_completion:
 		return
 	_pending_victory_completion = false
-	GameManager.complete_battle()
+	_finish_victory()
+
+
+## Rolls this battle's loot into GameSession's pending_* fields (see
+## GameSession.complete_current_encounter() -> _roll_and_queue_loot()) and
+## routes to the victory summary screen with everything this battle
+## accumulated. Unlike GameManager.complete_battle() (still used by
+## scripts/tools/screenshot_tour.gd to skip straight to the World Map),
+## this is the real gameplay path -- it shows the summary before the
+## player ever reaches the World Map.
+func _finish_victory() -> void:
+	GameSession.complete_current_encounter()
+	var party := GameSession.get_party(GameSession.selected_party_id)
+	var summary := {
+		"kills_by_type": _kills_by_type,
+		"total_xp": _total_xp_awarded,
+		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
+		"leveled_up_ids": _leveled_up_ids,
+	}
+	GameManager.go_to_battle_result(summary)
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

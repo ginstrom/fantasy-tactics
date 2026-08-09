@@ -976,3 +976,79 @@ func test_clear_xp_with_no_level_up_completes_the_battle_immediately() -> void:
 
 	assert_false(battlefield.level_up.visible)
 	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
+
+
+func test_a_victorious_battle_reports_kills_grouped_by_type_to_the_summary() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var units := _stage_a_killing_blow(battlefield)
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(GameManager.battle_result_summary.kills_by_type, {tr("battle.enemy.goblin"): 1})
+
+
+func test_a_victorious_battle_reports_total_and_per_member_xp_to_the_summary() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	var units := _stage_a_killing_blow(battlefield)
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(
+		GameManager.battle_result_summary.total_xp, 15.0,
+		"5 goblin kill XP + 10 goblin camp clear XP"
+	)
+	assert_eq(GameManager.battle_result_summary.party_member_count, 1)
+
+
+func test_a_victorious_battle_with_no_level_up_reports_an_empty_leveled_up_list() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(GameManager.battle_result_summary.leveled_up_ids, [])
+
+
+func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._apply_battle_outcome(true)
+	assert_true(battlefield.level_up.visible, "sanity check: this setup crosses the level-2 threshold")
+	battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_eq(GameManager.battle_result_summary.leveled_up_ids, ["warrior_001"])
+
+
+func test_multiple_kills_in_one_battle_are_tallied_by_type_not_overwritten() -> void:
+	var battlefield := _setup_orc_outpost_battle(func(_option_count: int) -> int: return 0)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var first_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var second_enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[1])
+	first_enemy.grid_position = warrior.grid_position + Vector2i(1, 0)
+	first_enemy.health = 1
+	second_enemy.grid_position = warrior.grid_position + Vector2i(0, 1)
+	second_enemy.health = 1
+	battlefield.grid.selected_unit = warrior
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.try_attack_selected_unit(first_enemy.grid_position)
+	warrior.has_acted = false
+	battlefield.grid.try_attack_selected_unit(second_enemy.grid_position)
+
+	battlefield._apply_battle_outcome(true)
+	# This fixture's 2 kill-XP awards (5 each) plus the Orc Outpost's 20 clear
+	# XP total 30, crossing the level-2 threshold (20) — deferring
+	# _finish_victory() until the level-up modal resolves, same as
+	# test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary.
+	# Dismiss it exactly as a player would so the summary actually gets built.
+	if battlefield.level_up.visible:
+		battlefield.level_up.continue_button.emit_signal("pressed")
+
+	assert_eq(GameManager.battle_result_summary.kills_by_type, {tr("battle.enemy.goblin"): 2})
