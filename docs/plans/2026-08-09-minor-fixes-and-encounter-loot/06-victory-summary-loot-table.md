@@ -463,23 +463,34 @@ func test_shows_this_battles_loot_as_a_table() -> void:
 		"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1, "leveled_up_ids": [],
 		"loot_gear_counts": {"shortsword_iron": 1}, "loot_mana_crystal_counts": {1: 2},
 	})
-	var tree: Tree = screen.get_node("Center/VBox/LootTable/Table/Tree")
+	var tree: Tree = screen.get_node("Center/VBox/LootTable/Content/Table/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Iron Shortsword", "Mana Crystal (Tier 1)"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "2"])
 
 
-## Columns with show_sell=false, show_equip=true: name=0, type=1, count=2,
-## price=3, equip=4 -- 5 total, i.e. no Sell column exists at all.
+## LootTable no longer puts Sell/Equip in per-row Tree buttons -- selecting
+## a row and clicking [View] (or double-clicking it) opens LootDetailPanel,
+## a real PanelContainer with real, text-labeled Sell/Equip buttons (see
+## scripts/ui/loot_table.gd/loot_detail_panel.gd; this redesign landed
+## during Step 4's manual verification, after this step was originally
+## drafted). configure(false, true) means the detail panel's Equip button
+## shows for a gear row and its Sell button never does.
 func test_loot_table_has_an_equip_action_but_no_sell_action() -> void:
 	var screen := _open_battle_result({
 		"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1, "leveled_up_ids": [],
 		"loot_gear_counts": {"shortsword_iron": 1},
 	})
-	var tree: Tree = screen.get_node("Center/VBox/LootTable/Table/Tree")
+	var tree: Tree = screen.get_node("Center/VBox/LootTable/Content/Table/Tree")
+	var item := tree.get_root().get_first_child()
+	item.select(0)
+	tree.emit_signal("item_selected")
+	screen.get_node("Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
 
-	assert_eq(tree.columns, 5)
-	assert_eq(tree.get_root().get_first_child().get_button_count(4), 1)
+	var detail_panel: Control = screen.get_node("Center/VBox/LootTable/LootDetailPanel")
+	assert_true(detail_panel.visible)
+	assert_true(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
+	assert_false(detail_panel.get_node("Content/ButtonRow/SellButton").visible)
 
 
 func test_equip_routes_via_game_manager_scoped_to_this_battles_party() -> void:
