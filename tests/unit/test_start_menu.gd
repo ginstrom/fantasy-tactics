@@ -63,6 +63,27 @@ func test_begin_button_is_disabled_until_a_name_is_entered() -> void:
 	assert_true(begin_button.disabled, "Whitespace-only input must not count as a name")
 
 
+func test_random_button_fills_the_name_field_with_one_of_the_two_choices() -> void:
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_random_button_pressed()
+
+	var name_input: LineEdit = screen.get_node("Center/VBox/NameEntry/NameInput")
+	assert_true(name_input.text in ["The Black Company", "Company of Saints"])
+
+
+func test_random_button_enables_the_begin_button() -> void:
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+	var begin_button: Button = screen.get_node("Center/VBox/NameEntry/BeginButton")
+	assert_true(begin_button.disabled)
+
+	screen._on_random_button_pressed()
+
+	assert_false(begin_button.disabled)
+
+
 func test_begin_button_starts_a_new_game_with_the_entered_player_name() -> void:
 	var screen: Control = StartMenuScene.instantiate()
 	add_child_autofree(screen)

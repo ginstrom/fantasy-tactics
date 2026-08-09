@@ -854,6 +854,24 @@ func test_create_party_sets_name_encampment_location_and_placeholder_metadata() 
 	assert_false(party.movement_spent)
 
 
+func test_create_party_uses_the_given_name() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.create_party("Alpha Party")
+
+	assert_eq(session.parties[0].name, "Alpha Party")
+
+
+func test_create_party_defaults_to_party_1_when_no_name_is_given() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.create_party()
+
+	assert_eq(session.parties[0].name, "Party 1")
+
+
 func test_get_party_returns_a_safe_copy_and_empty_dictionary_for_an_unknown_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

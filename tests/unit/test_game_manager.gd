@@ -95,6 +95,14 @@ func test_create_party_wraps_the_one_party_session_contract_without_routing() ->
 	GameManager.route_context_id = ""
 
 
+func test_create_party_passes_the_given_name_through_to_game_session() -> void:
+	GameSession.reset()
+
+	GameManager.create_party("Alpha Party")
+
+	assert_eq(GameSession.parties[0].name, "Alpha Party")
+
+
 func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void:
 	GameSession.reset()
 	GameSession.create_party()

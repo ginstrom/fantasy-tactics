@@ -111,8 +111,8 @@ func go_to_world_map_from_game_menu() -> Error:
 
 ## The session owns the single-party restriction; this UI-facing wrapper only
 ## converts its success value into the Error contract used by screen actions.
-func create_party() -> Error:
-	if not GameSession.create_party():
+func create_party(party_name: String = "Party 1") -> Error:
+	if not GameSession.create_party(party_name):
 		return ERR_INVALID_DATA
 	return OK
 

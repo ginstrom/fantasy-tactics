@@ -427,7 +427,7 @@ func reset() -> void:
 	player_name = DEFAULT_PLAYER_NAME
 
 
-func create_party() -> bool:
+func create_party(party_name: String = "Party 1") -> bool:
 	if not parties.is_empty():
 		return false
 
@@ -439,7 +439,7 @@ func create_party() -> bool:
 		"deployed": false,
 		"travel_route": [] as Array[Vector2i],
 		"movement_spent": false,
-		"name": "Party 1",
+		"name": party_name,
 		# TBD: party-level progression data. Placeholder only.
 		"progression": {},
 		# TBD: free-form party metadata. Placeholder only.

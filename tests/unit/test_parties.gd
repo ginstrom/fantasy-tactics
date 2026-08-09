@@ -45,13 +45,61 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 	assert_true(create_button.visible)
 	assert_false(create_button.disabled)
 	create_button.emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/PartyNameEntry/ConfirmButton").emit_signal("pressed")
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
 	assert_eq(UiTestHelpers.tree_row_values(screen.get_node("Body/Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
 	assert_true(create_button.disabled)
+
+
+func test_create_party_button_reveals_the_name_entry_instead_of_creating_immediately() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	var create_button: Button = screen.get_node("Body/Center/VBox/CreatePartyButton")
+
 	create_button.emit_signal("pressed")
+
+	assert_eq(GameSession.parties.size(), 0)
+	assert_true(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_false(create_button.visible)
+
+
+func test_party_name_random_button_fills_the_name_field_with_one_of_the_two_choices() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+
+	screen._on_party_name_random_button_pressed()
+
+	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameInput")
+	assert_true(name_input.text in ["Party 1", "Alpha Party"])
+
+
+func test_confirming_the_party_name_creates_the_party_with_that_name_and_hides_the_entry() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameInput")
+	name_input.text = "Alpha Party"
+
+	screen.get_node("Body/Center/VBox/PartyNameEntry/ConfirmButton").emit_signal("pressed")
+
 	assert_eq(GameSession.parties.size(), 1)
+	assert_eq(GameSession.parties[0].name, "Alpha Party")
+	assert_false(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+
+
+func test_cancelling_the_party_name_entry_creates_nothing_and_restores_the_button() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+
+	screen.get_node("Body/Center/VBox/PartyNameEntry/CancelButton").emit_signal("pressed")
+
+	assert_eq(GameSession.parties.size(), 0)
+	assert_false(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_true(screen.get_node("Body/Center/VBox/CreatePartyButton").visible)
 
 
 ## Column titles are resolved via tr() (see parties.gd) to the real English

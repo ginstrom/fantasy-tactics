@@ -6,7 +6,10 @@ extends Control
 @onready var quit_button: Button = $Center/VBox/QuitButton
 @onready var name_entry: VBoxContainer = $Center/VBox/NameEntry
 @onready var name_input: LineEdit = $Center/VBox/NameEntry/NameInput
+@onready var random_button: Button = $Center/VBox/NameEntry/RandomButton
 @onready var begin_button: Button = $Center/VBox/NameEntry/BeginButton
+
+const PLAYER_NAME_CHOICES := ["The Black Company", "Company of Saints"]
 
 
 func _ready() -> void:
@@ -36,6 +39,11 @@ func _on_name_input_text_changed(new_text: String) -> void:
 
 func _on_name_input_text_submitted(_new_text: String) -> void:
 	_on_begin_pressed()
+
+
+func _on_random_button_pressed() -> void:
+	name_input.text = PLAYER_NAME_CHOICES[randi() % PLAYER_NAME_CHOICES.size()]
+	_on_name_input_text_changed(name_input.text)
 
 
 func _on_begin_pressed() -> void:

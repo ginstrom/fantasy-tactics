@@ -12,7 +12,11 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 @onready var party_table: TableView = $Body/Center/VBox/PartyTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
 @onready var create_party_button: Button = $Body/Center/VBox/CreatePartyButton
+@onready var party_name_entry: VBoxContainer = $Body/Center/VBox/PartyNameEntry
+@onready var party_name_input: LineEdit = $Body/Center/VBox/PartyNameEntry/NameInput
 @onready var information_panel: PanelContainer = %InformationPanel
+
+const PARTY_NAME_CHOICES := ["Party 1", "Alpha Party"]
 
 var selected_party_id: String = ""
 
@@ -88,8 +92,27 @@ func _on_information_panel_party_selected(party_id: String) -> void:
 
 
 func _on_create_party_pressed() -> void:
-	GameManager.create_party()
+	party_name_input.text = ""
+	create_party_button.visible = false
+	party_name_entry.visible = true
+	party_name_input.grab_focus()
+
+
+func _on_party_name_random_button_pressed() -> void:
+	party_name_input.text = PARTY_NAME_CHOICES[randi() % PARTY_NAME_CHOICES.size()]
+
+
+func _on_party_name_confirm_pressed() -> void:
+	var entered_name := party_name_input.text.strip_edges()
+	GameManager.create_party(entered_name if not entered_name.is_empty() else "Party 1")
+	party_name_entry.visible = false
+	create_party_button.visible = true
 	refresh()
+
+
+func _on_party_name_cancel_pressed() -> void:
+	party_name_entry.visible = false
+	create_party_button.visible = true
 
 
 func _on_back_pressed() -> void:

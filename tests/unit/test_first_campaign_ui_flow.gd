@@ -31,6 +31,7 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	assert_true(create_button.visible)
 	assert_false(create_button.disabled)
 	create_button.emit_signal("pressed")
+	parties.get_node("Body/Center/VBox/PartyNameEntry/ConfirmButton").emit_signal("pressed")
 	assert_eq(GameSession.parties.size(), 1)
 
 	var party_table: Tree = parties.get_node("Body/Center/VBox/PartyTable/Tree")

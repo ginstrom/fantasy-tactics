@@ -57,6 +57,10 @@ horizontal_alignment = 1
 [node name="NameInput" type="LineEdit" parent="Center/VBox/NameEntry"]
 layout_mode = 2
 
+[node name="RandomButton" type="Button" parent="Center/VBox/NameEntry"]
+layout_mode = 2
+text = "🎲 menu.random"
+
 [node name="BeginButton" type="Button" parent="Center/VBox/NameEntry"]
 layout_mode = 2
 disabled = true
@@ -67,4 +71,5 @@ text = "menu.begin"
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
 [connection signal="text_changed" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_changed"]
 [connection signal="text_submitted" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_submitted"]
+[connection signal="pressed" from="Center/VBox/NameEntry/RandomButton" to="." method="_on_random_button_pressed"]
 [connection signal="pressed" from="Center/VBox/NameEntry/BeginButton" to="." method="_on_begin_pressed"]
