@@ -14,6 +14,7 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var grid: Node2D = $Grid
 @onready var level_up: Control = $HUD/LevelUp
 @onready var portrait_panel: Control = %PortraitPanel
+@onready var unit_info_panel: Control = %UnitInfoPanel
 
 var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1
@@ -52,6 +53,7 @@ var _last_logged_attack_result: Dictionary = {}
 
 func _ready() -> void:
 	grid.enemy_defeated.connect(_award_kill_xp)
+	grid.unit_focus_changed.connect(_on_unit_focus_changed)
 	level_up.resolved.connect(_on_level_up_resolved)
 	portrait_panel.grid = grid
 	_on_board_changed()
@@ -116,6 +118,10 @@ func _on_board_changed() -> void:
 
 	if grid.is_battle_won():
 		_resolve_battle(true)
+
+
+func _on_unit_focus_changed(unit) -> void:
+	unit_info_panel.show_unit(unit)
 
 
 func _resolve_battle(victory: bool) -> void:

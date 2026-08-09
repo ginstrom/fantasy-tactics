@@ -428,6 +428,97 @@ func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> voi
 	assert_eq(battlefield.round_label.get_parent(), battlefield.end_turn_button.get_parent())
 
 
+## Task 3: the right-side unit hover/click detail panel, which lives inside
+## BodyRow next to PortraitPanel (see unit_info_panel.gd and battlefield.tscn).
+
+func test_unit_info_panel_starts_empty() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_true(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
+	assert_false(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+
+
+func test_unit_info_panel_shows_exact_hp_name_class_and_level_for_a_player_unit() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._set_hovered_unit(warrior)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_false(panel.get_node("Content/EmptyLabel").visible)
+	assert_true(panel.get_node("Content/NameLabel").visible)
+	assert_eq(panel.get_node("Content/NameLabel").text, "Warrior")
+	assert_eq(panel.get_node("Content/ClassLabel").text, tr("information.class") % "warrior")
+	assert_eq(panel.get_node("Content/LevelLabel").text, tr("information.level") % 1)
+	assert_eq(panel.get_node("Content/HpLabel").text, tr("battle.unit_info.hp") % [10, 10])
+	assert_false(panel.get_node("Content/WoundLabel").visible, "Enemies-only row must stay hidden for a player unit")
+
+
+func test_unit_info_panel_shows_only_a_wound_tier_for_an_enemy_never_exact_hp() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_eq(panel.get_node("Content/NameLabel").text, goblin.display_name)
+	assert_true(panel.get_node("Content/WoundLabel").visible)
+	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.healthy"))
+	assert_false(panel.get_node("Content/HpLabel").visible, "Player-only row must stay hidden for an enemy")
+	assert_false(panel.get_node("Content/ClassLabel").visible)
+	assert_false(panel.get_node("Content/LevelLabel").visible)
+
+
+func test_unit_info_panel_wound_tiers_match_the_health_percentage_thresholds() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var panel: Control = battlefield.unit_info_panel
+
+	goblin.health = goblin.max_health  # 100%
+	battlefield.grid._set_hovered_unit(goblin)
+	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.healthy"))
+
+	goblin.health = int(goblin.max_health * 0.5)  # 50%, inside the 34-66% band
+	battlefield.grid._set_hovered_unit(null)
+	battlefield.grid._set_hovered_unit(goblin)
+	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.wounded"))
+
+	goblin.health = 1  # well under 33%
+	battlefield.grid._set_hovered_unit(null)
+	battlefield.grid._set_hovered_unit(goblin)
+	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.badly_wounded"))
+
+
+func test_unit_info_panel_clears_back_to_empty_when_focus_is_lost() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	battlefield.grid._set_hovered_unit(goblin)
+
+	battlefield.grid._set_hovered_unit(null)
+
+	assert_true(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
+	assert_false(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+
+
+func test_unit_info_panel_lives_to_the_right_of_the_portrait_panel() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.unit_info_panel.get_parent(), battlefield.portrait_panel.get_parent())
+	var body_row: Node = battlefield.unit_info_panel.get_parent()
+	assert_gt(
+		battlefield.unit_info_panel.get_index(), battlefield.portrait_panel.get_index(),
+		"The unit info panel must sit after (visually to the right of) the portrait panel in BodyRow"
+	)
+
+
 func test_portrait_panel_is_container_driven_not_offset_positioned() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)

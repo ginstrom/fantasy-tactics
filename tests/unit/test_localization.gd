@@ -57,6 +57,11 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		"Warrior attacks Kobold 1 — misses."
 	)
 	assert_eq(tr("battle.log.defeated") % "Kobold 2", "Kobold 2 is defeated!")
+	assert_eq(tr("battle.unit_info.empty"), "Hover or click a unit to see its details.")
+	assert_eq(tr("battle.unit_info.hp") % [3, 8], "HP: 3/8")
+	assert_eq(tr("battle.unit_info.healthy"), "Healthy")
+	assert_eq(tr("battle.unit_info.wounded"), "Wounded")
+	assert_eq(tr("battle.unit_info.badly_wounded"), "Badly Wounded")
 	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
 	assert_eq(tr("battle.result.victory") % "Goblin Camp", "Victory! Goblin Camp is cleared.")
 	assert_eq(tr("battle.result.defeat"), "Defeat. The party returns to the settlement.")
