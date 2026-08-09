@@ -769,6 +769,41 @@ func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
 	assert_eq(session.pending_gear, ["shortsword_iron", "shortsword_iron"], "A guaranteed-hit gear roll fires once per kill")
 
 
+func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(_min_value: int, max_value: int) -> int: return max_value
+	session.loot_gear_roll = func() -> float: return 1.0
+	# Force a single-orc composition (rather than two goblins) so the kill
+	# loot side of this total stays deterministic.
+	session.enemy_composition_roll = func(_option_count: int) -> int: return 1
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.complete_current_encounter()
+
+	# Kill gold: one orc, randi_range(1, 5) stubbed to max (5) * multiplier 2 = 10.
+	# Encounter bonus: randi_range(0, 5) stubbed to max (5) * difficulty 2 = 10.
+	assert_eq(session.pending_reward, 20, "Kill gold (10) plus the encounter bonus (10) at 2-star difficulty")
+
+
+func test_recompleting_an_already_completed_encounter_does_not_requeue_the_bonus() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(_min_value: int, max_value: int) -> int: return max_value
+	session.loot_gear_roll = func() -> float: return 1.0
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	session.deposit_pending_reward()
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	assert_eq(
+		session.pending_reward, 0,
+		"Re-completing an already-completed site must not requeue its gold bonus either"
+	)
+
+
 func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

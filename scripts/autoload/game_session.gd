@@ -851,7 +851,9 @@ func enter_encounter(encounter_id: String) -> void:
 ## Ids that name a template directly rather than a live instance (e.g. the
 ## debug menu's raw battlefield shortcuts) still record history and queue
 ## their reward, but never touch active_encounters/encounter_vacancies since
-## there was no real instance to clear.
+## there was no real instance to clear. On first completion, a flat gold
+## bonus is queued: randi_range(0, 5) * difficulty, scaled by the
+## expedition's star difficulty.
 func complete_current_encounter() -> void:
 	if selected_encounter == "":
 		return
@@ -859,6 +861,7 @@ func complete_current_encounter() -> void:
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
 		_roll_and_queue_loot(expedition.get("enemy", {}))
+		pending_reward += loot_gold_roll.call(0, 5) * int(expedition.get("difficulty", 1))
 		_clear_active_encounter(selected_encounter)
 	selected_encounter = ""
 
