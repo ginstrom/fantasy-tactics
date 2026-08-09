@@ -3,24 +3,27 @@ extends Control
 ## Reads GameManager.battle_result_summary (set by Battlefield._finish_
 ## victory() right before routing here — see that method) once, in
 ## _ready(), the same "transient payload set right before navigating"
-## pattern route_context_id uses elsewhere in this codebase. Loot IS part of
-## that summary dict ("loot_gold"/"loot_mana_crystals"/"loot_gear"): reading
+## pattern route_context_id uses elsewhere in this codebase. Loot is part of
+## that summary dict ("loot_gold" plus the itemized
+## "loot_gear_counts"/"loot_mana_crystal_counts") -- reading
 ## GameSession.pending_reward/pending_mana_crystals/pending_gear directly
 ## would show every encounter a deployed party has cleared so far this
-## deployment, not just this battle's own loot, since those fields only
-## reset on GameSession.reset()/deposit_pending_reward() -- not per battle.
-## _finish_victory() computes a before/after delta around
-## GameSession.complete_current_encounter() so this screen shows only what
-## this battle actually dropped.
+## deployment, not just this battle's own loot (see _finish_victory()'s
+## before/after delta). The gear/mana-crystal table reuses LootTable,
+## scoped to this battle's own party (summary.party_id) for its [Equip]
+## action -- no [Sell] here, loot only sells once banked at the Encampment.
 
 @onready var kills_label: Label = $Center/VBox/KillsLabel
 @onready var xp_label: Label = $Center/VBox/XpLabel
 @onready var level_up_label: Label = $Center/VBox/LevelUpLabel
-@onready var loot_label: Label = $Center/VBox/LootLabel
+@onready var gold_label: Label = $Center/VBox/GoldLabel
+@onready var loot_table: LootTable = $Center/VBox/LootTable
 @onready var ok_button: Button = $Center/VBox/OkButton
 
 
 func _ready() -> void:
+	loot_table.configure(false, true)
+	loot_table.equip_requested.connect(_on_equip_requested)
 	_refresh()
 
 
@@ -41,7 +44,10 @@ func _refresh() -> void:
 			names.append(GameSession.get_adventurer(adventurer_id).get("name", ""))
 		level_up_label.text = tr("battle_result.leveled_up") % ", ".join(names)
 
-	loot_label.text = _format_loot()
+	gold_label.text = tr("battle_result.gold") % summary.get("loot_gold", 0)
+	loot_table.set_rows(GameSession.build_loot_rows(
+		summary.get("loot_gear_counts", {}), summary.get("loot_mana_crystal_counts", {})
+	))
 
 
 func _format_kills(kills_by_type: Dictionary) -> String:
@@ -53,12 +59,12 @@ func _format_kills(kills_by_type: Dictionary) -> String:
 	return tr("battle_result.kills") % ", ".join(parts)
 
 
-func _format_loot() -> String:
-	var summary: Dictionary = GameManager.battle_result_summary
-	var gold: int = summary.get("loot_gold", 0)
-	var mana_crystal_count: int = summary.get("loot_mana_crystals", 0)
-	var gear_count: int = summary.get("loot_gear", 0)
-	return tr("battle_result.loot") % [gold, mana_crystal_count, gear_count]
+func _on_equip_requested(item_id: String) -> void:
+	GameManager.go_to_assign_equipment(
+		item_id,
+		GameManager.battle_result_summary.get("party_id", ""),
+		GameManager.AssignEquipmentOrigin.BATTLE_RESULT
+	)
 
 
 func _on_ok_pressed() -> void:

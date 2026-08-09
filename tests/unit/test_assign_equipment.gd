@@ -11,6 +11,8 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameManager.assign_equipment_party_id = ""
+	GameManager.assign_equipment_origin = GameManager.AssignEquipmentOrigin.STORES
 
 
 func test_assign_equipment_shows_the_title_and_the_back_action() -> void:
@@ -35,6 +37,16 @@ func test_back_button_returns_to_stores() -> void:
 	assert_string_contains(source, "GameManager.go_to_stores()")
 
 
+func test_back_returns_to_battle_result_when_that_was_the_origin() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/assign_equipment.gd")
+	assert_string_contains(source, "GameManager.go_to_battle_result(GameManager.battle_result_summary)")
+
+
+func test_back_returns_to_party_details_when_that_was_the_origin() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/assign_equipment.gd")
+	assert_string_contains(source, "GameManager.go_to_party_details(GameManager.assign_equipment_party_id)")
+
+
 func test_table_lists_the_default_warrior() -> void:
 	GameManager.route_context_id = "dagger_iron"
 	var screen: Control = AssignEquipmentScene.instantiate()
@@ -43,6 +55,22 @@ func test_table_lists_the_default_warrior() -> void:
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
 	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+
+
+func test_table_is_scoped_to_the_party_when_a_party_id_is_set() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	GameManager.route_context_id = "dagger_iron"
+	GameManager.assign_equipment_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = AssignEquipmentScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+
+	assert_eq(
+		UiTestHelpers.tree_row_values(tree, 0), ["Warrior"],
+		"Only the party's own member, not the freshly recruited, unassigned adventurer"
+	)
 
 
 func test_activating_a_row_equips_the_item_and_returns_to_stores() -> void:

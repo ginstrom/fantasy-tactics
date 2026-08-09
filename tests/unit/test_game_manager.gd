@@ -624,6 +624,45 @@ func test_go_to_assign_equipment_rejects_an_unknown_item_id() -> void:
 	assert_eq(manager.route_context_id, "")
 
 
+func test_go_to_assign_equipment_with_a_party_id_scopes_and_records_the_origin() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(
+		manager.go_to_assign_equipment(
+			"dagger_iron", GameSession.FIRST_PARTY_ID, manager.AssignEquipmentOrigin.BATTLE_RESULT
+		),
+		OK
+	)
+	assert_eq(manager.route_context_id, "dagger_iron")
+	assert_eq(manager.assign_equipment_party_id, GameSession.FIRST_PARTY_ID)
+	assert_eq(manager.assign_equipment_origin, manager.AssignEquipmentOrigin.BATTLE_RESULT)
+
+
+func test_go_to_assign_equipment_rejects_an_unknown_party_id() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.assign_equipment_party_id = "stale"
+
+	assert_eq(manager.go_to_assign_equipment("dagger_iron", "no_such_party"), ERR_INVALID_DATA)
+	assert_eq(manager.assign_equipment_party_id, "")
+
+
+func test_go_to_assign_equipment_defaults_to_the_stores_origin_and_no_party_scope() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.go_to_assign_equipment("dagger_iron")
+
+	assert_eq(manager.assign_equipment_party_id, "")
+	assert_eq(manager.assign_equipment_origin, manager.AssignEquipmentOrigin.STORES)
+
+
 func test_go_to_battle_result_stores_the_summary_dictionary() -> void:
 	var summary := {"kills_by_type": {"Goblin": 1}, "total_xp": 15.0, "party_member_count": 1, "leveled_up_ids": []}
 

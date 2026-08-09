@@ -48,6 +48,17 @@ var route_context_id: String = ""
 var unit_details_origin: String = ""
 var add_member_return_party_id: String = ""
 
+## Scopes Assign Equipment to one party's own members (the victory summary
+## and World Map Party Details' [Equip] — see Steps 6/7 of
+## docs/plans/2026-08-09-minor-fixes-and-encounter-loot/) instead of the
+## full roster (Stores' [Equip]). Empty means unscoped.
+var assign_equipment_party_id: String = ""
+
+## Which screen opened Assign Equipment, so its Back action (and a
+## successful equip) can return there instead of always landing on Stores.
+enum AssignEquipmentOrigin { STORES, BATTLE_RESULT, PARTY_DETAILS }
+var assign_equipment_origin: AssignEquipmentOrigin = AssignEquipmentOrigin.STORES
+
 # Transient victory-summary payload, mirroring route_context_id's "set
 # right before navigating, read once in the destination scene's _ready()"
 # pattern. Battlefield builds this from data no other system durably
@@ -189,15 +200,24 @@ func go_to_trading_post() -> Error:
 
 
 ## Mirrors go_to_unit_details()'s validate-then-route shape: an unknown item
-## id clears the detail context and reports ERR_INVALID_DATA instead of
-## routing to a screen with nothing to show.
-func go_to_assign_equipment(item_id: String) -> Error:
+## id, or an unknown party_id when one is given, clears the detail context
+## and reports ERR_INVALID_DATA instead of routing to a screen with nothing
+## to show. party_id/origin default to the old unscoped, Stores-originated
+## behavior so every pre-existing call site keeps working unchanged.
+func go_to_assign_equipment(
+	item_id: String, party_id: String = "", origin: AssignEquipmentOrigin = AssignEquipmentOrigin.STORES
+) -> Error:
 	if GameSession.get_item_definition(item_id).is_empty():
+		_clear_detail_context()
+		return ERR_INVALID_DATA
+	if party_id != "" and GameSession.get_party(party_id).is_empty():
 		_clear_detail_context()
 		return ERR_INVALID_DATA
 	route_context_id = item_id
 	unit_details_origin = ""
 	add_member_return_party_id = ""
+	assign_equipment_party_id = party_id
+	assign_equipment_origin = origin
 	return _change_scene(ASSIGN_EQUIPMENT_SCENE)
 
 
@@ -399,3 +419,5 @@ func _clear_detail_context() -> void:
 	route_context_id = ""
 	unit_details_origin = ""
 	add_member_return_party_id = ""
+	assign_equipment_party_id = ""
+	assign_equipment_origin = AssignEquipmentOrigin.STORES

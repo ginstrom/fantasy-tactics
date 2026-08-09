@@ -1079,11 +1079,11 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 		"Only this battle's own gold, not the 50 already carried over"
 	)
 	assert_eq(
-		GameManager.battle_result_summary.loot_mana_crystals, 1,
-		"Only this battle's own mana crystals, not the 3 already carried over"
+		GameManager.battle_result_summary.loot_mana_crystal_counts, {1: 1},
+		"Only this battle's own mana crystal, not the 3 already carried over"
 	)
 	assert_eq(
-		GameManager.battle_result_summary.loot_gear, 1,
+		GameManager.battle_result_summary.loot_gear_counts, {"shortsword_iron": 1},
 		"Only this battle's own gear, not the 2 pieces already carried over"
 	)
 	# Sanity check: the combined totals really did accumulate underneath --

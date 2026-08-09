@@ -289,7 +289,7 @@ func _on_level_up_queue_drained() -> void:
 ## player ever reaches the World Map.
 func _finish_victory() -> void:
 	var gold_before: int = GameSession.pending_reward
-	var mana_crystals_before: int = _total_pending_mana_crystals()
+	var mana_crystal_counts_before: Dictionary = GameSession.pending_mana_crystals.duplicate()
 	var gear_count_before: int = GameSession.pending_gear.size()
 
 	GameSession.complete_current_encounter()
@@ -300,22 +300,34 @@ func _finish_victory() -> void:
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
+		"party_id": GameSession.selected_party_id,
 		# This battle's own loot only, not the party's full pending_* totals --
 		# those accumulate across every encounter cleared before returning to
 		# the settlement, but this summary screen is titled for just this
-		# battle (see battle_result.gd's _format_loot()).
+		# battle (see battle_result.gd).
 		"loot_gold": GameSession.pending_reward - gold_before,
-		"loot_mana_crystals": _total_pending_mana_crystals() - mana_crystals_before,
-		"loot_gear": GameSession.pending_gear.size() - gear_count_before,
+		"loot_mana_crystal_counts": _pending_mana_crystal_counts_delta(mana_crystal_counts_before),
+		"loot_gear_counts": _pending_gear_counts_delta(gear_count_before),
 	}
 	GameManager.go_to_battle_result(summary)
 
 
-func _total_pending_mana_crystals() -> int:
-	var total := 0
+func _pending_mana_crystal_counts_delta(counts_before: Dictionary) -> Dictionary:
+	var delta: Dictionary = {}
 	for tier in GameSession.pending_mana_crystals:
-		total += GameSession.pending_mana_crystals[tier]
-	return total
+		var gained: int = GameSession.pending_mana_crystals[tier] - counts_before.get(tier, 0)
+		if gained > 0:
+			delta[tier] = gained
+	return delta
+
+
+## pending_gear only ever grows via append() before a deposit, so the tail
+## slice starting at count_before is exactly this battle's own new drops.
+func _pending_gear_counts_delta(count_before: int) -> Dictionary:
+	var delta: Dictionary = {}
+	for item_id in GameSession.pending_gear.slice(count_before, GameSession.pending_gear.size()):
+		delta[item_id] = delta.get(item_id, 0) + 1
+	return delta
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

@@ -104,7 +104,7 @@ messages = {
 "battle_result.no_kills": "No enemies defeated.",
 "battle_result.xp": "XP gained: %d total (%d each)",
 "battle_result.leveled_up": "Leveled up: %s",
-"battle_result.loot": "Loot: %d gold, %d mana crystals, %d gear",
+"battle_result.gold": "Gold: %d",
 "battle_result.ok": "OK",
 "unit_details.title": "Unit Details",
 "unit_details.status": "Status: %s",
