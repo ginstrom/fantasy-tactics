@@ -28,6 +28,14 @@ that spec doesn't spell out — don't re-litigate them mid-implementation:
   whichever screen sent it there. This needs two small `GameManager`
   additions — `assign_equipment_party_id` and `assign_equipment_origin` —
   mirroring the existing `add_member_return_party_id` pattern.
+- `GameSession.pending_gear` is a `Dictionary` (item id → count), the same
+  shape `banked_gear` uses — not the `Array[String]` it started as. A
+  party-scoped Equip (victory summary, World Map Party Details) always
+  draws from this "party store" via `equip_item_from_party_store()`,
+  never from the (encamped, often unreachable) bank — freshly-dropped
+  battle loot isn't banked until the party actually returns home. This
+  was discovered and fixed during Step 6's manual verification; see that
+  step's fix notes for the full rationale.
 - The World Map's Party Details table reads `GameSession.pending_gear`/
   `pending_mana_crystals` (everything the deployed party is carrying,
   itemized) — never `banked_gear`/`mana_crystals` (Stores' inventory).
