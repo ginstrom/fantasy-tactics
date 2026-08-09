@@ -128,5 +128,12 @@ func _on_party_name_cancel_pressed() -> void:
 	create_party_button.visible = true
 
 
+## Back steps up one level at a time: while the create-party name entry is
+## showing, that sub-view is the current level, so Back cancels it (same as
+## the entry's own Cancel button) and lands on the plain party list rather
+## than jumping straight past it to Units.
 func _on_back_pressed() -> void:
+	if party_name_entry.visible:
+		_on_party_name_cancel_pressed()
+		return
 	GameManager.go_to_units()

@@ -26,6 +26,18 @@ func test_back_button_returns_to_units() -> void:
 	assert_string_contains(source, "GameManager.go_to_units()")
 
 
+func test_back_button_cancels_the_name_entry_instead_of_leaving_the_screen() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+
+	screen.get_node("Body/Center/VBox/BackButton").emit_signal("pressed")
+
+	assert_eq(GameSession.parties.size(), 0)
+	assert_false(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_true(screen.get_node("Body/Center/VBox/CreatePartyButton").visible)
+
+
 func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
