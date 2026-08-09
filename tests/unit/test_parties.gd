@@ -45,7 +45,8 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 	assert_true(create_button.visible)
 	assert_false(create_button.disabled)
 	create_button.emit_signal("pressed")
-	screen.get_node("Body/Center/VBox/PartyNameEntry/ConfirmButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput").text = "Party 1"
+	screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton").emit_signal("pressed")
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
@@ -72,18 +73,56 @@ func test_party_name_random_button_fills_the_name_field_with_one_of_the_two_choi
 
 	screen._on_party_name_random_button_pressed()
 
-	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameInput")
+	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput")
 	assert_true(name_input.text in ["Party 1", "Alpha Party"])
+
+
+func test_ok_button_starts_disabled_and_enables_once_a_name_is_entered() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+	var ok_button: Button = screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton")
+	assert_true(ok_button.disabled)
+
+	screen._on_party_name_input_text_changed("Aria's Company")
+	assert_false(ok_button.disabled)
+
+	screen._on_party_name_input_text_changed("   ")
+	assert_true(ok_button.disabled, "Whitespace-only input must not enable OK")
+
+
+func test_random_button_also_enables_the_ok_button() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+	var ok_button: Button = screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton")
+
+	screen._on_party_name_random_button_pressed()
+
+	assert_false(ok_button.disabled)
+
+
+func test_submitting_the_name_field_confirms_like_pressing_ok() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput")
+	name_input.text = "Alpha Party"
+
+	screen._on_party_name_input_text_submitted(name_input.text)
+
+	assert_eq(GameSession.parties.size(), 1)
+	assert_eq(GameSession.parties[0].name, "Alpha Party")
 
 
 func test_confirming_the_party_name_creates_the_party_with_that_name_and_hides_the_entry() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
-	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameInput")
+	var name_input: LineEdit = screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput")
 	name_input.text = "Alpha Party"
 
-	screen.get_node("Body/Center/VBox/PartyNameEntry/ConfirmButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton").emit_signal("pressed")
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.parties[0].name, "Alpha Party")

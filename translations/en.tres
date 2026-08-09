@@ -83,7 +83,7 @@ messages = {
 "parties.title": "Parties",
 "parties.create": "Create Party",
 "parties.enter_name": "Name this party:",
-"parties.confirm_name": "Create Party",
+"parties.confirm_name": "OK",
 "parties.empty": "No parties yet.",
 "parties.column.party": "Party",
 "parties.column.members": "Members",

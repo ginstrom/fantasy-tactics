@@ -65,16 +65,22 @@ layout_mode = 2
 text = "parties.enter_name"
 horizontal_alignment = 1
 
-[node name="NameInput" type="LineEdit" parent="Body/Center/VBox/PartyNameEntry"]
+[node name="NameRow" type="HBoxContainer" parent="Body/Center/VBox/PartyNameEntry"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameInput" type="LineEdit" parent="Body/Center/VBox/PartyNameEntry/NameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ConfirmButton" type="Button" parent="Body/Center/VBox/PartyNameEntry/NameRow"]
+layout_mode = 2
+disabled = true
+text = "parties.confirm_name"
 
 [node name="RandomButton" type="Button" parent="Body/Center/VBox/PartyNameEntry"]
 layout_mode = 2
 text = "menu.random"
-
-[node name="ConfirmButton" type="Button" parent="Body/Center/VBox/PartyNameEntry"]
-layout_mode = 2
-text = "parties.confirm_name"
 
 [node name="CancelButton" type="Button" parent="Body/Center/VBox/PartyNameEntry"]
 layout_mode = 2
@@ -97,6 +103,8 @@ layout_mode = 2
 
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/CreatePartyButton" to="." method="_on_create_party_pressed"]
+[connection signal="text_changed" from="Body/Center/VBox/PartyNameEntry/NameRow/NameInput" to="." method="_on_party_name_input_text_changed"]
+[connection signal="text_submitted" from="Body/Center/VBox/PartyNameEntry/NameRow/NameInput" to="." method="_on_party_name_input_text_submitted"]
+[connection signal="pressed" from="Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton" to="." method="_on_party_name_confirm_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/PartyNameEntry/RandomButton" to="." method="_on_party_name_random_button_pressed"]
-[connection signal="pressed" from="Body/Center/VBox/PartyNameEntry/ConfirmButton" to="." method="_on_party_name_confirm_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/PartyNameEntry/CancelButton" to="." method="_on_party_name_cancel_pressed"]
