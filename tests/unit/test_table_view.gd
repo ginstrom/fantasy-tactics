@@ -72,6 +72,23 @@ func test_button_column_creates_a_native_tree_button_with_its_source_column_id()
 	assert_eq(item.get_button_id(0, 0), 0)
 
 
+## Regression test: the original button icon was a single stretched pixel,
+## nearly invisible against the Tree's dark theme. It must now be large
+## enough, and high-contrast enough, to read as a real button at a glance.
+func test_button_icon_is_a_visibly_sized_high_contrast_chip_not_a_tiny_dot() -> void:
+	var table: Variant = await _make_table()
+
+	var icon_size: Vector2 = table._button_icon.get_size()
+	assert_true(icon_size.x >= 32, "Button icon must be wide enough to read as a real button")
+	assert_true(icon_size.y >= 16, "Button icon must be tall enough to read as a real button")
+
+	var image: Image = table._button_icon.get_image()
+	var fill_color: Color = image.get_pixel(int(icon_size.x / 2.0), int(icon_size.y / 2.0))
+	var border_color: Color = image.get_pixel(0, 0)
+	assert_true(fill_color.a > 0.9, "The chip's fill must be fully opaque, not a faint tint")
+	assert_ne(fill_color, border_color, "The border must contrast with the fill so the chip's edges read clearly")
+
+
 func test_button_visible_callable_hides_the_button_on_rows_it_rejects() -> void:
 	var table: Variant = await _make_table()
 	var action_column := TableColumnDescriptor.new(&"action", "Action", TableColumnDescriptor.Type.BUTTON)

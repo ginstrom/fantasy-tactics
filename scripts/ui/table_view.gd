@@ -226,9 +226,28 @@ func _visible_column_indices() -> Array[int]:
 	return indices
 
 
+const BUTTON_ICON_WIDTH := 56
+const BUTTON_ICON_HEIGHT := 22
+const BUTTON_ICON_FILL_COLOR := Color(0.35, 0.55, 0.8, 1.0)
+const BUTTON_ICON_BORDER_COLOR := Color(0.62, 0.78, 0.95, 1.0)
+
+
+## A single stretched pixel used to read as an invisible dot against the
+## Tree's dark theme (see test_table_icon_is_a_visibly_sized_high_contrast_
+## chip_not_a_tiny_dot in test_table_view.gd). Tree renders an add_button()
+## icon at its own native size rather than a fixed small glyph size, so a
+## properly sized, colored, bordered chip reads as a real button — drawn
+## with plain Image pixel writes (no Font/SubViewport rendering) since this
+## also has to run under `godot --headless`, where SubViewport-based text
+## rendering never completes (the dummy rendering driver never produces a
+## real texture, confirmed empirically: get_image() throws rather than
+## returning pixel data).
 func _create_button_icon() -> ImageTexture:
-	var image := Image.create(1, 1, false, Image.FORMAT_RGBA8)
-	image.fill(Color.WHITE)
+	var image := Image.create(BUTTON_ICON_WIDTH, BUTTON_ICON_HEIGHT, false, Image.FORMAT_RGBA8)
+	for y in BUTTON_ICON_HEIGHT:
+		for x in BUTTON_ICON_WIDTH:
+			var on_border := x == 0 or y == 0 or x == BUTTON_ICON_WIDTH - 1 or y == BUTTON_ICON_HEIGHT - 1
+			image.set_pixel(x, y, BUTTON_ICON_BORDER_COLOR if on_border else BUTTON_ICON_FILL_COLOR)
 	return ImageTexture.create_from_image(image)
 
 
