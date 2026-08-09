@@ -44,6 +44,14 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 
+[node name="GoldLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="LootLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
 [node name="MembersLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "party_details.members"

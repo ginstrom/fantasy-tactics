@@ -101,6 +101,29 @@ func test_reads_the_party_id_from_route_context() -> void:
 	assert_eq(screen.party_id, GameSession.FIRST_PARTY_ID)
 
 
+func test_party_details_shows_gold_and_banked_loot() -> void:
+	GameSession.create_party()
+	GameSession.gold = 250
+	GameSession.mana_crystals = {1: 2, 2: 1}
+	GameSession.banked_gear = {"dagger_iron": 1, "leather_armor": 2}
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 250)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/LootLabel").text,
+		tr("party_details.loot") % [3, 3],
+		"3 mana crystals (2 tier-1 + 1 tier-2) and 3 gear pieces (1 dagger + 2 armor)"
+	)
+
+
+func test_party_details_shows_zero_gold_and_loot_on_a_fresh_session() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
+	assert_eq(screen.get_node("Body/Center/VBox/LootLabel").text, tr("party_details.loot") % [0, 0])
+
+
 func test_an_empty_party_shows_the_empty_state_without_errors() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)

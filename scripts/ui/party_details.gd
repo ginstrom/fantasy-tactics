@@ -13,6 +13,8 @@ extends Control
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
+@onready var gold_label: Label = $Body/Center/VBox/GoldLabel
+@onready var loot_label: Label = $Body/Center/VBox/LootLabel
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
 @onready var add_member_button: Button = $Body/Center/VBox/AddMemberButton
@@ -40,6 +42,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func refresh() -> void:
 	var party := GameSession.get_party(party_id)
 	party_name_label.text = "" if party.is_empty() else party.name
+	gold_label.text = tr("party_details.gold") % GameSession.gold
+	loot_label.text = tr("party_details.loot") % [_banked_mana_crystal_count(), _banked_gear_count()]
 	var rows := _build_rows(party)
 	member_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
@@ -80,6 +84,20 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 			"level": adventurer.level,
 		})
 	return rows
+
+
+func _banked_mana_crystal_count() -> int:
+	var total := 0
+	for tier in GameSession.mana_crystals:
+		total += GameSession.mana_crystals[tier]
+	return total
+
+
+func _banked_gear_count() -> int:
+	var total := 0
+	for item_id in GameSession.banked_gear:
+		total += GameSession.banked_gear[item_id]
+	return total
 
 
 ## A selection is only valid while it names a current member of this party

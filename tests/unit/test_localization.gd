@@ -139,6 +139,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("party_details.column.name"), "Name")
 	assert_eq(tr("party_details.column.class"), "Class")
 	assert_eq(tr("party_details.column.level"), "Level")
+	assert_eq(tr("party_details.gold") % 250, "Gold: 250")
+	assert_eq(tr("party_details.loot") % [3, 2], "Loot: 3 mana crystals, 2 gear")
 	assert_eq(tr("add_member.column.name"), "Name")
 	assert_eq(tr("add_member.column.class"), "Class")
 	assert_eq(tr("add_member.column.level"), "Level")
