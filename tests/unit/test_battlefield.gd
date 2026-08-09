@@ -7,6 +7,7 @@ const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	GameManager.battle_result_summary = {}
 	GameSession.reset_injectable_rolls()
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
@@ -201,7 +202,7 @@ func test_portrait_row_decorative_children_do_not_intercept_clicks() -> void:
 	add_child_autofree(battlefield)
 
 	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
-	for child_name in ["Swatch", "Health", "SelectionRing"]:
+	for child_name in ["Swatch", "SwatchStack", "Health", "HealthBacking", "SelectionRing"]:
 		var child: Control = row.find_child(child_name, true, false)
 		assert_eq(
 			child.mouse_filter, Control.MOUSE_FILTER_IGNORE,
@@ -247,14 +248,18 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 ## crowd it out. EnemyHealth's own parent is a ScrollContainer (see
 ## test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container
 ## below), not the shared BottomContent stack directly -- Hint and Status
-## still share that stack, and the scroll container is what's actually
-## parented alongside them.
+## still share that stack. The scroll container itself sits in ScrollRow
+## (alongside LogScroll, see test_bottom_panel_clears_the_battle_grids_
+## bottom_edge), which is what's actually parented alongside Hint/Status.
 func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
-	assert_eq(battlefield.enemy_health.get_parent().get_parent(), battlefield.hint.get_parent())
+	assert_eq(
+		battlefield.enemy_health.get_parent().get_parent().get_parent(),
+		battlefield.hint.get_parent()
+	)
 
 
 ## Regression test for a real bug found via a real screenshot: with a full
@@ -304,7 +309,10 @@ func test_combat_log_shares_the_bottom_panel_stack_and_starts_empty() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
-	assert_eq(battlefield.log_list.get_parent().get_parent(), battlefield.hint.get_parent())
+	assert_eq(
+		battlefield.log_list.get_parent().get_parent().get_parent(),
+		battlefield.hint.get_parent()
+	)
 	assert_eq(battlefield.log_list.get_child_count(), 0)
 
 
@@ -315,6 +323,29 @@ func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
 	var scroll_container: Control = battlefield.log_list.get_parent()
 	assert_true(scroll_container is ScrollContainer)
 	assert_gt(scroll_container.custom_minimum_size.y, 0.0)
+
+
+## Regression test for a real layout bug found via a real screenshot: adding
+## LogScroll stacked above EnemyHealthScroll blew the bottom panel's height
+## budget and made it visibly cover the battle grid's bottom rows. LogScroll
+## and EnemyHealthScroll must share one height budget (side by side in a row)
+## rather than stacking two, so the bottom panel's top edge never rises above
+## the grid's bottom edge.
+func test_bottom_panel_clears_the_battle_grids_bottom_edge() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var bottom_panel: Control = battlefield.hint.get_parent().get_parent()
+	var grid_bottom_edge: float = (
+		battlefield.grid.position.y
+		+ BattleControllerScript.GRID_HEIGHT * BattleControllerScript.TILE_SIZE
+	)
+	assert_true(
+		bottom_panel.get_global_rect().position.y >= grid_bottom_edge,
+		"The bottom HUD panel must never grow tall enough to cover the battle grid"
+	)
 
 
 func _stage_an_adjacent_pair(battlefield: Node2D) -> Dictionary:
@@ -450,12 +481,18 @@ func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> voi
 ## Task 3: the right-side unit hover/click detail panel, which lives inside
 ## BodyRow next to PortraitPanel (see unit_info_panel.gd and battlefield.tscn).
 
-func test_unit_info_panel_starts_empty() -> void:
+## BattleController._ready() auto-selects the first living party member
+## (selection ring shown on the board from turn one), so the unit-info panel
+## must reflect that same opening selection instead of showing its empty
+## prompt despite a unit already being visibly selected.
+func test_unit_info_panel_shows_the_auto_selected_unit_at_battle_start() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
-	assert_true(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
-	assert_false(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+	assert_false(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
+	assert_true(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+	assert_eq(battlefield.unit_info_panel.get_node("Content/NameLabel").text, warrior.display_name)
 
 
 func test_unit_info_panel_shows_exact_hp_name_class_and_level_for_a_player_unit() -> void:
@@ -514,16 +551,22 @@ func test_unit_info_panel_wound_tiers_match_the_health_percentage_thresholds() -
 	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.badly_wounded"))
 
 
-func test_unit_info_panel_clears_back_to_empty_when_focus_is_lost() -> void:
+## get_focused_unit() falls back from hover to the pinned selection (see
+## BattleController.get_focused_unit()) -- and battle start already pins the
+## first party member as that selection (see BattleController._ready()), so
+## losing hover reverts to showing that pinned unit, not an empty panel.
+func test_unit_info_panel_reverts_to_the_pinned_selection_when_hover_ends() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	battlefield.grid._set_hovered_unit(goblin)
 
 	battlefield.grid._set_hovered_unit(null)
 
-	assert_true(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
-	assert_false(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+	assert_false(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
+	assert_true(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
+	assert_eq(battlefield.unit_info_panel.get_node("Content/NameLabel").text, warrior.display_name)
 
 
 func test_unit_info_panel_lives_to_the_right_of_the_portrait_panel() -> void:
@@ -1008,6 +1051,46 @@ func test_a_victorious_battle_with_no_level_up_reports_an_empty_leveled_up_list(
 	battlefield._apply_battle_outcome(true)
 
 	assert_eq(GameManager.battle_result_summary.leveled_up_ids, [])
+
+
+## Regression test: GameSession.pending_reward/pending_mana_crystals/
+## pending_gear accumulate across every encounter a deployed party clears
+## before returning to the settlement (see GameSession.deposit_pending_
+## reward()), so a party's second victory in one deployment must not report
+## the first battle's already-carried loot alongside its own in the summary
+## -- only what this battle itself dropped.
+func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void:
+	var battlefield := _setup_goblin_camp_battle()
+	# Simulate an earlier battle's loot already carried in pending_* this same
+	# deployment, not yet deposited back at the settlement.
+	GameSession.pending_reward = 50
+	GameSession.pending_mana_crystals = {1: 3}
+	GameSession.pending_gear = ["dagger_iron", "buckler_wood"]
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 0.0
+
+	battlefield._apply_battle_outcome(true)
+
+	# Goblin camp's single goblin: gold_min 1 * multiplier 1, one mana
+	# crystal, and (since loot_gear_roll always rolls below GEAR_DROP_CHANCE
+	# here) one gear drop -- this battle's own loot only.
+	assert_eq(
+		GameManager.battle_result_summary.loot_gold, 1,
+		"Only this battle's own gold, not the 50 already carried over"
+	)
+	assert_eq(
+		GameManager.battle_result_summary.loot_mana_crystals, 1,
+		"Only this battle's own mana crystals, not the 3 already carried over"
+	)
+	assert_eq(
+		GameManager.battle_result_summary.loot_gear, 1,
+		"Only this battle's own gear, not the 2 pieces already carried over"
+	)
+	# Sanity check: the combined totals really did accumulate underneath --
+	# the summary is deliberately reporting less than GameSession's own totals.
+	assert_eq(GameSession.pending_reward, 51)
+	assert_eq(GameSession.pending_mana_crystals[1], 4)
+	assert_eq(GameSession.pending_gear.size(), 3)
 
 
 func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary() -> void:

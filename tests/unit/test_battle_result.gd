@@ -66,12 +66,10 @@ func test_shows_the_leveled_up_members_names_when_present() -> void:
 	assert_eq(screen.get_node("Center/VBox/LevelUpLabel").text, tr("battle_result.leveled_up") % "Warrior")
 
 
-func test_shows_this_battles_loot_read_live_from_game_session() -> void:
-	GameSession.pending_reward = 5
-	GameSession.pending_mana_crystals = {1: 2}
-	GameSession.pending_gear = ["dagger_iron"]
+func test_shows_this_battles_loot_from_the_summary() -> void:
 	var screen := _open_battle_result({
 		"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1, "leveled_up_ids": [],
+		"loot_gold": 5, "loot_mana_crystals": 2, "loot_gear": 1,
 	})
 
 	assert_eq(screen.get_node("Center/VBox/LootLabel").text, tr("battle_result.loot") % [5, 2, 1])

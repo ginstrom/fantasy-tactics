@@ -212,6 +212,7 @@ func go_to_party_details(party_id: String) -> Error:
 
 
 func go_to_battle_result(summary: Dictionary) -> Error:
+	_clear_detail_context()
 	battle_result_summary = summary
 	return _change_scene(BATTLE_RESULT_SCENE)
 

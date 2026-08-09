@@ -3,13 +3,15 @@ extends Control
 ## Reads GameManager.battle_result_summary (set by Battlefield._finish_
 ## victory() right before routing here — see that method) once, in
 ## _ready(), the same "transient payload set right before navigating"
-## pattern route_context_id uses elsewhere in this codebase. Loot is
-## deliberately NOT part of that summary dict: GameSession.pending_reward/
-## pending_mana_crystals/pending_gear are already live and current by the
-## time this scene loads (GameSession.complete_current_encounter() rolled
-## them before Battlefield navigated here), so this screen just reads them
-## directly, exactly as information_panel.gd's _refresh_carried_loot()
-## already does for the World Map.
+## pattern route_context_id uses elsewhere in this codebase. Loot IS part of
+## that summary dict ("loot_gold"/"loot_mana_crystals"/"loot_gear"): reading
+## GameSession.pending_reward/pending_mana_crystals/pending_gear directly
+## would show every encounter a deployed party has cleared so far this
+## deployment, not just this battle's own loot, since those fields only
+## reset on GameSession.reset()/deposit_pending_reward() -- not per battle.
+## _finish_victory() computes a before/after delta around
+## GameSession.complete_current_encounter() so this screen shows only what
+## this battle actually dropped.
 
 @onready var kills_label: Label = $Center/VBox/KillsLabel
 @onready var xp_label: Label = $Center/VBox/XpLabel
@@ -52,10 +54,11 @@ func _format_kills(kills_by_type: Dictionary) -> String:
 
 
 func _format_loot() -> String:
-	var mana_crystal_count := 0
-	for tier in GameSession.pending_mana_crystals:
-		mana_crystal_count += GameSession.pending_mana_crystals[tier]
-	return tr("battle_result.loot") % [GameSession.pending_reward, mana_crystal_count, GameSession.pending_gear.size()]
+	var summary: Dictionary = GameManager.battle_result_summary
+	var gold: int = summary.get("loot_gold", 0)
+	var mana_crystal_count: int = summary.get("loot_mana_crystals", 0)
+	var gear_count: int = summary.get("loot_gear", 0)
+	return tr("battle_result.loot") % [gold, mana_crystal_count, gear_count]
 
 
 func _on_ok_pressed() -> void:

@@ -104,8 +104,20 @@ func _ready() -> void:
 		enemy_unit.enemy_type_name = enemy_type_name
 		units.append(enemy_unit)
 	# Round one is a new round too: open it with the first party member
-	# already selected rather than forcing a manual pick.
+	# already selected rather than forcing a manual pick. Assigned directly
+	# rather than via _select_unit(): that method also emits board_changed,
+	# which is already statically connected to Battlefield._on_board_changed()
+	# at scene-instantiation time (see battlefield.tscn's [connection] block)
+	# -- but children finish _ready() before their parent, so Battlefield's
+	# own @onready fields (grid, hint, ...) aren't assigned yet this early,
+	# and that emit would crash. inspected_unit is set directly too, so
+	# get_focused_unit() is already correct by the time Battlefield connects
+	# unit_focus_changed and syncs the unit-info panel itself in its own
+	# _ready() (see battlefield.gd, which calls _on_unit_focus_changed()
+	# explicitly right after wiring that connection, the same way it already
+	# calls _on_board_changed() explicitly for the same reason).
 	selected_unit = _first_living_player_unit()
+	inspected_unit = selected_unit
 	_draw_tiles()
 	_draw_units()
 	_update_highlights()
@@ -183,6 +195,8 @@ func _set_hovered_unit(unit) -> void:
 ## method) -- every selection path instead goes through _select_unit(),
 ## which pins the same way for free.
 func _set_inspected_unit(unit) -> void:
+	if unit == inspected_unit:
+		return
 	inspected_unit = unit
 	_emit_focus_changed()
 

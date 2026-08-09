@@ -8,7 +8,7 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var status: Label = %Status
 @onready var enemy_health: VBoxContainer = %EnemyHealth
 @onready var log_list: VBoxContainer = %Log
-@onready var log_scroll: ScrollContainer = $HUD/Margin/VBox/BottomPanel/BottomContent/LogScroll
+@onready var log_scroll: ScrollContainer = $HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll
 @onready var round_label: Label = %RoundLabel
 @onready var end_turn_button: Button = %EndTurnButton
 @onready var grid: Node2D = $Grid
@@ -27,8 +27,8 @@ var _battle_resolved: bool = false
 var _level_up_queue: Array[Dictionary] = []
 var _level_up_active: bool = false
 # Set when a victory's clear-XP award queues at least one level-up: defers
-# GameManager.complete_battle() (the battle-result scene transition) until
-# every queued level-up — kill-triggered or clear-triggered — has resolved.
+# _finish_victory() (the battle-result scene transition) until every queued
+# level-up — kill-triggered or clear-triggered — has resolved.
 var _pending_victory_completion: bool = false
 # Per-instance award guards (see _award_kill_xp/_award_clear_xp): a
 # Battlefield is re-instantiated for every battle, so these cannot leak
@@ -73,6 +73,12 @@ func _ready() -> void:
 	level_up.resolved.connect(_on_level_up_resolved)
 	portrait_panel.grid = grid
 	_on_board_changed()
+	# BattleController._ready() already selects the first living party member
+	# (selected_unit/inspected_unit), but that happens before this node's own
+	# _ready() runs, so the unit_focus_changed connection above didn't exist
+	# yet to pick it up. Sync the panel explicitly now, the same way
+	# _on_board_changed() is called explicitly above.
+	_on_unit_focus_changed(grid.get_focused_unit())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -153,7 +159,7 @@ func _show_battle_result(victory: bool) -> void:
 
 
 func _victory_message() -> String:
-	# Captured before GameManager.complete_battle() clears selected_encounter.
+	# Captured before _finish_victory() clears selected_encounter.
 	var expedition := _current_expedition()
 	return tr("battle.result.victory") % tr(expedition.name_key)
 
@@ -282,15 +288,34 @@ func _on_level_up_queue_drained() -> void:
 ## this is the real gameplay path -- it shows the summary before the
 ## player ever reaches the World Map.
 func _finish_victory() -> void:
+	var gold_before: int = GameSession.pending_reward
+	var mana_crystals_before: int = _total_pending_mana_crystals()
+	var gear_count_before: int = GameSession.pending_gear.size()
+
 	GameSession.complete_current_encounter()
+
 	var party := GameSession.get_party(GameSession.selected_party_id)
 	var summary := {
 		"kills_by_type": _kills_by_type,
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
+		# This battle's own loot only, not the party's full pending_* totals --
+		# those accumulate across every encounter cleared before returning to
+		# the settlement, but this summary screen is titled for just this
+		# battle (see battle_result.gd's _format_loot()).
+		"loot_gold": GameSession.pending_reward - gold_before,
+		"loot_mana_crystals": _total_pending_mana_crystals() - mana_crystals_before,
+		"loot_gear": GameSession.pending_gear.size() - gear_count_before,
 	}
 	GameManager.go_to_battle_result(summary)
+
+
+func _total_pending_mana_crystals() -> int:
+	var total := 0
+	for tier in GameSession.pending_mana_crystals:
+		total += GameSession.pending_mana_crystals[tier]
+	return total
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:
