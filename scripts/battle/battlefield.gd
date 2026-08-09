@@ -290,7 +290,7 @@ func _on_level_up_queue_drained() -> void:
 func _finish_victory() -> void:
 	var gold_before: int = GameSession.pending_reward
 	var mana_crystal_counts_before: Dictionary = GameSession.pending_mana_crystals.duplicate()
-	var gear_count_before: int = GameSession.pending_gear.size()
+	var gear_counts_before: Dictionary = GameSession.pending_gear.duplicate()
 
 	GameSession.complete_current_encounter()
 
@@ -306,27 +306,23 @@ func _finish_victory() -> void:
 		# the settlement, but this summary screen is titled for just this
 		# battle (see battle_result.gd).
 		"loot_gold": GameSession.pending_reward - gold_before,
-		"loot_mana_crystal_counts": _pending_mana_crystal_counts_delta(mana_crystal_counts_before),
-		"loot_gear_counts": _pending_gear_counts_delta(gear_count_before),
+		"loot_mana_crystal_counts": _dict_counts_delta(mana_crystal_counts_before, GameSession.pending_mana_crystals),
+		"loot_gear_counts": _dict_counts_delta(gear_counts_before, GameSession.pending_gear),
 	}
 	GameManager.go_to_battle_result(summary)
 
 
-func _pending_mana_crystal_counts_delta(counts_before: Dictionary) -> Dictionary:
+## Computes this battle's own additions to a pending_* counts dict as a
+## before/after delta. pending_mana_crystals (tier -> count) and
+## pending_gear (item id -> count) now share this exact shape, so one
+## helper covers both -- see GameSession.pending_gear's docstring for why
+## it moved from an Array to this Dictionary shape.
+func _dict_counts_delta(counts_before: Dictionary, counts_after: Dictionary) -> Dictionary:
 	var delta: Dictionary = {}
-	for tier in GameSession.pending_mana_crystals:
-		var gained: int = GameSession.pending_mana_crystals[tier] - counts_before.get(tier, 0)
+	for key in counts_after:
+		var gained: int = counts_after[key] - counts_before.get(key, 0)
 		if gained > 0:
-			delta[tier] = gained
-	return delta
-
-
-## pending_gear only ever grows via append() before a deposit, so the tail
-## slice starting at count_before is exactly this battle's own new drops.
-func _pending_gear_counts_delta(count_before: int) -> Dictionary:
-	var delta: Dictionary = {}
-	for item_id in GameSession.pending_gear.slice(count_before, GameSession.pending_gear.size()):
-		delta[item_id] = delta.get(item_id, 0) + 1
+			delta[key] = gained
 	return delta
 
 

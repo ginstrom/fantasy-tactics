@@ -1065,7 +1065,7 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 	# deployment, not yet deposited back at the settlement.
 	GameSession.pending_reward = 50
 	GameSession.pending_mana_crystals = {1: 3}
-	GameSession.pending_gear = ["dagger_iron", "buckler_wood"]
+	GameSession.pending_gear = {"dagger_iron": 1, "buckler_wood": 1}
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 0.0
 
@@ -1090,7 +1090,10 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 	# the summary is deliberately reporting less than GameSession's own totals.
 	assert_eq(GameSession.pending_reward, 51)
 	assert_eq(GameSession.pending_mana_crystals[1], 4)
-	assert_eq(GameSession.pending_gear.size(), 3)
+	var total_gear_pieces := 0
+	for item_id in GameSession.pending_gear:
+		total_gear_pieces += GameSession.pending_gear[item_id]
+	assert_eq(total_gear_pieces, 3)
 
 
 func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary() -> void:

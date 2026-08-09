@@ -722,7 +722,7 @@ func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when
 
 	assert_eq(session.pending_reward, 1, "One goblin kill: randi_range(1, 6) stubbed to the min (1) times multiplier 1")
 	assert_eq(session.pending_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
-	assert_eq(session.pending_gear, [], "A gear roll of 1.0 must never clear the 25% drop chance")
+	assert_eq(session.pending_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
 
 
 func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> void:
@@ -734,7 +734,7 @@ func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> vo
 
 	session.complete_current_encounter()
 
-	assert_eq(session.pending_gear, ["shortsword_iron"], "A gear roll of 0.0 must always clear the 25% drop chance")
+	assert_eq(session.pending_gear, {"shortsword_iron": 1}, "A gear roll of 0.0 must always clear the 25% drop chance")
 
 
 func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() -> void:
@@ -766,7 +766,7 @@ func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
 
 	assert_eq(session.pending_reward, 2, "Two goblin kills: 1 gold each, multiplier 1")
 	assert_eq(session.pending_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
-	assert_eq(session.pending_gear, ["shortsword_iron", "shortsword_iron"], "A guaranteed-hit gear roll fires once per kill")
+	assert_eq(session.pending_gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
 
 
 func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() -> void:
@@ -818,7 +818,7 @@ func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
 	assert_eq(session.mana_crystals, {1: 1})
 	assert_eq(session.banked_gear, {"shortsword_iron": 1})
 	assert_eq(session.pending_mana_crystals, {})
-	assert_eq(session.pending_gear, [])
+	assert_eq(session.pending_gear, {})
 
 
 func test_reset_clears_loot_state() -> void:
@@ -827,14 +827,14 @@ func test_reset_clears_loot_state() -> void:
 	session.mana_crystals = {1: 3}
 	session.banked_gear = {"shortsword_iron": 2}
 	session.pending_mana_crystals = {1: 1}
-	session.pending_gear = ["dagger_iron"] as Array[String]
+	session.pending_gear = {"dagger_iron": 1}
 
 	session.reset()
 
 	assert_eq(session.mana_crystals, {})
 	assert_eq(session.banked_gear, {})
 	assert_eq(session.pending_mana_crystals, {})
-	assert_eq(session.pending_gear, [])
+	assert_eq(session.pending_gear, {})
 
 
 func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:
@@ -2560,6 +2560,34 @@ func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_advent
 	GameSession.banked_gear = {"dagger_steel": 1}
 	assert_false(GameSession.equip_item_from_bank("no_such_id", "dagger_steel"))
 	assert_eq(GameSession.banked_gear.dagger_steel, 1, "A rejected equip must not touch the bank")
+
+
+func test_equip_item_from_party_store_adds_and_activates_without_touching_the_bank() -> void:
+	GameSession.reset()
+	GameSession.pending_gear = {"dagger_steel": 1}
+
+	var equipped: bool = GameSession.equip_item_from_party_store(GameSession.WARRIOR_ID, "dagger_steel")
+
+	assert_true(equipped)
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon, "dagger_steel")
+	assert_eq(equipment.weapon_inventory, ["longsword_iron", "dagger_steel"])
+	assert_eq(
+		GameSession.pending_gear, {"dagger_steel": 0},
+		"The party store loses the item -- zero-count keys stay, matching banked_gear's own equip/sell pattern"
+	)
+	assert_eq(GameSession.banked_gear, {}, "The bank must never be touched by this method")
+
+
+func test_equip_item_from_party_store_rejects_an_item_not_in_the_party_store() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_steel": 1}
+
+	assert_false(
+		GameSession.equip_item_from_party_store(GameSession.WARRIOR_ID, "dagger_steel"),
+		"A bank copy does not satisfy the party store -- these are two separate pools"
+	)
+	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "longsword_iron")
 
 
 func test_activate_carried_item_switches_the_active_weapon_without_touching_the_bank() -> void:

@@ -372,7 +372,7 @@ var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
 var pending_mana_crystals: Dictionary = {}
-var pending_gear: Array[String] = []
+var pending_gear: Dictionary = {}
 var has_trading_post: bool = false
 var player_name: String = DEFAULT_PLAYER_NAME
 
@@ -434,7 +434,7 @@ func reset() -> void:
 	mana_crystals = {}
 	banked_gear = {}
 	pending_mana_crystals = {}
-	pending_gear = []
+	pending_gear = {}
 	has_trading_post = false
 	player_name = DEFAULT_PLAYER_NAME
 
@@ -882,7 +882,7 @@ func _roll_and_queue_loot(enemy: Dictionary) -> void:
 		var crystal_tier: int = table.mana_crystal_tier
 		pending_mana_crystals[crystal_tier] = pending_mana_crystals.get(crystal_tier, 0) + 1
 		if loot_gear_roll.call() < GEAR_DROP_CHANCE:
-			pending_gear.append(table.gear_item_id)
+			pending_gear[table.gear_item_id] = pending_gear.get(table.gear_item_id, 0) + 1
 
 
 func abandon_current_encounter() -> void:
@@ -897,8 +897,8 @@ func deposit_pending_reward() -> int:
 		mana_crystals[tier] = mana_crystals.get(tier, 0) + pending_mana_crystals[tier]
 	pending_mana_crystals = {}
 	for item_id in pending_gear:
-		banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
-	pending_gear = []
+		banked_gear[item_id] = banked_gear.get(item_id, 0) + pending_gear[item_id]
+	pending_gear = {}
 	return deposited
 
 
@@ -1046,20 +1046,32 @@ func buy_item(item_id: String) -> bool:
 	return true
 
 
-## Requires item_id to currently be in banked_gear (an item a screen no
-## longer lists, because its bank count already hit zero, is never
-## reachable here). Makes item_id the active item for its slot. If the
-## unit doesn't already carry item_id, one unit is taken from the bank and
-## added to that slot's inventory array. If the unit already carries that
-## exact item (e.g. a second copy sits in the bank while the first is
-## already equipped), the bank is left untouched and this call just
-## re-activates the already-carried copy. Rejects (mutates nothing) for an
-## unknown item id or an unknown adventurer. Equipment is no longer a
-## swap: nothing the unit already carries is ever evicted to the bank by
-## equipping something new — see activate_carried_item()/unequip_to_bank()
-## for the other two equipment actions.
+## Requires item_id to currently be in banked_gear. See _equip_item_from()
+## for the shared add-and-activate logic -- this is identical to
+## equip_item_from_party_store() below except which pool it draws from.
 func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
-	if banked_gear.get(item_id, 0) <= 0:
+	return _equip_item_from(banked_gear, adventurer_id, item_id)
+
+
+## Requires item_id to currently be in the party's own store (pending_gear
+## -- everything the deployed party has picked up but not yet carried home
+## and banked). Used by the victory summary and World Map Party Details'
+## Equip actions, both scoped to the currently deployed party, as opposed
+## to Stores' Equip, which always draws from the (encamped) bank via
+## equip_item_from_bank() above.
+func equip_item_from_party_store(adventurer_id: String, item_id: String) -> bool:
+	return _equip_item_from(pending_gear, adventurer_id, item_id)
+
+
+## Shared by equip_item_from_bank()/equip_item_from_party_store(): makes
+## item_id the active item for its slot, taking one unit from source_gear
+## (a Dictionary of the exact same id -> count shape banked_gear and
+## pending_gear both use) unless the unit already carries item_id, in
+## which case source_gear is untouched and the already-carried copy is
+## just re-activated. Rejects (mutates nothing) for an item not currently
+## in source_gear, an unknown item id, or an unknown adventurer.
+func _equip_item_from(source_gear: Dictionary, adventurer_id: String, item_id: String) -> bool:
+	if source_gear.get(item_id, 0) <= 0:
 		return false
 	var item := get_item_definition(item_id)
 	if item.is_empty():
@@ -1071,7 +1083,7 @@ func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
 	var slot: String = item.slot
 	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]
 	if not inventory.has(item_id):
-		banked_gear[item_id] -= 1
+		source_gear[item_id] -= 1
 		inventory.append(item_id)
 	adventurers[adventurer_index].equipment[slot] = item_id
 	return true

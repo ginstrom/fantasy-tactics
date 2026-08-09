@@ -84,6 +84,43 @@ func test_activating_a_row_equips_the_item_and_returns_to_stores() -> void:
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_iron")
 
 
+func test_activating_a_row_when_party_scoped_equips_from_the_party_store_not_the_bank() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.banked_gear = {"dagger_iron": 5}
+	GameManager.route_context_id = "dagger_iron"
+	GameManager.assign_equipment_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = AssignEquipmentScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_row_activated(GameSession.WARRIOR_ID)
+
+	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_iron")
+	assert_eq(
+		GameSession.pending_gear, {"dagger_iron": 0},
+		"The party store's copy is the one consumed -- zero-count keys stay, matching equip_item_from_bank's pattern"
+	)
+	assert_eq(GameSession.banked_gear, {"dagger_iron": 5}, "The bank must be untouched by a party-scoped equip")
+
+
+func test_activating_a_row_when_party_scoped_ignores_a_bank_only_copy() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.banked_gear = {"dagger_iron": 1}
+	GameManager.route_context_id = "dagger_iron"
+	GameManager.assign_equipment_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = AssignEquipmentScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_row_activated(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "longsword_iron",
+		"A party-scoped equip must never fall back to the bank"
+	)
+
+
 func test_activating_a_row_for_an_item_no_longer_in_stock_refreshes_in_place() -> void:
 	GameManager.route_context_id = "dagger_iron"
 	var screen: Control = AssignEquipmentScene.instantiate()

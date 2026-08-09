@@ -312,7 +312,7 @@ func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instea
 func test_refresh_party_shows_carried_loot_when_pending_loot_exists() -> void:
 	GameSession.create_party()
 	GameSession.pending_mana_crystals = {1: 2, 2: 1}
-	GameSession.pending_gear = ["shortsword_iron", "shortsword_iron", "dagger_iron"]
+	GameSession.pending_gear = {"shortsword_iron": 2, "dagger_iron": 1}
 	var panel: PanelContainer = InformationPanelScene.instantiate()
 	add_child_autofree(panel)
 
@@ -334,7 +334,7 @@ func test_refresh_party_hides_carried_loot_when_there_is_none() -> void:
 
 
 func test_a_bare_refresh_hides_carried_loot_too() -> void:
-	GameSession.pending_gear = ["dagger_iron"]
+	GameSession.pending_gear = {"dagger_iron": 1}
 	var panel: PanelContainer = InformationPanelScene.instantiate()
 	add_child_autofree(panel)
 

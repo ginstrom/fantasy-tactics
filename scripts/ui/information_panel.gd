@@ -162,7 +162,9 @@ func _refresh_carried_loot() -> void:
 	var mana_crystal_count := 0
 	for tier in GameSession.pending_mana_crystals:
 		mana_crystal_count += GameSession.pending_mana_crystals[tier]
-	var gear_count: int = GameSession.pending_gear.size()
+	var gear_count := 0
+	for item_id in GameSession.pending_gear:
+		gear_count += GameSession.pending_gear[item_id]
 	carried_loot_label.visible = mana_crystal_count > 0 or gear_count > 0
 	if carried_loot_label.visible:
 		carried_loot_label.text = tr("information.carried_loot") % [mana_crystal_count, gear_count]
