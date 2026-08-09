@@ -191,9 +191,21 @@ func test_the_real_post_victory_scene_change_produces_a_selectable_world_map() -
 		settle_frames += 1
 	assert_eq(GameSession.selected_encounter, "", "Victory should have resolved before the frame budget ran out")
 
-	# GameManager.complete_battle() just called go_to_world_map(), which
-	# calls the REAL get_tree().change_scene_to_file() -- that's deferred to
-	# the end of the frame, so give it a few frames to actually take effect.
+	# Battlefield._finish_victory() now routes through GameManager.go_to_
+	# battle_result() (the new victory summary screen) before ever reaching
+	# the World Map -- both scene changes go through the REAL get_tree().
+	# change_scene_to_file(), each deferred to the end of its frame, so
+	# settle for the summary screen first, dismiss it with its real OK
+	# button exactly as a player would, then settle again for the World Map
+	# underneath it.
+	var result_settle_frames := 0
+	while (get_tree().current_scene == null or get_tree().current_scene.name != "BattleResult") and result_settle_frames < 10:
+		await get_tree().process_frame
+		result_settle_frames += 1
+	assert_eq(get_tree().current_scene.name, "BattleResult", "Victory must land on the summary screen first")
+
+	get_tree().current_scene.get_node("Center/VBox/OkButton").emit_signal("pressed")
+
 	var scene_settle_frames := 0
 	while (get_tree().current_scene == null or get_tree().current_scene.name != "WorldMap") and scene_settle_frames < 10:
 		await get_tree().process_frame
@@ -256,6 +268,21 @@ func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_part
 		await get_tree().process_frame
 		settle_frames += 1
 	assert_eq(GameSession.selected_encounter, "", "Victory should have resolved before the frame budget ran out")
+
+	# Battlefield._finish_victory() now routes through GameManager.go_to_
+	# battle_result() (the new victory summary screen) before ever reaching
+	# the World Map -- both scene changes go through the REAL get_tree().
+	# change_scene_to_file(), each deferred to the end of its frame, so
+	# settle for the summary screen first, dismiss it with its real OK
+	# button exactly as a player would, then settle again for the World Map
+	# underneath it.
+	var result_settle_frames := 0
+	while (get_tree().current_scene == null or get_tree().current_scene.name != "BattleResult") and result_settle_frames < 10:
+		await get_tree().process_frame
+		result_settle_frames += 1
+	assert_eq(get_tree().current_scene.name, "BattleResult", "Victory must land on the summary screen first")
+
+	get_tree().current_scene.get_node("Center/VBox/OkButton").emit_signal("pressed")
 
 	var scene_settle_frames := 0
 	while (get_tree().current_scene == null or get_tree().current_scene.name != "WorldMap") and scene_settle_frames < 10:
