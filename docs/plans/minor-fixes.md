@@ -38,9 +38,12 @@ cleared.
 The victory summary screen and the World Map's Party Details screen show
 loot (mana crystals and gear) as a table in the same format as the Stores
 screen (name, type, count, price columns), reusing the same table
-component. Neither shows a [Sell] action. Both keep an [Equip] action for
-gear rows, but assignment there is limited to the current party's own
-members, not the full roster.
+component. Neither shows a [Sell] action. The victory summary is a
+read-only record of that encounter's own drops — no [Equip] action there,
+since the screen shows a frozen snapshot rather than the party's live,
+mutable stock. Party Details keeps an [Equip] action for gear rows
+(assignment limited to the current party's own members, not the full
+roster), since it reads the party's actual carried loot live.
 
 The victory screen's table lists only the loot from that encounter. The
 World Map's Party Details table lists everything the party is currently

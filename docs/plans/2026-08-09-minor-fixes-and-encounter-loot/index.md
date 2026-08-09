@@ -15,27 +15,36 @@ that spec doesn't spell out — don't re-litigate them mid-implementation:
   `randi_range(0, 5) * difficulty`, rolled once per encounter clear.
 - "Same format as the Stores screen" becomes one new reusable component,
   `LootTable` (`scenes/ui/loot_table.tscn` / `scripts/ui/loot_table.gd`),
-  wrapping a `TableView` with Name/Type/Count/Price columns plus optional
-  per-row `[Sell]`/`[Equip]` `TableColumn.Type.BUTTON` columns. Stores,
-  the victory summary, and the World Map's Party Details screen all
-  instance it instead of each hand-rolling their own table + button glue.
-  Gold is never a row in this table (it isn't in `banked_gear`/
-  `mana_crystals` either) — every screen that shows loot gold keeps showing
-  it as a separate label alongside the table.
-- Equipping gear straight from a loot table (victory summary, World Map
-  Party Details) opens the existing `assign_equipment.tscn` screen scoped
+  wrapping a data-only `TableView` (Name/Type/Count/Price) plus a
+  `[View]` button that opens `LootDetailPanel` — a real `PanelContainer`
+  with real, text-labeled `[Sell]`/`[Equip]` buttons, not per-row `Tree`
+  buttons (Godot's `Tree` control is icon-only, discovered during Step 4's
+  manual verification). Stores, the victory summary, and the World Map's
+  Party Details screen all instance it instead of each hand-rolling their
+  own table + button glue. Gold is never a row in this table (it isn't in
+  `banked_gear`/`mana_crystals` either) — every screen that shows loot
+  gold keeps showing it as a separate label alongside the table.
+- Only Stores and World Map Party Details ever offer `[Equip]`; the
+  victory summary shows a **read-only** loot table (`configure(false,
+  false)`, no `[Sell]`, no `[Equip]`) — it's a frozen snapshot of one
+  battle's own drops, never re-read after it's shown, so letting the
+  player mutate live state through it would silently desync the two
+  (discovered during Step 6's manual verification). Equipping gear from
+  Party Details opens the existing `assign_equipment.tscn` screen scoped
   to one party's `member_ids` instead of the full roster, and returns to
   whichever screen sent it there. This needs two small `GameManager`
-  additions — `assign_equipment_party_id` and `assign_equipment_origin` —
-  mirroring the existing `add_member_return_party_id` pattern.
+  additions — `assign_equipment_party_id` and `assign_equipment_origin`
+  (`{ STORES, PARTY_DETAILS }`) — mirroring the existing `add_member_
+  return_party_id` pattern.
 - `GameSession.pending_gear` is a `Dictionary` (item id → count), the same
-  shape `banked_gear` uses — not the `Array[String]` it started as. A
-  party-scoped Equip (victory summary, World Map Party Details) always
-  draws from this "party store" via `equip_item_from_party_store()`,
-  never from the (encamped, often unreachable) bank — freshly-dropped
-  battle loot isn't banked until the party actually returns home. This
-  was discovered and fixed during Step 6's manual verification; see that
-  step's fix notes for the full rationale.
+  shape `banked_gear` uses — not the `Array[String]` it started as. Party
+  Details' party-scoped Equip always draws from this "party store" via
+  `equip_item_from_party_store()`, never from the (encamped, often
+  unreachable) bank — freshly-dropped battle loot isn't banked until the
+  party actually returns home. This was discovered and fixed during Step
+  6's manual verification, alongside the decision to drop Equip from the
+  victory screen entirely rather than make its frozen snapshot track live
+  state; see that step's fix notes for the full rationale.
 - The World Map's Party Details table reads `GameSession.pending_gear`/
   `pending_mana_crystals` (everything the deployed party is carrying,
   itemized) — never `banked_gear`/`mana_crystals` (Stores' inventory).
