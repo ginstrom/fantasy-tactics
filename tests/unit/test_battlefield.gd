@@ -219,12 +219,41 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 	assert_eq(battlefield.grid.selected_unit.adventurer_id, second_member_id)
 
 
-func test_hud_hint_and_status_share_the_top_left_stack() -> void:
+## Battle feedback (Hint, Status, the enemy health list) lives in a bottom
+## message panel beneath the battle map, matching the World Map HUD's own
+## BottomPanel (see world_map.tscn/test_world_map.gd's
+## test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel) --
+## not stacked above the left portrait panel, where a tall enemy health list
+## (up to 8 entries, see BattleController.ENEMY_START_POSITIONS) used to
+## crowd it out.
+func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
 	assert_eq(battlefield.enemy_health.get_parent(), battlefield.hint.get_parent())
+
+
+func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	# Hint/Status/EnemyHealth stack inside one VBoxContainer (BottomContent),
+	# which is itself the PanelContainer's single stretched child -- unlike
+	# world_map.tscn's single-Label BottomPanel, this one needs the extra
+	# layer to hold three widgets.
+	assert_true(battlefield.hint.get_parent().get_parent() is PanelContainer)
+
+
+func test_bottom_panel_does_not_share_a_parent_with_the_portrait_panel() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_ne(
+		battlefield.hint.get_parent(),
+		battlefield.portrait_panel.get_parent(),
+		"The bottom feedback panel and the left portrait panel must be separate HUD regions, not stacked in the same row"
+	)
 
 
 func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> void:
