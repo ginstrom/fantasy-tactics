@@ -1458,7 +1458,7 @@ func test_each_level_gained_adds_one_max_health_and_ten_skill_points() -> void:
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
 	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.stats.max_health, 11, "Leveling once should add exactly one max health")
+	assert_eq(warrior.stats.max_health, 20, "Leveling once should add exactly ten max health")
 	assert_eq(warrior.progression.skill_points, 10, "Leveling once should add exactly ten skill points")
 
 
@@ -1573,7 +1573,7 @@ func test_get_effective_max_health_reflects_leveling() -> void:
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
-	assert_eq(session.get_effective_max_health("warrior_001"), 11)
+	assert_eq(session.get_effective_max_health("warrior_001"), 20)
 
 
 func test_get_effective_move_range_adds_the_bonus_move_perk() -> void:

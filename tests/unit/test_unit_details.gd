@@ -142,8 +142,8 @@ func test_stats_label_reflects_leveling_xp_attack_and_health_changes() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		tr("unit_details.stats") % [25, 50, 64, 64, 11],
-		"25.5 XP displays floored as 25/50 to level 3; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 11"
+		tr("unit_details.stats") % [25, 50, 64, 64, 20],
+		"25.5 XP displays floored as 25/50 to level 3; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 20"
 	)
 
 

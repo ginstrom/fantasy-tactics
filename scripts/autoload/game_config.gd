@@ -16,7 +16,7 @@ const DEFAULTS: Dictionary = {
 		"attack_to_hit_chance_divisor": 100.0,
 	},
 	"progression": {
-		"level_up_max_health_bonus": 1,
+		"level_up_max_health_bonus": 10,
 		"level_up_skill_points": 10,
 		"perk_level_interval": 3,
 	},

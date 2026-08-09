@@ -388,8 +388,8 @@ func test_ready_builds_the_player_unit_from_the_first_partys_effective_stats() -
 		GameSession.get_effective_max_health(GameSession.WARRIOR_ID),
 		"The unit's max health must come from GameSession's derived value"
 	)
-	assert_eq(warrior.max_health, 11, "One level up should have added one max health")
-	assert_eq(warrior.health, 11, "A fresh unit starts at full (derived) health")
+	assert_eq(warrior.max_health, 20, "One level up should have added ten max health")
+	assert_eq(warrior.health, 20, "A fresh unit starts at full (derived) health")
 
 
 func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_when_raw_attack_reaches_one_hundred() -> void:
