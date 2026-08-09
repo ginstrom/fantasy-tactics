@@ -71,8 +71,13 @@ func test_full_trade_loop_buy_assign_and_fight_with_new_equipment() -> void:
 	assign_screen._on_row_activated(GameSession.WARRIOR_ID)
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_steel")
 	assert_eq(
-		GameSession.banked_gear.get("longsword_iron", 0), 1,
-		"the displaced default Iron Longsword returns to the bank"
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon_inventory,
+		["longsword_iron", "dagger_steel"],
+		"the starting Iron Longsword stays carried, not evicted to the bank"
+	)
+	assert_eq(
+		GameSession.banked_gear.get("longsword_iron", 0), 0,
+		"the starting Iron Longsword was never in the bank to begin with"
 	)
 	assert_eq(GameSession.banked_gear.get("dagger_steel", 0), 0, "the assigned dagger leaves the bank")
 

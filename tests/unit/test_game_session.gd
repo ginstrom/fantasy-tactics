@@ -2280,7 +2280,13 @@ func test_get_item_definition_finds_a_weapon_then_an_armor_then_returns_empty() 
 func test_default_warrior_starts_with_an_iron_longsword_and_leather_armor() -> void:
 	var warrior: Dictionary = GameSession.get_default_warrior()
 
-	assert_eq(warrior.equipment, {"weapon": "longsword_iron", "armor": "leather_armor"})
+	assert_eq(
+		warrior.equipment,
+		{
+			"weapon": "longsword_iron", "weapon_inventory": ["longsword_iron"],
+			"armor": "leather_armor", "armor_inventory": ["leather_armor"],
+		}
+	)
 
 
 func test_effective_weapon_damage_range_and_name_come_from_the_equipped_weapon() -> void:
@@ -2467,16 +2473,49 @@ func test_buy_item_requires_a_trading_post_and_enough_gold_then_banks_the_item()
 	assert_eq(GameSession.banked_gear.dagger_iron, 1)
 
 
-func test_equip_item_from_bank_moves_the_item_from_the_bank_onto_the_unit_and_returns_the_old_one() -> void:
+func test_equip_item_from_bank_adds_the_new_item_and_activates_it_without_evicting_the_old_one() -> void:
 	GameSession.reset()
 	GameSession.banked_gear = {"dagger_steel": 1}
 
 	var equipped: bool = GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
 
 	assert_true(equipped)
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_steel")
-	assert_eq(GameSession.banked_gear.dagger_steel, 0)
-	assert_eq(GameSession.banked_gear.longsword_iron, 1, "The previously-equipped Iron Longsword returns to the bank")
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon, "dagger_steel", "The newly-equipped item becomes active")
+	assert_eq(
+		equipment.weapon_inventory, ["longsword_iron", "dagger_steel"],
+		"The starting Iron Longsword stays carried, not evicted to the bank"
+	)
+	assert_eq(GameSession.banked_gear.dagger_steel, 0, "The new item leaves the bank")
+	assert_eq(
+		GameSession.banked_gear.get("longsword_iron", 0), 0,
+		"The previously-active Iron Longsword must NOT reappear in the bank"
+	)
+
+
+func test_equipping_an_already_carried_item_reactivates_it_without_touching_the_bank() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_steel": 2}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	# A second Steel Dagger sits in the bank; the unit already carries one.
+	assert_eq(GameSession.banked_gear.dagger_steel, 1)
+	# Switch back to the Iron Longsword (now inactive but still carried) via
+	# activate_carried_item, not equip_item_from_bank -- the Iron Longsword
+	# was never itself in the bank, so equip_item_from_bank would correctly
+	# reject it here (see the "Requires item_id to currently be in
+	# banked_gear" precondition below).
+	GameSession.activate_carried_item(GameSession.WARRIOR_ID, "weapon", "longsword_iron")
+
+	var equipped: bool = GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+
+	assert_true(equipped)
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon, "dagger_steel", "Re-equipping re-activates the already-carried copy")
+	assert_eq(
+		equipment.weapon_inventory, ["longsword_iron", "dagger_steel"],
+		"No duplicate entry — the unit already carried this exact item"
+	)
+	assert_eq(GameSession.banked_gear.dagger_steel, 1, "The spare bank copy is untouched, not consumed again")
 
 
 func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_adventurer() -> void:
@@ -2486,6 +2525,81 @@ func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_advent
 	GameSession.banked_gear = {"dagger_steel": 1}
 	assert_false(GameSession.equip_item_from_bank("no_such_id", "dagger_steel"))
 	assert_eq(GameSession.banked_gear.dagger_steel, 1, "A rejected equip must not touch the bank")
+
+
+func test_activate_carried_item_switches_the_active_weapon_without_touching_the_bank() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+
+	var activated: bool = GameSession.activate_carried_item(GameSession.WARRIOR_ID, "weapon", "longsword_iron")
+
+	assert_true(activated)
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon, "longsword_iron")
+	assert_eq(
+		equipment.weapon_inventory, ["longsword_iron", "dagger_steel"],
+		"Activating a carried item must not change what's carried"
+	)
+	assert_eq(GameSession.banked_gear.get("dagger_steel", 0), 0, "No bank interaction")
+
+
+func test_activate_carried_item_rejects_an_uncarried_item_an_unknown_slot_or_adventurer() -> void:
+	GameSession.reset()
+
+	assert_false(
+		GameSession.activate_carried_item(GameSession.WARRIOR_ID, "weapon", "dagger_steel"),
+		"Not carried"
+	)
+	assert_false(
+		GameSession.activate_carried_item(GameSession.WARRIOR_ID, "shield", "longsword_iron"),
+		"Unknown slot"
+	)
+	assert_false(
+		GameSession.activate_carried_item("no_such_id", "weapon", "longsword_iron"),
+		"Unknown adventurer"
+	)
+	assert_eq(
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "longsword_iron",
+		"Every rejected call must leave the active weapon untouched"
+	)
+
+
+func test_unequip_to_bank_removes_a_non_active_carried_item_and_banks_it() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_steel": 1}
+	GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "dagger_steel")
+	# longsword_iron is now carried but inactive.
+
+	var unequipped: bool = GameSession.unequip_to_bank(GameSession.WARRIOR_ID, "weapon", "longsword_iron")
+
+	assert_true(unequipped)
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon_inventory, ["dagger_steel"])
+	assert_eq(equipment.weapon, "dagger_steel", "The active item is unaffected")
+	assert_eq(GameSession.banked_gear.longsword_iron, 1)
+
+
+func test_unequip_to_bank_rejects_the_active_item_an_uncarried_item_or_an_unknown_adventurer() -> void:
+	GameSession.reset()
+
+	assert_false(
+		GameSession.unequip_to_bank(GameSession.WARRIOR_ID, "weapon", "longsword_iron"),
+		"Cannot unequip the only (and therefore active) carried weapon"
+	)
+	assert_false(
+		GameSession.unequip_to_bank(GameSession.WARRIOR_ID, "weapon", "dagger_steel"),
+		"Not carried"
+	)
+	assert_false(
+		GameSession.unequip_to_bank("no_such_id", "weapon", "longsword_iron"),
+		"Unknown adventurer"
+	)
+	assert_eq(
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon_inventory, ["longsword_iron"],
+		"Every rejected call must leave the inventory untouched"
+	)
+	assert_eq(GameSession.banked_gear, {}, "Nothing rejected should ever reach the bank")
 
 
 func test_reset_clears_the_trading_post() -> void:

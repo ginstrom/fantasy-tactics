@@ -224,7 +224,10 @@ func get_default_warrior() -> Dictionary:
 		"id": WARRIOR_ID,
 		"name": "Warrior",
 		"class": "warrior",
-		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
+		"equipment": {
+			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
 		"level": 1,
 		"availability_status": "available",
 		# Authored base combat values; effective values (hit chance, max health,
@@ -260,7 +263,10 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_002",
 		"name": "Warrior 2",
 		"class": "warrior",
-		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
+		"equipment": {
+			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -269,7 +275,10 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_003",
 		"name": "Warrior 3",
 		"class": "warrior",
-		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
+		"equipment": {
+			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -278,7 +287,10 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"id": "warrior_004",
 		"name": "Warrior 4",
 		"class": "warrior",
-		"equipment": {"weapon": DEFAULT_WEAPON_ID, "armor": DEFAULT_ARMOR_ID},
+		"equipment": {
+			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
 		"level": 1,
 		"availability_status": "available",
 		"cost": 10,
@@ -1031,13 +1043,18 @@ func buy_item(item_id: String) -> bool:
 	return true
 
 
-## Moves one unit of item_id out of banked_gear onto adventurer_id's matching
-## equipment slot (weapon or armor, from the item's own "slot" field), and
-## returns whatever was previously equipped in that slot back to the bank —
-## equipment is a swap, not a one-way consumption, so the adventurer's
-## starting gear (or a previous purchase) is never silently lost. Rejects an
-## item not in stock, an unknown item id, or an unknown adventurer, without
-## mutating anything either way.
+## Requires item_id to currently be in banked_gear (an item a screen no
+## longer lists, because its bank count already hit zero, is never
+## reachable here). Makes item_id the active item for its slot. If the
+## unit doesn't already carry item_id, one unit is taken from the bank and
+## added to that slot's inventory array. If the unit already carries that
+## exact item (e.g. a second copy sits in the bank while the first is
+## already equipped), the bank is left untouched and this call just
+## re-activates the already-carried copy. Rejects (mutates nothing) for an
+## unknown item id or an unknown adventurer. Equipment is no longer a
+## swap: nothing the unit already carries is ever evicted to the bank by
+## equipping something new — see activate_carried_item()/unequip_to_bank()
+## for the other two equipment actions.
 func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
 	if banked_gear.get(item_id, 0) <= 0:
 		return false
@@ -1049,11 +1066,52 @@ func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
 		return false
 
 	var slot: String = item.slot
-	var previous_item_id: String = adventurers[adventurer_index].equipment.get(slot, "")
-	banked_gear[item_id] -= 1
+	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]
+	if not inventory.has(item_id):
+		banked_gear[item_id] -= 1
+		inventory.append(item_id)
 	adventurers[adventurer_index].equipment[slot] = item_id
-	if previous_item_id != "":
-		banked_gear[previous_item_id] = banked_gear.get(previous_item_id, 0) + 1
+	return true
+
+
+## Switches the active item for `slot` ("weapon" or "armor") to item_id,
+## which must already be in that slot's inventory array. No bank
+## interaction. Rejects an item not carried in that slot, an unknown slot,
+## or an unknown adventurer, mutating nothing.
+func activate_carried_item(adventurer_id: String, slot: String, item_id: String) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	var equipment: Dictionary = adventurers[adventurer_index].equipment
+	var inventory_key := "%s_inventory" % slot
+	if not equipment.has(inventory_key):
+		return false
+	var inventory: Array = equipment[inventory_key]
+	if not inventory.has(item_id):
+		return false
+	adventurers[adventurer_index].equipment[slot] = item_id
+	return true
+
+
+## Removes item_id from slot's inventory array and returns one unit to
+## banked_gear. Rejects (mutates nothing) if item_id is currently that
+## slot's active item — a unit can never end up with an empty active slot,
+## so the player must activate something else first — if item_id isn't
+## carried in that slot at all, for an unknown slot, or for an unknown
+## adventurer.
+func unequip_to_bank(adventurer_id: String, slot: String, item_id: String) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	var equipment: Dictionary = adventurers[adventurer_index].equipment
+	var inventory_key := "%s_inventory" % slot
+	if not equipment.has(inventory_key):
+		return false
+	var inventory: Array = equipment[inventory_key]
+	if not inventory.has(item_id) or equipment.get(slot, "") == item_id:
+		return false
+	inventory.erase(item_id)
+	banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
 	return true
 
 
