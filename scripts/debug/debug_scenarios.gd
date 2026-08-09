@@ -72,14 +72,17 @@ static func _create_three_warrior_party() -> bool:
 
 
 ## For testing the Trade loop directly: a staffed encamped party, a Trading
-## Post already owned (so Stores' Sell button is enabled), and Stores
-## pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword.
+## Post already owned (so Stores' Sell button is enabled), Stores
+## pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword,
+## and 500 gold so the Trading Post's Buy tab is actually usable rather
+## than every purchase being unaffordable.
 static func _stock_trading_post_and_stores() -> bool:
 	if not _create_staffed_party():
 		return false
 	GameSession.has_trading_post = true
 	GameSession.mana_crystals = {1: 2}
 	GameSession.banked_gear = {"shortsword_iron": 1}
+	GameSession.gold = 500
 	return true
 
 
