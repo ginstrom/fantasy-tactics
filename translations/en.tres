@@ -91,7 +91,7 @@ messages = {
 "party_status.encamped": "Encamped",
 "party_status.deployed": "Deployed",
 "party_details.title": "Party Details",
-"party_details.gold": "Gold: %d",
+"party_details.gold": "Party Gold: %d",
 "party_details.members": "Members",
 "party_details.no_members": "No members yet.",
 "party_details.add_member": "Add Member",

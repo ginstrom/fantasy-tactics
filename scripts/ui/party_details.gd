@@ -15,18 +15,19 @@ extends Control
 ## party-scoped [Equip] and no [Sell]. An encamped party shows no loot
 ## table at all — deposit_pending_reward() has already moved that loot
 ## into GameSession.banked_gear/mana_crystals (Stores' inventory) by the
-## time a party is back at the Encampment. GoldLabel always shows
-## GameSession.gold (banked gold) regardless of deployment state.
-## PendingRewardLabel shows GameSession.pending_reward alongside it,
-## visible only while deployed with a nonzero amount queued — the same
-## "Unbanked reward: N gold" row/translation key InformationPanel already
-## uses on the World Map (information_panel.gd's refresh_party()).
+## time a party is back at the Encampment. GoldLabel shows this party's own
+## carried gold (GameSession.pending_reward) while deployed, not the
+## Encampment's banked GameSession.gold -- that belongs to Stores, not to
+## one party. An encamped party always reads 0 here: partly because
+## deposit_pending_reward() already zeroed it for that party, but also
+## because pending_reward only ever tracks the single currently-deployed
+## party (GameSession.selected_party_id) and must never be read for any
+## other, encamped party's page.
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
 @onready var gold_label: Label = $Body/Center/VBox/GoldLabel
-@onready var pending_reward_label: Label = $Body/Center/VBox/PendingRewardLabel
 @onready var loot_table: LootTable = $Body/Center/VBox/LootTable
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
@@ -57,11 +58,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func refresh() -> void:
 	var party := GameSession.get_party(party_id)
 	party_name_label.text = "" if party.is_empty() else party.name
-	gold_label.text = tr("party_details.gold") % GameSession.gold
 	var deployed: bool = party.get("deployed", false)
-	pending_reward_label.visible = deployed and GameSession.pending_reward > 0
-	if pending_reward_label.visible:
-		pending_reward_label.text = tr("information.pending_reward") % GameSession.pending_reward
+	# pending_reward tracks the single currently-deployed party (see
+	# GameSession.selected_party_id) -- reading it unconditionally would
+	# misattribute the deployed party's carried gold to a different,
+	# encamped party's page, so an encamped party always reads 0 here.
+	gold_label.text = tr("party_details.gold") % (GameSession.pending_reward if deployed else 0)
 	loot_table.visible = deployed
 	if deployed:
 		loot_table.set_rows(GameSession.build_loot_rows(GameSession.pending_gear, GameSession.pending_mana_crystals))

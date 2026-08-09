@@ -49,11 +49,6 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="PendingRewardLabel" type="Label" parent="Body/Center/VBox"]
-layout_mode = 2
-visible = false
-horizontal_alignment = 1
-
 [node name="LootTable" parent="Body/Center/VBox" instance=ExtResource("5_loot_table")]
 visible = false
 layout_mode = 2

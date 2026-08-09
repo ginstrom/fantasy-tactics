@@ -101,17 +101,21 @@ func test_reads_the_party_id_from_route_context() -> void:
 	assert_eq(screen.party_id, GameSession.FIRST_PARTY_ID)
 
 
-func test_party_details_shows_gold_and_hides_the_loot_table_for_an_encamped_party() -> void:
+func test_party_details_shows_zero_gold_and_hides_the_loot_table_for_an_encamped_party() -> void:
 	GameSession.create_party()
+	# Banked gold/loot -- Stores' inventory, not this party's own. An
+	# encamped party has already deposited everything it carried, so
+	# GoldLabel (this party's own carried gold) and the loot table must
+	# both read empty, regardless of what's sitting in the bank.
 	GameSession.gold = 250
-	# Banked (not pending) loot -- Stores' inventory, not this party's own.
-	# An encamped party has already deposited everything it carried; the
-	# loot table must not show Stores' inventory here at all.
 	GameSession.mana_crystals = {1: 2, 2: 1}
 	GameSession.banked_gear = {"dagger_iron": 1, "leather_armor": 2}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 250)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0,
+		"An encamped party carries no gold of its own, however much is banked"
+	)
 	assert_false(
 		screen.get_node("Body/Center/VBox/LootTable").visible,
 		"Loot has already banked into Stores by the time a party is back at the Encampment"
@@ -125,37 +129,27 @@ func test_party_details_shows_zero_gold_on_a_fresh_session() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
 
 
-func test_a_deployed_partys_pending_reward_shows_next_to_gold() -> void:
+func test_a_deployed_partys_gold_label_shows_its_own_carried_reward() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
 	GameSession.pending_reward = 15
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	assert_true(screen.get_node("Body/Center/VBox/PendingRewardLabel").visible)
-	assert_eq(
-		screen.get_node("Body/Center/VBox/PendingRewardLabel").text,
-		tr("information.pending_reward") % 15
-	)
+	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 15)
 
 
-func test_pending_reward_row_is_hidden_when_zero_or_the_party_is_encamped() -> void:
+func test_a_returned_partys_gold_label_reads_zero_once_its_reward_is_deposited() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	var deployed_screen := _open_party_details(GameSession.FIRST_PARTY_ID)
-	assert_false(
-		deployed_screen.get_node("Body/Center/VBox/PendingRewardLabel").visible,
-		"Zero pending reward must not show an empty row"
-	)
+	GameSession.pending_reward = 15
 
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.pending_reward = 5
-	var encamped_screen := _open_party_details(GameSession.FIRST_PARTY_ID)
-	assert_false(
-		encamped_screen.get_node("Body/Center/VBox/PendingRewardLabel").visible,
-		"An encamped party must not show a pending reward row even if one is somehow still queued"
-	)
+	GameSession.deposit_pending_reward()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
 
 
 func test_a_deployed_partys_loot_table_shows_everything_it_is_carrying() -> void:
