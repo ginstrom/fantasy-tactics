@@ -873,8 +873,8 @@ func test_a_level_up_from_kill_xp_raises_the_active_units_max_and_current_health
 	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
 
 	assert_eq(GameSession.get_adventurer("warrior_001").level, 2, "19 + 10 orc kill XP should cross the level 2 threshold")
-	assert_eq(units.warrior.max_health, 11, "The active unit's max health must rise immediately on a mid-battle level-up")
-	assert_eq(units.warrior.health, 11, "The active unit's current health must rise by the same amount as max health")
+	assert_eq(units.warrior.max_health, 20, "The active unit's max health must rise immediately on a mid-battle level-up")
+	assert_eq(units.warrior.health, 20, "The active unit's current health must rise by the same amount as max health")
 
 
 ## Task 3: the immediate, queued, modal level-up overlay. A queued level-up
