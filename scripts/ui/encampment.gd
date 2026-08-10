@@ -4,6 +4,7 @@ extends Control
 @onready var parties_label: Label = $Body/Center/VBox/PartiesLabel
 @onready var units_label: Label = $Body/Center/VBox/UnitsLabel
 @onready var information_panel: PanelContainer = %InformationPanel
+@onready var campaign_guide: PanelContainer = %CampaignGuide
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func refresh() -> void:
 	parties_label.text = tr("encampment.parties_count") % GameSession.get_encamped_parties().size()
 	units_label.text = tr("encampment.units_count") % _count_encamped_units()
 	information_panel.refresh()
+	campaign_guide.refresh()
 
 
 ## Adventurers currently physically present at the encampment: the roster

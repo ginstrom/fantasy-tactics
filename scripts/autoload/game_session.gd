@@ -5,6 +5,26 @@ const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
 const RUINED_FORTRESS_ID := "ruined_fortress"
+
+# First-campaign guide message ids (see get_campaign_guide_state() near the
+# bottom of this file and docs/plans/2026-08-10-initial-campaign-and-
+# automation/04-first-campaign-guidance.md). Order matters: it's the
+# priority scan order get_campaign_guide_state() walks.
+const CAMPAIGN_GUIDE_FORM_PARTY := "form_party"
+const CAMPAIGN_GUIDE_DEPLOY := "deploy"
+const CAMPAIGN_GUIDE_SELECT_ROUTE := "select_route"
+const CAMPAIGN_GUIDE_ENTER_SITE := "enter_site"
+const CAMPAIGN_GUIDE_RETURN_BANK := "return_bank"
+const CAMPAIGN_GUIDE_FIRST_IMPROVEMENT := "first_improvement"
+const CAMPAIGN_GUIDE_SEQUENCE: Array[String] = [
+	CAMPAIGN_GUIDE_FORM_PARTY,
+	CAMPAIGN_GUIDE_DEPLOY,
+	CAMPAIGN_GUIDE_SELECT_ROUTE,
+	CAMPAIGN_GUIDE_ENTER_SITE,
+	CAMPAIGN_GUIDE_RETURN_BANK,
+	CAMPAIGN_GUIDE_FIRST_IMPROVEMENT,
+]
+
 const EXPEDITIONS: Dictionary = {
 	"goblin_camp": {
 		"position": Vector2i(4, 4),
@@ -388,6 +408,11 @@ var battle_mana_crystals: Dictionary = {}
 var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
 var player_name: String = DEFAULT_PLAYER_NAME
+# Compact durable record of which first-campaign guide messages have already
+# been shown/dismissed (see docs/plans/2026-08-10-initial-campaign-and-
+# automation/04-first-campaign-guidance.md's get_campaign_guide_state()). An
+# arbitrary id -> bool map, empty until that step starts writing to it.
+var tutorial_progress: Dictionary = {}
 
 
 func _init() -> void:
@@ -455,6 +480,7 @@ func reset() -> void:
 	battle_gear = {}
 	has_trading_post = false
 	player_name = DEFAULT_PLAYER_NAME
+	tutorial_progress = {}
 
 
 func create_party(party_name: String = "Party 1") -> bool:
@@ -929,6 +955,18 @@ func merge_battle_loot_into_party() -> void:
 	_merge_counts(battle_mana_crystals, pending_mana_crystals)
 	battle_gear = {}
 	battle_mana_crystals = {}
+
+
+## True whenever this battle's own loot store (battle_reward/battle_gear/
+## battle_mana_crystals) still holds anything merge_battle_loot_into_party()
+## has not yet folded into the party's carried store -- i.e. the window
+## between complete_current_encounter() clearing selected_encounter and the
+## player leaving the Battle Result screen for the World Map. See
+## GameManager.can_save_current_campaign(), which ANDs this in alongside the
+## "no active encounter" guard so a save can never freeze loot in this
+## transient, not-yet-settled bucket.
+func has_unsettled_battle_loot() -> bool:
+	return battle_reward != 0 or not battle_gear.is_empty() or not battle_mana_crystals.is_empty()
 
 
 ## Merges the party's carried store into the Encampment's bank -- the other
@@ -1590,3 +1628,209 @@ func get_effective_resistance(adventurer_id: String) -> int:
 		return 0
 	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
 	return 0 if armor.is_empty() else int(armor.resistance)
+
+
+## Exports every durable field this session owns as a versioned, deep-copy-
+## safe, JSON-safe Dictionary (see CampaignSnapshot). No disk I/O and no
+## reward-banking side effects -- battle_reward/pending_reward are carried
+## across exactly as they stand, never merged or deposited.
+func export_campaign_snapshot() -> Dictionary:
+	var snapshot := CampaignSnapshot.new()
+	snapshot.adventurers = adventurers.duplicate(true)
+	snapshot.recruitment_candidates = recruitment_candidates.duplicate(true)
+	snapshot.recruitment_vacancies = recruitment_vacancies.duplicate(true)
+	snapshot.parties = parties.duplicate(true)
+	snapshot.selected_party_id = selected_party_id
+	snapshot.selected_encounter = selected_encounter
+	snapshot.completed_encounters = completed_encounters.duplicate(true)
+	snapshot.active_encounters = active_encounters.duplicate(true)
+	snapshot.encounter_vacancies = encounter_vacancies.duplicate(true)
+	snapshot.used_encounter_template_ids = _used_encounter_template_ids.duplicate(true)
+	snapshot.world_turn = world_turn
+	snapshot.gold = gold
+	snapshot.guild_hall_level = guild_hall_level
+	snapshot.pending_reward = pending_reward
+	snapshot.mana_crystals = mana_crystals.duplicate(true)
+	snapshot.banked_gear = banked_gear.duplicate(true)
+	snapshot.pending_mana_crystals = pending_mana_crystals.duplicate(true)
+	snapshot.pending_gear = pending_gear.duplicate(true)
+	snapshot.battle_reward = battle_reward
+	snapshot.battle_mana_crystals = battle_mana_crystals.duplicate(true)
+	snapshot.battle_gear = battle_gear.duplicate(true)
+	snapshot.has_trading_post = has_trading_post
+	snapshot.player_name = player_name
+	snapshot.tutorial_progress = tutorial_progress.duplicate(true)
+	return snapshot.to_dictionary()
+
+
+## All-or-nothing import: validates and normalizes data into a separate
+## Dictionary (see CampaignSnapshot.from_dictionary()) and only assigns this
+## session's own fields once that normalization reports "ok": true, so a
+## rejected import never partially lands. Returns the same
+## { "ok", "snapshot", "error" } result CampaignSnapshot.from_dictionary()
+## produced, for the caller to inspect. Never calls
+## merge_battle_loot_into_party() or deposit_pending_reward() -- carried
+## rewards are restored exactly as exported, never banked.
+##
+## Every Array/Dictionary field is duplicated (never assigned directly)
+## when copied from result.snapshot onto this session's own fields, so the
+## two stay independent objects in both directions: a caller mutating the
+## returned result's nested "snapshot" afterward (e.g. for logging) cannot
+## reach back into live session state, and this session mutating its own
+## fields afterward cannot reach into the returned result.
+func import_campaign_snapshot(data: Dictionary) -> Dictionary:
+	var result := CampaignSnapshot.from_dictionary(data)
+	if not result.ok:
+		return result
+
+	var snapshot: Dictionary = result.snapshot
+	adventurers = snapshot.adventurers.duplicate(true)
+	recruitment_candidates = snapshot.recruitment_candidates.duplicate(true)
+	recruitment_vacancies = snapshot.recruitment_vacancies.duplicate(true)
+	parties = snapshot.parties.duplicate(true)
+	selected_party_id = snapshot.selected_party_id
+	selected_encounter = snapshot.selected_encounter
+	completed_encounters = snapshot.completed_encounters.duplicate(true)
+	active_encounters = snapshot.active_encounters.duplicate(true)
+	encounter_vacancies = snapshot.encounter_vacancies.duplicate(true)
+	_used_encounter_template_ids = snapshot.used_encounter_template_ids.duplicate(true)
+	world_turn = snapshot.world_turn
+	gold = snapshot.gold
+	guild_hall_level = snapshot.guild_hall_level
+	pending_reward = snapshot.pending_reward
+	mana_crystals = snapshot.mana_crystals.duplicate(true)
+	banked_gear = snapshot.banked_gear.duplicate(true)
+	pending_mana_crystals = snapshot.pending_mana_crystals.duplicate(true)
+	pending_gear = snapshot.pending_gear.duplicate(true)
+	battle_reward = snapshot.battle_reward
+	battle_mana_crystals = snapshot.battle_mana_crystals.duplicate(true)
+	battle_gear = snapshot.battle_gear.duplicate(true)
+	has_trading_post = snapshot.has_trading_post
+	player_name = snapshot.player_name
+	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
+	return result
+
+
+## Derived, one-shot guide-state query for the first campaign's opening
+## reward-to-improvement loop (see docs/plans/2026-08-10-initial-campaign-
+## and-automation/04-first-campaign-guidance.md): form a party, deploy it,
+## select/commit a route, enter the first site, return home to bank the
+## reward, then choose the first affordable improvement. Scans
+## CAMPAIGN_GUIDE_SEQUENCE and returns whichever id's contextual trigger
+## currently holds and has not already been dismissed via
+## record_campaign_guide_dismissal() or retired via
+## record_campaign_guide_progress(); "" means nothing is due right now.
+##
+## A pure read, like every other get_/has_/can_ method in this file --
+## calling it never writes tutorial_progress or anything else. When several
+## ids are simultaneously triggered, the *latest* one in the sequence wins
+## rather than the first (see _compute_campaign_guide_active_id()), but that
+## alone only decides what to show *this call*; making a message that was
+## actually shown stay retired across later calls is
+## record_campaign_guide_progress()'s job, not this one's -- see that
+## method's doc for why the split matters.
+func get_campaign_guide_state() -> String:
+	return _compute_campaign_guide_active_id()
+
+
+## Pure priority scan: the CAMPAIGN_GUIDE_SEQUENCE entries are visited in
+## order, so simply overwriting active_id on every still-triggered, not-yet-
+## retired hit naturally leaves the *last* (highest-priority) one standing --
+## no index bookkeeping needed to pick "latest wins" over "first wins".
+func _compute_campaign_guide_active_id() -> String:
+	var active_id := ""
+	for guide_id in CAMPAIGN_GUIDE_SEQUENCE:
+		if not tutorial_progress.get(guide_id, false) and _is_campaign_guide_triggered(guide_id):
+			active_id = guide_id
+	return active_id
+
+
+func _is_campaign_guide_triggered(guide_id: String) -> bool:
+	match guide_id:
+		CAMPAIGN_GUIDE_FORM_PARTY:
+			return parties.is_empty()
+		CAMPAIGN_GUIDE_DEPLOY:
+			return not parties.is_empty() and not has_deployed_party()
+		CAMPAIGN_GUIDE_SELECT_ROUTE:
+			return (
+				has_deployed_party() and selected_encounter == ""
+				and get_deployed_party_route().is_empty()
+				and not _campaign_guide_party_on_active_encounter()
+			)
+		CAMPAIGN_GUIDE_ENTER_SITE:
+			return (
+				has_deployed_party() and selected_encounter == ""
+				and _campaign_guide_party_on_active_encounter()
+			)
+		CAMPAIGN_GUIDE_RETURN_BANK:
+			return has_deployed_party() and selected_encounter == "" and pending_reward > 0
+		CAMPAIGN_GUIDE_FIRST_IMPROVEMENT:
+			return (
+				not has_deployed_party() and gold > 0
+				and not _campaign_guide_first_improvement_made()
+				and _campaign_guide_has_affordable_improvement()
+			)
+	return false
+
+
+## True once the deployed party is standing on a tile that still names a
+## live, uncleared active-encounter instance -- mirrors world_map.gd's own
+## _expedition_id_at() lookup against GameSession.get_active_encounters().
+func _campaign_guide_party_on_active_encounter() -> bool:
+	var position := get_deployed_party_position()
+	for record in get_active_encounters():
+		if record.position == position:
+			return true
+	return false
+
+
+## Monotonic proxy for "the player has already made at least one of the
+## three improvements the manual verification flow names (recruit,
+## equipment, Guild Hall)". Equipment purchases (buy_item()) require
+## has_trading_post already being true, so that flag alone also covers the
+## equipment case without needing to inspect banked_gear, which loot pickups
+## populate too and would otherwise be a false positive.
+func _campaign_guide_first_improvement_made() -> bool:
+	return guild_hall_level > 1 or has_trading_post or adventurers.size() > 1
+
+
+func _campaign_guide_has_affordable_improvement() -> bool:
+	if can_upgrade_guild_hall() or can_purchase_trading_post():
+		return true
+	for candidate in recruitment_candidates:
+		if gold >= int(candidate.get("cost", 0)):
+			return true
+	return false
+
+
+## Explicit player action from the guide banner's Dismiss button (see
+## scripts/ui/campaign_guide.gd) -- durably retires guide_id so
+## get_campaign_guide_state() never returns it again this campaign,
+## independent of whether its trigger condition is still true.
+func record_campaign_guide_dismissal(guide_id: String) -> void:
+	tutorial_progress[guide_id] = true
+
+
+## Explicit write called by the guide banner (scripts/ui/campaign_guide.gd's
+## refresh()) whenever it actually renders guide_id on screen -- never by
+## get_campaign_guide_state() itself, which stays a pure read like every
+## other get_ method here. Durably retires every id *earlier* than guide_id
+## in CAMPAIGN_GUIDE_SEQUENCE (guide_id itself is left alone -- only
+## record_campaign_guide_dismissal() retires the currently-active message).
+##
+## This is required, not decorative: the deployed party un-deploys again on
+## every walk home (see return_deployed_party_to_settlement()), and the
+## route/arrival triggers re-arm on every later expedition, so once the
+## player has visibly moved on to a later stage, the earlier ones' live
+## trigger conditions can and do become true again on their own. Tying
+## retirement to an explicit call the UI makes only when it actually
+## displayed guide_id -- rather than to a side effect buried in the query --
+## means a message can only ever be retired because the player really saw
+## something past it, never because some unrelated caller merely asked
+## what the current state is.
+func record_campaign_guide_progress(guide_id: String) -> void:
+	var reached_index := CAMPAIGN_GUIDE_SEQUENCE.find(guide_id)
+	if reached_index <= 0:
+		return
+	for index in reached_index:
+		tutorial_progress[CAMPAIGN_GUIDE_SEQUENCE[index]] = true

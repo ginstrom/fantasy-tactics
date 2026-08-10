@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/campaign_guide.tscn" id="3_campaign_guide"]
 
 [node name="WorldMap" type="Node2D"]
 script = ExtResource("1_world_map")
@@ -18,6 +19,15 @@ script = ExtResource("1_world_map")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
+[node name="CampaignGuide" parent="HUD" instance=ExtResource("3_campaign_guide")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 332.0
+offset_bottom = 160.0
+
 [node name="Margin" type="MarginContainer" parent="HUD"]
 layout_mode = 1
 anchors_preset = 15
@@ -25,6 +35,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
@@ -32,10 +43,12 @@ theme_override_constants/margin_bottom = 16
 
 [node name="VBox" type="VBoxContainer" parent="HUD/Margin"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="TopRow" type="HBoxContainer" parent="HUD/Margin/VBox"]
 layout_mode = 2
+mouse_filter = 2
 alignment = 2
 
 [node name="TopRight" type="VBoxContainer" parent="HUD/Margin/VBox/TopRow"]

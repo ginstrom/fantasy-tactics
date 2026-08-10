@@ -150,6 +150,19 @@ func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline()
 	click_event.pressed = true
 	click_event.position = party_pixel_center
 
+	# HUD/Margin, HUD/Margin/VBox and HUD/Margin/VBox/TopRow are mouse_filter
+	# = IGNORE (see 04-first-campaign-guidance's Dismiss-button fix), so a
+	# real click that finds nothing to claim it here now correctly keeps
+	# searching *past* this scene entirely -- including whatever real,
+	# still-live get_tree().current_scene an earlier, unrelated test left
+	# behind via its own GameManager.go_to_*() call and never unloaded (a
+	# pre-existing gap in several other test files, not fixed here). A
+	# stale current_scene sitting anywhere in the tree can silently absorb
+	# this push_input() click before it ever reaches WorldMap's own
+	# _unhandled_input -- clear it first so this test only ever contends
+	# with the fresh instance above.
+	if get_tree().current_scene != null:
+		get_tree().unload_current_scene()
 	world_map.get_viewport().push_input(click_event, true)
 
 	assert_true(

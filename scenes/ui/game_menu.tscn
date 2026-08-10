@@ -53,7 +53,48 @@ text = ""
 visible = false
 horizontal_alignment = 1
 
+[node name="LoadConfirmDialog" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -170.0
+offset_top = -60.0
+offset_right = 170.0
+offset_bottom = 60.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="LoadConfirmDialog"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="MessageLabel" type="Label" parent="LoadConfirmDialog/VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "menu.load_confirm_message"
+horizontal_alignment = 1
+
+[node name="ButtonRow" type="HBoxContainer" parent="LoadConfirmDialog/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="LoadConfirmDialog/VBox/ButtonRow"]
+layout_mode = 2
+text = "menu.load_confirm_cancel"
+
+[node name="ConfirmButton" type="Button" parent="LoadConfirmDialog/VBox/ButtonRow"]
+layout_mode = 2
+text = "menu.load_confirm_load"
+
 [connection signal="pressed" from="Center/VBox/ReturnButton" to="." method="_on_return_pressed"]
 [connection signal="pressed" from="Center/VBox/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Center/VBox/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="Center/VBox/LoadButton" to="." method="_on_load_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
+[connection signal="pressed" from="LoadConfirmDialog/VBox/ButtonRow/CancelButton" to="." method="_on_load_confirm_cancel_pressed"]
+[connection signal="pressed" from="LoadConfirmDialog/VBox/ButtonRow/ConfirmButton" to="." method="_on_load_confirm_pressed"]

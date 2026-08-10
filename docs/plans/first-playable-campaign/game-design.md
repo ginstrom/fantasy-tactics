@@ -263,14 +263,37 @@ magical items — both remain future work, to be added only once this first
 buy/sell/equip loop has been playtested (see the asset and scope-expansion
 principles below).
 
-The player-facing shell is also in place: New Game begins at the settlement;
-Continue and Load are intentionally disabled until a save system exists; and
 Escape opens a pause-menu overlay from the settlement, encampment, party
 manager, world map, and battlefield. The overlay can return to the unchanged
-scene, open the World Map, show the current "Not implemented yet" Save status,
-or quit. Opening the World Map during an active battle preserves that battle:
-its encounter can be re-entered, while End Turn remains locked until the battle
-resolves.
+scene, open the World Map, Save, Load, or quit. Opening the World Map during
+an active battle preserves that battle: its encounter can be re-entered,
+while End Turn remains locked until the battle resolves.
+
+### Save, load, and first-campaign guidance
+
+New Game begins at the settlement. Save writes one durable snapshot to
+`user://campaign-save.json` atomically — a temp file is renamed over the
+target, so a crash or power loss mid-write never corrupts the existing save —
+and only from Encampment or World Map with no battle in progress; the same
+guard also blocks saving while a just-won battle's loot is still unsettled
+(not yet banked or merged into the party), and an active encounter makes no
+write attempt at all rather than failing one. Load parses and validates the
+file before importing anything — an absent save, a corrupt file, and one
+written by an incompatible format each get a distinct diagnostic — and a
+failed or rejected load leaves the current session completely untouched.
+Because loading discards whatever is currently live, the pause menu's Load
+asks for confirmation before it proceeds; the Start Menu's Continue and Load,
+which run before any campaign is in progress, do not. There is intentionally
+one save slot, not multiple — Continue, Load, and the pause menu's Load all
+read and write the same file.
+
+A short, dismissible first-campaign guide (instanced on Encampment and World
+Map, never a modal and never blocking input) leads a new player through the
+opening loop: form a party, deploy it, select and commit a route, enter a
+site, return home to bank the reward, and choose the first affordable
+improvement (recruit, equipment, or the Guild Hall). Each message shows once,
+is dismissed explicitly by the player, and that dismissal survives save/load
+like the rest of durable campaign state.
 
 For fast development checks, a debug-only F9 scenario menu can open a fresh
 campaign at the settlement, encampment, party manager, a ready-to-depart
@@ -292,12 +315,13 @@ and four monster types (Goblin, Orc, Kobold, Hobgoblin), with a refill's
 tier chosen at random, weighted by the player's growing power. The next
 implementation work should focus on these unfinished outcomes, in order:
 
-1. Add save/load now that the expedition, reward, and upgrade loop is
-   repeatable; then enable the existing Continue and Load UI.
-2. Assemble Milestone 5's first campaign slice — onboarding and pacing —
-   now that both the encounter catalogue and the upgrade path have several
-   options each.
-3. Add durable presentation assets only when their associated gameplay choices
+1. Assemble Milestone 5's first campaign slice — onboarding and pacing — now
+   that both the encounter catalogue and the upgrade path have several
+   options each, save/load lets a campaign persist across sessions, and a
+   short first-campaign guide covers the opening loop (see Save, load, and
+   first-campaign guidance above). What remains is compact-area assembly and
+   pacing/difficulty playtesting.
+2. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
@@ -569,12 +593,15 @@ prototype's single Warrior immediately usable.
 
 ## Milestone 5: First campaign slice
 
-**Status: not started, no longer blocked.** The reward and upgrade loop now
+**Status: not started, less blocked.** The reward and upgrade loop now
 exists (gold, mana crystals, gear, XP, the Guild Hall, the Trading Post,
 and randomized site compositions), and the encounter catalogue now spans
 three star tiers and four monster types — both halves of this milestone's
 "several expeditions, several upgrades" precondition (see Next work above)
-are satisfied. What remains is assembling and playtesting the slice itself.
+are satisfied. Save/load and a first-campaign guide (see Save, load, and
+first-campaign guidance above) also cover this milestone's onboarding design
+scope. What remains is assembling a compact local area from the proven
+systems and playtesting pacing/difficulty for the slice itself.
 
 ### Player outcome
 
@@ -588,7 +615,11 @@ available local threats are cleared.
   types and a modest upgrade path.
 - Balance reward pacing, difficulty, and the information shown in the UI.
 - Improve onboarding so the first game explains movement, rounds, world turns,
-  rewards, and upgrades through play.
+  rewards, and upgrades through play. *(Partly done: a dismissible
+  first-campaign guide now covers party formation, deployment, route
+  selection, battle entry, rewards, and the first improvement — see Save,
+  load, and first-campaign guidance above. It does not yet separately teach
+  battle-round mechanics or world-turn pacing.)*
 - Define the data boundaries and content workflows needed to add more
   encounters, units, buildings, and assets after the slice is fun.
 
@@ -622,7 +653,9 @@ required to validate the first campaign:
 - Full supplies, injuries, permadeath, trade-route/caravan, and diplomacy
   systems
 - Self-sustaining settlement income and conflict with neighbouring cities
-- Save/load, long-term balance, accessibility, and production-grade polish
+- Long-term balance, accessibility, and production-grade polish (save/load
+  now ships in single-slot form — see Save, load, and first-campaign
+  guidance above — but multiple save slots remain deferred)
 
 These systems should be introduced only when the first campaign shows what
 specific player decision they improve.

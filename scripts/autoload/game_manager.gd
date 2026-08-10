@@ -30,9 +30,21 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
-# Hardcoded until a real save system exists; both menus read this to decide
-# whether Continue/Load are available.
-var has_saved_game: bool = false
+## The persistence layer behind save_current_campaign()/load_current_campaign()/
+## has_valid_save(). Deliberately a plain, untyped var (not a private
+## underscore-prefixed field, and not statically typed to SaveRepository) so
+## a test can substitute any object exposing the same save_campaign()/
+## load_campaign()/has_valid_save() surface -- most simply a real
+## SaveRepository constructed with a throwaway save_path (see
+## SaveRepository's own test-injectable path) instead of a repository
+## pointed at the real user://campaign-save.json. This is the same
+## injectable-dependency shape GameSession's roll Callables use (see
+## GameSession.enemy_composition_roll) for swapping real behavior with a
+## controlled double. UI scripts must always go through the three wrappers
+## below instead of ever reaching into save_repository or the filesystem
+## directly (see docs/plans/2026-08-10-initial-campaign-and-automation/
+## 02-atomic-save-repository.md).
+var save_repository = SaveRepository.new()
 
 # Short-lived context for the detail routes below (e.g. which party Party
 # Details should read). It belongs here rather than on GameSession because
@@ -413,6 +425,81 @@ func toggle_debug_menu() -> Error:
 
 func quit_game() -> void:
 	get_tree().quit()
+
+
+## True only when the current campaign is safe to snapshot: no active
+## encounter in progress, and no unsettled battle loot sitting in
+## GameSession's battle_* buckets (see GameSession.has_unsettled_battle_
+## loot() -- selected_encounter is already cleared by the time complete_
+## current_encounter() queues that loot, so the first condition alone does
+## not cover the Battle Result screen). Deliberately reads GameSession's own
+## durable state rather than the scene tree -- a screen renamed or added
+## later can never silently widen or narrow this guard's true meaning the
+## way matching on get_tree().current_scene.name could. See
+## docs/plans/2026-08-10-initial-campaign-and-automation/
+## 03-save-boundaries-and-menu.md.
+func can_save_current_campaign() -> bool:
+	return GameSession.selected_encounter == "" and not GameSession.has_unsettled_battle_loot()
+
+
+## Narrow wrapper around save_repository.save_campaign(): writes the current
+## GameSession's durable state atomically, but only when
+## can_save_current_campaign() allows it. A blocked save never reaches
+## save_repository at all -- mid-battle state is never exported, let alone
+## written -- and returns an {"ok": false, "error"} result of its own
+## instead. Exists so UI code has exactly one call site for writing the
+## current campaign and never touches the filesystem or save_repository's
+## own internals directly. Returns save_repository's own {"ok", "error"}
+## result unchanged on an allowed save.
+func save_current_campaign() -> Dictionary:
+	if not can_save_current_campaign():
+		return {"ok": false, "error": "cannot save during an active encounter"}
+	return save_repository.save_campaign(GameSession)
+
+
+## Narrow wrapper around save_repository.load_campaign(): a failed load (see
+## SaveRepository.LoadStatus) never imports anything, leaving GameSession
+## completely untouched. Does not decide where to route afterward -- see
+## go_to_loaded_campaign() below, which UI code should call instead whenever
+## a successful load should also resume play. Returns save_repository's own
+## {"ok", "snapshot", "error", "status"} result unchanged.
+func load_current_campaign() -> Dictionary:
+	return save_repository.load_campaign(GameSession)
+
+
+## The one "resume a saved campaign" decision Start Menu's Continue/Load and
+## the pause menu's Load all share: load_current_campaign() first, and only
+## once that succeeds, close the pause menu (a harmless no-op if it was
+## never open -- see close_game_menu()) and route to the World Map for a
+## deployed party or the Encampment otherwise -- the same two destinations a
+## live campaign already reaches via go_to_world_map()/go_to_encampment(),
+## but by calling the underlying routing primitives (_clear_detail_context()
+## / _change_scene()) directly rather than those two functions themselves.
+## This keeps the save/load invariant "preserve, never settle" true by
+## construction: go_to_world_map() calls GameSession.
+## merge_battle_loot_into_party() and go_to_encampment() calls GameSession.
+## deposit_pending_reward(), and neither reward-banking side effect may ever
+## sit in the load path, even as a currently-unreachable no-op. A failed
+## load changes nothing at all: no scene change, GameSession left completely
+## untouched, so whichever screen called this is exactly as it was. Returns
+## load_current_campaign()'s own {"ok", "snapshot", "error", "status"}
+## result unchanged so the caller can surface its own feedback.
+func go_to_loaded_campaign() -> Dictionary:
+	var result := load_current_campaign()
+	if result.ok:
+		close_game_menu()
+		if GameSession.has_deployed_party():
+			_clear_detail_context()
+			_change_scene(WORLD_MAP_SCENE)
+		else:
+			_change_scene(ENCAMPMENT_SCENE)
+	return result
+
+
+## Narrow wrapper so UI can check save availability without ever reaching
+## into SaveRepository's on-disk details directly.
+func has_valid_save() -> bool:
+	return save_repository.has_valid_save()
 
 
 func _change_scene(path: String) -> Error:

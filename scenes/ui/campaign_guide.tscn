@@ -1,0 +1,47 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/campaign_guide.gd" id="1_campaign_guide"]
+
+[node name="CampaignGuide" type="PanelContainer"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 316.0
+offset_bottom = 144.0
+mouse_filter = 2
+custom_minimum_size = Vector2(300, 0)
+script = ExtResource("1_campaign_guide")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="MessageLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+autowrap_mode = 3
+text = "campaign_guide.form_party.message"
+
+[node name="TargetLabel" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+autowrap_mode = 3
+text = "campaign_guide.form_party.target"
+
+[node name="DismissButton" type="Button" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+text = "campaign_guide.dismiss"
+
+[connection signal="pressed" from="Margin/VBox/DismissButton" to="." method="_on_dismiss_button_pressed"]

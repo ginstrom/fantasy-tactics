@@ -1,6 +1,29 @@
 extends GutTest
 
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const SaveRepositoryScript := preload("res://scripts/save/save_repository.gd")
+const TEST_SAVE_PATH := "user://test_game_manager_campaign.json"
+
+
+## A minimal double exposing the same save_campaign()/load_campaign()/
+## has_valid_save() surface as SaveRepository (see GameManager.
+## save_repository's own doc comment), used by the boundary-guard tests
+## below so they can prove exactly whether the repository was ever asked to
+## write -- without touching real disk I/O the way a real SaveRepository
+## pointed at TEST_SAVE_PATH would.
+class FakeSaveRepository extends RefCounted:
+	var save_called: bool = false
+	var save_result: Dictionary = {"ok": true, "error": ""}
+
+	func save_campaign(_session: Object) -> Dictionary:
+		save_called = true
+		return save_result
+
+	func load_campaign(_session: Object) -> Dictionary:
+		return {"ok": false, "snapshot": {}, "error": "not used by these tests", "status": SaveRepositoryScript.LoadStatus.ABSENT}
+
+	func has_valid_save() -> bool:
+		return false
 
 
 func after_each() -> void:
@@ -11,6 +34,13 @@ func after_each() -> void:
 	GameManager.battle_result_summary = {}
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
+	# Save-related tests inject a repository pointed at TEST_SAVE_PATH instead
+	# of the real campaign-save.json; put GameManager back on a fresh default
+	# repository and remove any file this run may have left behind so no test
+	# leaks save state into another.
+	GameManager.save_repository = SaveRepositoryScript.new()
+	if FileAccess.file_exists(TEST_SAVE_PATH):
+		DirAccess.remove_absolute(TEST_SAVE_PATH)
 
 
 func test_battle_route_uses_battlefield_scene() -> void:
@@ -692,3 +722,303 @@ func test_go_to_battle_result_stores_the_summary_dictionary() -> void:
 
 func test_battle_result_summary_starts_empty() -> void:
 	assert_eq(GameManager.battle_result_summary, {})
+
+
+## --- Save/load wrappers (Step 2 -- see docs/plans/2026-08-10-initial- ------
+## --- campaign-and-automation/02-atomic-save-repository.md). These tests ---
+## --- only prove GameManager delegates to an injectable SaveRepository ----
+## --- instead of ever touching FileAccess/DirAccess itself. The boundary --
+## --- guard and routing decision tests are below, in the Step 3 section. --
+
+
+func test_game_manager_source_never_touches_file_or_dir_access_directly() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_false(source.contains("FileAccess"), "UI/manager code must go through SaveRepository, never FileAccess directly")
+	assert_false(source.contains("DirAccess"), "UI/manager code must go through SaveRepository, never DirAccess directly")
+
+
+func test_save_repository_is_test_injectable() -> void:
+	var repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	GameManager.save_repository = repository
+
+	assert_eq(GameManager.save_repository.save_path, TEST_SAVE_PATH)
+
+
+func test_save_current_campaign_delegates_to_the_injected_repository() -> void:
+	GameSession.reset()
+	GameSession.gold = 77
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	var result: Dictionary = GameManager.save_current_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(FileAccess.file_exists(TEST_SAVE_PATH))
+	var json := JSON.new()
+	assert_eq(json.parse(FileAccess.get_file_as_string(TEST_SAVE_PATH)), OK)
+	assert_eq(json.data.gold, 77)
+
+
+func test_load_current_campaign_imports_into_game_session_via_the_injected_repository() -> void:
+	GameSession.reset()
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	var writer_session: Node = preload("res://scripts/autoload/game_session.gd").new()
+	autofree(writer_session)
+	writer_session.gold = 123
+	writer_repository.save_campaign(writer_session)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+
+	var result: Dictionary = GameManager.load_current_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.gold, 123)
+
+
+func test_load_current_campaign_never_mutates_game_session_when_the_repository_load_fails() -> void:
+	GameSession.reset()
+	GameSession.gold = 5
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	var result: Dictionary = GameManager.load_current_campaign()
+
+	assert_false(result.ok)
+	assert_eq(GameSession.gold, 5)
+
+
+func test_has_valid_save_reflects_the_injected_repository() -> void:
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	assert_false(GameManager.has_valid_save())
+
+	GameSession.reset()
+	GameManager.save_current_campaign()
+
+	assert_true(GameManager.has_valid_save())
+
+
+## --- Save boundaries and the resume-a-campaign decision (Step 3 -- see ----
+## --- docs/plans/2026-08-10-initial-campaign-and-automation/ ---------------
+## --- 03-save-boundaries-and-menu.md). can_save_current_campaign()/ --------
+## --- save_current_campaign() are tested against a FakeSaveRepository so ---
+## --- "no write happened" is a cheap, deterministic assertion rather than --
+## --- an absence-of-a-file check; go_to_loaded_campaign()'s routing --------
+## --- decision is tested against a real (throwaway-path) SaveRepository ----
+## --- since it needs an actual round trip to prove which branch fired. -----
+
+
+func test_can_save_current_campaign_is_true_outside_an_active_encounter() -> void:
+	GameSession.reset()
+
+	assert_true(GameManager.can_save_current_campaign())
+
+
+func test_can_save_current_campaign_is_false_during_an_active_encounter() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	assert_false(GameManager.can_save_current_campaign())
+
+	GameSession.abandon_current_encounter()
+
+
+## complete_current_encounter() clears selected_encounter *before* battle_
+## reward/battle_gear/battle_mana_crystals are merged into the party (that
+## happens later, in go_to_world_map()) -- so on the Battle Result screen,
+## selected_encounter == "" even though this battle's loot has not yet been
+## settled. can_save_current_campaign() must not rely solely on
+## selected_encounter to cover this window; see GameSession.
+## has_unsettled_battle_loot().
+func test_can_save_current_campaign_is_false_when_battle_loot_is_unsettled() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+
+	assert_eq(GameSession.selected_encounter, "", "Sanity check: no active encounter is blocking the save")
+	assert_false(GameManager.can_save_current_campaign())
+
+
+func test_can_save_current_campaign_is_true_again_once_unsettled_battle_loot_is_merged() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+	GameSession.merge_battle_loot_into_party()
+
+	assert_true(GameManager.can_save_current_campaign())
+
+
+func test_save_current_campaign_makes_no_write_during_an_active_encounter() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var fake := FakeSaveRepository.new()
+	GameManager.save_repository = fake
+
+	var result: Dictionary = GameManager.save_current_campaign()
+
+	assert_false(result.ok)
+	assert_false(fake.save_called, "A blocked save must never reach the repository")
+	GameSession.abandon_current_encounter()
+
+
+func test_save_current_campaign_writes_when_no_encounter_is_active() -> void:
+	GameSession.reset()
+	var fake := FakeSaveRepository.new()
+	GameManager.save_repository = fake
+
+	var result: Dictionary = GameManager.save_current_campaign()
+
+	assert_true(result.ok)
+	assert_true(fake.save_called)
+
+
+func test_successful_save_does_not_change_reward_buckets() -> void:
+	GameSession.reset()
+	GameSession.gold = 42
+	GameSession.pending_reward = 7
+	GameSession.mana_crystals = {1: 3}
+	GameSession.banked_gear = {"dagger_iron": 2}
+	GameManager.save_repository = FakeSaveRepository.new()
+
+	GameManager.save_current_campaign()
+
+	assert_eq(GameSession.gold, 42)
+	assert_eq(GameSession.pending_reward, 7)
+	assert_eq(GameSession.mana_crystals, {1: 3})
+	assert_eq(GameSession.banked_gear, {"dagger_iron": 2})
+
+
+func test_go_to_loaded_campaign_routes_to_the_world_map_for_a_deployed_party() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+	GameManager.route_context_id = "stale"
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(GameSession.has_deployed_party())
+	# go_to_world_map() is the only routing branch that clears
+	# route_context_id (via _clear_detail_context()) -- go_to_encampment()
+	# never touches it -- so this doubles as proof of which branch fired.
+	assert_eq(GameManager.route_context_id, "", "A deployed party must route through go_to_world_map()")
+	GameManager.route_context_id = ""
+
+
+func test_go_to_loaded_campaign_routes_to_the_encampment_for_an_undeployed_party() -> void:
+	GameSession.reset()
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+	GameManager.route_context_id = "stale"
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_false(GameSession.has_deployed_party())
+	assert_eq(
+		GameManager.route_context_id, "stale",
+		"An undeployed party must route through go_to_encampment(), which never touches route_context_id"
+	)
+	GameManager.route_context_id = ""
+
+
+## Reward buckets must be preserved across a load, never additionally
+## settled by it -- the same guarantee test_successful_save_does_not_
+## change_reward_buckets() proves for the save side. go_to_loaded_campaign()
+## calls the underlying routing primitives directly (_clear_detail_context()
+## / _change_scene()) rather than go_to_world_map()/go_to_encampment()
+## themselves, so this is a structural guarantee, not merely an argument
+## about which states a real save can reach: GameSession.
+## merge_battle_loot_into_party() and GameSession.deposit_pending_reward()
+## are never called from anywhere in the load path, for any state. These
+## tests set every reward bucket nonzero -- including combinations (e.g.
+## nonzero battle_reward, or nonzero pending_reward on an undeployed party)
+## that a real save could probably never actually contain -- specifically to
+## prove the guarantee does not depend on reachability.
+func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to_the_encampment() -> void:
+	GameSession.reset()
+	GameSession.gold = 10
+	GameSession.pending_reward = 12
+	GameSession.banked_gear = {"dagger_iron": 3}
+	GameSession.mana_crystals = {1: 2}
+	GameSession.battle_reward = 3
+	GameSession.battle_gear = {"buckler_wood": 1}
+	GameSession.battle_mana_crystals = {2: 1}
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_false(GameSession.has_deployed_party(), "Sanity check: this must route through the Encampment branch")
+	assert_eq(GameSession.gold, 10)
+	assert_eq(GameSession.pending_reward, 12)
+	assert_eq(GameSession.banked_gear, {"dagger_iron": 3})
+	assert_eq(GameSession.mana_crystals, {1: 2})
+	assert_eq(GameSession.battle_reward, 3)
+	assert_eq(GameSession.battle_gear, {"buckler_wood": 1})
+	assert_eq(GameSession.battle_mana_crystals, {2: 1})
+
+
+func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_world_map() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.gold = 5
+	GameSession.pending_reward = 25
+	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.pending_mana_crystals = {1: 4}
+	GameSession.battle_reward = 7
+	GameSession.battle_gear = {"shortsword_iron": 1}
+	GameSession.battle_mana_crystals = {1: 1}
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(GameSession.has_deployed_party(), "Sanity check: this must route through the World Map branch")
+	assert_eq(GameSession.gold, 5)
+	assert_eq(GameSession.pending_reward, 25)
+	assert_eq(GameSession.pending_gear, {"dagger_iron": 1})
+	assert_eq(GameSession.pending_mana_crystals, {1: 4})
+	assert_eq(GameSession.battle_reward, 7)
+	assert_eq(GameSession.battle_gear, {"shortsword_iron": 1})
+	assert_eq(GameSession.battle_mana_crystals, {1: 1})
+
+
+func test_go_to_loaded_campaign_closes_an_open_pause_menu_on_success() -> void:
+	GameSession.reset()
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameManager.save_repository = writer_repository
+	GameManager.open_game_menu()
+
+	GameManager.go_to_loaded_campaign()
+
+	assert_false(GameManager.is_game_menu_open())
+	assert_false(get_tree().paused)
+
+
+func test_go_to_loaded_campaign_leaves_game_session_and_routing_untouched_on_a_failed_load() -> void:
+	GameSession.reset()
+	GameSession.gold = 55
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+	GameManager.route_context_id = "stale"
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_false(result.ok)
+	assert_eq(GameSession.gold, 55, "A failed load must never touch GameSession")
+	assert_eq(GameManager.route_context_id, "stale", "A failed load must never route anywhere")
+	GameManager.route_context_id = ""

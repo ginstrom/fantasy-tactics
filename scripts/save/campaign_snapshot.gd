@@ -1,0 +1,425 @@
+class_name CampaignSnapshot
+extends RefCounted
+## Versioned, deep-copy-safe value object for GameSession's durable-state
+## boundary (see docs/plans/2026-08-10-initial-campaign-and-automation/
+## 01-campaign-snapshot-contract.md). Converts between GameSession's live,
+## strongly-typed fields (Vector2i positions/routes) and a plain, JSON-safe
+## Dictionary ({"x": int, "y": int} standing in for every Vector2i) that a
+## later save-repository step can persist unchanged.
+##
+## GameSession.export_campaign_snapshot() populates a CampaignSnapshot's
+## fields from itself and calls to_dictionary(); GameSession.
+## import_campaign_snapshot(data) hands data straight to the static
+## from_dictionary(data), which validates and normalizes the whole payload
+## into a separate scratch Dictionary before returning it -- GameSession only
+## assigns its own fields once from_dictionary() reports "ok": true, so a
+## rejected import can never partially land. Contains no disk I/O and never
+## triggers reward-banking side effects (merge_battle_loot_into_party(),
+## deposit_pending_reward()) -- it only moves values, never settles them.
+
+const FORMAT_VERSION := 1
+
+## Same EXPEDITIONS template catalog GameSession exposes on its autoload
+## singleton, reached here via preload of the script itself (a compile-time
+## constant lookup) rather than the GameSession singleton reference, so this
+## contract depends on the constant table, not on the autoload existing.
+const _GameSessionScript := preload("res://scripts/autoload/game_session.gd")
+
+var adventurers: Array[Dictionary] = []
+var recruitment_candidates: Array[Dictionary] = []
+var recruitment_vacancies: Array[Dictionary] = []
+var parties: Array[Dictionary] = []
+var selected_party_id: String = ""
+var selected_encounter: String = ""
+var completed_encounters: Array[String] = []
+var active_encounters: Array[Dictionary] = []
+var encounter_vacancies: Array[Dictionary] = []
+# Mirrors GameSession._used_encounter_template_ids (see that field's own
+# doc comment) -- private in GameSession, but still durable: without it a
+# restored campaign's next vacancy refill could hand a reused template the
+# exact tile its earlier instance was just cleared from.
+var used_encounter_template_ids: Array[String] = []
+var world_turn: int = 1
+var gold: int = 0
+var guild_hall_level: int = 1
+var pending_reward: int = 0
+var mana_crystals: Dictionary = {}
+var banked_gear: Dictionary = {}
+var pending_mana_crystals: Dictionary = {}
+var pending_gear: Dictionary = {}
+var battle_reward: int = 0
+var battle_mana_crystals: Dictionary = {}
+var battle_gear: Dictionary = {}
+var has_trading_post: bool = false
+var player_name: String = ""
+# Compact durable record of which first-campaign guide messages have already
+# been shown/dismissed (see docs/plans/2026-08-10-initial-campaign-and-
+# automation/04-first-campaign-guidance.md's get_campaign_guide_state()) --
+# an arbitrary id -> bool map, empty until that step starts writing to it.
+var tutorial_progress: Dictionary = {}
+
+
+## Serializes this object's own fields into a plain, JSON-safe Dictionary
+## tagged with FORMAT_VERSION. Every field is deep-duplicated (and every
+## Vector2i converted to {"x": int, "y": int}) so the result shares no
+## Array/Dictionary reference with this object.
+func to_dictionary() -> Dictionary:
+	return {
+		"version": FORMAT_VERSION,
+		"adventurers": adventurers.duplicate(true),
+		"recruitment_candidates": recruitment_candidates.duplicate(true),
+		"recruitment_vacancies": recruitment_vacancies.duplicate(true),
+		"parties": _parties_to_dictionary(parties),
+		"selected_party_id": selected_party_id,
+		"selected_encounter": selected_encounter,
+		"completed_encounters": completed_encounters.duplicate(true),
+		"active_encounters": _encounters_to_dictionary(active_encounters),
+		"encounter_vacancies": encounter_vacancies.duplicate(true),
+		"used_encounter_template_ids": used_encounter_template_ids.duplicate(true),
+		"world_turn": world_turn,
+		"gold": gold,
+		"guild_hall_level": guild_hall_level,
+		"pending_reward": pending_reward,
+		"mana_crystals": mana_crystals.duplicate(true),
+		"banked_gear": banked_gear.duplicate(true),
+		"pending_mana_crystals": pending_mana_crystals.duplicate(true),
+		"pending_gear": pending_gear.duplicate(true),
+		"battle_reward": battle_reward,
+		"battle_mana_crystals": battle_mana_crystals.duplicate(true),
+		"battle_gear": battle_gear.duplicate(true),
+		"has_trading_post": has_trading_post,
+		"player_name": player_name,
+		"tutorial_progress": tutorial_progress.duplicate(true),
+	}
+
+
+## Validates and normalizes a raw Dictionary (as produced by to_dictionary(),
+## or later read back from a save file) into the exact set of typed values
+## GameSession assigns on success. Never partially commits: every field is
+## checked against a scratch Dictionary first, and the first failure returns
+## immediately with an empty "snapshot" rather than a partially-normalized
+## result a careless caller might assign anyway.
+static func from_dictionary(data: Variant) -> Dictionary:
+	if not data is Dictionary:
+		return _invalid("snapshot data is not a dictionary")
+	if not data.get("version") is int or int(data.version) != FORMAT_VERSION:
+		return _invalid("missing or unsupported snapshot version")
+
+	var normalized: Dictionary = {}
+
+	var adventurers_result := _normalize_id_list(data.get("adventurers"), "adventurers")
+	if not adventurers_result.ok:
+		return _invalid(adventurers_result.error)
+	normalized["adventurers"] = adventurers_result.list
+
+	var candidates_result := _normalize_id_list(data.get("recruitment_candidates"), "recruitment_candidates")
+	if not candidates_result.ok:
+		return _invalid(candidates_result.error)
+	normalized["recruitment_candidates"] = candidates_result.list
+
+	var recruitment_vacancies_result := _normalize_vacancy_list(data.get("recruitment_vacancies"), "recruitment_vacancies")
+	if not recruitment_vacancies_result.ok:
+		return _invalid(recruitment_vacancies_result.error)
+	normalized["recruitment_vacancies"] = recruitment_vacancies_result.list
+
+	var parties_result := _normalize_parties(data.get("parties"))
+	if not parties_result.ok:
+		return _invalid(parties_result.error)
+	normalized["parties"] = parties_result.list
+
+	var completed_result := _normalize_string_array(data.get("completed_encounters"), "completed_encounters")
+	if not completed_result.ok:
+		return _invalid(completed_result.error)
+	normalized["completed_encounters"] = completed_result.list
+
+	var active_encounters_result := _normalize_active_encounters(data.get("active_encounters"))
+	if not active_encounters_result.ok:
+		return _invalid(active_encounters_result.error)
+	normalized["active_encounters"] = active_encounters_result.list
+
+	var encounter_vacancies_result := _normalize_vacancy_list(data.get("encounter_vacancies"), "encounter_vacancies")
+	if not encounter_vacancies_result.ok:
+		return _invalid(encounter_vacancies_result.error)
+	normalized["encounter_vacancies"] = encounter_vacancies_result.list
+
+	var used_templates_result := _normalize_string_array(data.get("used_encounter_template_ids"), "used_encounter_template_ids")
+	if not used_templates_result.ok:
+		return _invalid(used_templates_result.error)
+	normalized["used_encounter_template_ids"] = used_templates_result.list
+
+	if not data.get("selected_party_id") is String:
+		return _invalid("selected_party_id is not a string")
+	normalized["selected_party_id"] = data.selected_party_id
+
+	if not data.get("selected_encounter") is String:
+		return _invalid("selected_encounter is not a string")
+	normalized["selected_encounter"] = data.selected_encounter
+
+	for scalar_key in ["world_turn", "gold", "guild_hall_level", "pending_reward", "battle_reward"]:
+		if not data.get(scalar_key) is int:
+			return _invalid("%s is not an int" % scalar_key)
+		normalized[scalar_key] = int(data[scalar_key])
+
+	if not data.get("has_trading_post") is bool:
+		return _invalid("has_trading_post is not a bool")
+	normalized["has_trading_post"] = data.has_trading_post
+
+	if not data.get("player_name") is String:
+		return _invalid("player_name is not a string")
+	normalized["player_name"] = data.player_name
+
+	for dict_key in [
+		"mana_crystals", "banked_gear", "pending_mana_crystals",
+		"pending_gear", "battle_mana_crystals", "battle_gear",
+	]:
+		if not data.get(dict_key) is Dictionary:
+			return _invalid("%s is not a dictionary" % dict_key)
+		normalized[dict_key] = (data[dict_key] as Dictionary).duplicate(true)
+
+	var tutorial_progress_result := _normalize_tutorial_progress(data.get("tutorial_progress"))
+	if not tutorial_progress_result.ok:
+		return _invalid(tutorial_progress_result.error)
+	normalized["tutorial_progress"] = tutorial_progress_result.value
+
+	if normalized.selected_party_id != "" and not _has_id(normalized.parties, normalized.selected_party_id):
+		return _invalid("selected_party_id does not reference a known party")
+
+	# Reaches into GameSession's EXPEDITIONS const table (a compile-time-
+	# constant template catalog, not live session state) via preload rather
+	# than the GameSession autoload singleton, so a raw template id entered
+	# directly -- see get_expedition()'s own dual resolution -- still
+	# validates as a legitimate selected_encounter.
+	if (
+		normalized.selected_encounter != ""
+		and not _has_id(normalized.active_encounters, normalized.selected_encounter)
+		and not _GameSessionScript.EXPEDITIONS.has(normalized.selected_encounter)
+	):
+		return _invalid("selected_encounter does not reference a known encounter")
+
+	return {"ok": true, "snapshot": normalized, "error": ""}
+
+
+static func _invalid(error: String) -> Dictionary:
+	return {"ok": false, "snapshot": {}, "error": error}
+
+
+static func _valid_list(list: Array) -> Dictionary:
+	return {"ok": true, "error": "", "list": list}
+
+
+static func _invalid_list(error: String) -> Dictionary:
+	return {"ok": false, "error": error, "list": []}
+
+
+static func _has_id(list: Array, id: String) -> bool:
+	for entry in list:
+		if entry.id == id:
+			return true
+	return false
+
+
+## Rejects a non-Array field, a non-Dictionary element, an element with a
+## missing/empty/non-string "id", or two elements sharing an id. Used for
+## the two roster-shaped lists (adventurers, recruitment_candidates), whose
+## nested equipment/stats/progression shape is not this contract's concern
+## to police -- only the id every other lookup in GameSession keys on.
+static func _normalize_id_list(raw: Variant, field_name: String) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("%s is not an array" % field_name)
+
+	var seen_ids: Dictionary = {}
+	var normalized: Array[Dictionary] = []
+	for entry in raw:
+		if not entry is Dictionary:
+			return _invalid_list("%s contains a non-dictionary entry" % field_name)
+		if not entry.get("id") is String or String(entry.id).is_empty():
+			return _invalid_list("%s contains an entry with an invalid id" % field_name)
+		if seen_ids.has(entry.id):
+			return _invalid_list("%s contains a duplicate id: %s" % [field_name, entry.id])
+		seen_ids[entry.id] = true
+		normalized.append((entry as Dictionary).duplicate(true))
+	return _valid_list(normalized)
+
+
+## Array[String] fields (completed_encounters, used_encounter_template_ids).
+static func _normalize_string_array(raw: Variant, field_name: String) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("%s is not an array" % field_name)
+	var normalized: Array[String] = []
+	for entry in raw:
+		if not entry is String:
+			return _invalid_list("%s contains a non-string entry" % field_name)
+		normalized.append(entry)
+	return _valid_list(normalized)
+
+
+## {"turns_remaining": int} lists (recruitment_vacancies, encounter_vacancies).
+static func _normalize_vacancy_list(raw: Variant, field_name: String) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("%s is not an array" % field_name)
+	var normalized: Array[Dictionary] = []
+	for entry in raw:
+		if not entry is Dictionary or not entry.get("turns_remaining") is int:
+			return _invalid_list("%s contains an invalid vacancy entry" % field_name)
+		normalized.append({"turns_remaining": int(entry.turns_remaining)})
+	return _valid_list(normalized)
+
+
+## Rejects a non-Dictionary field, a non-String key, or a non-bool value --
+## tighter than the shared "is it a Dictionary" check the other id -> count
+## reward stores get, since tutorial_progress's own shape (an arbitrary
+## message id -> shown/dismissed bool map, see the field's doc comment
+## above) is simple enough to fully police here.
+static func _normalize_tutorial_progress(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "tutorial_progress is not a dictionary", "value": {}}
+	var normalized: Dictionary = {}
+	for key in (raw as Dictionary).keys():
+		if not key is String:
+			return {"ok": false, "error": "tutorial_progress contains a non-string key", "value": {}}
+		var entry_value = raw[key]
+		if not entry_value is bool:
+			return {"ok": false, "error": "tutorial_progress contains a non-bool value", "value": {}}
+		normalized[key] = entry_value
+	return {"ok": true, "error": "", "value": normalized}
+
+
+static func _is_vector2i_dict(value: Variant) -> bool:
+	return value is Dictionary and value.get("x") is int and value.get("y") is int
+
+
+static func _to_vector2i(value: Dictionary) -> Vector2i:
+	return Vector2i(int(value.x), int(value.y))
+
+
+static func _vector2i_to_dict(value: Vector2i) -> Dictionary:
+	return {"x": value.x, "y": value.y}
+
+
+static func _parties_to_dictionary(source: Array[Dictionary]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for party in source:
+		var copy: Dictionary = party.duplicate(true)
+		copy["world_position"] = _vector2i_to_dict(party.world_position)
+		var route: Array = []
+		for step in party.travel_route:
+			route.append(_vector2i_to_dict(step))
+		copy["travel_route"] = route
+		result.append(copy)
+	return result
+
+
+static func _encounters_to_dictionary(source: Array[Dictionary]) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for instance in source:
+		var copy: Dictionary = instance.duplicate(true)
+		copy["position"] = _vector2i_to_dict(instance.position)
+		result.append(copy)
+	return result
+
+
+## Validates and restores each party dict's Vector2i-bearing fields
+## (world_position, travel_route). Requires a party's "id" to be a
+## non-empty, unique-within-the-list string -- the same shape
+## _normalize_id_list() enforces for the roster lists, but parties also
+## carry Vector2i-shaped fields those lists never do, so it is validated
+## separately rather than reusing that helper. Like _normalize_active_
+## encounters(), starts from a duplicate of the raw dict and overwrites only
+## the fields it validates/converts, so an unknown/future party key still
+## survives an export -> import round trip instead of being silently
+## dropped.
+static func _normalize_parties(raw: Variant) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("parties is not an array")
+
+	var seen_ids: Dictionary = {}
+	var normalized: Array[Dictionary] = []
+	for raw_party in raw:
+		var party_result := _normalize_party(raw_party)
+		if not party_result.ok:
+			return _invalid_list(party_result.error)
+		var party: Dictionary = party_result.value
+		if seen_ids.has(party.id):
+			return _invalid_list("parties contains a duplicate id: %s" % party.id)
+		seen_ids[party.id] = true
+		normalized.append(party)
+	return _valid_list(normalized)
+
+
+static func _normalize_party(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "parties contains a non-dictionary entry"}
+	var party: Dictionary = raw
+
+	if not party.get("id") is String or String(party.id).is_empty():
+		return {"ok": false, "error": "a party entry has an invalid id"}
+	if not party.get("member_ids") is Array:
+		return {"ok": false, "error": "party %s has an invalid member_ids list" % party.id}
+	var member_ids: Array[String] = []
+	for member_id in party.member_ids:
+		if not member_id is String:
+			return {"ok": false, "error": "party %s has a non-string member id" % party.id}
+		member_ids.append(member_id)
+	if not party.get("location_id") is String:
+		return {"ok": false, "error": "party %s has an invalid location_id" % party.id}
+	if not _is_vector2i_dict(party.get("world_position")):
+		return {"ok": false, "error": "party %s has an invalid world_position" % party.id}
+	if not party.get("deployed") is bool:
+		return {"ok": false, "error": "party %s has an invalid deployed flag" % party.id}
+	if not party.get("travel_route") is Array:
+		return {"ok": false, "error": "party %s has an invalid travel_route" % party.id}
+	var travel_route: Array[Vector2i] = []
+	for step in party.travel_route:
+		if not _is_vector2i_dict(step):
+			return {"ok": false, "error": "party %s has an invalid travel_route step" % party.id}
+		travel_route.append(_to_vector2i(step))
+	if not party.get("movement_spent") is bool:
+		return {"ok": false, "error": "party %s has an invalid movement_spent flag" % party.id}
+	if not party.get("name") is String:
+		return {"ok": false, "error": "party %s has an invalid name" % party.id}
+	if not party.get("progression") is Dictionary:
+		return {"ok": false, "error": "party %s has an invalid progression" % party.id}
+	if not party.get("metadata") is Dictionary:
+		return {"ok": false, "error": "party %s has an invalid metadata" % party.id}
+
+	var normalized: Dictionary = party.duplicate(true)
+	normalized["id"] = String(party.id)
+	normalized["member_ids"] = member_ids
+	normalized["location_id"] = String(party.location_id)
+	normalized["world_position"] = _to_vector2i(party.world_position)
+	normalized["deployed"] = bool(party.deployed)
+	normalized["travel_route"] = travel_route
+	normalized["movement_spent"] = bool(party.movement_spent)
+	normalized["name"] = String(party.name)
+	normalized["progression"] = (party.progression as Dictionary).duplicate(true)
+	normalized["metadata"] = (party.metadata as Dictionary).duplicate(true)
+
+	return {"ok": true, "error": "", "value": normalized}
+
+
+## Validates and restores each active-encounter instance's Vector2i "position"
+## field. Every other key (template_id, name_key, difficulty, enemy, ...)
+## mirrors EXPEDITIONS' own template shape, which this contract does not
+## police beyond copying it through untouched.
+static func _normalize_active_encounters(raw: Variant) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("active_encounters is not an array")
+
+	var seen_ids: Dictionary = {}
+	var normalized: Array[Dictionary] = []
+	for raw_instance in raw:
+		if not raw_instance is Dictionary:
+			return _invalid_list("active_encounters contains a non-dictionary entry")
+		var instance: Dictionary = raw_instance
+		if not instance.get("id") is String or String(instance.id).is_empty():
+			return _invalid_list("an active encounter entry has an invalid id")
+		if seen_ids.has(instance.id):
+			return _invalid_list("active_encounters contains a duplicate id: %s" % instance.id)
+		if not _is_vector2i_dict(instance.get("position")):
+			return _invalid_list("active encounter %s has an invalid position" % instance.id)
+		seen_ids[instance.id] = true
+
+		var copy: Dictionary = instance.duplicate(true)
+		copy["position"] = _to_vector2i(instance.position)
+		normalized.append(copy)
+	return _valid_list(normalized)

@@ -865,6 +865,49 @@ func test_merge_battle_loot_into_party_is_a_no_op_when_the_battle_store_is_empty
 	assert_eq(session.pending_gear, {"buckler_wood": 1})
 
 
+func test_has_unsettled_battle_loot_is_false_when_the_battle_store_is_empty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_a_nonzero_battle_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_reward = 1
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_gear() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_gear = {"dagger_iron": 1}
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_mana_crystals() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_mana_crystals = {1: 1}
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_false_after_merging_it_into_the_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_reward = 5
+	session.battle_gear = {"dagger_iron": 1}
+	session.battle_mana_crystals = {1: 1}
+
+	session.merge_battle_loot_into_party()
+
+	assert_false(session.has_unsettled_battle_loot())
+
+
 func test_reset_clears_loot_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2922,3 +2965,458 @@ func test_a_vacancy_refill_can_produce_the_ruined_fortress() -> void:
 	for instance in GameSession.active_encounters:
 		template_ids.append(instance.template_id)
 	assert_true(template_ids.has(GameSession.RUINED_FORTRESS_ID))
+
+
+## Every durable field export_campaign_snapshot()/import_campaign_snapshot()
+## carry -- see CampaignSnapshot. Captured field-by-field (rather than
+## compared against a pre-serialized dictionary) so a test failure names
+## exactly which category regressed.
+func _capture_durable_fields() -> Dictionary:
+	return {
+		"adventurers": GameSession.adventurers.duplicate(true),
+		"recruitment_candidates": GameSession.recruitment_candidates.duplicate(true),
+		"recruitment_vacancies": GameSession.recruitment_vacancies.duplicate(true),
+		"parties": GameSession.parties.duplicate(true),
+		"selected_party_id": GameSession.selected_party_id,
+		"selected_encounter": GameSession.selected_encounter,
+		"completed_encounters": GameSession.completed_encounters.duplicate(true),
+		"active_encounters": GameSession.active_encounters.duplicate(true),
+		"encounter_vacancies": GameSession.encounter_vacancies.duplicate(true),
+		"used_encounter_template_ids": GameSession._used_encounter_template_ids.duplicate(true),
+		"world_turn": GameSession.world_turn,
+		"gold": GameSession.gold,
+		"guild_hall_level": GameSession.guild_hall_level,
+		"pending_reward": GameSession.pending_reward,
+		"mana_crystals": GameSession.mana_crystals.duplicate(true),
+		"banked_gear": GameSession.banked_gear.duplicate(true),
+		"pending_mana_crystals": GameSession.pending_mana_crystals.duplicate(true),
+		"pending_gear": GameSession.pending_gear.duplicate(true),
+		"battle_reward": GameSession.battle_reward,
+		"battle_mana_crystals": GameSession.battle_mana_crystals.duplicate(true),
+		"battle_gear": GameSession.battle_gear.duplicate(true),
+		"has_trading_post": GameSession.has_trading_post,
+		"player_name": GameSession.player_name,
+		"tutorial_progress": GameSession.tutorial_progress.duplicate(true),
+	}
+
+
+func test_import_keeps_carried_rewards_unbanked() -> void:
+	GameSession.pending_reward = 17
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.pending_reward, 17)
+	assert_eq(GameSession.gold, 0)
+
+
+## Exercises every durable category the snapshot contract covers: roster/
+## progression/equipment, parties/routes, selected ids, world turn,
+## encounter instances/completions/vacancies, recruitment offers/vacancies,
+## gold/buildings, every battle/pending/banked reward store, player name,
+## and tutorial progress.
+func test_export_then_reset_then_import_restores_the_full_session() -> void:
+	GameSession.start_new_game("Ryan")
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	GameSession.depart_selected_party()
+	GameSession.set_deployed_party_position(Vector2i(4, 3))
+	GameSession.set_deployed_party_route([Vector2i(4, 4)])
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.completed_encounters = ["orc_outpost"]
+	GameSession.encounter_vacancies = [{"turns_remaining": 3}]
+	GameSession.recruitment_vacancies = [{"turns_remaining": 6}]
+	GameSession.world_turn = 5
+	GameSession.gold = 123
+	GameSession.guild_hall_level = 2
+	GameSession.pending_reward = 9
+	GameSession.mana_crystals = {1: 2}
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	GameSession.pending_mana_crystals = {2: 1}
+	GameSession.pending_gear = {"longsword_iron": 1}
+	GameSession.battle_reward = 4
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.has_trading_post = true
+	GameSession.tutorial_progress = {"formed_party": true}
+	var expected := _capture_durable_fields()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(_capture_durable_fields(), expected)
+
+
+## Reflection guard against the durable-field list drifting out of sync: the
+## field-by-field wiring export_campaign_snapshot()/import_campaign_
+## snapshot()/CampaignSnapshot/_capture_durable_fields() above all repeat by
+## hand has no shared source of truth, so nothing fails today if a new
+## durable var is added to GameSession without also adding it to the
+## snapshot -- it would just silently fail to survive a save/load round
+## trip. This walks every script-declared instance var GameSession actually
+## has and asserts export_campaign_snapshot()'s output carries each one,
+## rather than repeating the same hand-written list a fourth time. Only two
+## kinds of var are allowed to not appear in the snapshot: Callable
+## roll-hooks (injectable test doubles, e.g. GameSession.
+## enemy_composition_roll -- behavior, not state) and the balance-config
+## numbers GameConfig overwrites at _ready() from config files (e.g.
+## GameSession.BASE_ATTACK) -- neither is per-campaign player state. Any
+## other genuinely non-durable var must be added to the explicit
+## `excluded_names` allowlist below with its own reason, not silently
+## skipped.
+func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
+	var snapshot: Dictionary = GameSession.export_campaign_snapshot()
+
+	# GameSession's own field name differs from the snapshot's key for
+	# exactly one durable var: _used_encounter_template_ids is private
+	# (leading underscore) because nothing outside GameSession needs to
+	# read it directly, but see its own doc comment for why it is still
+	# durable.
+	var renamed_keys: Dictionary = {
+		"_used_encounter_template_ids": "used_encounter_template_ids",
+	}
+
+	# Balance-config numbers: not per-campaign state, always reset from
+	# GameConfig at boot (see GameSession._ready()).
+	var excluded_names: Dictionary = {
+		"BASE_ATTACK": true,
+		"BASE_MAX_HEALTH": true,
+		"BASE_MOVE_RANGE": true,
+		"LEVEL_UP_MAX_HEALTH_BONUS": true,
+		"LEVEL_UP_SKILL_POINTS": true,
+		"PERK_LEVEL_INTERVAL": true,
+		"GUILD_HALL_LEVEL_1_PARTY_CAP": true,
+		"GUILD_HALL_LEVEL_2_PARTY_CAP": true,
+		"GUILD_HALL_UPGRADE_COST": true,
+		"GUILD_HALL_MAX_LEVEL": true,
+		"TRADING_POST_PURCHASE_COST": true,
+		"TRADING_POST_INCOME_PER_TURN": true,
+		"EFFECTIVE_HIT_CHANCE_CAP": true,
+		"ATTACK_TO_HIT_CHANCE_DIVISOR": true,
+		"ENCOUNTER_INSTANCE_CAP": true,
+		"RECRUITMENT_OFFER_CAP": true,
+		"ENCOUNTER_VACANCY_TURNS": true,
+		"RECRUITMENT_VACANCY_TURNS": true,
+		"ENCOUNTER_VACANCY_JITTER_TURNS": true,
+		"RECRUITMENT_VACANCY_JITTER_TURNS": true,
+	}
+
+	var checked_field_names: Array[String] = []
+	for property in GameSession.get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			continue
+		var field_name: String = property.name
+		if property.type == TYPE_CALLABLE:
+			continue
+		if excluded_names.has(field_name):
+			continue
+		var snapshot_key: String = renamed_keys.get(field_name, field_name)
+		checked_field_names.append(field_name)
+		assert_true(
+			snapshot.has(snapshot_key),
+			(
+				"GameSession.%s looks durable but export_campaign_snapshot() does not carry it -- "
+				+ "wire it into CampaignSnapshot/export_campaign_snapshot()/import_campaign_snapshot(), "
+				+ "or add %s to this test's excluded_names allowlist with a reason if it is not durable."
+			) % [field_name, field_name]
+		)
+
+	# Sanity check: reflection must actually find GameSession's durable vars,
+	# so a Godot API change silently returning nothing cannot pass this test
+	# vacuously.
+	assert_gt(checked_field_names.size(), 15)
+
+
+func test_export_campaign_snapshot_deep_copies_so_mutating_it_does_not_affect_the_session() -> void:
+	GameSession.create_party()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.parties[0].name = "Mutated"
+	snapshot.gold = 999
+
+	assert_ne(GameSession.get_selected_party().name, "Mutated")
+	assert_eq(GameSession.gold, 0)
+
+
+func test_import_campaign_snapshot_deep_copies_so_mutating_the_session_afterward_does_not_affect_the_source_data() -> void:
+	GameSession.create_party()
+	var snapshot := GameSession.export_campaign_snapshot()
+
+	GameSession.reset()
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	GameSession.parties[0].name = "Mutated"
+	GameSession.gold = 999
+
+	assert_ne(snapshot.parties[0].name, "Mutated")
+	assert_ne(snapshot.gold, 999)
+
+
+## The other direction from the test above: import_campaign_snapshot()'s
+## returned result carries a "snapshot" key (see CampaignSnapshot.
+## from_dictionary()) that a caller might inspect for logging/diagnostics.
+## Mutating that returned dict afterward must not reach back into the live
+## session -- import_campaign_snapshot() has to duplicate every Array/
+## Dictionary field it assigns from result.snapshot, not alias it.
+func test_import_campaign_snapshot_result_does_not_alias_live_session_state() -> void:
+	GameSession.create_party()
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+	assert_true(result.ok, result.error)
+
+	result.snapshot.gold = 999
+	result.snapshot.parties[0].name = "Mutated"
+	result.snapshot.adventurers.append({"id": "intruder"})
+
+	assert_eq(GameSession.gold, 0)
+	assert_ne(GameSession.get_selected_party().name, "Mutated")
+	assert_eq(GameSession.adventurers.size(), 1)
+
+
+func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
+	GameSession.battle_reward = 3
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.pending_reward = 7
+	GameSession.pending_gear = {"longsword_iron": 1}
+	GameSession.pending_mana_crystals = {2: 1}
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.banked_gear, {})
+	assert_eq(GameSession.mana_crystals, {})
+	assert_eq(GameSession.battle_reward, 3)
+	assert_eq(GameSession.battle_gear, {"dagger_iron": 1})
+	assert_eq(GameSession.battle_mana_crystals, {1: 1})
+	assert_eq(GameSession.pending_reward, 7)
+	assert_eq(GameSession.pending_gear, {"longsword_iron": 1})
+	assert_eq(GameSession.pending_mana_crystals, {2: 1})
+
+
+func test_import_campaign_snapshot_rejects_invalid_data_and_leaves_a_prepared_session_unchanged() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.gold = 55
+	var expected := _capture_durable_fields()
+
+	var invalid_data := GameSession.export_campaign_snapshot()
+	invalid_data.erase("version")
+	var result := GameSession.import_campaign_snapshot(invalid_data)
+
+	assert_false(result.ok)
+	assert_eq(_capture_durable_fields(), expected)
+
+
+## get_campaign_guide_state(): the derived, one-shot query behind the first-
+## campaign guide banner (see docs/plans/2026-08-10-initial-campaign-and-
+## automation/04-first-campaign-guidance.md and scripts/ui/campaign_guide.gd).
+## Walks the party-formed -> deployed -> route-selected -> site-entered ->
+## reward-banked -> first-improvement loop end to end, then checks
+## dismissal and the no-regression backfill separately.
+func test_campaign_guide_starts_by_asking_to_form_a_party() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+
+func test_campaign_guide_moves_to_deploy_once_a_party_exists() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_DEPLOY)
+
+
+func test_campaign_guide_moves_to_select_route_once_the_party_deploys() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE)
+
+
+func test_campaign_guide_moves_to_enter_site_once_the_party_reaches_an_active_encounter() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_ENTER_SITE)
+
+
+func test_campaign_guide_moves_to_return_bank_once_the_party_carries_a_reward() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+
+	assert_true(GameSession.pending_reward > 0)
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_RETURN_BANK)
+
+
+func test_campaign_guide_offers_the_first_affordable_improvement_once_the_reward_is_banked() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10  # guarantee an affordable recruit regardless of the rolled reward
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+
+## get_campaign_guide_state() must be a pure read, exactly like every other
+## get_/has_/can_ method in this file (get_recruitment_candidates(),
+## has_deployed_party(), can_upgrade_guild_hall(), ...): calling it -- even
+## repeatedly, even when several ids are simultaneously triggered -- must
+## never write tutorial_progress. Only the explicit
+## record_campaign_guide_progress()/record_campaign_guide_dismissal() calls
+## may do that.
+func test_get_campaign_guide_state_never_writes_tutorial_progress() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10
+	# At this point DEPLOY, SELECT_ROUTE, and FIRST_IMPROVEMENT can all be
+	# simultaneously live-triggered (see the priority-scan comment on
+	# _compute_campaign_guide_active_id()) -- exactly the situation a hidden
+	# write would be tempted to "clean up".
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	GameSession.get_campaign_guide_state()
+	GameSession.get_campaign_guide_state()
+
+	assert_eq(GameSession.tutorial_progress, {})
+
+
+## record_campaign_guide_progress(): the explicit write the guide banner
+## makes (see scripts/ui/campaign_guide.gd's refresh()) whenever it actually
+## renders a message -- this is what durably retires every earlier,
+## still-pending id, not the query itself.
+func test_record_campaign_guide_progress_retires_every_earlier_id() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_DEPLOY, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_ENTER_SITE, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_RETURN_BANK, false))
+	# guide_id itself is left alone -- only an explicit dismissal (or later
+	# resolving on its own, as the next test covers) retires the current one.
+	assert_false(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT, false))
+
+
+func test_record_campaign_guide_progress_on_the_first_stage_writes_nothing() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	assert_eq(GameSession.tutorial_progress, {})
+
+
+## A second expedition naturally un-deploys the party again (see
+## return_deployed_party_to_settlement()), which would otherwise make a
+## naive live-state check wrongly resurface "deploy your party" even though
+## the player is really just standing at the bank with gold to spend. This
+## is exactly why record_campaign_guide_progress() exists: it must have
+## actually been called (mirroring the guide banner having actually
+## rendered FIRST_IMPROVEMENT) for DEPLOY to stay retired once its own live
+## trigger goes away.
+func test_campaign_guide_clears_once_the_first_improvement_is_made() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = 10
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.purchase_recruit(GameSession.recruitment_candidates[0].id))
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+## _campaign_guide_first_improvement_made()'s other two branches (recruiting
+## is covered above): a Guild Hall upgrade or a Trading Post purchase must
+## each independently count as "the first improvement" too.
+func test_campaign_guide_clears_once_the_guild_hall_is_upgraded() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = GameSession.GUILD_HALL_UPGRADE_COST
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.upgrade_guild_hall())
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+func test_campaign_guide_clears_once_the_trading_post_is_purchased() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.purchase_trading_post())
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+func test_record_campaign_guide_dismissal_retires_a_message_even_while_its_trigger_still_holds() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	GameSession.record_campaign_guide_dismissal(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+func test_campaign_guide_dismissal_survives_a_snapshot_round_trip() -> void:
+	GameSession.reset()
+	GameSession.record_campaign_guide_dismissal(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.get_campaign_guide_state(), "")
