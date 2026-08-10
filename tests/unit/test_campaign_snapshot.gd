@@ -202,9 +202,27 @@ func test_rejects_a_malformed_vector2i_field() -> void:
 	assert_false(result.ok)
 
 
+func test_rejects_a_malformed_dictionary_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.mana_crystals = "not a dictionary"
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
 func test_rejects_duplicate_adventurer_ids() -> void:
 	var data := _full_snapshot().to_dictionary()
 	data.adventurers.append(data.adventurers[0].duplicate(true))
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_duplicate_recruitment_candidate_ids() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.recruitment_candidates.append(data.recruitment_candidates[0].duplicate(true))
 
 	var result := CampaignSnapshot.from_dictionary(data)
 

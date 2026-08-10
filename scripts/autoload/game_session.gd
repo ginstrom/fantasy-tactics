@@ -1639,34 +1639,41 @@ func export_campaign_snapshot() -> Dictionary:
 ## produced, for the caller to inspect. Never calls
 ## merge_battle_loot_into_party() or deposit_pending_reward() -- carried
 ## rewards are restored exactly as exported, never banked.
+##
+## Every Array/Dictionary field is duplicated (never assigned directly)
+## when copied from result.snapshot onto this session's own fields, so the
+## two stay independent objects in both directions: a caller mutating the
+## returned result's nested "snapshot" afterward (e.g. for logging) cannot
+## reach back into live session state, and this session mutating its own
+## fields afterward cannot reach into the returned result.
 func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	var result := CampaignSnapshot.from_dictionary(data)
 	if not result.ok:
 		return result
 
 	var snapshot: Dictionary = result.snapshot
-	adventurers = snapshot.adventurers
-	recruitment_candidates = snapshot.recruitment_candidates
-	recruitment_vacancies = snapshot.recruitment_vacancies
-	parties = snapshot.parties
+	adventurers = snapshot.adventurers.duplicate(true)
+	recruitment_candidates = snapshot.recruitment_candidates.duplicate(true)
+	recruitment_vacancies = snapshot.recruitment_vacancies.duplicate(true)
+	parties = snapshot.parties.duplicate(true)
 	selected_party_id = snapshot.selected_party_id
 	selected_encounter = snapshot.selected_encounter
-	completed_encounters = snapshot.completed_encounters
-	active_encounters = snapshot.active_encounters
-	encounter_vacancies = snapshot.encounter_vacancies
-	_used_encounter_template_ids = snapshot.used_encounter_template_ids
+	completed_encounters = snapshot.completed_encounters.duplicate(true)
+	active_encounters = snapshot.active_encounters.duplicate(true)
+	encounter_vacancies = snapshot.encounter_vacancies.duplicate(true)
+	_used_encounter_template_ids = snapshot.used_encounter_template_ids.duplicate(true)
 	world_turn = snapshot.world_turn
 	gold = snapshot.gold
 	guild_hall_level = snapshot.guild_hall_level
 	pending_reward = snapshot.pending_reward
-	mana_crystals = snapshot.mana_crystals
-	banked_gear = snapshot.banked_gear
-	pending_mana_crystals = snapshot.pending_mana_crystals
-	pending_gear = snapshot.pending_gear
+	mana_crystals = snapshot.mana_crystals.duplicate(true)
+	banked_gear = snapshot.banked_gear.duplicate(true)
+	pending_mana_crystals = snapshot.pending_mana_crystals.duplicate(true)
+	pending_gear = snapshot.pending_gear.duplicate(true)
 	battle_reward = snapshot.battle_reward
-	battle_mana_crystals = snapshot.battle_mana_crystals
-	battle_gear = snapshot.battle_gear
+	battle_mana_crystals = snapshot.battle_mana_crystals.duplicate(true)
+	battle_gear = snapshot.battle_gear.duplicate(true)
 	has_trading_post = snapshot.has_trading_post
 	player_name = snapshot.player_name
-	tutorial_progress = snapshot.tutorial_progress
+	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result

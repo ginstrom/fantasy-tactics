@@ -173,6 +173,10 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if normalized.selected_party_id != "" and not _has_id(normalized.parties, normalized.selected_party_id):
 		return _invalid("selected_party_id does not reference a known party")
 
+	# Reaches into the GameSession autoload for its EXPEDITIONS const table
+	# (a compile-time-constant template catalog, not live session state) so
+	# a raw template id entered directly -- see get_expedition()'s own
+	# dual resolution -- still validates as a legitimate selected_encounter.
 	if (
 		normalized.selected_encounter != ""
 		and not _has_id(normalized.active_encounters, normalized.selected_encounter)

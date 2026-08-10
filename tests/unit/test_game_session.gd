@@ -3029,6 +3029,29 @@ func test_import_campaign_snapshot_deep_copies_so_mutating_the_session_afterward
 	assert_ne(snapshot.gold, 999)
 
 
+## The other direction from the test above: import_campaign_snapshot()'s
+## returned result carries a "snapshot" key (see CampaignSnapshot.
+## from_dictionary()) that a caller might inspect for logging/diagnostics.
+## Mutating that returned dict afterward must not reach back into the live
+## session -- import_campaign_snapshot() has to duplicate every Array/
+## Dictionary field it assigns from result.snapshot, not alias it.
+func test_import_campaign_snapshot_result_does_not_alias_live_session_state() -> void:
+	GameSession.create_party()
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+	assert_true(result.ok, result.error)
+
+	result.snapshot.gold = 999
+	result.snapshot.parties[0].name = "Mutated"
+	result.snapshot.adventurers.append({"id": "intruder"})
+
+	assert_eq(GameSession.gold, 0)
+	assert_ne(GameSession.get_selected_party().name, "Mutated")
+	assert_eq(GameSession.adventurers.size(), 1)
+
+
 func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
 	GameSession.battle_reward = 3
 	GameSession.battle_gear = {"dagger_iron": 1}
