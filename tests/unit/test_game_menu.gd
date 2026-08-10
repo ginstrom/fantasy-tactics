@@ -108,32 +108,101 @@ func test_pressing_save_during_an_active_encounter_shows_a_failure_status_and_wr
 	GameSession.abandon_current_encounter()
 
 
-func test_pressing_load_with_a_saved_game_imports_it_and_closes_the_menu() -> void:
+## --- Load confirmation (manual-verification fix: Load had no confirm- -----
+## --- before-overwrite prompt). Pressing Load in the pause menu must never --
+## --- call GameManager.go_to_loaded_campaign() immediately -- it would -----
+## --- silently discard whatever unsaved progress is live in GameSession ----
+## --- right now. It only raises a confirmation prompt; the prompt's own ----
+## --- Confirm action is what actually performs the load a bare press used -
+## --- to trigger directly (see the two tests below this block, updated to -
+## --- go through the prompt). Start Menu's Continue/Load are deliberately -
+## --- NOT covered by this prompt -- see test_start_menu.gd -- there is no -
+## --- campaign in progress yet at the Start Menu, so there is nothing to --
+## --- lose.
+
+
+func test_load_confirm_dialog_is_hidden_until_load_is_pressed() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_false(menu.get_node("LoadConfirmDialog").visible)
+
+
+func test_pressing_load_shows_a_confirmation_dialog_and_does_not_load_immediately() -> void:
+	GameSession.gold = 321
+	GameManager.save_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameSession.gold = 7
+	GameManager.open_game_menu()
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	menu.get_node("Center/VBox/LoadButton").emit_signal("pressed")
+
+	assert_true(menu.get_node("LoadConfirmDialog").visible, "Load must raise a confirmation prompt, not load immediately")
+	assert_eq(GameSession.gold, 7, "Pressing Load alone must not import the saved campaign yet")
+	assert_true(GameManager.is_game_menu_open(), "The pause menu must stay open behind the prompt")
+
+
+func test_pressing_cancel_on_the_load_confirmation_leaves_everything_untouched() -> void:
+	GameSession.gold = 321
+	GameManager.save_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameSession.gold = 7
+	GameManager.open_game_menu()
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/LoadButton").emit_signal("pressed")
+
+	menu.get_node("LoadConfirmDialog/VBox/ButtonRow/CancelButton").emit_signal("pressed")
+
+	assert_false(menu.get_node("LoadConfirmDialog").visible, "Cancel must close the prompt")
+	assert_eq(GameSession.gold, 7, "Cancel must never import the saved campaign")
+	assert_true(GameManager.is_game_menu_open(), "Cancel must leave the pause menu open, not route anywhere")
+	assert_true(get_tree().paused, "Cancel must not unpause -- the pause menu it leaves open is still open")
+
+
+func test_confirming_the_load_dialog_with_a_saved_game_imports_it_and_closes_the_menu() -> void:
 	GameSession.gold = 321
 	GameManager.save_repository.save_campaign(GameSession)
 	GameSession.reset()
 	GameManager.open_game_menu()
 	var menu: CanvasLayer = GameMenuScene.instantiate()
 	add_child_autofree(menu)
-
 	menu.get_node("Center/VBox/LoadButton").emit_signal("pressed")
 
+	menu.get_node("LoadConfirmDialog/VBox/ButtonRow/ConfirmButton").emit_signal("pressed")
+
 	assert_eq(GameSession.gold, 321)
+	assert_false(menu.get_node("LoadConfirmDialog").visible)
 	assert_false(GameManager.is_game_menu_open())
 	assert_false(get_tree().paused)
 
 
-func test_pressing_load_without_a_saved_game_shows_a_failure_status_and_keeps_the_menu_open() -> void:
+func test_confirming_the_load_dialog_without_a_saved_game_shows_a_failure_status_and_keeps_the_menu_open() -> void:
 	GameManager.open_game_menu()
 	var menu: CanvasLayer = GameMenuScene.instantiate()
 	add_child_autofree(menu)
 	var status: Label = menu.get_node("Center/VBox/StatusLabel")
-
 	menu.get_node("Center/VBox/LoadButton").emit_signal("pressed")
 
+	menu.get_node("LoadConfirmDialog/VBox/ButtonRow/ConfirmButton").emit_signal("pressed")
+
+	assert_false(menu.get_node("LoadConfirmDialog").visible, "The prompt must close even when the load it triggers fails")
 	assert_true(status.visible)
 	assert_eq(status.text, "Load failed.")
 	assert_true(GameManager.is_game_menu_open(), "A failed load must not close the pause menu")
+
+
+func test_refresh_hides_the_load_confirm_dialog_after_it_was_shown() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/LoadButton").emit_signal("pressed")
+	assert_true(menu.get_node("LoadConfirmDialog").visible, "Sanity check: Load should show the prompt")
+
+	menu.refresh()
+
+	assert_false(menu.get_node("LoadConfirmDialog").visible)
 
 
 func test_refresh_hides_the_status_label_after_it_was_shown() -> void:

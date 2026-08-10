@@ -153,3 +153,20 @@ func test_start_menu_source_never_touches_the_filesystem_or_a_repository_directl
 	assert_false(source.contains("DirAccess"), "Save/Load intents must go through GameManager, never DirAccess directly")
 	assert_false(source.contains("SaveRepository"), "Save/Load intents must go through GameManager, never SaveRepository directly")
 	assert_false(source.contains("GameSession"), "Save/Load intents must go through GameManager, never GameSession directly")
+
+
+## The pause menu's Load gained a confirm-before-overwrite prompt (see
+## test_game_menu.gd) because a live campaign might be running when it's
+## pressed. At the Start Menu there is no campaign in progress yet -- it's
+## the entry point -- so Continue/Load have nothing to lose and must stay
+## exactly as immediate as they've always been. Asserted at the source
+## level (rather than only via test_continue_loads_the_saved_campaign() /
+## test_load_button_loads_the_saved_campaign() above already calling
+## go_to_loaded_campaign() with no dialog step in between) so this is a
+## direct, structural guarantee: no dialog/confirmation node or reference
+## ever gates the Start Menu's own load path, now or if this file grows.
+func test_start_menu_load_path_is_not_gated_by_any_confirmation_dialog() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/start_menu.gd")
+
+	assert_false(source.contains("Dialog"), "Start Menu's Continue/Load must never be gated by a confirmation dialog")
+	assert_false(source.contains("confirm"), "Start Menu's Continue/Load must never be gated by a confirmation step")

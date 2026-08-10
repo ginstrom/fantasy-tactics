@@ -3,6 +3,7 @@ extends CanvasLayer
 @onready var save_button: Button = $Center/VBox/SaveButton
 @onready var load_button: Button = $Center/VBox/LoadButton
 @onready var status_label: Label = $Center/VBox/StatusLabel
+@onready var load_confirm_dialog: PanelContainer = $LoadConfirmDialog
 
 
 func _ready() -> void:
@@ -19,6 +20,7 @@ func refresh() -> void:
 	save_button.disabled = not GameManager.can_save_current_campaign()
 	load_button.disabled = not GameManager.has_valid_save()
 	status_label.visible = false
+	load_confirm_dialog.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -45,13 +47,30 @@ func _on_save_pressed() -> void:
 	load_button.disabled = not GameManager.has_valid_save()
 
 
+## Load never imports anything by itself -- it would silently discard
+## whatever unsaved campaign progress is currently live. Pressing it only
+## raises the confirmation prompt below; _on_load_confirm_pressed() is the
+## one call site that actually performs the load this button used to
+## trigger directly. The Start Menu's own Continue/Load (see
+## scripts/ui/start_menu.gd) deliberately have no such prompt -- there is
+## no campaign in progress yet at the Start Menu, so there is nothing to
+## lose there.
+func _on_load_pressed() -> void:
+	load_confirm_dialog.visible = true
+
+
+func _on_load_confirm_cancel_pressed() -> void:
+	load_confirm_dialog.visible = false
+
+
 ## A successful load already routes away from whatever scene is currently
 ## showing this overlay (see GameManager.go_to_loaded_campaign()), so there
 ## is nothing left to update here on success. A failed load never routes or
 ## closes the menu -- surface the failure and refresh Load's own enabled
 ## state (has_valid_save() may have just changed, e.g. a corrupt file) so
 ## the player isn't left looking at a stale control.
-func _on_load_pressed() -> void:
+func _on_load_confirm_pressed() -> void:
+	load_confirm_dialog.visible = false
 	var result: Dictionary = GameManager.go_to_loaded_campaign()
 	if not result.ok:
 		load_button.disabled = not GameManager.has_valid_save()
