@@ -196,7 +196,7 @@ var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
 var ATTACK_TO_HIT_CHANCE_DIVISOR: float = 100.0
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
-# A campaign starts sparse (one active encounter, one active recruitment
+# A campaign starts sparse (two active encounters, one active recruitment
 # offer) and refills each cleared/hired slot only after its own category's
 # wait, and only while under that category's cap. See EXPEDITIONS/
 # RECRUITMENT_CANDIDATE_TEMPLATES for the template pools these instances/
@@ -205,6 +205,8 @@ var ENCOUNTER_INSTANCE_CAP: int = 2
 var RECRUITMENT_OFFER_CAP: int = 4
 var ENCOUNTER_VACANCY_TURNS: int = 15
 var RECRUITMENT_VACANCY_TURNS: int = 30
+var ENCOUNTER_VACANCY_JITTER_TURNS: int = 5
+var RECRUITMENT_VACANCY_JITTER_TURNS: int = 5
 # The pool of candidate templates a refill's power-weighted picker chooses
 # among (see _choose_encounter_template()) -- order no longer determines
 # which template gets picked, only which is enumerated first when weights
@@ -324,19 +326,26 @@ var star_weight_roll: Callable = func(total_weight: int) -> int: return randi() 
 ## pattern). Called with the resolved composition option's
 ## (count_min, count_max).
 var enemy_count_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+## Injectable so tests can force a specific vacancy delay instead of
+## depending on real randomness (see enemy_composition_roll for the same
+## pattern). Called by _resolve_vacancy_delay() with an inclusive
+## [minimum, maximum] jitter range and expected to return a value in that
+## range once per newly opened vacancy.
+var vacancy_delay_roll: Callable = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
 
 
-## Restores enemy_composition_roll, enemy_count_roll, and star_weight_roll
-## to their real-random default implementations. Deliberately NOT called by
-## reset() -- these Callables are intentionally never touched by reset() (see
-## each var's own doc comment) so a test can pin one, then call reset() for
-## unrelated setup, without losing its pin. Call sites that need a guaranteed
-## clean slate (a fresh debug scenario, a test's after_each) call this
-## explicitly instead.
+## Restores enemy_composition_roll, enemy_count_roll, star_weight_roll, and
+## vacancy_delay_roll to their real-random default implementations.
+## Deliberately NOT called by reset() -- these Callables are intentionally
+## never touched by reset() (see each var's own doc comment) so a test can
+## pin one, then call reset() for unrelated setup, without losing its pin.
+## Call sites that need a guaranteed clean slate (a fresh debug scenario, a
+## test's after_each) call this explicitly instead.
 func reset_injectable_rolls() -> void:
 	enemy_composition_roll = func(option_count: int) -> int: return randi() % option_count
 	enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
+	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
 
 
 # Injectable so tests can force deterministic loot instead of depending on
@@ -348,9 +357,10 @@ var loot_gear_roll: Callable = func() -> float: return randf()
 var completed_encounters: Array[String] = []
 # Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
 # instance is a spawned record: {id, template_id, position, ...copied
-# template fields}. A fresh campaign seeds exactly one (the Goblin Camp, id
-# "goblin_camp", at its documented position). Clearing one starts an
-# ENCOUNTER_VACANCY_TURNS clock that may add another later, capped at
+# template fields}. A fresh campaign seeds exactly two (the Goblin Camp, id
+# "goblin_camp", and the Orc Outpost, id "orc_outpost", each at its
+# documented position). Clearing one starts a vacancy clock (see
+# _resolve_vacancy_delay) that may add another later, capped at
 # ENCOUNTER_INSTANCE_CAP. A cleared instance is never reopened; it is only
 # ever recorded (by its own id) in completed_encounters.
 var active_encounters: Array[Dictionary] = []
@@ -408,6 +418,8 @@ func _load_balance_config() -> void:
 	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
 	ENCOUNTER_VACANCY_TURNS = GameConfig.get_int("population", "encounter_vacancy_turns", ENCOUNTER_VACANCY_TURNS)
 	RECRUITMENT_VACANCY_TURNS = GameConfig.get_int("population", "recruitment_vacancy_turns", RECRUITMENT_VACANCY_TURNS)
+	ENCOUNTER_VACANCY_JITTER_TURNS = GameConfig.get_int("population", "encounter_vacancy_jitter_turns", ENCOUNTER_VACANCY_JITTER_TURNS)
+	RECRUITMENT_VACANCY_JITTER_TURNS = GameConfig.get_int("population", "recruitment_vacancy_jitter_turns", RECRUITMENT_VACANCY_JITTER_TURNS)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -1193,13 +1205,25 @@ func _clear_active_encounter(instance_id: String) -> void:
 	_start_encounter_vacancy()
 
 
+## Resolves a single bounded delay for a newly opened vacancy via
+## vacancy_delay_roll, called once per vacancy (never rerolled while
+## ticking -- see _advance_encounter_vacancies()/_advance_recruitment_vacancies()).
+## The lower bound is clamped to 1 so a jitter magnitude at or above the base
+## can never produce a non-positive or zero-turn wait.
+func _resolve_vacancy_delay(base_turns: int, jitter_turns: int) -> int:
+	var minimum := maxi(1, base_turns - jitter_turns)
+	var maximum := base_turns + jitter_turns
+	return vacancy_delay_roll.call(minimum, maximum)
+
+
 ## Distinguishes "no new cooldown starts if already at capacity" (this guard,
 ## evaluated once at vacancy-open time) from "a clock exists but is capped
 ## from firing" (the symmetric guard inside _advance_encounter_vacancies).
 func _start_encounter_vacancy() -> void:
 	if active_encounters.size() >= ENCOUNTER_INSTANCE_CAP:
 		return
-	encounter_vacancies.append({"turns_remaining": ENCOUNTER_VACANCY_TURNS})
+	var turns_remaining := _resolve_vacancy_delay(ENCOUNTER_VACANCY_TURNS, ENCOUNTER_VACANCY_JITTER_TURNS)
+	encounter_vacancies.append({"turns_remaining": turns_remaining})
 
 
 ## Ticks every pending encounter vacancy clock down by one World Map turn. A
@@ -1352,7 +1376,8 @@ func _mint_encounter_instance_id() -> String:
 func _start_recruitment_vacancy() -> void:
 	if recruitment_candidates.size() >= RECRUITMENT_OFFER_CAP:
 		return
-	recruitment_vacancies.append({"turns_remaining": RECRUITMENT_VACANCY_TURNS})
+	var turns_remaining := _resolve_vacancy_delay(RECRUITMENT_VACANCY_TURNS, RECRUITMENT_VACANCY_JITTER_TURNS)
+	recruitment_vacancies.append({"turns_remaining": turns_remaining})
 
 
 func _advance_recruitment_vacancies() -> void:

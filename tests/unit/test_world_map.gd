@@ -13,6 +13,7 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameSession.reset_injectable_rolls()
 
 
 func _deploy_warrior_party() -> void:
@@ -978,6 +979,10 @@ func test_end_turn_updates_the_turn_label() -> void:
 ## (see _draw_markers), so a vacancy that refills mid-session must appear the
 ## very next time End Turn redraws the markers — no separate "refresh" step.
 func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> void:
+	# Force the base delay so the turn loop below still lands exactly on the
+	# refill turn rather than depending on the jitter range
+	# _resolve_vacancy_delay() now resolves (see GameSession.vacancy_delay_roll).
+	GameSession.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return GameSession.ENCOUNTER_VACANCY_TURNS
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
 	var world_map: Node2D = WorldMapScene.instantiate()

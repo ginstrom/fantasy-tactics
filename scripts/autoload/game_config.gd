@@ -31,6 +31,8 @@ const DEFAULTS: Dictionary = {
 		"recruitment_offer_cap": 4,
 		"encounter_vacancy_turns": 15,
 		"recruitment_vacancy_turns": 30,
+		"encounter_vacancy_jitter_turns": 5,
+		"recruitment_vacancy_jitter_turns": 5,
 	},
 	"trading_post": {
 		"purchase_cost": 50,

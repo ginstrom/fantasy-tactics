@@ -1767,6 +1767,10 @@ func test_get_active_encounters_returns_a_copy_that_cannot_mutate_the_session() 
 func test_clearing_goblin_camp_leaves_orc_outpost_active_and_starts_one_vacancy_timer() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result so this test keeps validating "one vacancy clock
+	# starts at the documented base delay" rather than the jitter range
+	# _resolve_vacancy_delay() now resolves (see vacancy_delay_roll).
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
@@ -1781,6 +1785,8 @@ func test_clearing_goblin_camp_leaves_orc_outpost_active_and_starts_one_vacancy_
 func test_clearing_the_active_encounter_removes_it_and_starts_one_vacancy_clock() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result -- see the sibling test above for why.
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
@@ -1792,9 +1798,108 @@ func test_clearing_the_active_encounter_removes_it_and_starts_one_vacancy_clock(
 	assert_eq(session.encounter_vacancies[0].turns_remaining, session.ENCOUNTER_VACANCY_TURNS)
 
 
+## Given verbatim by the plan brief: proves _resolve_vacancy_delay() (Step 2)
+## calls vacancy_delay_roll exactly once, with the documented inclusive
+## encounter jitter bounds (base 15 +/- 5 => [10, 20]), and stores whatever
+## it returns -- here the forced minimum -- as the vacancy's turns_remaining.
+func test_encounter_vacancy_rolls_the_inclusive_base_plus_or_minus_jitter_once() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# A single-element Array, not a plain int: GDScript lambdas capture
+	# enclosing locals by value, so a plain "var calls := 0" mutated inside
+	# the Callable would never be visible out here. The Array is captured by
+	# reference to the same underlying object, so mutating its contents is.
+	var calls := [0]
+	session.vacancy_delay_roll = func(minimum: int, maximum: int) -> int:
+		calls[0] += 1
+		assert_eq(minimum, 10)
+		assert_eq(maximum, 20)
+		return minimum
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(calls[0], 1)
+	assert_eq(session.encounter_vacancies[0].turns_remaining, 10)
+
+
+## Mirrors the encounter test above for the recruitment category (base 30
+## +/- 5 => [25, 35]), forcing the upper bound instead of the lower one.
+func test_recruitment_vacancy_rolls_the_inclusive_base_plus_or_minus_jitter_once() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# See test_encounter_vacancy_rolls_the_inclusive_base_plus_or_minus_jitter_once
+	# for why this is an Array rather than a plain int.
+	var calls := [0]
+	session.vacancy_delay_roll = func(minimum: int, maximum: int) -> int:
+		calls[0] += 1
+		assert_eq(minimum, 25)
+		assert_eq(maximum, 35)
+		return maximum
+	session.gold = 10
+
+	session.purchase_recruit("warrior_002")
+
+	assert_eq(calls[0], 1)
+	assert_eq(session.recruitment_vacancies[0].turns_remaining, 35)
+
+
+## A forced roll landing back on the base value (not just an extreme) must
+## still be the number actually stored -- proves _resolve_vacancy_delay()
+## stores the roll's return value verbatim rather than, say, always adding
+## the jitter offset.
+func test_encounter_vacancy_stores_the_base_delay_when_the_roll_returns_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 15
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(session.encounter_vacancies[0].turns_remaining, 15)
+
+
+func test_recruitment_vacancy_stores_the_base_delay_when_the_roll_returns_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 30
+	session.gold = 10
+
+	session.purchase_recruit("warrior_002")
+
+	assert_eq(session.recruitment_vacancies[0].turns_remaining, 30)
+
+
+## The delay is resolved once, at vacancy-open time, not rerolled on every
+## tick -- _advance_encounter_vacancies() must only decrement turns_remaining,
+## never call vacancy_delay_roll again while a vacancy is pending.
+func test_encounter_vacancy_only_rolls_once_while_ticking_across_several_turns() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# See test_encounter_vacancy_rolls_the_inclusive_base_plus_or_minus_jitter_once
+	# for why this is an Array rather than a plain int.
+	var calls := [0]
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int:
+		calls[0] += 1
+		return 15
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+	assert_eq(calls[0], 1, "Opening the vacancy resolves the delay exactly once")
+
+	for i in 5:
+		session.end_world_turn()
+
+	assert_eq(calls[0], 1, "Ticking down an already-open vacancy must not reroll its delay")
+
+
 func test_encounter_vacancy_does_not_refill_before_turn_fifteen() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result so this test keeps validating tick/refill timing
+	# rather than the jitter range _resolve_vacancy_delay() now resolves (see
+	# vacancy_delay_roll and its dedicated jitter tests above).
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 
@@ -1814,6 +1919,8 @@ func test_encounter_vacancy_does_not_refill_before_turn_fifteen() -> void:
 func test_encounter_vacancy_refills_exactly_at_turn_fifteen() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result -- see test_encounter_vacancy_does_not_refill_before_turn_fifteen.
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 	# Force the weighted refill toward goblin_camp (the tier-1 candidate) so
@@ -1862,6 +1969,10 @@ func test_encounter_refill_does_not_reuse_the_original_cleared_tile() -> void:
 	# Clear Goblin Camp and wait for refill. The new instance must not spawn
 	# at (4, 4) even though that position is now empty, because Goblin Camp
 	# is marked as previously-spawned in _used_encounter_template_ids.
+	# Force the base delay so this test's turn loop still lands on the exact
+	# refill turn rather than depending on the jitter range
+	# _resolve_vacancy_delay() now resolves (see vacancy_delay_roll).
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 	session.enter_encounter(goblin_instance_id)
 	session.complete_current_encounter()
 	# Force the weighted refill toward goblin_camp (the tier-1 candidate) so
@@ -1912,6 +2023,8 @@ func test_encounter_refill_fallback_scan_avoids_near_settlement_positions() -> v
 	# Clear Orc Outpost; Goblin Camp remains active at its documented (4, 4),
 	# occupying the far corner the scan should otherwise prefer first and
 	# forcing it to keep searching rather than trivially reusing (4, 4).
+	# Force the base delay -- see test_encounter_refill_does_not_reuse_the_original_cleared_tile.
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 	session.complete_current_encounter()
 	# Force the weighted refill toward orc_outpost (the tier-2 candidate, first
@@ -1996,6 +2109,11 @@ func test_no_new_encounter_vacancy_clock_starts_while_already_at_capacity() -> v
 func test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result so this test keeps validating "a purchase starts
+	# one vacancy clock at the documented base delay" rather than the jitter
+	# range _resolve_vacancy_delay() now resolves (see vacancy_delay_roll and
+	# its dedicated jitter tests above).
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.gold = 10
 
 	session.purchase_recruit("warrior_002")
@@ -2016,6 +2134,8 @@ func test_a_failed_purchase_starts_no_recruitment_vacancy_clock() -> void:
 func test_recruitment_vacancy_does_not_refill_before_turn_thirty() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result -- see test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock.
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.gold = 10
 	session.purchase_recruit("warrior_002")
 
@@ -2029,6 +2149,8 @@ func test_recruitment_vacancy_does_not_refill_before_turn_thirty() -> void:
 func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	# Force the base result -- see test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock.
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.gold = 10
 	session.purchase_recruit("warrior_002")
 
@@ -2096,6 +2218,10 @@ func test_generated_encounter_instance_ids_never_collide_with_historical_ones() 
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.completed_encounters.append("encounter_001")
+	# Force the base delay so this test's turn loop still lands on the exact
+	# refill turn rather than depending on the jitter range
+	# _resolve_vacancy_delay() now resolves (see vacancy_delay_roll).
+	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.ENCOUNTER_VACANCY_TURNS
 
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
