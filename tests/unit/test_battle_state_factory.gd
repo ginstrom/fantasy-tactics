@@ -68,6 +68,65 @@ func test_build_selects_the_first_living_player_unit_and_starts_on_the_player_si
 	assert_eq(controller.selected_unit.side, BattleControllerScript.Side.PLAYER)
 
 
+## --- end_turn() round-start reselection ---------------------------------------
+## BattleController.end_turn() re-selects the first living player unit via
+## its own _first_living_player_unit(), which walks _player_adventurer_ids
+## rather than `units` directly (see battle_controller.gd). A factory-built
+## controller must populate that field, or every end_turn() back to the
+## player side would silently leave selected_unit null -- exactly the gap
+## test_battle_controller.gd's own _make_controller()-based tests guard
+## against by assigning _player_adventurer_ids by hand (see
+## test_end_turn_selects_the_first_living_player_unit_when_a_new_round_starts
+## there).
+
+func _two_player_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "two_player",
+		"player": {
+			"units": [
+				{"id": "hero_1", "template_id": "warrior", "position": {"x": 0, "y": 0}},
+				{"id": "hero_2", "template_id": "warrior", "position": {"x": 1, "y": 0}},
+			],
+		},
+		"enemy": {"units": [{"id": "grunt", "template_id": "goblin", "position": {"x": 5, "y": 5}}]},
+	})
+
+
+func test_end_turn_reselects_the_first_living_player_unit_when_control_returns_to_the_player() -> void:
+	var controller: Node2D = BattleStateFactory.build(_two_player_scenario(), 1)
+	autofree(controller)
+	# Simulate the round-start selection having moved on, the way a real
+	# turn would leave it once the second unit has acted.
+	controller.selected_unit = controller.get_unit_at(Vector2i(1, 0))
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	assert_null(controller.selected_unit, "Handing control to the enemy does not select one of its units")
+
+	controller.end_turn()  # ENEMY -> PLAYER
+
+	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER)
+	assert_not_null(
+		controller.selected_unit,
+		"A factory-built controller must reselect a player unit at round start, not silently leave it null",
+	)
+	assert_eq(controller.selected_unit, controller.get_unit_at(Vector2i(0, 0)), "hero_1 was declared first")
+
+
+func test_end_turn_skips_a_defeated_party_member_when_reselecting_at_round_start() -> void:
+	var controller: Node2D = BattleStateFactory.build(_two_player_scenario(), 1)
+	autofree(controller)
+	controller.get_unit_at(Vector2i(0, 0)).health = 0
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	controller.end_turn()  # ENEMY -> PLAYER
+
+	assert_eq(
+		controller.selected_unit,
+		controller.get_unit_at(Vector2i(1, 0)),
+		"A defeated party member cannot be the round-start selection",
+	)
+
+
 ## --- Stats read from GameSession's read-only balance constants ---------------
 
 func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_default_gear() -> void:

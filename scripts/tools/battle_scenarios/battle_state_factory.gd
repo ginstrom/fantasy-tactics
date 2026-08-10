@@ -14,12 +14,20 @@ extends RefCounted
 ## and enemy turns already drive (try_move_selected_unit,
 ## try_attack_selected_unit, get_legal_moves, run_enemy_turn, end_turn,
 ## is_battle_won/is_battle_lost) for free -- this file only ever sets
-## `grid`, `units`, `active_side`, `selected_unit`, `hit_roll`, and
-## `damage_roll`. It never calls BattleController._ready() (which would
-## itself read GameSession.selected_encounter/get_selected_party()), and it
-## never touches GameConfig or GameSession's mutable campaign fields --
-## only GameSession's balance *constants* (WEAPONS, ARMORS, BASE_*, the
-## enemy *_STATS consts) as the default baseline that a unit's explicit
+## `grid`, `units`, `_player_adventurer_ids`, `active_side`, `selected_unit`,
+## `hit_roll`, and `damage_roll`. `_player_adventurer_ids` (player unit ids in
+## build order) is required for end_turn()'s own round-start reselection
+## (BattleController._first_living_player_unit(), which end_turn() calls
+## on the PLAYER side) to work correctly -- without it, end_turn() would
+## silently leave selected_unit null every time control returns to the
+## player, exactly the gap test_battle_controller.gd's own
+## _make_controller()-based tests guard against by assigning it manually
+## (see test_end_turn_selects_the_first_living_player_unit_when_a_new_round_
+## starts). It never calls BattleController._ready() (which would itself
+## read GameSession.selected_encounter/get_selected_party()), and it never
+## touches GameConfig or GameSession's mutable campaign fields -- only
+## GameSession's balance *constants* (WEAPONS, ARMORS, BASE_*, the enemy
+## *_STATS consts) as the default baseline that a unit's explicit
 ## `modifiers` layer on top of.
 ##
 ## Board `blocked` tiles are carried in the scenario contract but not yet
@@ -55,16 +63,25 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	controller.damage_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
 
 	var units: Array = []
+	var player_adventurer_ids: Array[String] = []
 	var player_units: Array = scenario.player.units
 	for index in player_units.size():
-		units.append(_build_player_unit(player_units[index], index))
+		var unit_spec: Dictionary = player_units[index]
+		units.append(_build_player_unit(unit_spec, index))
+		player_adventurer_ids.append(String(unit_spec.id))
 	var enemy_units: Array = scenario.enemy.units
 	for index in enemy_units.size():
 		units.append(_build_enemy_unit(enemy_units[index], index))
 	controller.units = units
+	controller._player_adventurer_ids = player_adventurer_ids
 
 	controller.active_side = BattleControllerScript.Side.PLAYER
-	controller.selected_unit = _first_living_player_unit(units)
+	# Reuses BattleController's own reselection method (rather than
+	# reimplementing it here) now that _player_adventurer_ids is populated,
+	# so round-one's initial selection and every later end_turn() round-start
+	# reselection agree by construction instead of by two parallel
+	# implementations staying in sync by hand.
+	controller.selected_unit = controller._first_living_player_unit()
 
 	return controller
 
@@ -175,10 +192,3 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	unit.display_name = String(spec.id)
 	unit.enemy_type_name = TranslationServer.translate(base.get("name_key", ""))
 	return unit
-
-
-static func _first_living_player_unit(units: Array):
-	for unit in units:
-		if unit.side == BattleControllerScript.Side.PLAYER and unit.is_alive():
-			return unit
-	return null
