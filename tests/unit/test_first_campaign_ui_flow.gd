@@ -319,3 +319,53 @@ func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_part
 		live_world_map.party_selected,
 		"a click pushed through the real pipeline on the REAL post-victory world map must select the party"
 	)
+
+
+## Covers 04-first-campaign-guidance.md's Red requirement directly: instance
+## the real World Map with its real CampaignGuide banner visible, then push
+## a real InputEventMouseButton (the same Viewport/GUI pipeline the test
+## above uses, not the private _handle_tile_click() shortcut) through a
+## board tile the banner's fixed top-left rect visually overlaps, and prove
+## the click still reaches the board and selects the party. This is the
+## regression the banner's MOUSE_FILTER_IGNORE tree exists to prevent.
+func test_campaign_guide_never_blocks_a_real_click_through_a_guided_world_map_region() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+	assert_true(GameSession.has_deployed_party())
+
+	# Move the party to a tile the guide's top-left banner rect (offset
+	# 16..332 x, 16..160 y -- see scenes/world/world_map.tscn) visually
+	# covers, so a click there is a genuine click-through-the-banner case.
+	var covered_position := Vector2i(1, 1)
+	GameSession.set_deployed_party_position(covered_position)
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_eq(world_map.party_position, covered_position)
+
+	var guide: Control = world_map.get_node("%CampaignGuide")
+	assert_eq(guide.mouse_filter, Control.MOUSE_FILTER_IGNORE, "the guide must never absorb input")
+	assert_eq(
+		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE,
+		"a freshly deployed party with no route yet should be showing the select-route guide"
+	)
+	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
+
+	var covered_pixel_center: Vector2 = Vector2(covered_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	assert_true(
+		guide.get_global_rect().has_point(covered_pixel_center),
+		"the covered tile must genuinely sit under the guide's rect, or this test proves nothing"
+	)
+
+	assert_false(world_map.party_selected)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = covered_pixel_center
+	world_map.get_viewport().push_input(click_event, true)
+
+	assert_true(
+		world_map.party_selected,
+		"a real click through the guided region must still select the party underneath the banner"
+	)

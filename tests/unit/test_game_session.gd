@@ -3087,3 +3087,128 @@ func test_import_campaign_snapshot_rejects_invalid_data_and_leaves_a_prepared_se
 
 	assert_false(result.ok)
 	assert_eq(_capture_durable_fields(), expected)
+
+
+## get_campaign_guide_state(): the derived, one-shot query behind the first-
+## campaign guide banner (see docs/plans/2026-08-10-initial-campaign-and-
+## automation/04-first-campaign-guidance.md and scripts/ui/campaign_guide.gd).
+## Walks the party-formed -> deployed -> route-selected -> site-entered ->
+## reward-banked -> first-improvement loop end to end, then checks
+## dismissal and the no-regression backfill separately.
+func test_campaign_guide_starts_by_asking_to_form_a_party() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+
+func test_campaign_guide_moves_to_deploy_once_a_party_exists() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_DEPLOY)
+
+
+func test_campaign_guide_moves_to_select_route_once_the_party_deploys() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE)
+
+
+func test_campaign_guide_moves_to_enter_site_once_the_party_reaches_an_active_encounter() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_ENTER_SITE)
+
+
+func test_campaign_guide_moves_to_return_bank_once_the_party_carries_a_reward() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+
+	assert_true(GameSession.pending_reward > 0)
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_RETURN_BANK)
+
+
+func test_campaign_guide_offers_the_first_affordable_improvement_once_the_reward_is_banked() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10  # guarantee an affordable recruit regardless of the rolled reward
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+
+func test_campaign_guide_clears_once_the_first_improvement_is_made() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = 10
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.purchase_recruit(GameSession.recruitment_candidates[0].id))
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+## A second expedition naturally un-deploys the party again (see
+## return_deployed_party_to_settlement()), which would otherwise make a
+## naive live-state check wrongly resurface "deploy your party" even though
+## the player is really just standing at the bank with gold to spend --
+## reaching a later stage must durably retire every earlier one so that
+## can never happen.
+func test_campaign_guide_reaching_a_later_stage_retires_every_earlier_one() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10
+
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_DEPLOY, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_ENTER_SITE, false))
+	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_RETURN_BANK, false))
+
+
+func test_record_campaign_guide_dismissal_retires_a_message_even_while_its_trigger_still_holds() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	GameSession.record_campaign_guide_dismissal(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+func test_campaign_guide_dismissal_survives_a_snapshot_round_trip() -> void:
+	GameSession.reset()
+	GameSession.record_campaign_guide_dismissal(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.get_campaign_guide_state(), "")

@@ -252,5 +252,18 @@ messages = {
 "loot_detail_panel.detail": "%s — %d in stock, sells for %d gold",
 "loot_detail_panel.sell": "Sell",
 "loot_detail_panel.equip": "Equip",
-"loot_detail_panel.close": "Close"
+"loot_detail_panel.close": "Close",
+"campaign_guide.dismiss": "Dismiss",
+"campaign_guide.form_party.message": "Form a party: open Units, then Parties, to create one and add an adventurer.",
+"campaign_guide.form_party.target": "Units -> Parties -> Create Party",
+"campaign_guide.deploy.message": "Your party is ready. Open Deploy Party and select it to head out.",
+"campaign_guide.deploy.target": "Encampment -> Deploy Party",
+"campaign_guide.select_route.message": "Click your party, then click a highlighted tile to set a route to a marked site.",
+"campaign_guide.select_route.target": "World Map",
+"campaign_guide.enter_site.message": "You've arrived. Click the party again to enter the site and start the battle.",
+"campaign_guide.enter_site.target": "World Map",
+"campaign_guide.return_bank.message": "Victory! Walk your party home and click the settlement to bank the reward.",
+"campaign_guide.return_bank.target": "World Map -> Settlement",
+"campaign_guide.first_improvement.message": "You have gold. Recruit an adventurer, buy equipment, or upgrade the Guild Hall.",
+"campaign_guide.first_improvement.target": "Encampment -> Units / Trade / Buildings"
 }

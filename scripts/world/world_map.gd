@@ -46,6 +46,7 @@ var repathing: bool = false
 @onready var turn_label: Label = %TurnLabel
 @onready var end_turn_button: Button = %EndTurnButton
 @onready var information_panel: PanelContainer = %InformationPanel
+@onready var campaign_guide: PanelContainer = %CampaignGuide
 
 
 func _ready() -> void:
@@ -59,6 +60,7 @@ func _ready() -> void:
 	_update_turn_label()
 	_refresh_turn_controls()
 	_refresh_information_panel()
+	_refresh_campaign_guide()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -213,6 +215,7 @@ func _on_end_turn_pressed() -> void:
 	_update_highlights()
 	_update_turn_label()
 	_refresh_turn_controls()
+	_refresh_campaign_guide()
 	board_changed.emit()
 
 
@@ -230,6 +233,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			party_selected = true
 			_update_highlights()
 			_refresh_information_panel()
+			_refresh_campaign_guide()
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
@@ -259,6 +263,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_routes()
 			_update_highlights()
 			_refresh_information_panel()
+			_refresh_campaign_guide()
 			return
 
 		party_selected = false
@@ -266,6 +271,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_routes()
 		_update_highlights()
 		_refresh_information_panel()
+		_refresh_campaign_guide()
 		return
 
 	if not party_selected:
@@ -279,6 +285,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
+			_refresh_campaign_guide()
 			board_changed.emit()
 		return
 
@@ -289,6 +296,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_markers()
 		_draw_routes()
 		_update_highlights()
+		_refresh_campaign_guide()
 
 
 func _on_encounter_activated(encounter_id: String) -> void:
@@ -438,6 +446,12 @@ func _refresh_information_panel() -> void:
 ## screen decides that pressing View Party opens Party Details.
 func _on_information_panel_party_selected(party_id: String) -> void:
 	GameManager.go_to_party_details(party_id)
+
+
+func _refresh_campaign_guide() -> void:
+	if not is_inside_tree():
+		return
+	campaign_guide.refresh()
 
 
 func _update_highlights() -> void:

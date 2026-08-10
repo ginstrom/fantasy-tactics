@@ -5,6 +5,26 @@ const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
 const RUINED_FORTRESS_ID := "ruined_fortress"
+
+# First-campaign guide message ids (see get_campaign_guide_state() near the
+# bottom of this file and docs/plans/2026-08-10-initial-campaign-and-
+# automation/04-first-campaign-guidance.md). Order matters: it's the
+# priority scan order get_campaign_guide_state() walks.
+const CAMPAIGN_GUIDE_FORM_PARTY := "form_party"
+const CAMPAIGN_GUIDE_DEPLOY := "deploy"
+const CAMPAIGN_GUIDE_SELECT_ROUTE := "select_route"
+const CAMPAIGN_GUIDE_ENTER_SITE := "enter_site"
+const CAMPAIGN_GUIDE_RETURN_BANK := "return_bank"
+const CAMPAIGN_GUIDE_FIRST_IMPROVEMENT := "first_improvement"
+const CAMPAIGN_GUIDE_SEQUENCE: Array[String] = [
+	CAMPAIGN_GUIDE_FORM_PARTY,
+	CAMPAIGN_GUIDE_DEPLOY,
+	CAMPAIGN_GUIDE_SELECT_ROUTE,
+	CAMPAIGN_GUIDE_ENTER_SITE,
+	CAMPAIGN_GUIDE_RETURN_BANK,
+	CAMPAIGN_GUIDE_FIRST_IMPROVEMENT,
+]
+
 const EXPEDITIONS: Dictionary = {
 	"goblin_camp": {
 		"position": Vector2i(4, 4),
@@ -1677,3 +1697,111 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result
+
+
+## Derived, one-shot guide-state query for the first campaign's opening
+## reward-to-improvement loop (see docs/plans/2026-08-10-initial-campaign-
+## and-automation/04-first-campaign-guidance.md): form a party, deploy it,
+## select/commit a route, enter the first site, return home to bank the
+## reward, then choose the first affordable improvement. Scans
+## CAMPAIGN_GUIDE_SEQUENCE and returns whichever id's contextual trigger
+## currently holds and has not already been dismissed via
+## record_campaign_guide_dismissal(); "" means nothing is due right now.
+##
+## When several ids are simultaneously triggered, the *latest* one in the
+## sequence wins rather than the first -- e.g. the deployed party
+## inevitably un-deploys again on the walk home after the very first
+## expedition (see return_deployed_party_to_settlement()), which would
+## otherwise make a naive first-match scan wrongly resurface "deploy your
+## party" the moment the player is really just standing at the bank with
+## gold to spend. Reaching a later id therefore also durably retires every
+## earlier, still-pending id in tutorial_progress -- the one narrow,
+## guide-scoped write this query performs -- so a message already
+## demonstrated can never resurface even if campaign state later cycles
+## back through a similar-looking condition.
+func get_campaign_guide_state() -> String:
+	var active_id := ""
+	var active_index := -1
+	for index in CAMPAIGN_GUIDE_SEQUENCE.size():
+		var guide_id: String = CAMPAIGN_GUIDE_SEQUENCE[index]
+		if tutorial_progress.get(guide_id, false):
+			continue
+		if index > active_index and _is_campaign_guide_triggered(guide_id):
+			active_id = guide_id
+			active_index = index
+
+	if active_index == -1:
+		return ""
+
+	for index in active_index:
+		tutorial_progress[CAMPAIGN_GUIDE_SEQUENCE[index]] = true
+	return active_id
+
+
+func _is_campaign_guide_triggered(guide_id: String) -> bool:
+	match guide_id:
+		CAMPAIGN_GUIDE_FORM_PARTY:
+			return parties.is_empty()
+		CAMPAIGN_GUIDE_DEPLOY:
+			return not parties.is_empty() and not has_deployed_party()
+		CAMPAIGN_GUIDE_SELECT_ROUTE:
+			return (
+				has_deployed_party() and selected_encounter == ""
+				and get_deployed_party_route().is_empty()
+				and not _campaign_guide_party_on_active_encounter()
+			)
+		CAMPAIGN_GUIDE_ENTER_SITE:
+			return (
+				has_deployed_party() and selected_encounter == ""
+				and _campaign_guide_party_on_active_encounter()
+			)
+		CAMPAIGN_GUIDE_RETURN_BANK:
+			return has_deployed_party() and selected_encounter == "" and pending_reward > 0
+		CAMPAIGN_GUIDE_FIRST_IMPROVEMENT:
+			return (
+				not has_deployed_party() and gold > 0
+				and not _campaign_guide_first_improvement_made()
+				and _campaign_guide_has_affordable_improvement()
+			)
+	return false
+
+
+## True once the deployed party is standing on a tile that still names a
+## live, uncleared active-encounter instance -- mirrors world_map.gd's own
+## _expedition_id_at() lookup against GameSession.get_active_encounters().
+func _campaign_guide_party_on_active_encounter() -> bool:
+	var position := get_deployed_party_position()
+	for record in get_active_encounters():
+		if record.position == position:
+			return true
+	return false
+
+
+## Monotonic proxy for "the player has already made at least one of the
+## three improvements the manual verification flow names (recruit,
+## equipment, Guild Hall)". Equipment purchases (buy_item()) require
+## has_trading_post already being true, so that flag alone also covers the
+## equipment case without needing to inspect banked_gear, which loot pickups
+## populate too and would otherwise be a false positive.
+func _campaign_guide_first_improvement_made() -> bool:
+	return guild_hall_level > 1 or has_trading_post or adventurers.size() > 1
+
+
+func _campaign_guide_has_affordable_improvement() -> bool:
+	if can_upgrade_guild_hall() or can_purchase_trading_post():
+		return true
+	for candidate in recruitment_candidates:
+		if gold >= int(candidate.get("cost", 0)):
+			return true
+	return false
+
+
+## Explicit player action from the guide banner's Dismiss button (see
+## scripts/ui/campaign_guide.gd) -- durably retires guide_id so
+## get_campaign_guide_state() never returns it again this campaign,
+## independent of whether its trigger condition is still true. The only
+## other write to tutorial_progress is get_campaign_guide_state()'s own
+## backfill of earlier ids; this is the only one a screen ever calls
+## directly.
+func record_campaign_guide_dismissal(guide_id: String) -> void:
+	tutorial_progress[guide_id] = true
