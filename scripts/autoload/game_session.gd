@@ -388,6 +388,11 @@ var battle_mana_crystals: Dictionary = {}
 var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
 var player_name: String = DEFAULT_PLAYER_NAME
+# Compact durable record of which first-campaign guide messages have already
+# been shown/dismissed (see docs/plans/2026-08-10-initial-campaign-and-
+# automation/04-first-campaign-guidance.md's get_campaign_guide_state()). An
+# arbitrary id -> bool map, empty until that step starts writing to it.
+var tutorial_progress: Dictionary = {}
 
 
 func _init() -> void:
@@ -455,6 +460,7 @@ func reset() -> void:
 	battle_gear = {}
 	has_trading_post = false
 	player_name = DEFAULT_PLAYER_NAME
+	tutorial_progress = {}
 
 
 func create_party(party_name: String = "Party 1") -> bool:
@@ -1590,3 +1596,77 @@ func get_effective_resistance(adventurer_id: String) -> int:
 		return 0
 	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
 	return 0 if armor.is_empty() else int(armor.resistance)
+
+
+## Exports every durable field this session owns as a versioned, deep-copy-
+## safe, JSON-safe Dictionary (see CampaignSnapshot). No disk I/O and no
+## reward-banking side effects -- battle_reward/pending_reward are carried
+## across exactly as they stand, never merged or deposited.
+func export_campaign_snapshot() -> Dictionary:
+	var snapshot := CampaignSnapshot.new()
+	snapshot.adventurers = adventurers.duplicate(true)
+	snapshot.recruitment_candidates = recruitment_candidates.duplicate(true)
+	snapshot.recruitment_vacancies = recruitment_vacancies.duplicate(true)
+	snapshot.parties = parties.duplicate(true)
+	snapshot.selected_party_id = selected_party_id
+	snapshot.selected_encounter = selected_encounter
+	snapshot.completed_encounters = completed_encounters.duplicate(true)
+	snapshot.active_encounters = active_encounters.duplicate(true)
+	snapshot.encounter_vacancies = encounter_vacancies.duplicate(true)
+	snapshot.used_encounter_template_ids = _used_encounter_template_ids.duplicate(true)
+	snapshot.world_turn = world_turn
+	snapshot.gold = gold
+	snapshot.guild_hall_level = guild_hall_level
+	snapshot.pending_reward = pending_reward
+	snapshot.mana_crystals = mana_crystals.duplicate(true)
+	snapshot.banked_gear = banked_gear.duplicate(true)
+	snapshot.pending_mana_crystals = pending_mana_crystals.duplicate(true)
+	snapshot.pending_gear = pending_gear.duplicate(true)
+	snapshot.battle_reward = battle_reward
+	snapshot.battle_mana_crystals = battle_mana_crystals.duplicate(true)
+	snapshot.battle_gear = battle_gear.duplicate(true)
+	snapshot.has_trading_post = has_trading_post
+	snapshot.player_name = player_name
+	snapshot.tutorial_progress = tutorial_progress.duplicate(true)
+	return snapshot.to_dictionary()
+
+
+## All-or-nothing import: validates and normalizes data into a separate
+## Dictionary (see CampaignSnapshot.from_dictionary()) and only assigns this
+## session's own fields once that normalization reports "ok": true, so a
+## rejected import never partially lands. Returns the same
+## { "ok", "snapshot", "error" } result CampaignSnapshot.from_dictionary()
+## produced, for the caller to inspect. Never calls
+## merge_battle_loot_into_party() or deposit_pending_reward() -- carried
+## rewards are restored exactly as exported, never banked.
+func import_campaign_snapshot(data: Dictionary) -> Dictionary:
+	var result := CampaignSnapshot.from_dictionary(data)
+	if not result.ok:
+		return result
+
+	var snapshot: Dictionary = result.snapshot
+	adventurers = snapshot.adventurers
+	recruitment_candidates = snapshot.recruitment_candidates
+	recruitment_vacancies = snapshot.recruitment_vacancies
+	parties = snapshot.parties
+	selected_party_id = snapshot.selected_party_id
+	selected_encounter = snapshot.selected_encounter
+	completed_encounters = snapshot.completed_encounters
+	active_encounters = snapshot.active_encounters
+	encounter_vacancies = snapshot.encounter_vacancies
+	_used_encounter_template_ids = snapshot.used_encounter_template_ids
+	world_turn = snapshot.world_turn
+	gold = snapshot.gold
+	guild_hall_level = snapshot.guild_hall_level
+	pending_reward = snapshot.pending_reward
+	mana_crystals = snapshot.mana_crystals
+	banked_gear = snapshot.banked_gear
+	pending_mana_crystals = snapshot.pending_mana_crystals
+	pending_gear = snapshot.pending_gear
+	battle_reward = snapshot.battle_reward
+	battle_mana_crystals = snapshot.battle_mana_crystals
+	battle_gear = snapshot.battle_gear
+	has_trading_post = snapshot.has_trading_post
+	player_name = snapshot.player_name
+	tutorial_progress = snapshot.tutorial_progress
+	return result

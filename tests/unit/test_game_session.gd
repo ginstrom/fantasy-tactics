@@ -2922,3 +2922,145 @@ func test_a_vacancy_refill_can_produce_the_ruined_fortress() -> void:
 	for instance in GameSession.active_encounters:
 		template_ids.append(instance.template_id)
 	assert_true(template_ids.has(GameSession.RUINED_FORTRESS_ID))
+
+
+## Every durable field export_campaign_snapshot()/import_campaign_snapshot()
+## carry -- see CampaignSnapshot. Captured field-by-field (rather than
+## compared against a pre-serialized dictionary) so a test failure names
+## exactly which category regressed.
+func _capture_durable_fields() -> Dictionary:
+	return {
+		"adventurers": GameSession.adventurers.duplicate(true),
+		"recruitment_candidates": GameSession.recruitment_candidates.duplicate(true),
+		"recruitment_vacancies": GameSession.recruitment_vacancies.duplicate(true),
+		"parties": GameSession.parties.duplicate(true),
+		"selected_party_id": GameSession.selected_party_id,
+		"selected_encounter": GameSession.selected_encounter,
+		"completed_encounters": GameSession.completed_encounters.duplicate(true),
+		"active_encounters": GameSession.active_encounters.duplicate(true),
+		"encounter_vacancies": GameSession.encounter_vacancies.duplicate(true),
+		"world_turn": GameSession.world_turn,
+		"gold": GameSession.gold,
+		"guild_hall_level": GameSession.guild_hall_level,
+		"pending_reward": GameSession.pending_reward,
+		"mana_crystals": GameSession.mana_crystals.duplicate(true),
+		"banked_gear": GameSession.banked_gear.duplicate(true),
+		"pending_mana_crystals": GameSession.pending_mana_crystals.duplicate(true),
+		"pending_gear": GameSession.pending_gear.duplicate(true),
+		"battle_reward": GameSession.battle_reward,
+		"battle_mana_crystals": GameSession.battle_mana_crystals.duplicate(true),
+		"battle_gear": GameSession.battle_gear.duplicate(true),
+		"has_trading_post": GameSession.has_trading_post,
+		"player_name": GameSession.player_name,
+		"tutorial_progress": GameSession.tutorial_progress.duplicate(true),
+	}
+
+
+func test_import_keeps_carried_rewards_unbanked() -> void:
+	GameSession.pending_reward = 17
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.pending_reward, 17)
+	assert_eq(GameSession.gold, 0)
+
+
+## Exercises every durable category the snapshot contract covers: roster/
+## progression/equipment, parties/routes, selected ids, world turn,
+## encounter instances/completions/vacancies, recruitment offers/vacancies,
+## gold/buildings, every battle/pending/banked reward store, player name,
+## and tutorial progress.
+func test_export_then_reset_then_import_restores_the_full_session() -> void:
+	GameSession.start_new_game("Ryan")
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.recruit_adventurer()
+	GameSession.depart_selected_party()
+	GameSession.set_deployed_party_position(Vector2i(4, 3))
+	GameSession.set_deployed_party_route([Vector2i(4, 4)])
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.completed_encounters = ["orc_outpost"]
+	GameSession.encounter_vacancies = [{"turns_remaining": 3}]
+	GameSession.recruitment_vacancies = [{"turns_remaining": 6}]
+	GameSession.world_turn = 5
+	GameSession.gold = 123
+	GameSession.guild_hall_level = 2
+	GameSession.pending_reward = 9
+	GameSession.mana_crystals = {1: 2}
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	GameSession.pending_mana_crystals = {2: 1}
+	GameSession.pending_gear = {"longsword_iron": 1}
+	GameSession.battle_reward = 4
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.has_trading_post = true
+	GameSession.tutorial_progress = {"formed_party": true}
+	var expected := _capture_durable_fields()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(_capture_durable_fields(), expected)
+
+
+func test_export_campaign_snapshot_deep_copies_so_mutating_it_does_not_affect_the_session() -> void:
+	GameSession.create_party()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.parties[0].name = "Mutated"
+	snapshot.gold = 999
+
+	assert_ne(GameSession.get_selected_party().name, "Mutated")
+	assert_eq(GameSession.gold, 0)
+
+
+func test_import_campaign_snapshot_deep_copies_so_mutating_the_session_afterward_does_not_affect_the_source_data() -> void:
+	GameSession.create_party()
+	var snapshot := GameSession.export_campaign_snapshot()
+
+	GameSession.reset()
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	GameSession.parties[0].name = "Mutated"
+	GameSession.gold = 999
+
+	assert_ne(snapshot.parties[0].name, "Mutated")
+	assert_ne(snapshot.gold, 999)
+
+
+func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
+	GameSession.battle_reward = 3
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.pending_reward = 7
+	GameSession.pending_gear = {"longsword_iron": 1}
+	GameSession.pending_mana_crystals = {2: 1}
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.banked_gear, {})
+	assert_eq(GameSession.mana_crystals, {})
+	assert_eq(GameSession.battle_reward, 3)
+	assert_eq(GameSession.battle_gear, {"dagger_iron": 1})
+	assert_eq(GameSession.battle_mana_crystals, {1: 1})
+	assert_eq(GameSession.pending_reward, 7)
+	assert_eq(GameSession.pending_gear, {"longsword_iron": 1})
+	assert_eq(GameSession.pending_mana_crystals, {2: 1})
+
+
+func test_import_campaign_snapshot_rejects_invalid_data_and_leaves_a_prepared_session_unchanged() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.gold = 55
+	var expected := _capture_durable_fields()
+
+	var invalid_data := GameSession.export_campaign_snapshot()
+	invalid_data.erase("version")
+	var result := GameSession.import_campaign_snapshot(invalid_data)
+
+	assert_false(result.ok)
+	assert_eq(_capture_durable_fields(), expected)
