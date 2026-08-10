@@ -45,6 +45,8 @@ var guild_hall_level: int = 1
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
+var owned_item_instances: Dictionary = {}
+var banked_item_instance_ids: Array[String] = []
 var pending_mana_crystals: Dictionary = {}
 var pending_gear: Dictionary = {}
 var battle_reward: int = 0
@@ -82,6 +84,8 @@ func to_dictionary() -> Dictionary:
 		"pending_reward": pending_reward,
 		"mana_crystals": mana_crystals.duplicate(true),
 		"banked_gear": banked_gear.duplicate(true),
+		"owned_item_instances": owned_item_instances.duplicate(true),
+		"banked_item_instance_ids": banked_item_instance_ids.duplicate(),
 		"pending_mana_crystals": pending_mana_crystals.duplicate(true),
 		"pending_gear": pending_gear.duplicate(true),
 		"battle_reward": battle_reward,
@@ -175,6 +179,19 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if not data.get(dict_key) is Dictionary:
 			return _invalid("%s is not a dictionary" % dict_key)
 		normalized[dict_key] = (data[dict_key] as Dictionary).duplicate(true)
+
+	# Version-one saves predate owned instances; normalize their absent fields
+	# to empty collections so loading an existing campaign remains safe.
+	for dict_key in ["owned_item_instances"]:
+		if data.has(dict_key) and not data[dict_key] is Dictionary:
+			return _invalid("%s is not a dictionary" % dict_key)
+		normalized[dict_key] = (data.get(dict_key, {}) as Dictionary).duplicate(true)
+	if data.has("banked_item_instance_ids") and not data.banked_item_instance_ids is Array:
+		return _invalid("banked_item_instance_ids is not an array")
+	var instance_ids_result := _normalize_string_array(data.get("banked_item_instance_ids", []), "banked_item_instance_ids")
+	if not instance_ids_result.ok:
+		return _invalid(instance_ids_result.error)
+	normalized["banked_item_instance_ids"] = instance_ids_result.list
 
 	var tutorial_progress_result := _normalize_tutorial_progress(data.get("tutorial_progress"))
 	if not tutorial_progress_result.ok:

@@ -23,7 +23,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
-	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, GameSession.mana_crystals))
+	loot_table.set_rows(GameSession.build_loot_rows(
+		GameSession.banked_gear, GameSession.mana_crystals, GameSession.banked_item_instance_ids
+	))
 
 
 func _on_equip_requested(item_id: String) -> void:

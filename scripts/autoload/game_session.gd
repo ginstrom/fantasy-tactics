@@ -401,6 +401,11 @@ var guild_hall_level: int = 1
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
+# Permanent improvements materialize a normal stack entry into one of these
+# unique records.  Normal gear deliberately remains in banked_gear so Stores
+# can retain its compact stack-based representation.
+var owned_item_instances: Dictionary = {}
+var banked_item_instance_ids: Array[String] = []
 var pending_mana_crystals: Dictionary = {}
 var pending_gear: Dictionary = {}
 var battle_reward: int = 0
@@ -473,6 +478,8 @@ func reset() -> void:
 	pending_reward = 0
 	mana_crystals = {}
 	banked_gear = {}
+	owned_item_instances = {}
+	banked_item_instance_ids = []
 	pending_mana_crystals = {}
 	pending_gear = {}
 	battle_reward = 0
@@ -1036,11 +1043,61 @@ func get_expedition(encounter_id: String) -> Dictionary:
 ## way (an empty Dictionary for an unknown id, matching get_adventurer()'s
 ## and get_party()'s not-found convention).
 func get_item_definition(item_id: String) -> Dictionary:
+	if owned_item_instances.has(item_id):
+		return get_item_definition(str(owned_item_instances[item_id].base_item_id))
 	if WEAPONS.has(item_id):
 		return WEAPONS[item_id].duplicate(true)
 	if ARMORS.has(item_id):
 		return ARMORS[item_id].duplicate(true)
 	return {}
+
+
+## Converts exactly one normal banked item into a unique owned instance.  The
+## later crafting slices supply the modifier and recipe calls; this boundary
+## establishes the ownership transfer they will rely on.  Every validation is
+## intentionally before the first mutation so a failed conversion is atomic.
+func materialize_banked_item_instance(base_item_id: String, instance_id: String) -> bool:
+	if instance_id.is_empty() or owned_item_instances.has(instance_id):
+		return false
+	if banked_gear.get(base_item_id, 0) <= 0:
+		return false
+	if get_item_definition(base_item_id).is_empty():
+		return false
+	banked_gear[base_item_id] -= 1
+	owned_item_instances[instance_id] = {
+		"id": instance_id,
+		"base_item_id": base_item_id,
+		"treatment_id": "",
+		"enhancement_id": "",
+		"rune_id": "",
+		"modifier_tiers": {},
+	}
+	banked_item_instance_ids.append(instance_id)
+	return true
+
+
+## Assigns one permanent modifier category.  Categories deliberately map to
+## the handbook's persisted fields; a strictly lower tier cannot downgrade a
+## unique item, while equal-or-higher tiers replace that category only.
+func set_item_instance_modifier(instance_id: String, category: String, modifier_id: String, tier: int) -> bool:
+	if not owned_item_instances.has(instance_id) or modifier_id.is_empty() or tier <= 0:
+		return false
+	var field_by_category := {
+		"treatment": "treatment_id",
+		"enhancement": "enhancement_id",
+		"rune": "rune_id",
+	}
+	if not field_by_category.has(category):
+		return false
+	var instance: Dictionary = owned_item_instances[instance_id].duplicate(true)
+	var tiers: Dictionary = instance.modifier_tiers
+	if tier < int(tiers.get(category, 0)):
+		return false
+	instance[field_by_category[category]] = modifier_id
+	tiers[category] = tier
+	instance["modifier_tiers"] = tiers
+	owned_item_instances[instance_id] = instance
+	return true
 
 
 const MANA_CRYSTAL_ID_PREFIX := "mana_crystal_"
@@ -1064,7 +1121,7 @@ func get_item_sale_price(item_id: String) -> int:
 ## Map's Party Details screen (pending_gear/pending_mana_crystals), each
 ## backed by a different pair of GameSession fields but sharing this exact
 ## row shape and this exact pricing/naming logic.
-func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary) -> Array[Dictionary]:
+func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary, item_instance_ids: Array = []) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	for item_id in gear_counts:
 		var count: int = gear_counts[item_id]
@@ -1077,6 +1134,17 @@ func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary) -
 			"type": tr("stores.type.%s" % item.slot),
 			"count": count,
 			"price": get_item_sale_price(item_id),
+		})
+	for instance_id in item_instance_ids:
+		var instance_item := get_item_definition(instance_id)
+		if instance_item.is_empty():
+			continue
+		rows.append({
+			"id": instance_id,
+			"name": tr(instance_item.name_key),
+			"type": tr("stores.type.%s" % instance_item.slot),
+			"count": 1,
+			"price": get_item_sale_price(instance_id),
 		})
 	for tier in mana_crystal_counts:
 		var count: int = mana_crystal_counts[tier]
@@ -1107,6 +1175,14 @@ func sell_item(item_id: String, quantity: int = 1) -> bool:
 		mana_crystals[tier] -= quantity
 		gold += get_item_sale_price(item_id) * quantity
 		return true
+	if owned_item_instances.has(item_id):
+		if quantity != 1 or not banked_item_instance_ids.has(item_id):
+			return false
+		var sale_price := get_item_sale_price(item_id)
+		banked_item_instance_ids.erase(item_id)
+		owned_item_instances.erase(item_id)
+		gold += sale_price
+		return true
 	if banked_gear.get(item_id, 0) < quantity:
 		return false
 	banked_gear[item_id] -= quantity
@@ -1119,7 +1195,9 @@ func sell_item(item_id: String, quantity: int = 1) -> bool:
 func buy_item(item_id: String) -> bool:
 	if not has_trading_post:
 		return false
-	var item := get_item_definition(item_id)
+	# Buying is a catalog operation: an owned instance must never be treated as
+	# a template and turned into a second stack entry.
+	var item: Dictionary = WEAPONS.get(item_id, ARMORS.get(item_id, {}))
 	if item.is_empty() or gold < int(item.price):
 		return false
 	gold -= int(item.price)
@@ -1131,7 +1209,26 @@ func buy_item(item_id: String) -> bool:
 ## for the shared add-and-activate logic -- this is identical to
 ## equip_item_from_party_store() below except which pool it draws from.
 func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
+	if owned_item_instances.has(item_id):
+		return _equip_item_instance_from_bank(adventurer_id, item_id)
 	return _equip_item_from(banked_gear, adventurer_id, item_id)
+
+
+func _equip_item_instance_from_bank(adventurer_id: String, instance_id: String) -> bool:
+	if not banked_item_instance_ids.has(instance_id):
+		return false
+	var item := get_item_definition(instance_id)
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if item.is_empty() or adventurer_index == -1:
+		return false
+	var slot: String = item.slot
+	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]
+	if inventory.has(instance_id):
+		return false
+	banked_item_instance_ids.erase(instance_id)
+	inventory.append(instance_id)
+	adventurers[adventurer_index].equipment[slot] = instance_id
+	return true
 
 
 ## Requires item_id to currently be in the party's own store (pending_gear
@@ -1183,7 +1280,8 @@ func activate_carried_item(adventurer_id: String, slot: String, item_id: String)
 	if not equipment.has(inventory_key):
 		return false
 	var inventory: Array = equipment[inventory_key]
-	if not inventory.has(item_id):
+	var item := get_item_definition(item_id)
+	if not inventory.has(item_id) or item.is_empty() or item.slot != slot:
 		return false
 	adventurers[adventurer_index].equipment[slot] = item_id
 	return true
@@ -1207,7 +1305,10 @@ func unequip_to_bank(adventurer_id: String, slot: String, item_id: String) -> bo
 	if not inventory.has(item_id) or equipment.get(slot, "") == item_id:
 		return false
 	inventory.erase(item_id)
-	banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
+	if owned_item_instances.has(item_id):
+		banked_item_instance_ids.append(item_id)
+	else:
+		banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
 	return true
 
 
@@ -1593,7 +1694,7 @@ func get_effective_weapon_damage_range(adventurer_id: String) -> Vector2i:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return Vector2i.ZERO
-	var weapon: Dictionary = WEAPONS.get(adventurer.equipment.weapon, {})
+	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
 	if weapon.is_empty():
 		return Vector2i.ZERO
 	return Vector2i(weapon.damage_min, weapon.damage_max)
@@ -1603,7 +1704,7 @@ func get_effective_weapon_name(adventurer_id: String) -> String:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return ""
-	var weapon: Dictionary = WEAPONS.get(adventurer.equipment.weapon, {})
+	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
 	return "" if weapon.is_empty() else tr(weapon.name_key)
 
 
@@ -1611,7 +1712,7 @@ func get_effective_armor_name(adventurer_id: String) -> String:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return ""
-	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
 	return "" if armor.is_empty() else tr(armor.name_key)
 
 
@@ -1619,7 +1720,7 @@ func get_effective_defense(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
 	return 0 if armor.is_empty() else int(armor.defense)
 
 
@@ -1627,7 +1728,7 @@ func get_effective_resistance(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	var armor: Dictionary = ARMORS.get(adventurer.equipment.armor, {})
+	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
 	return 0 if armor.is_empty() else int(armor.resistance)
 
 
@@ -1653,6 +1754,8 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.pending_reward = pending_reward
 	snapshot.mana_crystals = mana_crystals.duplicate(true)
 	snapshot.banked_gear = banked_gear.duplicate(true)
+	snapshot.owned_item_instances = owned_item_instances.duplicate(true)
+	snapshot.banked_item_instance_ids = banked_item_instance_ids.duplicate()
 	snapshot.pending_mana_crystals = pending_mana_crystals.duplicate(true)
 	snapshot.pending_gear = pending_gear.duplicate(true)
 	snapshot.battle_reward = battle_reward
@@ -1685,6 +1788,9 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 		return result
 
 	var snapshot: Dictionary = result.snapshot
+	var owned_instance_error := _validate_owned_item_instance_ownership(snapshot)
+	if not owned_instance_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": owned_instance_error}
 	adventurers = snapshot.adventurers.duplicate(true)
 	recruitment_candidates = snapshot.recruitment_candidates.duplicate(true)
 	recruitment_vacancies = snapshot.recruitment_vacancies.duplicate(true)
@@ -1701,6 +1807,8 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	pending_reward = snapshot.pending_reward
 	mana_crystals = snapshot.mana_crystals.duplicate(true)
 	banked_gear = snapshot.banked_gear.duplicate(true)
+	owned_item_instances = snapshot.owned_item_instances.duplicate(true)
+	banked_item_instance_ids.assign(snapshot.banked_item_instance_ids)
 	pending_mana_crystals = snapshot.pending_mana_crystals.duplicate(true)
 	pending_gear = snapshot.pending_gear.duplicate(true)
 	battle_reward = snapshot.battle_reward
@@ -1710,6 +1818,65 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result
+
+
+## Owned instances have exactly one location: Stores or one matching-slot
+## adventurer inventory.  Validate the complete imported graph before
+## assigning any field, preserving import_campaign_snapshot()'s all-or-
+## nothing promise for malformed or hand-edited save data.
+func _validate_owned_item_instance_ownership(snapshot: Dictionary) -> String:
+	var locations: Dictionary = {}
+	for raw_id in snapshot.owned_item_instances:
+		var instance_id := str(raw_id)
+		var instance = snapshot.owned_item_instances[raw_id]
+		if not instance is Dictionary or instance.get("id") != instance_id:
+			return "owned item instance has an invalid id"
+		for field_name in ["base_item_id", "treatment_id", "enhancement_id", "rune_id"]:
+			if not instance.get(field_name) is String:
+				return "owned item instance has an invalid %s" % field_name
+		if not instance.get("modifier_tiers") is Dictionary:
+			return "owned item instance has invalid modifier tiers"
+		for category in instance.modifier_tiers:
+			if category not in ["treatment", "enhancement", "rune"]:
+				return "owned item instance has an unknown modifier category"
+			if not instance.modifier_tiers[category] is int or int(instance.modifier_tiers[category]) <= 0:
+				return "owned item instance has an invalid modifier tier"
+		var base_item_id := str(instance.get("base_item_id", ""))
+		if not WEAPONS.has(base_item_id) and not ARMORS.has(base_item_id):
+			return "owned item instance has an unknown base item"
+		locations[instance_id] = 0
+
+	for raw_id in snapshot.banked_item_instance_ids:
+		var instance_id := str(raw_id)
+		if not locations.has(instance_id):
+			return "banked owned item instance is unknown"
+		locations[instance_id] += 1
+
+	for adventurer in snapshot.adventurers:
+		var equipment = adventurer.get("equipment", {})
+		if not equipment is Dictionary:
+			continue
+		for slot in ["weapon", "armor"]:
+			var inventory = equipment.get("%s_inventory" % slot, [])
+			if not inventory is Array:
+				continue
+			var active_item_id := str(equipment.get(slot, ""))
+			if locations.has(active_item_id) and not inventory.has(active_item_id):
+				return "active owned item instance is missing from its inventory"
+			for raw_id in inventory:
+				var instance_id := str(raw_id)
+				if not locations.has(instance_id):
+					continue
+				var base_item_id := str(snapshot.owned_item_instances[instance_id].base_item_id)
+				var item_slot: String = str(get_item_definition(base_item_id).slot)
+				if item_slot != slot:
+					return "owned item instance is in an incompatible inventory"
+				locations[instance_id] += 1
+
+	for instance_id in locations:
+		if locations[instance_id] != 1:
+			return "owned item instance must have exactly one location"
+	return ""
 
 
 ## Derived, one-shot guide-state query for the first campaign's opening

@@ -3420,3 +3420,165 @@ func test_campaign_guide_dismissal_survives_a_snapshot_round_trip() -> void:
 
 	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
 	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+## --- Owned equipment instances ----------------------------------------------
+
+func test_materializing_a_banked_base_item_creates_one_unique_owned_instance() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"longsword_iron": 1}
+
+	assert_true(GameSession.materialize_banked_item_instance("longsword_iron", "gear_00042"))
+	assert_eq(GameSession.banked_gear, {"longsword_iron": 0})
+	assert_eq(GameSession.owned_item_instances.gear_00042, {
+		"id": "gear_00042",
+		"base_item_id": "longsword_iron",
+		"treatment_id": "",
+		"enhancement_id": "",
+		"rune_id": "",
+		"modifier_tiers": {},
+	})
+	assert_eq(GameSession.banked_item_instance_ids, ["gear_00042"])
+
+
+func test_materializing_a_duplicate_instance_id_rejects_without_consuming_the_base_item() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"longsword_iron": 2}
+
+	assert_true(GameSession.materialize_banked_item_instance("longsword_iron", "gear_00042"))
+	var instances_before: Dictionary = GameSession.owned_item_instances.duplicate(true)
+	var banked_instances_before: Array = GameSession.banked_item_instance_ids.duplicate()
+
+	assert_false(GameSession.materialize_banked_item_instance("longsword_iron", "gear_00042"))
+	assert_eq(GameSession.banked_gear, {"longsword_iron": 1})
+	assert_eq(GameSession.owned_item_instances, instances_before)
+	assert_eq(GameSession.banked_item_instance_ids, banked_instances_before)
+
+
+func test_an_advanced_modifier_replaces_its_lower_tier_while_other_categories_stack() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"longsword_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("longsword_iron", "gear_00042"))
+
+	assert_true(GameSession.set_item_instance_modifier("gear_00042", "treatment", "sharpened", 1))
+	assert_true(GameSession.set_item_instance_modifier("gear_00042", "enhancement", "accuracy_basic", 1))
+	assert_true(GameSession.set_item_instance_modifier("gear_00042", "enhancement", "accuracy_advanced", 2))
+
+	var instance: Dictionary = GameSession.owned_item_instances.gear_00042
+	assert_eq(instance.treatment_id, "sharpened")
+	assert_eq(instance.enhancement_id, "accuracy_advanced")
+	assert_eq(instance.modifier_tiers, {"treatment": 1, "enhancement": 2})
+
+
+func test_a_lower_modifier_tier_is_rejected_without_mutating_the_owned_instance() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"longsword_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("longsword_iron", "gear_00042"))
+	assert_true(GameSession.set_item_instance_modifier("gear_00042", "enhancement", "accuracy_advanced", 2))
+	var before: Dictionary = GameSession.owned_item_instances.gear_00042.duplicate(true)
+
+	assert_false(GameSession.set_item_instance_modifier("gear_00042", "enhancement", "accuracy_basic", 1))
+	assert_eq(GameSession.owned_item_instances.gear_00042, before)
+
+
+func test_an_owned_instance_transfers_from_stores_to_an_adventurer_and_can_be_reactivated() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "gear_00042"))
+	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
+	assert_eq(equipment.weapon, "gear_00042")
+	assert_eq(equipment.weapon_inventory, [GameSession.DEFAULT_WEAPON_ID, "gear_00042"])
+	assert_eq(GameSession.banked_item_instance_ids, [])
+	assert_eq(GameSession.get_effective_weapon_damage_range(GameSession.WARRIOR_ID), Vector2i(1, 4))
+	assert_true(GameSession.activate_carried_item(GameSession.WARRIOR_ID, "weapon", GameSession.DEFAULT_WEAPON_ID))
+	assert_true(GameSession.activate_carried_item(GameSession.WARRIOR_ID, "weapon", "gear_00042"))
+	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "gear_00042")
+
+
+func test_owned_instances_survive_a_campaign_snapshot_round_trip_without_aliasing() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+	assert_true(GameSession.set_item_instance_modifier("gear_00042", "treatment", "sharpened", 1))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.owned_item_instances.gear_00042.treatment_id, "sharpened")
+	assert_eq(GameSession.banked_item_instance_ids, ["gear_00042"])
+	snapshot.owned_item_instances.gear_00042.treatment_id = "mutated"
+	assert_eq(GameSession.owned_item_instances.gear_00042.treatment_id, "sharpened")
+
+
+func test_selling_a_banked_owned_instance_removes_its_record_exactly_once() -> void:
+	GameSession.reset()
+	GameSession.has_trading_post = true
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+
+	assert_true(GameSession.sell_item("gear_00042"))
+	assert_eq(GameSession.gold, 5)
+	assert_false(GameSession.owned_item_instances.has("gear_00042"))
+	assert_eq(GameSession.banked_item_instance_ids, [])
+	assert_false(GameSession.sell_item("gear_00042"))
+	assert_eq(GameSession.gold, 5)
+
+
+func test_import_rejects_an_owned_instance_in_two_locations_without_mutating_live_state() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0].equipment.weapon_inventory.append("gear_00042")
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "owned item instance")
+	assert_eq(_capture_durable_fields(), before)
+
+
+func test_buying_an_owned_instance_id_is_rejected_without_creating_a_stack_entry() -> void:
+	GameSession.reset()
+	GameSession.has_trading_post = true
+	GameSession.gold = 10
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+
+	assert_false(GameSession.buy_item("gear_00042"))
+	assert_eq(GameSession.gold, 10)
+	assert_eq(GameSession.banked_gear, {"dagger_iron": 0})
+	assert_eq(GameSession.banked_item_instance_ids, ["gear_00042"])
+
+
+func test_import_rejects_an_active_owned_instance_pointer_missing_from_its_inventory() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0].equipment.weapon = "gear_00042"
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "active owned item instance")
+	assert_eq(_capture_durable_fields(), before)
+
+
+func test_import_rejects_an_owned_instance_with_malformed_modifier_data() -> void:
+	GameSession.reset()
+	GameSession.banked_gear = {"dagger_iron": 1}
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "gear_00042"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.owned_item_instances.gear_00042.modifier_tiers = "not a dictionary"
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "modifier tiers")
+	assert_eq(_capture_durable_fields(), before)
