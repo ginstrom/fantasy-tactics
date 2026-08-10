@@ -6,7 +6,10 @@ A deep tactical/strategic turn-based RPG in a fantasy setting.
 
 The player controls units organized into parties. Battles provide strategic benefits (stronger units, loot) while strategic decisions affect game play (buildings, bonuses, units, equipment).
 
-The game features a deep unit development aspect, such that losing a unit must hurt. Strategic choices have real impact on game play, as do tactical decisions on the progress of the game.
+The game features a deep unit development aspect. Units start out relatively weak, but gradually gain enough power for a party of 5-6 heroes to take on entire monster armies.
+The progression should feel hard-earned such that losing a unit is painful. 
+
+Strategic choices have real impact on game play, as do tactical decisions on the progress of the game.
 
 The game has an economic system based around trade and loot. As the player develops their encampment, they can craft high-level items to equip their units and sell for profit. In addition traders bring in passive income.
 
