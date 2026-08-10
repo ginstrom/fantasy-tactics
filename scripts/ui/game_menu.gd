@@ -37,6 +37,10 @@ func _on_save_pressed() -> void:
 	var result: Dictionary = GameManager.save_current_campaign()
 	status_label.text = tr("menu.save_success") if result.ok else tr("menu.save_failed")
 	status_label.visible = true
+	# A successful save can flip has_valid_save() from false to true (the
+	# very first save of a session); recompute Load's disabled state so the
+	# player doesn't have to close and reopen the menu to see it unlock.
+	load_button.disabled = not GameManager.has_valid_save()
 
 
 ## A successful load already routes away from whatever scene is currently

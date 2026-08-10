@@ -152,3 +152,4 @@ func test_start_menu_source_never_touches_the_filesystem_or_a_repository_directl
 	assert_false(source.contains("FileAccess"), "Save/Load intents must go through GameManager, never FileAccess directly")
 	assert_false(source.contains("DirAccess"), "Save/Load intents must go through GameManager, never DirAccess directly")
 	assert_false(source.contains("SaveRepository"), "Save/Load intents must go through GameManager, never SaveRepository directly")
+	assert_false(source.contains("GameSession"), "Save/Load intents must go through GameManager, never GameSession directly")
