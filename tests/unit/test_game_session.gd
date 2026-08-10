@@ -3155,27 +3155,14 @@ func test_campaign_guide_offers_the_first_affordable_improvement_once_the_reward
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
 
 
-func test_campaign_guide_clears_once_the_first_improvement_is_made() -> void:
-	GameSession.reset()
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.depart_selected_party()
-	GameSession.return_deployed_party_to_settlement()
-	GameSession.gold = 10
-	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
-
-	assert_true(GameSession.purchase_recruit(GameSession.recruitment_candidates[0].id))
-
-	assert_eq(GameSession.get_campaign_guide_state(), "")
-
-
-## A second expedition naturally un-deploys the party again (see
-## return_deployed_party_to_settlement()), which would otherwise make a
-## naive live-state check wrongly resurface "deploy your party" even though
-## the player is really just standing at the bank with gold to spend --
-## reaching a later stage must durably retire every earlier one so that
-## can never happen.
-func test_campaign_guide_reaching_a_later_stage_retires_every_earlier_one() -> void:
+## get_campaign_guide_state() must be a pure read, exactly like every other
+## get_/has_/can_ method in this file (get_recruitment_candidates(),
+## has_deployed_party(), can_upgrade_guild_hall(), ...): calling it -- even
+## repeatedly, even when several ids are simultaneously triggered -- must
+## never write tutorial_progress. Only the explicit
+## record_campaign_guide_progress()/record_campaign_guide_dismissal() calls
+## may do that.
+func test_get_campaign_guide_state_never_writes_tutorial_progress() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
@@ -3186,13 +3173,110 @@ func test_campaign_guide_reaching_a_later_stage_retires_every_earlier_one() -> v
 	GameSession.return_deployed_party_to_settlement()
 	GameSession.deposit_pending_reward()
 	GameSession.gold = 10
-
+	# At this point DEPLOY, SELECT_ROUTE, and FIRST_IMPROVEMENT can all be
+	# simultaneously live-triggered (see the priority-scan comment on
+	# _compute_campaign_guide_active_id()) -- exactly the situation a hidden
+	# write would be tempted to "clean up".
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	GameSession.get_campaign_guide_state()
+	GameSession.get_campaign_guide_state()
+
+	assert_eq(GameSession.tutorial_progress, {})
+
+
+## record_campaign_guide_progress(): the explicit write the guide banner
+## makes (see scripts/ui/campaign_guide.gd's refresh()) whenever it actually
+## renders a message -- this is what durably retires every earlier,
+## still-pending id, not the query itself.
+func test_record_campaign_guide_progress_retires_every_earlier_id() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+	GameSession.merge_battle_loot_into_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.deposit_pending_reward()
+	GameSession.gold = 10
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
 	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false))
 	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_DEPLOY, false))
 	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE, false))
 	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_ENTER_SITE, false))
 	assert_true(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_RETURN_BANK, false))
+	# guide_id itself is left alone -- only an explicit dismissal (or later
+	# resolving on its own, as the next test covers) retires the current one.
+	assert_false(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT, false))
+
+
+func test_record_campaign_guide_progress_on_the_first_stage_writes_nothing() -> void:
+	GameSession.reset()
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+
+	assert_eq(GameSession.tutorial_progress, {})
+
+
+## A second expedition naturally un-deploys the party again (see
+## return_deployed_party_to_settlement()), which would otherwise make a
+## naive live-state check wrongly resurface "deploy your party" even though
+## the player is really just standing at the bank with gold to spend. This
+## is exactly why record_campaign_guide_progress() exists: it must have
+## actually been called (mirroring the guide banner having actually
+## rendered FIRST_IMPROVEMENT) for DEPLOY to stay retired once its own live
+## trigger goes away.
+func test_campaign_guide_clears_once_the_first_improvement_is_made() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = 10
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.purchase_recruit(GameSession.recruitment_candidates[0].id))
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+## _campaign_guide_first_improvement_made()'s other two branches (recruiting
+## is covered above): a Guild Hall upgrade or a Trading Post purchase must
+## each independently count as "the first improvement" too.
+func test_campaign_guide_clears_once_the_guild_hall_is_upgraded() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = GameSession.GUILD_HALL_UPGRADE_COST
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.upgrade_guild_hall())
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
+
+
+func test_campaign_guide_clears_once_the_trading_post_is_purchased() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
+
+	assert_true(GameSession.purchase_trading_post())
+
+	assert_eq(GameSession.get_campaign_guide_state(), "")
 
 
 func test_record_campaign_guide_dismissal_retires_a_message_even_while_its_trigger_still_holds() -> void:

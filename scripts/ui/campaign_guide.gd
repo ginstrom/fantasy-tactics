@@ -3,12 +3,16 @@ extends PanelContainer
 ## Non-blocking first-campaign guide banner (see docs/plans/2026-08-10-
 ## initial-campaign-and-automation/04-first-campaign-guidance.md). Instanced
 ## only on Encampment and World Map, it renders whatever
-## GameSession.get_campaign_guide_state() currently says is due -- one short
-## message, an optional textual target cue, and a Dismiss action -- and
-## nothing else. It never routes or otherwise touches campaign state; the
-## only session write it ever triggers is the explicit dismissal recorded
-## by GameSession.record_campaign_guide_dismissal() when the player presses
-## Dismiss.
+## GameSession.get_campaign_guide_state() (a pure read) currently says is
+## due -- one short message, an optional textual target cue, and a Dismiss
+## action -- and nothing else. It never routes campaign state. The two
+## writes it can ever trigger are both explicit, GameSession-side methods
+## named for exactly what they do: record_campaign_guide_dismissal() when
+## the player presses Dismiss, and record_campaign_guide_progress() -- right
+## here in refresh(), every time it actually renders a message -- so
+## retirement of an earlier message is always tied to the player genuinely
+## having been shown something past it, never to some unrelated caller
+## merely asking GameSession what the current state is.
 ##
 ## Every node in this scene keeps mouse_filter = MOUSE_FILTER_IGNORE except
 ## the Dismiss button itself, so the banner can never absorb a click meant
@@ -29,14 +33,17 @@ func _ready() -> void:
 
 ## Re-reads the derived guide state and updates the banner in place. Safe to
 ## call as often as the owning screen likes (its own state-changing actions
-## call this directly rather than waiting for a full scene reload) -- it
-## never mutates GameSession itself.
+## call this directly rather than waiting for a full scene reload). Reading
+## the state is free (get_campaign_guide_state() is pure); actually
+## rendering one is what durably retires every earlier message, via the one
+## explicit write below.
 func refresh() -> void:
 	_current_guide_id = GameSession.get_campaign_guide_state()
 	visible = _current_guide_id != ""
 	if not visible:
 		return
 
+	GameSession.record_campaign_guide_progress(_current_guide_id)
 	message_label.text = tr("campaign_guide.%s.message" % _current_guide_id)
 
 	var target_key := "campaign_guide.%s.target" % _current_guide_id

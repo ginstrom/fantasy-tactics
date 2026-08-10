@@ -1706,35 +1706,30 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 ## reward, then choose the first affordable improvement. Scans
 ## CAMPAIGN_GUIDE_SEQUENCE and returns whichever id's contextual trigger
 ## currently holds and has not already been dismissed via
-## record_campaign_guide_dismissal(); "" means nothing is due right now.
+## record_campaign_guide_dismissal() or retired via
+## record_campaign_guide_progress(); "" means nothing is due right now.
 ##
-## When several ids are simultaneously triggered, the *latest* one in the
-## sequence wins rather than the first -- e.g. the deployed party
-## inevitably un-deploys again on the walk home after the very first
-## expedition (see return_deployed_party_to_settlement()), which would
-## otherwise make a naive first-match scan wrongly resurface "deploy your
-## party" the moment the player is really just standing at the bank with
-## gold to spend. Reaching a later id therefore also durably retires every
-## earlier, still-pending id in tutorial_progress -- the one narrow,
-## guide-scoped write this query performs -- so a message already
-## demonstrated can never resurface even if campaign state later cycles
-## back through a similar-looking condition.
+## A pure read, like every other get_/has_/can_ method in this file --
+## calling it never writes tutorial_progress or anything else. When several
+## ids are simultaneously triggered, the *latest* one in the sequence wins
+## rather than the first (see _compute_campaign_guide_active_id()), but that
+## alone only decides what to show *this call*; making a message that was
+## actually shown stay retired across later calls is
+## record_campaign_guide_progress()'s job, not this one's -- see that
+## method's doc for why the split matters.
 func get_campaign_guide_state() -> String:
+	return _compute_campaign_guide_active_id()
+
+
+## Pure priority scan: the CAMPAIGN_GUIDE_SEQUENCE entries are visited in
+## order, so simply overwriting active_id on every still-triggered, not-yet-
+## retired hit naturally leaves the *last* (highest-priority) one standing --
+## no index bookkeeping needed to pick "latest wins" over "first wins".
+func _compute_campaign_guide_active_id() -> String:
 	var active_id := ""
-	var active_index := -1
-	for index in CAMPAIGN_GUIDE_SEQUENCE.size():
-		var guide_id: String = CAMPAIGN_GUIDE_SEQUENCE[index]
-		if tutorial_progress.get(guide_id, false):
-			continue
-		if index > active_index and _is_campaign_guide_triggered(guide_id):
+	for guide_id in CAMPAIGN_GUIDE_SEQUENCE:
+		if not tutorial_progress.get(guide_id, false) and _is_campaign_guide_triggered(guide_id):
 			active_id = guide_id
-			active_index = index
-
-	if active_index == -1:
-		return ""
-
-	for index in active_index:
-		tutorial_progress[CAMPAIGN_GUIDE_SEQUENCE[index]] = true
 	return active_id
 
 
@@ -1799,9 +1794,31 @@ func _campaign_guide_has_affordable_improvement() -> bool:
 ## Explicit player action from the guide banner's Dismiss button (see
 ## scripts/ui/campaign_guide.gd) -- durably retires guide_id so
 ## get_campaign_guide_state() never returns it again this campaign,
-## independent of whether its trigger condition is still true. The only
-## other write to tutorial_progress is get_campaign_guide_state()'s own
-## backfill of earlier ids; this is the only one a screen ever calls
-## directly.
+## independent of whether its trigger condition is still true.
 func record_campaign_guide_dismissal(guide_id: String) -> void:
 	tutorial_progress[guide_id] = true
+
+
+## Explicit write called by the guide banner (scripts/ui/campaign_guide.gd's
+## refresh()) whenever it actually renders guide_id on screen -- never by
+## get_campaign_guide_state() itself, which stays a pure read like every
+## other get_ method here. Durably retires every id *earlier* than guide_id
+## in CAMPAIGN_GUIDE_SEQUENCE (guide_id itself is left alone -- only
+## record_campaign_guide_dismissal() retires the currently-active message).
+##
+## This is required, not decorative: the deployed party un-deploys again on
+## every walk home (see return_deployed_party_to_settlement()), and the
+## route/arrival triggers re-arm on every later expedition, so once the
+## player has visibly moved on to a later stage, the earlier ones' live
+## trigger conditions can and do become true again on their own. Tying
+## retirement to an explicit call the UI makes only when it actually
+## displayed guide_id -- rather than to a side effect buried in the query --
+## means a message can only ever be retired because the player really saw
+## something past it, never because some unrelated caller merely asked
+## what the current state is.
+func record_campaign_guide_progress(guide_id: String) -> void:
+	var reached_index := CAMPAIGN_GUIDE_SEQUENCE.find(guide_id)
+	if reached_index <= 0:
+		return
+	for index in reached_index:
+		tutorial_progress[CAMPAIGN_GUIDE_SEQUENCE[index]] = true
