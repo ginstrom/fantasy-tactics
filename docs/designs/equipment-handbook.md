@@ -65,7 +65,7 @@ Unmodified items remain stackable base ids in Stores. The first permanent improv
 
 The [Movement and Action Points](movement-and-action-points.md) guide owns the
 AP foundation that precedes potions, spells, active perks, and rune triggers.
-Equipment effects use that shared 6-AP Round budget and must state any cost or
+Future equipment effects use that shared 6-AP Round budget and must state any cost or
 AP change explicitly; they do not create a separate item-action allowance.
 
 ## Crafting buildings
@@ -82,7 +82,7 @@ Sharpened adds +1 raw weapon damage after the weapon roll and before Might/Resis
 
 ## Potions — Alchemy Workshop slice
 
-Potions are stackable Store items assigned to a unit before battle. A successful 2-AP use consumes exactly one carried potion at the campaign/battle boundary; an invalid AP, target, or availability check consumes nothing.
+Potions are future stackable Store items assigned to a unit before battle. Their AP cost and consumption boundary remain unshipped.
 
 | Potion | First effect | Constraint |
 |---|---|---|
@@ -100,7 +100,7 @@ The first reference rune is **Thorn Rune** for armor: when a wearer is hit by a 
 
 ## Delivery and verification
 
-1. Generic AP: replace movement-plus-one-attack with 6 AP, 1-AP movement, 3-AP attacks, and an action-menu seam.
+1. **Shipped:** generic AP replaces movement-plus-one-attack with 6 AP, 1-AP movement, and 3-AP attacks.
 2. Item instances: retain normal-item compatibility and snapshots; add category replacement.
 3. Blacksmith: normal recipes and Sharpened +1 damage.
 4. Alchemy Workshop: three potions, Basic Accuracy, and timed effects.

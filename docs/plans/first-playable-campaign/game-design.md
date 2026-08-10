@@ -57,7 +57,7 @@ Start Menu
   -> select the party at an active site and enter battle on a second click
   -> field every deployed party member and the site's full, star-tier enemy
      count; move and attack by mouse, WASD, or number-key (1-5) selection,
-     spending a shared per-unit movement-points budget
+     spending a shared per-unit Action Point (AP) budget
   -> defeat each enemy: resolve its kill XP immediately, split evenly across
      the deployed party (a modal Level-Up overlay appears if a member
      crosses a level threshold); each kill also queues gold, a mana crystal,
@@ -103,7 +103,7 @@ a modal Level-Up overlay that resolves immediately, before further input or a
 battle-result transition.
 Attack starts at 60 and has no cap, though its derived hit chance caps at 95%.
 Every third level requires a perk choice; the first available perk, Bonus
-Move, grants one extra tile of movement range. The same XP, Attack, health,
+Move, grants one flexible Action Point. The same XP, Attack, health,
 equipment, and perk data is legible outside battle from Unit Details.
 
 ### Vacancy-timed encounter and recruitment population
@@ -150,10 +150,11 @@ active site. A cleared camp rejects entry.
 
 Every deployed party member is fielded on the
 battlefield, at a fixed start position, alongside the site's full enemy
-count. A unit's movement is a spendable per-turn points budget (base 3
-tiles, plus one per Bonus Move perk), so
-WASD steps and multi-tile mouse clicks can be freely interleaved with a
-unit's one attack. The player selects a unit by mouse, clicking on the portrait 
+count. Every living unit begins its active Battle Round with 6 Action Points:
+each tile moved costs 1 AP and each adjacent basic attack costs 3 AP. WASD
+steps and multi-tile mouse clicks share that budget, and any affordable legal
+sequence—including two stationary attacks—is allowed. Bonus Move grants +1 AP.
+End Turn forfeits the remainder. The player selects a unit by mouse, clicking on the portrait
 in the left panel, or number key (1-5); a left portrait panel shows one 
 square per fielded party member, with the unit's colour, health, a selection ring, 
 and a dimmed state once defeated.

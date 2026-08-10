@@ -40,9 +40,9 @@ raw damage       = rolled attack damage + attacker might
 final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
 ```
 
-**Shipped compatibility:** the live game calls `accuracy` `attack` and `guard` `defense`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. Its movement-plus-one-attack turn is intentionally replaced by the generic Action Point foundation below. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
+**Shipped compatibility:** the live game calls `accuracy` `attack` and `guard` `defense`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
 
-### Generic Action Points (Next slice)
+### Generic Action Points (Shipped foundation)
 
 The shared [Movement and Action Points](movement-and-action-points.md) guide
 defines the Round lifecycle, initial 6-AP budget, action costs, legality,
@@ -67,7 +67,7 @@ No magic points, carry weight, dodge, critical hits, or luck rolls are added mer
 
 ## Advancement and perks
 
-**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk remains live until the generic AP migration; its approved replacement is `+1 Action Point`.
+**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk grants `+1 Action Point`.
 
 **Next slice:** retain one skill-point currency and permit only investments whose battle effect is implemented and tested. Accuracy is the sole spend until another permitted statistic is live. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
 
