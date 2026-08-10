@@ -32,7 +32,7 @@ Character development is heavily inspired by XCOM/Xenonauts and Fallout 1/2. In 
 * On level up, skill points are distributed
 * Every 3 levels, character can choose a perk (including chance to increase attribute score)
 
-The other way to improve character power is through gear, which can be found through adventuring or crafted as town buildings lefvel up.
+The other way to improve character power is through gear, which can be found through adventuring or crafted as town buildings level up.
 
 ### Fog of war
 
@@ -66,7 +66,7 @@ The player must tame and settle the area around the settlement for further growt
 
 As trade routes are developed, traders come to the town. The number, quality, and types of traders depend on the safety of the trade routes, size of the town, and types of buildings (e.g. trader's guild). The player can also organize trading caravans which must be protected, with guards and/or patrols along trade routes.
 
-Town management needs its own rich UI, although a true town-building experience is not needed. Something like the card-based town building in Rome: Total War is better. For example, building a temple to a certain god will attract clerics of that deity, and leveling up the temple will allow the recruitment of higher-level clerics/paladins and training for low-level recruits.
+Town management needs its own rich UI, although a true town-building experience is not needed. Something like the card-based town building in Rome: Total War is better. For example, building a temple will attract clerics, and leveling up the temple will allow the recruitment of higher-level clerics/paladins and training for low-level recruits.
 
 ## World map
 
@@ -76,4 +76,4 @@ The world should play somewhat like Civ, although instead of warring against oth
 
 There is a fog of war on the world map. The city has a fixed vision radius, which can be improved with buildings (watchtowers & upgrades). Beyond the vision radius, information about enemy parties and POIs becomes increasingly vague.
 
-Units also have vision ability, enhanced by various unit capabilities. Scout/thief type units should have a major value here which somewhat compensates for their relatively poor combat ability.
+Units also have vision ability, enhanced by various unit capabilities. Scouts should have a major value here which somewhat compensates for their relatively poor combat ability.
