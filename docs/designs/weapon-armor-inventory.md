@@ -1,26 +1,11 @@
 # Weapon and Armor Inventory
 
-**Status:** Approved design, not yet implemented. See
-[`docs/plans/`](../plans/) for the implementation plan once written.
-
-## Problem
-
-Today, `GameSession.equip_item_from_bank(adventurer_id, item_id)` treats
-equipping as a swap: the new item takes the slot (weapon or armor), and
-whatever was there returns to the bank. An adventurer can never hold more
-than one weapon or one armor piece at a time.
-
-Manual playtesting of the Assign Equipment flow surfaced a clear ask:
-equipping a new weapon shouldn't eject the old one back to Stores — a unit
-should be able to carry more than one weapon (and armor piece), and pick
-which one is active.
-
 ## Scope
 
-Both weapons and armor become per-unit inventories. A unit still only ever
+Both weapons and armor are per-unit inventories. A unit only ever
 *fights* with one weapon and wears one armor piece at a time — the
 "active" item in each slot — but it can carry others alongside without
-losing them to the bank.
+losing them.
 
 No cap on how many items a unit can carry per slot (matches this project's
 "connected loop before system depth" principle — a cap can be added later
@@ -33,7 +18,7 @@ side.
 
 ## Data model
 
-`adventurer.equipment` gains two array fields alongside the existing
+`adventurer.equipment` has two array fields alongside the existing
 scalar pointers, which keep their exact current meaning:
 
 ```gdscript
