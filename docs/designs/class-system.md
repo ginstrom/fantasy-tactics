@@ -9,9 +9,9 @@ The design grows a balanced party through four complementary roots, rather than 
 | Root class | Party role | Tactical emphasis | Earliest playable purpose |
 |---|---|---|---|
 | Warrior | Front line | Health, Might, Guard | Holds space and survives attacks. |
-| Scout | Ranged pressure and reconnaissance | Accuracy, Mobility | Attacks safely at range and reveals expedition risk. |
+| Scout | Ranged pressure and reconnaissance | Accuracy, Action Points | Attacks safely at range and reveals expedition risk. |
 | Cleric | Sustain and protection | Health, Guard, Resistance | Restores allies and prevents attrition. |
-| Mage | Control and burst | spell Accuracy, Mobility | Trades durability for area damage and control. |
+| Mage | Control and burst | spell Accuracy, Action Points | Trades durability for area damage and control. |
 
 Specializations build on a proven root role: Warrior becomes Knight or Archer, Mage becomes Spellcaster or Battle Mage, Cleric becomes Healer or Paladin, and Scout becomes Ranger. A specialization never arrives before its root's core combat loop and counterplay are playable.
 
@@ -26,7 +26,7 @@ Every combatant—adventurer or monster—uses one compact tactical profile. An 
 | `accuracy` | integer | Base chance to hit, expressed in percentage points. |
 | `guard` | integer | Percentage points subtracted from an attacker's Accuracy. |
 | `resistance` | integer percent | Reduces damage after a hit. |
-| `mobility` | integer tiles | Movement budget available during a Round. |
+| `action_points` | integer | Generic budget for movement, attacks, items, and future abilities during a Round. |
 
 `attack_damage`/weapon damage remains an attack property, not a seventh unit attribute. This keeps a sword, a bow, a spell, and a monster bite able to use the same attributes while retaining their own range, damage, and tags.
 
@@ -40,7 +40,11 @@ raw damage       = rolled attack damage + attacker might
 final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
 ```
 
-**Shipped compatibility:** the live game calls `accuracy` `attack`, `guard` `defense`, and `mobility` `move_range`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. The first shared-attribute slice must preserve those outcomes while migrating the names and data ownership. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
+**Shipped compatibility:** the live game calls `accuracy` `attack` and `guard` `defense`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. Its movement-plus-one-attack turn is intentionally replaced by the generic Action Point foundation below. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
+
+### Generic Action Points (Next slice)
+
+Every unit begins each Round with 6 Action Points (AP). Movement costs 1 AP per tile, a basic attack costs 3 AP, and using a carried potion costs 2 AP. A unit may take any legal actions while it can pay their costs: it can move three tiles and attack (matching the current baseline), attack twice while stationary, or combine movement, a potion, and an attack. Terrain, spells, perks, and equipment may later change costs or AP only through explicit, tested effects.
 
 ### Long-term concepts that are not yet attributes
 
@@ -49,7 +53,7 @@ The earlier Strength, Agility, Vitality, Intelligence, Piety, and Luck list desc
 | Concept | First supported expression | Deferred until |
 |---|---|---|
 | Strength | Might and melee equipment | carrying capacity |
-| Agility | Mobility and Guard | action points and dodge |
+| Agility | Action Points and Guard | dodge |
 | Vitality | max_health and Resistance | no additional system required |
 | Intelligence | Mage spell access | magic points and spellcasting |
 | Piety | Cleric spell access | healing/buff system and Temple gate |
@@ -59,7 +63,7 @@ No magic points, carry weight, dodge, critical hits, or luck rolls are added mer
 
 ## Advancement and perks
 
-**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk becomes `+1 mobility` without changing its outcome.
+**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk remains live until the generic AP migration; its approved replacement is `+1 Action Point`.
 
 **Next slice:** retain one skill-point currency and permit only investments whose battle effect is implemented and tested. Accuracy is the sole spend until another permitted statistic is live. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
 
@@ -68,7 +72,7 @@ No magic points, carry weight, dodge, critical hits, or luck rolls are added mer
 ### Generic perk themes
 
 - **Might:** Rage increases raw melee damage; Strong Back waits for inventory weight.
-- **Mobility/Guard:** Speed grants Mobility; Dodge waits for an avoidance system.
+- **Action Points/Guard:** Speed grants Action Points; Dodge waits for an avoidance system.
 - **Health/Resistance:** Toughness increases Resistance; Survivability increases max health.
 - **Knowledge:** Fast Learner may modify XP; perception waits for scouting.
 - **Faith and luck:** Prayer and luck perks wait for their owning systems.
@@ -90,10 +94,11 @@ Every slice must add an encounter pattern that rewards its role, automated comba
 | Slice | Roster | Capability added | Balance gate |
 |---|---|---|---|
 | 0 — **Shipped** | Warrior | adjacent attack, gear, health, accuracy, defense/resistance, movement | One Warrior can fight current monsters at their documented roles. |
-| 1 | Warrior + Scout/Ranger | ranged attacks, range/line-of-sight, basic scouting | Ranger pressure is valuable but cannot replace a front line. |
-| 2 | + Cleric/Healer | targeted healing, protection, durations | Healing offsets attrition but cannot make a Warrior unkillable. |
-| 3 | + Mage/Spellcaster | MP, spells, area/control effects | Mage has powerful output/control but poor durability and limited resources. |
-| 4 | root specializations | Knight, Archer, Battle Mage, Paladin | Each specialization changes decisions, not merely a percentage bonus. |
-| 5 | advanced perk branches | reactions, penetration, marks, cooldowns, multi-target effects | Effects have clear counters, stack limits, and scenario coverage. |
+| 1 | Warrior | generic AP, potion action foundation, item-instance contract | AP choices must be readable and retain a three-tile move plus attack option. |
+| 2 | Warrior + Scout/Ranger | ranged attacks, range/line-of-sight, basic scouting | Ranger pressure is valuable but cannot replace a front line. |
+| 3 | + Cleric/Healer | targeted healing, protection, durations | Healing offsets attrition but cannot make a Warrior unkillable. |
+| 4 | + Mage/Spellcaster | MP, spells, area/control effects | Mage has powerful output/control but poor durability and limited resources. |
+| 5 | root specializations | Knight, Archer, Battle Mage, Paladin | Each specialization changes decisions, not merely a percentage bonus. |
+| 6 | advanced perk branches | reactions, penetration, marks, cooldowns, multi-target effects | Effects have clear counters, stack limits, and scenario coverage. |
 
 The matching implementation plan lives in [`docs/plans/2026-08-10-class-attributes-and-monsters/`](../plans/2026-08-10-class-attributes-and-monsters/index.md).

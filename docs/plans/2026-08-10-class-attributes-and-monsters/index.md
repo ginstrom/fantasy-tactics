@@ -21,12 +21,13 @@
 
 ## Delivery order
 
-1. [01-shared-attribute-contract.md](01-shared-attribute-contract.md) — schema, compatibility migration, and snapshot contract.
-2. [02-monster-template-and-baseline.md](02-monster-template-and-baseline.md) — initial roster data and reproducible balance baselines.
-3. [03-scout-ranger.md](03-scout-ranger.md) — ranged combat and scouting.
-4. [04-cleric-healer.md](04-cleric-healer.md) — sustain and protection.
-5. [05-mage-spellcaster.md](05-mage-spellcaster.md) — MP, spells, and control.
-6. [06-specializations-and-monster-slices.md](06-specializations-and-monster-slices.md) — specialization gates and additional monster families.
-7. [07-verification-and-local-merge.md](07-verification-and-local-merge.md) — full verification, user signoff, local merge, and branch cleanup.
+1. [equipment and crafting plan](../2026-08-10-equipment-and-crafting/index.md) — generic Action Points and item instances, prerequisites for active class abilities.
+2. [01-shared-attribute-contract.md](01-shared-attribute-contract.md) — schema, compatibility migration, and snapshot contract.
+3. [02-monster-template-and-baseline.md](02-monster-template-and-baseline.md) — initial roster data and reproducible balance baselines.
+4. [03-scout-ranger.md](03-scout-ranger.md) — ranged combat and scouting.
+5. [04-cleric-healer.md](04-cleric-healer.md) — sustain and protection.
+6. [05-mage-spellcaster.md](05-mage-spellcaster.md) — MP, spells, and control.
+7. [06-specializations-and-monster-slices.md](06-specializations-and-monster-slices.md) — specialization gates and additional monster families.
+8. [07-verification-and-local-merge.md](07-verification-and-local-merge.md) — full verification, user signoff, local merge, and branch cleanup.
 
 Each numbered file is self-contained. Complete and merge one approved slice before starting the next; the class document and monster manual remain the cross-slice contract.
