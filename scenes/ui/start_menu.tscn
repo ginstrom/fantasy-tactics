@@ -68,6 +68,7 @@ text = "menu.begin"
 
 [connection signal="pressed" from="Center/VBox/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="Center/VBox/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="pressed" from="Center/VBox/LoadButton" to="." method="_on_load_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
 [connection signal="text_changed" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_changed"]
 [connection signal="text_submitted" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_submitted"]

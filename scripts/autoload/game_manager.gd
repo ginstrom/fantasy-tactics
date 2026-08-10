@@ -30,10 +30,6 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 
 const EN_TRANSLATION := preload("res://translations/en.tres")
 
-# Hardcoded until a real save system exists; both menus read this to decide
-# whether Continue/Load are available.
-var has_saved_game: bool = false
-
 ## The persistence layer behind save_current_campaign()/load_current_campaign()/
 ## has_valid_save(). Deliberately a plain, untyped var (not a private
 ## underscore-prefixed field, and not statically typed to SaveRepository) so
@@ -431,25 +427,62 @@ func quit_game() -> void:
 	get_tree().quit()
 
 
+## True only when the current campaign is safe to snapshot: no active
+## encounter in progress. Deliberately reads GameSession's own durable state
+## (selected_encounter) rather than the scene tree -- a screen renamed or
+## added later can never silently widen or narrow this guard's true meaning
+## the way matching on get_tree().current_scene.name could. See
+## docs/plans/2026-08-10-initial-campaign-and-automation/
+## 03-save-boundaries-and-menu.md.
+func can_save_current_campaign() -> bool:
+	return GameSession.selected_encounter == ""
+
+
 ## Narrow wrapper around save_repository.save_campaign(): writes the current
-## GameSession's durable state atomically. Deliberately does NOT decide
-## whether saving is currently allowed (e.g. mid-battle) -- that boundary
-## guard is Step 3's job (see docs/plans/2026-08-10-initial-campaign-and-
-## automation/03-save-boundaries-and-menu.md). Exists so UI code has exactly
-## one call site for writing the current campaign and never touches the
-## filesystem or save_repository's own internals directly. Returns
-## save_repository's own {"ok", "error"} result unchanged.
+## GameSession's durable state atomically, but only when
+## can_save_current_campaign() allows it. A blocked save never reaches
+## save_repository at all -- mid-battle state is never exported, let alone
+## written -- and returns an {"ok": false, "error"} result of its own
+## instead. Exists so UI code has exactly one call site for writing the
+## current campaign and never touches the filesystem or save_repository's
+## own internals directly. Returns save_repository's own {"ok", "error"}
+## result unchanged on an allowed save.
 func save_current_campaign() -> Dictionary:
+	if not can_save_current_campaign():
+		return {"ok": false, "error": "cannot save during an active encounter"}
 	return save_repository.save_campaign(GameSession)
 
 
 ## Narrow wrapper around save_repository.load_campaign(): a failed load (see
 ## SaveRepository.LoadStatus) never imports anything, leaving GameSession
-## completely untouched. Does not decide where to route afterward -- Step 3
-## adds that on top. Returns save_repository's own
+## completely untouched. Does not decide where to route afterward -- see
+## go_to_loaded_campaign() below, which UI code should call instead whenever
+## a successful load should also resume play. Returns save_repository's own
 ## {"ok", "snapshot", "error", "status"} result unchanged.
 func load_current_campaign() -> Dictionary:
 	return save_repository.load_campaign(GameSession)
+
+
+## The one "resume a saved campaign" decision Start Menu's Continue/Load and
+## the pause menu's Load all share: load_current_campaign() first, and only
+## once that succeeds, close the pause menu (a harmless no-op if it was
+## never open -- see close_game_menu()) and route to the World Map for a
+## deployed party or the Encampment otherwise, the same two places a live
+## campaign already returns to via go_to_world_map()/go_to_encampment(). A
+## failed load changes nothing at all: no scene change, GameSession left
+## completely untouched, so whichever screen called this is exactly as it
+## was. Returns load_current_campaign()'s own
+## {"ok", "snapshot", "error", "status"} result unchanged so the caller can
+## surface its own feedback.
+func go_to_loaded_campaign() -> Dictionary:
+	var result := load_current_campaign()
+	if result.ok:
+		close_game_menu()
+		if GameSession.has_deployed_party():
+			go_to_world_map()
+		else:
+			go_to_encampment()
+	return result
 
 
 ## Narrow wrapper so UI can check save availability without ever reaching

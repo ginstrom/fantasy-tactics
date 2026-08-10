@@ -56,4 +56,5 @@ horizontal_alignment = 1
 [connection signal="pressed" from="Center/VBox/ReturnButton" to="." method="_on_return_pressed"]
 [connection signal="pressed" from="Center/VBox/WorldMapButton" to="." method="_on_world_map_pressed"]
 [connection signal="pressed" from="Center/VBox/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="Center/VBox/LoadButton" to="." method="_on_load_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]

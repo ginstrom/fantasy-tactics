@@ -1,15 +1,20 @@
 extends GutTest
 
 const StartMenuScene := preload("res://scenes/ui/start_menu.tscn")
+const SaveRepositoryScript := preload("res://scripts/save/save_repository.gd")
+const TEST_SAVE_PATH := "user://test_start_menu_campaign.json"
 
 
 func before_each() -> void:
-	GameManager.has_saved_game = false
 	GameSession.reset()
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
 
 
 func after_each() -> void:
-	GameManager.has_saved_game = false
+	GameManager.save_repository = SaveRepositoryScript.new()
+	if FileAccess.file_exists(TEST_SAVE_PATH):
+		DirAccess.remove_absolute(TEST_SAVE_PATH)
+	GameManager.route_context_id = ""
 
 
 func test_continue_and_load_are_disabled_without_a_saved_game() -> void:
@@ -21,7 +26,7 @@ func test_continue_and_load_are_disabled_without_a_saved_game() -> void:
 
 
 func test_continue_and_load_are_enabled_with_a_saved_game() -> void:
-	GameManager.has_saved_game = true
+	GameManager.save_repository.save_campaign(GameSession)
 	var screen: Control = StartMenuScene.instantiate()
 	add_child_autofree(screen)
 
@@ -105,11 +110,45 @@ func test_begin_button_does_nothing_when_the_name_is_blank() -> void:
 	assert_eq(GameSession.player_name, "Unchanged")
 
 
-func test_continue_reuses_the_current_player_name() -> void:
-	GameSession.player_name = "Aria"
+func test_continue_loads_the_saved_campaign() -> void:
+	GameSession.player_name = "Saved Name"
+	GameSession.gold = 88
+	GameManager.save_repository.save_campaign(GameSession)
+	GameSession.reset()
 	var screen: Control = StartMenuScene.instantiate()
 	add_child_autofree(screen)
 
 	screen._on_continue_pressed()
 
-	assert_eq(GameSession.player_name, "Aria")
+	assert_eq(GameSession.player_name, "Saved Name")
+	assert_eq(GameSession.gold, 88)
+
+
+func test_load_button_loads_the_saved_campaign() -> void:
+	GameSession.player_name = "Saved Name"
+	GameManager.save_repository.save_campaign(GameSession)
+	GameSession.reset()
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_load_pressed()
+
+	assert_eq(GameSession.player_name, "Saved Name")
+
+
+func test_continue_without_a_saved_game_leaves_game_session_untouched() -> void:
+	GameSession.player_name = "Unchanged"
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_continue_pressed()
+
+	assert_eq(GameSession.player_name, "Unchanged")
+
+
+func test_start_menu_source_never_touches_the_filesystem_or_a_repository_directly() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/start_menu.gd")
+
+	assert_false(source.contains("FileAccess"), "Save/Load intents must go through GameManager, never FileAccess directly")
+	assert_false(source.contains("DirAccess"), "Save/Load intents must go through GameManager, never DirAccess directly")
+	assert_false(source.contains("SaveRepository"), "Save/Load intents must go through GameManager, never SaveRepository directly")

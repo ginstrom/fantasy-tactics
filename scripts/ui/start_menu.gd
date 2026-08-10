@@ -13,15 +13,17 @@ const PLAYER_NAME_CHOICES := ["The Black Company", "Company of Saints"]
 
 
 func _ready() -> void:
-	continue_button.disabled = not GameManager.has_saved_game
-	load_button.disabled = not GameManager.has_saved_game
+	continue_button.disabled = not GameManager.has_valid_save()
+	load_button.disabled = not GameManager.has_valid_save()
 
 
+## Continue and Load both resume the single persisted campaign -- there is
+## only one save slot -- so both go through the same
+## GameManager.go_to_loaded_campaign() decision. A failed load (missing,
+## corrupt, or an incompatible format) never imports anything and never
+## changes scene, so the Start Menu is simply left exactly as it was.
 func _on_continue_pressed() -> void:
-	# No save system yet, so Continue starts a new game like New Game does,
-	# reusing whatever player name is already on the session.
-	# This becomes real resume-from-save logic once save/load exists.
-	GameManager.go_to_game(GameSession.player_name)
+	GameManager.go_to_loaded_campaign()
 
 
 func _on_new_game_pressed() -> void:
@@ -44,6 +46,10 @@ func _on_name_input_text_submitted(_new_text: String) -> void:
 func _on_random_button_pressed() -> void:
 	name_input.text = PLAYER_NAME_CHOICES[randi() % PLAYER_NAME_CHOICES.size()]
 	_on_name_input_text_changed(name_input.text)
+
+
+func _on_load_pressed() -> void:
+	GameManager.go_to_loaded_campaign()
 
 
 func _on_begin_pressed() -> void:
