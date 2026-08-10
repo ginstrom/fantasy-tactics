@@ -1,6 +1,10 @@
 RUNS ?= 20
+SCENARIO ?= scenarios/battle/baseline-party-viability.json
+SEED ?= 20260810
+ITERATIONS ?= 20
+OUTPUT_DIR ?=
 
-.PHONY: help editor play test check screenshots simulate
+.PHONY: help editor play test check screenshots simulate scenario
 
 help:
 	@echo "make editor       Open the Godot editor"
@@ -9,6 +13,7 @@ help:
 	@echo "make check        Run the current validation suite"
 	@echo "make screenshots  Capture a screenshot of every scene/state into ./screenshots"
 	@echo "make simulate     Play N headless battles and log outcomes (RUNS=20 make simulate)"
+	@echo "make scenario     Run a deterministic scenario (SCENARIO=... SEED=1 ITERATIONS=20)"
 
 editor:
 	godot --editor project.godot
@@ -30,3 +35,6 @@ screenshots:
 
 simulate:
 	godot --headless -s scripts/tools/battle_sim_main.gd -- --runs=$(RUNS)
+
+scenario:
+	godot --headless -s scripts/tools/battle_scenarios/scenario_runner_main.gd -- --scenario=$(SCENARIO) --seed=$(SEED) --iterations=$(ITERATIONS) --output-dir=$(OUTPUT_DIR)

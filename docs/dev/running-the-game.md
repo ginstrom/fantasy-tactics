@@ -142,6 +142,16 @@ correctness testing (see [testing.md](testing.md) for that).
 |---|---|---|
 | A line's `outcome` is `"stalemate"` | The bot couldn't reach or defeat every enemy within the round cap | Rare for the two shipped encounters under normal balance values; if it happens consistently after a balance change (`config/game_config.json`), the change likely made a fight unwinnable by the greedy bot policy — not necessarily a bug, but worth a second look |
 
+## Run reproducible battle scenarios
+
+`make simulate` remains the scene-driven smoke client. For repeatable, scene-free policy experiments, run a declared scenario instead:
+
+```
+make scenario SCENARIO=scenarios/battle/baseline-party-viability.json SEED=20260810 ITERATIONS=20
+```
+
+The command writes a fresh directory under `user://battle-scenarios/` (or the exact `OUTPUT_DIR` supplied) with `records.jsonl` and `report.json`. Records are deterministic for a fixed scenario, seed, iteration count, and game configuration; generated results are local evidence and must not be committed.
+
 ## Open the project in the editor
 
 ### Steps

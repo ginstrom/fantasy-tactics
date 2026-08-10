@@ -1,0 +1,1 @@
+{"scenario_id":"baseline_policy_comparison","player":{"template_id":"warrior","count":1},"enemy":{"template_id":"goblin","count":1},"policies":{"player":"greedy_pursuit","enemy":"current_enemy_policy"}}

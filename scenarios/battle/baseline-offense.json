@@ -1,0 +1,1 @@
+{"scenario_id":"baseline_offense","player":{"template_id":"warrior","count":1},"enemy":{"template_id":"goblin","count":1},"matrix":{"attack_bonus":[{"value":0,"overrides":{"player":{"template_id":"warrior","count":1}}},{"value":20,"overrides":{"player":{"units":[{"template_id":"warrior","modifiers":{"attack":20}}]}}}]}}
