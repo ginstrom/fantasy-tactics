@@ -114,6 +114,24 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.tutorial_progress, {"formed_party": true})
 
 
+## _normalize_party() must start from a duplicate of the raw party dict and
+## only overwrite the fields it validates/converts (mirroring how
+## _normalize_id_list()/_normalize_active_encounters() already treat
+## unknown fields on adventurers/active encounters), rather than rebuilding
+## an explicit whitelist Dictionary literal that silently drops anything
+## not already named -- a quest-flag or other future party field must
+## survive an export -> import round trip untouched.
+func test_unknown_party_fields_survive_a_round_trip() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.parties[0]["quest_flags"] = {"rescued_npc": true}
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.parties[0].get("quest_flags"), {"rescued_npc": true})
+
+
 func test_from_dictionary_deep_copies_so_mutating_the_source_does_not_touch_the_result() -> void:
 	var data := _full_snapshot().to_dictionary()
 	var result := CampaignSnapshot.from_dictionary(data)

@@ -84,6 +84,12 @@ func _write(data: Dictionary) -> Dictionary:
 
 	var rename_err := DirAccess.rename_absolute(tmp_path, save_path)
 	if rename_err != OK:
+		# The old save at save_path is untouched, but the half-finished
+		# .tmp file would otherwise linger on disk indefinitely; a failed
+		# removal here is not itself a reason to fail the write, whose own
+		# error already reflects the real failure.
+		if FileAccess.file_exists(tmp_path):
+			DirAccess.remove_absolute(tmp_path)
 		return _write_failed(
 			"could not replace %s with %s (error %d)" % [save_path, tmp_path, rename_err]
 		)
@@ -143,7 +149,15 @@ func _load_failed(status: LoadStatus, error: String) -> Dictionary:
 ## - JSON has no int type -- Godot's JSON parser always hands back float for
 ##   every number, but CampaignSnapshot.from_dictionary() validates fields
 ##   like world_turn/gold strictly as `int`. Every whole-number float here
-##   becomes an int.
+##   becomes an int. This is applied to the whole payload, including fields
+##   CampaignSnapshot never touches directly (e.g. adventurers[].progression.
+##   xp, a float by design -- see game_session.gd's default adventurer
+##   template -- so fractional XP awards are never truncated on save). That
+##   is intentionally safe here: a whole-number xp value round-trips back to
+##   a float the moment it is next incremented (`+=` on an int promotes to
+##   float) or compared (`>=` against a float threshold), and any fractional
+##   xp value is never whole-number in the first place, so this normalizer
+##   never touches it. Do not "fix" this into an XP-aware exclusion.
 ## - JSON object keys are always strings -- a Dictionary with int keys (e.g.
 ##   mana_crystals' tier -> count map) loses its key type entirely on the way
 ##   through JSON.stringify()/parse(). Every Dictionary key that is a valid

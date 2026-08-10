@@ -823,6 +823,29 @@ func test_can_save_current_campaign_is_false_during_an_active_encounter() -> voi
 	GameSession.abandon_current_encounter()
 
 
+## complete_current_encounter() clears selected_encounter *before* battle_
+## reward/battle_gear/battle_mana_crystals are merged into the party (that
+## happens later, in go_to_world_map()) -- so on the Battle Result screen,
+## selected_encounter == "" even though this battle's loot has not yet been
+## settled. can_save_current_campaign() must not rely solely on
+## selected_encounter to cover this window; see GameSession.
+## has_unsettled_battle_loot().
+func test_can_save_current_campaign_is_false_when_battle_loot_is_unsettled() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+
+	assert_eq(GameSession.selected_encounter, "", "Sanity check: no active encounter is blocking the save")
+	assert_false(GameManager.can_save_current_campaign())
+
+
+func test_can_save_current_campaign_is_true_again_once_unsettled_battle_loot_is_merged() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+	GameSession.merge_battle_loot_into_party()
+
+	assert_true(GameManager.can_save_current_campaign())
+
+
 func test_save_current_campaign_makes_no_write_during_an_active_encounter() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
@@ -906,26 +929,26 @@ func test_go_to_loaded_campaign_routes_to_the_encampment_for_an_undeployed_party
 
 ## Reward buckets must be preserved across a load, never additionally
 ## settled by it -- the same guarantee test_successful_save_does_not_
-## change_reward_buckets() proves for the save side. go_to_encampment()
-## deposits pending_reward into gold when undeployed, and go_to_world_map()
-## merges battle_reward into pending_reward unconditionally; replaying
-## either here is only safe because a legitimately reachable save always
-## already has those particular buckets at their settled value for whichever
-## branch it will route through: pending_reward is 0 by the time a party is
-## actually undeployed (go_to_encampment() deposits it the moment the party
-## returns home -- see test_go_to_encampment_deposits_pending_gold_once()),
-## and battle_reward is always 0 in any save, since the pause menu offering
-## Save is never reachable from the Battle Result screen that briefly holds
-## it nonzero (see battle_result.gd, which never wires GameManager.
-## open_game_menu()). These tests assert that replay is a true no-op --
-## byte-identical reward buckets before and after the routing call -- not
-## merely "eventually correct".
+## change_reward_buckets() proves for the save side. go_to_loaded_campaign()
+## calls the underlying routing primitives directly (_clear_detail_context()
+## / _change_scene()) rather than go_to_world_map()/go_to_encampment()
+## themselves, so this is a structural guarantee, not merely an argument
+## about which states a real save can reach: GameSession.
+## merge_battle_loot_into_party() and GameSession.deposit_pending_reward()
+## are never called from anywhere in the load path, for any state. These
+## tests set every reward bucket nonzero -- including combinations (e.g.
+## nonzero battle_reward, or nonzero pending_reward on an undeployed party)
+## that a real save could probably never actually contain -- specifically to
+## prove the guarantee does not depend on reachability.
 func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to_the_encampment() -> void:
 	GameSession.reset()
 	GameSession.gold = 10
-	GameSession.pending_reward = 0
+	GameSession.pending_reward = 12
 	GameSession.banked_gear = {"dagger_iron": 3}
 	GameSession.mana_crystals = {1: 2}
+	GameSession.battle_reward = 3
+	GameSession.battle_gear = {"buckler_wood": 1}
+	GameSession.battle_mana_crystals = {2: 1}
 	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
 	writer_repository.save_campaign(GameSession)
 	GameSession.reset()
@@ -936,9 +959,12 @@ func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to
 	assert_true(result.ok, result.get("error", ""))
 	assert_false(GameSession.has_deployed_party(), "Sanity check: this must route through the Encampment branch")
 	assert_eq(GameSession.gold, 10)
-	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.pending_reward, 12)
 	assert_eq(GameSession.banked_gear, {"dagger_iron": 3})
 	assert_eq(GameSession.mana_crystals, {1: 2})
+	assert_eq(GameSession.battle_reward, 3)
+	assert_eq(GameSession.battle_gear, {"buckler_wood": 1})
+	assert_eq(GameSession.battle_mana_crystals, {2: 1})
 
 
 func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_world_map() -> void:
@@ -950,6 +976,9 @@ func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_wor
 	GameSession.pending_reward = 25
 	GameSession.pending_gear = {"dagger_iron": 1}
 	GameSession.pending_mana_crystals = {1: 4}
+	GameSession.battle_reward = 7
+	GameSession.battle_gear = {"shortsword_iron": 1}
+	GameSession.battle_mana_crystals = {1: 1}
 	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
 	writer_repository.save_campaign(GameSession)
 	GameSession.reset()
@@ -963,9 +992,9 @@ func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_wor
 	assert_eq(GameSession.pending_reward, 25)
 	assert_eq(GameSession.pending_gear, {"dagger_iron": 1})
 	assert_eq(GameSession.pending_mana_crystals, {1: 4})
-	assert_eq(GameSession.battle_reward, 0)
-	assert_eq(GameSession.battle_gear, {})
-	assert_eq(GameSession.battle_mana_crystals, {})
+	assert_eq(GameSession.battle_reward, 7)
+	assert_eq(GameSession.battle_gear, {"shortsword_iron": 1})
+	assert_eq(GameSession.battle_mana_crystals, {1: 1})
 
 
 func test_go_to_loaded_campaign_closes_an_open_pause_menu_on_success() -> void:

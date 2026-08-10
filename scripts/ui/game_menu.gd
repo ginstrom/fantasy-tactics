@@ -1,5 +1,6 @@
 extends CanvasLayer
 
+@onready var save_button: Button = $Center/VBox/SaveButton
 @onready var load_button: Button = $Center/VBox/LoadButton
 @onready var status_label: Label = $Center/VBox/StatusLabel
 
@@ -15,6 +16,7 @@ func _ready() -> void:
 func refresh() -> void:
 	# Reset transient state so the overlay starts clean every time it opens,
 	# regardless of what happened the last time it was shown.
+	save_button.disabled = not GameManager.can_save_current_campaign()
 	load_button.disabled = not GameManager.has_valid_save()
 	status_label.visible = false
 

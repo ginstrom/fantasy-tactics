@@ -865,6 +865,49 @@ func test_merge_battle_loot_into_party_is_a_no_op_when_the_battle_store_is_empty
 	assert_eq(session.pending_gear, {"buckler_wood": 1})
 
 
+func test_has_unsettled_battle_loot_is_false_when_the_battle_store_is_empty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_a_nonzero_battle_reward() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_reward = 1
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_gear() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_gear = {"dagger_iron": 1}
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_mana_crystals() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_mana_crystals = {1: 1}
+
+	assert_true(session.has_unsettled_battle_loot())
+
+
+func test_has_unsettled_battle_loot_is_false_after_merging_it_into_the_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.battle_reward = 5
+	session.battle_gear = {"dagger_iron": 1}
+	session.battle_mana_crystals = {1: 1}
+
+	session.merge_battle_loot_into_party()
+
+	assert_false(session.has_unsettled_battle_loot())
+
+
 func test_reset_clears_loot_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2939,6 +2982,7 @@ func _capture_durable_fields() -> Dictionary:
 		"completed_encounters": GameSession.completed_encounters.duplicate(true),
 		"active_encounters": GameSession.active_encounters.duplicate(true),
 		"encounter_vacancies": GameSession.encounter_vacancies.duplicate(true),
+		"used_encounter_template_ids": GameSession._used_encounter_template_ids.duplicate(true),
 		"world_turn": GameSession.world_turn,
 		"gold": GameSession.gold,
 		"guild_hall_level": GameSession.guild_hall_level,
@@ -3003,6 +3047,86 @@ func test_export_then_reset_then_import_restores_the_full_session() -> void:
 
 	assert_true(result.ok, result.error)
 	assert_eq(_capture_durable_fields(), expected)
+
+
+## Reflection guard against the durable-field list drifting out of sync: the
+## field-by-field wiring export_campaign_snapshot()/import_campaign_
+## snapshot()/CampaignSnapshot/_capture_durable_fields() above all repeat by
+## hand has no shared source of truth, so nothing fails today if a new
+## durable var is added to GameSession without also adding it to the
+## snapshot -- it would just silently fail to survive a save/load round
+## trip. This walks every script-declared instance var GameSession actually
+## has and asserts export_campaign_snapshot()'s output carries each one,
+## rather than repeating the same hand-written list a fourth time. Only two
+## kinds of var are allowed to not appear in the snapshot: Callable
+## roll-hooks (injectable test doubles, e.g. GameSession.
+## enemy_composition_roll -- behavior, not state) and the balance-config
+## numbers GameConfig overwrites at _ready() from config files (e.g.
+## GameSession.BASE_ATTACK) -- neither is per-campaign player state. Any
+## other genuinely non-durable var must be added to the explicit
+## `excluded_names` allowlist below with its own reason, not silently
+## skipped.
+func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
+	var snapshot: Dictionary = GameSession.export_campaign_snapshot()
+
+	# GameSession's own field name differs from the snapshot's key for
+	# exactly one durable var: _used_encounter_template_ids is private
+	# (leading underscore) because nothing outside GameSession needs to
+	# read it directly, but see its own doc comment for why it is still
+	# durable.
+	var renamed_keys: Dictionary = {
+		"_used_encounter_template_ids": "used_encounter_template_ids",
+	}
+
+	# Balance-config numbers: not per-campaign state, always reset from
+	# GameConfig at boot (see GameSession._ready()).
+	var excluded_names: Dictionary = {
+		"BASE_ATTACK": true,
+		"BASE_MAX_HEALTH": true,
+		"BASE_MOVE_RANGE": true,
+		"LEVEL_UP_MAX_HEALTH_BONUS": true,
+		"LEVEL_UP_SKILL_POINTS": true,
+		"PERK_LEVEL_INTERVAL": true,
+		"GUILD_HALL_LEVEL_1_PARTY_CAP": true,
+		"GUILD_HALL_LEVEL_2_PARTY_CAP": true,
+		"GUILD_HALL_UPGRADE_COST": true,
+		"GUILD_HALL_MAX_LEVEL": true,
+		"TRADING_POST_PURCHASE_COST": true,
+		"TRADING_POST_INCOME_PER_TURN": true,
+		"EFFECTIVE_HIT_CHANCE_CAP": true,
+		"ATTACK_TO_HIT_CHANCE_DIVISOR": true,
+		"ENCOUNTER_INSTANCE_CAP": true,
+		"RECRUITMENT_OFFER_CAP": true,
+		"ENCOUNTER_VACANCY_TURNS": true,
+		"RECRUITMENT_VACANCY_TURNS": true,
+		"ENCOUNTER_VACANCY_JITTER_TURNS": true,
+		"RECRUITMENT_VACANCY_JITTER_TURNS": true,
+	}
+
+	var checked_field_names: Array[String] = []
+	for property in GameSession.get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+			continue
+		var field_name: String = property.name
+		if property.type == TYPE_CALLABLE:
+			continue
+		if excluded_names.has(field_name):
+			continue
+		var snapshot_key: String = renamed_keys.get(field_name, field_name)
+		checked_field_names.append(field_name)
+		assert_true(
+			snapshot.has(snapshot_key),
+			(
+				"GameSession.%s looks durable but export_campaign_snapshot() does not carry it -- "
+				+ "wire it into CampaignSnapshot/export_campaign_snapshot()/import_campaign_snapshot(), "
+				+ "or add %s to this test's excluded_names allowlist with a reason if it is not durable."
+			) % [field_name, field_name]
+		)
+
+	# Sanity check: reflection must actually find GameSession's durable vars,
+	# so a Godot API change silently returning nothing cannot pass this test
+	# vacuously.
+	assert_gt(checked_field_names.size(), 15)
 
 
 func test_export_campaign_snapshot_deep_copies_so_mutating_it_does_not_affect_the_session() -> void:

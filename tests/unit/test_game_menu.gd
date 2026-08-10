@@ -33,14 +33,42 @@ func test_load_is_disabled_without_a_saved_game() -> void:
 	assert_true(menu.get_node("Center/VBox/LoadButton").disabled)
 
 
-func test_return_save_and_quit_are_always_enabled() -> void:
+func test_return_world_map_and_quit_are_always_enabled() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	var menu: CanvasLayer = GameMenuScene.instantiate()
 	add_child_autofree(menu)
 
 	assert_false(menu.get_node("Center/VBox/ReturnButton").disabled)
 	assert_false(menu.get_node("Center/VBox/WorldMapButton").disabled)
-	assert_false(menu.get_node("Center/VBox/SaveButton").disabled)
 	assert_false(menu.get_node("Center/VBox/QuitButton").disabled)
+	GameSession.abandon_current_encounter()
+
+
+func test_save_button_is_enabled_when_saving_is_allowed() -> void:
+	GameSession.reset()
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_false(menu.get_node("Center/VBox/SaveButton").disabled)
+
+
+func test_save_button_is_disabled_during_an_active_encounter() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_true(menu.get_node("Center/VBox/SaveButton").disabled)
+	GameSession.abandon_current_encounter()
+
+
+func test_save_button_is_disabled_when_battle_loot_is_unsettled() -> void:
+	GameSession.battle_reward = 5
+
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_true(menu.get_node("Center/VBox/SaveButton").disabled)
 
 
 func test_pressing_world_map_closes_the_menu_and_unpauses_the_game() -> void:
@@ -179,4 +207,4 @@ func test_game_menu_source_never_touches_the_filesystem_repository_or_game_sessi
 
 # Quit is intentionally not click-tested here: GameManager.quit_game() calls
 # get_tree().quit(), which would terminate the test run. Its disabled state
-# is covered by test_return_save_and_quit_are_always_enabled() above.
+# is covered by test_return_world_map_and_quit_are_always_enabled() above.

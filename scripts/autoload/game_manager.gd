@@ -428,14 +428,18 @@ func quit_game() -> void:
 
 
 ## True only when the current campaign is safe to snapshot: no active
-## encounter in progress. Deliberately reads GameSession's own durable state
-## (selected_encounter) rather than the scene tree -- a screen renamed or
-## added later can never silently widen or narrow this guard's true meaning
-## the way matching on get_tree().current_scene.name could. See
+## encounter in progress, and no unsettled battle loot sitting in
+## GameSession's battle_* buckets (see GameSession.has_unsettled_battle_
+## loot() -- selected_encounter is already cleared by the time complete_
+## current_encounter() queues that loot, so the first condition alone does
+## not cover the Battle Result screen). Deliberately reads GameSession's own
+## durable state rather than the scene tree -- a screen renamed or added
+## later can never silently widen or narrow this guard's true meaning the
+## way matching on get_tree().current_scene.name could. See
 ## docs/plans/2026-08-10-initial-campaign-and-automation/
 ## 03-save-boundaries-and-menu.md.
 func can_save_current_campaign() -> bool:
-	return GameSession.selected_encounter == ""
+	return GameSession.selected_encounter == "" and not GameSession.has_unsettled_battle_loot()
 
 
 ## Narrow wrapper around save_repository.save_campaign(): writes the current
@@ -467,21 +471,28 @@ func load_current_campaign() -> Dictionary:
 ## the pause menu's Load all share: load_current_campaign() first, and only
 ## once that succeeds, close the pause menu (a harmless no-op if it was
 ## never open -- see close_game_menu()) and route to the World Map for a
-## deployed party or the Encampment otherwise, the same two places a live
-## campaign already returns to via go_to_world_map()/go_to_encampment(). A
-## failed load changes nothing at all: no scene change, GameSession left
-## completely untouched, so whichever screen called this is exactly as it
-## was. Returns load_current_campaign()'s own
-## {"ok", "snapshot", "error", "status"} result unchanged so the caller can
-## surface its own feedback.
+## deployed party or the Encampment otherwise -- the same two destinations a
+## live campaign already reaches via go_to_world_map()/go_to_encampment(),
+## but by calling the underlying routing primitives (_clear_detail_context()
+## / _change_scene()) directly rather than those two functions themselves.
+## This keeps the save/load invariant "preserve, never settle" true by
+## construction: go_to_world_map() calls GameSession.
+## merge_battle_loot_into_party() and go_to_encampment() calls GameSession.
+## deposit_pending_reward(), and neither reward-banking side effect may ever
+## sit in the load path, even as a currently-unreachable no-op. A failed
+## load changes nothing at all: no scene change, GameSession left completely
+## untouched, so whichever screen called this is exactly as it was. Returns
+## load_current_campaign()'s own {"ok", "snapshot", "error", "status"}
+## result unchanged so the caller can surface its own feedback.
 func go_to_loaded_campaign() -> Dictionary:
 	var result := load_current_campaign()
 	if result.ok:
 		close_game_menu()
 		if GameSession.has_deployed_party():
-			go_to_world_map()
+			_clear_detail_context()
+			_change_scene(WORLD_MAP_SCENE)
 		else:
-			go_to_encampment()
+			_change_scene(ENCAMPMENT_SCENE)
 	return result
 
 

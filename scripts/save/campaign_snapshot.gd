@@ -19,6 +19,12 @@ extends RefCounted
 
 const FORMAT_VERSION := 1
 
+## Same EXPEDITIONS template catalog GameSession exposes on its autoload
+## singleton, reached here via preload of the script itself (a compile-time
+## constant lookup) rather than the GameSession singleton reference, so this
+## contract depends on the constant table, not on the autoload existing.
+const _GameSessionScript := preload("res://scripts/autoload/game_session.gd")
+
 var adventurers: Array[Dictionary] = []
 var recruitment_candidates: Array[Dictionary] = []
 var recruitment_vacancies: Array[Dictionary] = []
@@ -164,23 +170,29 @@ static func from_dictionary(data: Variant) -> Dictionary:
 
 	for dict_key in [
 		"mana_crystals", "banked_gear", "pending_mana_crystals",
-		"pending_gear", "battle_mana_crystals", "battle_gear", "tutorial_progress",
+		"pending_gear", "battle_mana_crystals", "battle_gear",
 	]:
 		if not data.get(dict_key) is Dictionary:
 			return _invalid("%s is not a dictionary" % dict_key)
 		normalized[dict_key] = (data[dict_key] as Dictionary).duplicate(true)
 
+	var tutorial_progress_result := _normalize_tutorial_progress(data.get("tutorial_progress"))
+	if not tutorial_progress_result.ok:
+		return _invalid(tutorial_progress_result.error)
+	normalized["tutorial_progress"] = tutorial_progress_result.value
+
 	if normalized.selected_party_id != "" and not _has_id(normalized.parties, normalized.selected_party_id):
 		return _invalid("selected_party_id does not reference a known party")
 
-	# Reaches into the GameSession autoload for its EXPEDITIONS const table
-	# (a compile-time-constant template catalog, not live session state) so
-	# a raw template id entered directly -- see get_expedition()'s own
-	# dual resolution -- still validates as a legitimate selected_encounter.
+	# Reaches into GameSession's EXPEDITIONS const table (a compile-time-
+	# constant template catalog, not live session state) via preload rather
+	# than the GameSession autoload singleton, so a raw template id entered
+	# directly -- see get_expedition()'s own dual resolution -- still
+	# validates as a legitimate selected_encounter.
 	if (
 		normalized.selected_encounter != ""
 		and not _has_id(normalized.active_encounters, normalized.selected_encounter)
-		and not GameSession.EXPEDITIONS.has(normalized.selected_encounter)
+		and not _GameSessionScript.EXPEDITIONS.has(normalized.selected_encounter)
 	):
 		return _invalid("selected_encounter does not reference a known encounter")
 
@@ -253,6 +265,25 @@ static func _normalize_vacancy_list(raw: Variant, field_name: String) -> Diction
 	return _valid_list(normalized)
 
 
+## Rejects a non-Dictionary field, a non-String key, or a non-bool value --
+## tighter than the shared "is it a Dictionary" check the other id -> count
+## reward stores get, since tutorial_progress's own shape (an arbitrary
+## message id -> shown/dismissed bool map, see the field's doc comment
+## above) is simple enough to fully police here.
+static func _normalize_tutorial_progress(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "tutorial_progress is not a dictionary", "value": {}}
+	var normalized: Dictionary = {}
+	for key in (raw as Dictionary).keys():
+		if not key is String:
+			return {"ok": false, "error": "tutorial_progress contains a non-string key", "value": {}}
+		var entry_value = raw[key]
+		if not entry_value is bool:
+			return {"ok": false, "error": "tutorial_progress contains a non-bool value", "value": {}}
+		normalized[key] = entry_value
+	return {"ok": true, "error": "", "value": normalized}
+
+
 static func _is_vector2i_dict(value: Variant) -> bool:
 	return value is Dictionary and value.get("x") is int and value.get("y") is int
 
@@ -292,7 +323,11 @@ static func _encounters_to_dictionary(source: Array[Dictionary]) -> Array[Dictio
 ## non-empty, unique-within-the-list string -- the same shape
 ## _normalize_id_list() enforces for the roster lists, but parties also
 ## carry Vector2i-shaped fields those lists never do, so it is validated
-## separately rather than reusing that helper.
+## separately rather than reusing that helper. Like _normalize_active_
+## encounters(), starts from a duplicate of the raw dict and overwrites only
+## the fields it validates/converts, so an unknown/future party key still
+## survives an export -> import round trip instead of being silently
+## dropped.
 static func _normalize_parties(raw: Variant) -> Dictionary:
 	if not raw is Array:
 		return _invalid_list("parties is not an array")
@@ -347,22 +382,19 @@ static func _normalize_party(raw: Variant) -> Dictionary:
 	if not party.get("metadata") is Dictionary:
 		return {"ok": false, "error": "party %s has an invalid metadata" % party.id}
 
-	return {
-		"ok": true,
-		"error": "",
-		"value": {
-			"id": String(party.id),
-			"member_ids": member_ids,
-			"location_id": String(party.location_id),
-			"world_position": _to_vector2i(party.world_position),
-			"deployed": bool(party.deployed),
-			"travel_route": travel_route,
-			"movement_spent": bool(party.movement_spent),
-			"name": String(party.name),
-			"progression": (party.progression as Dictionary).duplicate(true),
-			"metadata": (party.metadata as Dictionary).duplicate(true),
-		},
-	}
+	var normalized: Dictionary = party.duplicate(true)
+	normalized["id"] = String(party.id)
+	normalized["member_ids"] = member_ids
+	normalized["location_id"] = String(party.location_id)
+	normalized["world_position"] = _to_vector2i(party.world_position)
+	normalized["deployed"] = bool(party.deployed)
+	normalized["travel_route"] = travel_route
+	normalized["movement_spent"] = bool(party.movement_spent)
+	normalized["name"] = String(party.name)
+	normalized["progression"] = (party.progression as Dictionary).duplicate(true)
+	normalized["metadata"] = (party.metadata as Dictionary).duplicate(true)
+
+	return {"ok": true, "error": "", "value": normalized}
 
 
 ## Validates and restores each active-encounter instance's Vector2i "position"

@@ -274,6 +274,35 @@ func test_round_trip_preserves_int_keyed_mana_crystal_tiers() -> void:
 	)
 
 
+## The highest-risk conversion path in the save format: a party's
+## travel_route is an Array[{"x": int, "y": int}] on disk, standing in for
+## Array[Vector2i] -- a doubly-nested structure (Array of Dictionaries of
+## ints) that has to survive both CampaignSnapshot's Vector2i <-> Dictionary
+## conversion and JSON.stringify()/parse()'s float-for-every-number lossiness
+## (see SaveRepository._normalize_json_value()) through an actual file, not
+## just an in-memory to_dictionary()/from_dictionary() round trip.
+func test_round_trip_preserves_a_non_empty_travel_route_through_a_real_file() -> void:
+	var repository := _repository()
+	var written_session: Node = GameSessionScript.new()
+	autofree(written_session)
+	written_session.create_party()
+	written_session.assign_adventurer_to_selected_party(GameSessionScript.WARRIOR_ID)
+	written_session.depart_selected_party()
+	written_session.set_deployed_party_position(Vector2i(3, 3))
+	written_session.set_deployed_party_route([Vector2i(4, 3), Vector2i(4, 4), Vector2i(5, 4)] as Array[Vector2i])
+
+	repository.save_campaign(written_session)
+	var loaded_session: Node = GameSessionScript.new()
+	autofree(loaded_session)
+	var result := repository.load_campaign(loaded_session)
+
+	assert_true(result.ok, result.get("error", ""))
+	var loaded_party: Dictionary = loaded_session.get_selected_party()
+	assert_eq(loaded_party.travel_route, [Vector2i(4, 3), Vector2i(4, 4), Vector2i(5, 4)])
+	for step in loaded_party.travel_route:
+		assert_true(step is Vector2i, "Each restored travel_route step must be a real Vector2i, not a leftover {x, y} dict")
+
+
 func test_load_campaign_imports_into_the_given_session_on_success() -> void:
 	var repository := _repository()
 	repository.save_campaign(_populated_session())

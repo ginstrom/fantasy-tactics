@@ -957,6 +957,18 @@ func merge_battle_loot_into_party() -> void:
 	battle_mana_crystals = {}
 
 
+## True whenever this battle's own loot store (battle_reward/battle_gear/
+## battle_mana_crystals) still holds anything merge_battle_loot_into_party()
+## has not yet folded into the party's carried store -- i.e. the window
+## between complete_current_encounter() clearing selected_encounter and the
+## player leaving the Battle Result screen for the World Map. See
+## GameManager.can_save_current_campaign(), which ANDs this in alongside the
+## "no active encounter" guard so a save can never freeze loot in this
+## transient, not-yet-settled bucket.
+func has_unsettled_battle_loot() -> bool:
+	return battle_reward != 0 or not battle_gear.is_empty() or not battle_mana_crystals.is_empty()
+
+
 ## Merges the party's carried store into the Encampment's bank -- the other
 ## half of the shared _merge_counts() pair (see merge_battle_loot_into_
 ## party() for the battle -> party merge).
