@@ -23,6 +23,58 @@ func after_each() -> void:
 	GameSession.loot_gear_roll = func() -> float: return randf()
 
 
+## The two "real post-victory scene change" tests above drive a genuine
+## get_tree().change_scene_to_file() chain and never unload what they leave
+## behind as get_tree().current_scene once the test finishes -- there was
+## never a reason to, since none of those tests' own assertions depend on
+## it being gone afterward. But a real, still-live scene sitting directly
+## under root stays part of the same Viewport's GUI hit-testing for the
+## rest of this file's run, and can silently intercept a later test's own
+## push_input() click if the click's on-screen position happens to land on
+## one of ITS controls (e.g. anywhere in the right-hand two-thirds of the
+## screen, where EndTurnButton/InformationPanel live). Any test below this
+## point that pushes a real click must call this first so it's only ever
+## contending with its own freshly-instanced scene.
+func _unload_any_stale_real_scene() -> void:
+	if get_tree().current_scene != null:
+		get_tree().unload_current_scene()
+
+
+## GUT's own console/output panel (root/GutRunner/GutLayer) is a real,
+## visible CanvasLayer that stays on screen for the whole headless run --
+## positioned along the RIGHT two-thirds of the 1280x720 window (roughly
+## x=643..1275), which is exactly where World Map's right-aligned TopRow
+## content (EndTurnButton, InformationPanel) lives. Godot's GUI hit-testing
+## sorts by CanvasLayer, not by node-tree position, so GUT's panel silently
+## wins any push_input() click in that region unless it's hidden first. A
+## real player never has this panel; it's purely a test-harness artifact.
+func _hide_gut_debug_panel() -> CanvasLayer:
+	var gut_layer: CanvasLayer = get_tree().root.get_node_or_null("GutRunner/GutLayer")
+	if gut_layer != null:
+		gut_layer.visible = false
+	return gut_layer
+
+
+## BaseButton's own "pressed" signal fires on release (button-up), not on
+## press-down (Godot's default action_mode) -- a single push_input() of a
+## pressed=true event is enough to reach a Control's own gui_input, but
+## never enough to make a real Button actually register a click. Every real
+## push_input()-driven button-click assertion below needs the full down/up
+## pair a real mouse click always produces.
+func _push_click(viewport: Viewport, position: Vector2) -> void:
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = position
+	viewport.push_input(press, true)
+
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = position
+	viewport.push_input(release, true)
+
+
 func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	assert_eq(GameSession.parties.size(), 0)
 	var parties: Control = PartiesScene.instantiate()
@@ -369,3 +421,151 @@ func test_campaign_guide_never_blocks_a_real_click_through_a_guided_world_map_re
 		world_map.party_selected,
 		"a real click through the guided region must still select the party underneath the banner"
 	)
+
+
+## Manual playtesting found the Dismiss button itself unreachable on the
+## World Map: HUD/Margin (and its VBox/TopRow descendants) are LATER
+## siblings than HUD/CampaignGuide in world_map.tscn, so Godot's GUI hit
+## test checks them first -- and being containers, their default
+## mouse_filter (PASS) still claims their own full-width row for hit-testing
+## purposes, even though TopRow's visible content (EndTurnButton/
+## InformationPanel) is right-aligned far away from where the banner
+## actually sits. PASS only bubbles the event up TopRow's own ancestor
+## chain; it never lets the separate CampaignGuide sibling branch underneath
+## it take the click. This test proves the real pixel a player would click
+## -- the Dismiss button's own on-screen rect -- actually reaches it.
+func test_campaign_guide_dismiss_button_is_reachable_by_a_real_click_on_the_world_map() -> void:
+	_unload_any_stale_real_scene()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+	assert_true(GameSession.has_deployed_party())
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	# The Dismiss button's on-screen position depends on CampaignGuide's own
+	# internal VBoxContainer sort, which Godot defers to the end of the
+	# frame -- let it actually run (empirically, two frames) before trusting
+	# get_global_rect().
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var guide: Control = world_map.get_node("%CampaignGuide")
+	assert_eq(
+		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE,
+		"a freshly deployed party with no route yet should be showing the select-route guide"
+	)
+	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
+
+	var dismiss_button: Button = guide.get_node("%DismissButton")
+	var dismiss_pixel_center: Vector2 = dismiss_button.get_global_rect().get_center()
+
+	# The awaits above give another test elsewhere in this suite a chance to
+	# interleave (Godot coroutines don't fully serialize two awaiting tests)
+	# and re-plant a stale current_scene -- clear it again, right before
+	# this click, not just once at the top of the test.
+	_unload_any_stale_real_scene()
+	_push_click(world_map.get_viewport(), dismiss_pixel_center)
+
+	assert_true(
+		GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE, false),
+		"a real click on the Dismiss button's own on-screen position must record the dismissal"
+	)
+	assert_false(guide.visible, "the guide must hide itself once its message has been dismissed")
+
+
+## The fix for the Dismiss-button bug above sets mouse_filter = IGNORE on
+## HUD/Margin, HUD/Margin/VBox and HUD/Margin/VBox/TopRow -- containers, not
+## leaves. IGNORE on a container must only disable that container's own
+## catch-all click-absorption, never its descendants' own hit-testing, or
+## this would trade one broken button for several others. This proves a
+## real click still reaches EndTurnButton (a direct leaf of TopRow/TopRight)
+## and PartyViewButton (nested two levels deeper still, inside the
+## InformationPanel sub-scene) after the fix.
+func test_real_buttons_inside_the_now_ignored_top_row_still_receive_clicks() -> void:
+	_unload_any_stale_real_scene()
+	var gut_layer := _hide_gut_debug_panel()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	# Let the deferred container sort (TopRow/TopRight) actually run
+	# (empirically, two frames) before trusting any button's get_global_rect().
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var end_turn_button: Button = world_map.get_node("%EndTurnButton")
+	var turn_before: int = GameSession.world_turn
+	_push_click(world_map.get_viewport(), end_turn_button.get_global_rect().get_center())
+
+	assert_eq(
+		GameSession.world_turn, turn_before + 1,
+		"EndTurnButton, a direct leaf of the now-IGNORE TopRow, must still receive real clicks"
+	)
+
+	# Select the party first so InformationPanel actually renders PartyViewButton.
+	world_map._handle_tile_click(world_map.party_position)
+	assert_true(world_map.party_selected)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var information_panel: Control = world_map.get_node("%InformationPanel")
+	var party_view_button: Button = information_panel.get_node("Content/PartyViewButton")
+	assert_true(party_view_button.visible, "Sanity check: selecting the party must reveal the View Party button")
+
+	# The two awaits above give another test elsewhere in this suite a
+	# chance to interleave (Godot coroutines don't fully serialize two
+	# awaiting tests) and re-plant a stale current_scene -- clear it again,
+	# right before this click, not just once at the top of the test.
+	_unload_any_stale_real_scene()
+	_push_click(world_map.get_viewport(), party_view_button.get_global_rect().get_center())
+
+	if gut_layer != null:
+		gut_layer.visible = true
+
+	assert_eq(
+		GameManager.route_context_id, GameSession.FIRST_PARTY_ID,
+		"PartyViewButton, nested inside the now-IGNORE chain, must still route the real click through to Party Details"
+	)
+
+
+## Mirrors the World Map Dismiss-button regression test above, but for the
+## other surface CampaignGuide is instanced on. Unlike World Map,
+## Encampment.tscn instances CampaignGuide as the LAST child of the
+## Encampment root (after Body), so it is the frontmost sibling for
+## hit-testing there -- the opposite ordering from the World Map bug -- and
+## this proves that ordering really does keep the Dismiss button reachable.
+func test_campaign_guide_dismiss_button_is_reachable_by_a_real_click_on_encampment() -> void:
+	_unload_any_stale_real_scene()
+	var encampment: Control = EncampmentScene.instantiate()
+	add_child_autofree(encampment)
+	# The Dismiss button's on-screen position depends on CampaignGuide's own
+	# internal VBoxContainer sort, which Godot defers to the end of the
+	# frame -- let it actually run (empirically, two frames) before trusting
+	# get_global_rect().
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var guide: Control = encampment.get_node("%CampaignGuide")
+	assert_eq(
+		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY,
+		"a fresh campaign with no parties yet should be showing the form-party guide"
+	)
+	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
+
+	var dismiss_button: Button = guide.get_node("%DismissButton")
+	var dismiss_pixel_center: Vector2 = dismiss_button.get_global_rect().get_center()
+
+	# The awaits above give another test elsewhere in this suite a chance to
+	# interleave (Godot coroutines don't fully serialize two awaiting tests)
+	# and re-plant a stale current_scene -- clear it again, right before
+	# this click, not just once at the top of the test.
+	_unload_any_stale_real_scene()
+	_push_click(encampment.get_viewport(), dismiss_pixel_center)
+
+	assert_true(
+		GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false),
+		"a real click on the Dismiss button's own on-screen position must record the dismissal"
+	)
+	assert_false(guide.visible, "the guide must hide itself once its message has been dismissed")

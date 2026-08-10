@@ -9,6 +9,18 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	# test_entering_units_clears_a_stale_route_context_id() below is the one
+	# test in this file that drives a REAL GameManager.go_to_units() ->
+	# get_tree().change_scene_to_file() scene change rather than only
+	# instancing UnitsScene directly. Leaving that real Units scene as
+	# get_tree().current_scene for the rest of the suite's run makes it a
+	# live, full-screen, mouse_filter=STOP Control sitting at the front of
+	# the whole viewport's GUI hit-test -- silently absorbing any later
+	# test's own push_input()-driven click anywhere onscreen, in a
+	# completely unrelated scene/test. Unload it so this file never leaks
+	# that into whatever test happens to run next.
+	if get_tree().current_scene != null:
+		get_tree().unload_current_scene()
 
 
 func test_units_shows_the_title_and_the_back_action() -> void:
