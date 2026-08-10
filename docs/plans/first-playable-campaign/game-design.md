@@ -95,10 +95,12 @@ a time.
 Every kill and every cleared site awards XP immediately, split evenly across
 the deployed party: 5/10 for a Goblin kill/clear, 10/20 for an Orc kill/clear.
 Cumulative level thresholds are 0, 20, 50, 90, and so on — each level costing
-10 more XP than the last. A level grants one maximum-health point (applied
-immediately to both the persistent adventurer and the active battle unit) and ten
-unspent skill points, spendable on Attack from a modal Level-Up overlay that
-resolves immediately, before further input or a battle-result transition.
+10 more XP than the last. A level sets maximum HP to Vitality × level, applied
+immediately to both the persistent adventurer and the active battle unit — the
+Warrior's Vitality is 10, so a level-1 Warrior has 10 HP and a level-2 Warrior
+has 20. A level also grants ten unspent skill points, spendable on Attack from
+a modal Level-Up overlay that resolves immediately, before further input or a
+battle-result transition.
 Attack starts at 60 and has no cap, though its derived hit chance caps at 95%.
 Every third level requires a perk choice; the first available perk, Bonus
 Move, grants one extra tile of movement range. The same XP, Attack, health,
@@ -115,7 +117,11 @@ site or hiring a recruit opens a vacancy; that vacancy's own 15 +/- 5 (encounter
 or 30 +/- 5 (recruitment) World Map turn clock refills it with a new instance only
 if its category is still under its cap when the clock completes. A cleared
 site never reopens — a later spawn is a distinct new instance, though it may
-reuse a previously seen encounter template at a different map tile.
+reuse a previously seen encounter template at a different map tile. Each new
+encounter or recruitment instance gets its own unique identity, so a refill is
+always distinguishable from the instance it replaced even when it reuses a
+template. A refill's map position is chosen in-bounds and unoccupied, so it
+never visually appears to reopen the exact site that was just cleared.
 
 A three-star Ruined Fortress template now exists alongside the Goblin Camp
 and Orc Outpost, but it is never one of the campaign's two starting sites.
@@ -130,8 +136,6 @@ eligible, a refill is roughly 44% one-star, 44% two-star, and 11%
 three-star; by the time a player has recruited several adventurers and
 maxed the Guild Hall, those odds shift toward roughly 8% / 62% / 31%. No
 tier's odds ever reach zero.
-
-The user can also dismiss potential recruits so that future candidates can fill available slots.
 
 The World Map marks each active encounter with a difficulty-only star badge
 (one star for Goblin Camp, two for Orc Outpost, three for the Ruined
@@ -168,9 +172,9 @@ armor); its damage and defensive stats come from its equipped gear — see
 Trade, equipment, and loot below for how weapon and armor choice change a
 Warrior's damage range, effective hit chance, and damage taken. Monster HP
 and damage are tuned around that 10 HP baseline so a level-1 Warrior is in
-a roughly even solo fight against a single Orc (see
-[docs/plans/2026-08-08-monster-tiers-and-weighted-encounters/index.md](../../2026-08-08-monster-tiers-and-weighted-encounters/index.md)
-for the expected-rounds-to-kill math this was tuned against):
+a roughly even solo fight against a single Orc (tuned against
+expected-rounds-to-kill math for that baseline against each monster type; see
+the monster stat tables in `GameSession`):
 
 | Monster | Health | Hit chance | Damage | Weapon |
 |---|---|---|---|---|
@@ -543,8 +547,10 @@ must not simulate systems that do not exist yet.
   current buy/sell/equip loop has been playtested.
 - **Roster and Recruitment growth:** this slice intentionally has no search,
   pagination, town-size rules, building prerequisites, or class-specific
-  combat behavior. Refill timing and caps are deterministic, not random.
-  Later town growth can expand or filter the vacancy-timed offer pool without
+  combat behavior. Refill delay is randomized per vacancy (see Vacancy-timed
+  encounter and recruitment population above); once that delay elapses,
+  whether a refill actually spawns is deterministic, gated only by the
+  category's cap. Later town growth can expand or filter the vacancy-timed offer pool without
   changing ownership or screen routing.
 - **Party management limits:** party capacity is now the Guild Hall's cap (4,
   or 5 after the upgrade); removal, reassignment between parties, injuries,
