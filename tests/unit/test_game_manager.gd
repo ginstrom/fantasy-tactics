@@ -1,6 +1,8 @@
 extends GutTest
 
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const SaveRepositoryScript := preload("res://scripts/save/save_repository.gd")
+const TEST_SAVE_PATH := "user://test_game_manager_campaign.json"
 
 
 func after_each() -> void:
@@ -11,6 +13,13 @@ func after_each() -> void:
 	GameManager.battle_result_summary = {}
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
+	# Save-related tests inject a repository pointed at TEST_SAVE_PATH instead
+	# of the real campaign-save.json; put GameManager back on a fresh default
+	# repository and remove any file this run may have left behind so no test
+	# leaks save state into another.
+	GameManager.save_repository = SaveRepositoryScript.new()
+	if FileAccess.file_exists(TEST_SAVE_PATH):
+		DirAccess.remove_absolute(TEST_SAVE_PATH)
 
 
 func test_battle_route_uses_battlefield_scene() -> void:
@@ -692,3 +701,77 @@ func test_go_to_battle_result_stores_the_summary_dictionary() -> void:
 
 func test_battle_result_summary_starts_empty() -> void:
 	assert_eq(GameManager.battle_result_summary, {})
+
+
+## --- Save/load wrappers (Step 2 -- see docs/plans/2026-08-10-initial- ------
+## --- campaign-and-automation/02-atomic-save-repository.md). Boundary -----
+## --- guards (whether saving/loading is currently allowed) are Step 3's ---
+## --- job; these tests only prove GameManager delegates to an injectable --
+## --- SaveRepository instead of ever touching FileAccess/DirAccess itself.-
+
+
+func test_game_manager_source_never_touches_file_or_dir_access_directly() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_false(source.contains("FileAccess"), "UI/manager code must go through SaveRepository, never FileAccess directly")
+	assert_false(source.contains("DirAccess"), "UI/manager code must go through SaveRepository, never DirAccess directly")
+
+
+func test_save_repository_is_test_injectable() -> void:
+	var repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	GameManager.save_repository = repository
+
+	assert_eq(GameManager.save_repository.save_path, TEST_SAVE_PATH)
+
+
+func test_save_current_campaign_delegates_to_the_injected_repository() -> void:
+	GameSession.reset()
+	GameSession.gold = 77
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	var result: Dictionary = GameManager.save_current_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(FileAccess.file_exists(TEST_SAVE_PATH))
+	var json := JSON.new()
+	assert_eq(json.parse(FileAccess.get_file_as_string(TEST_SAVE_PATH)), OK)
+	assert_eq(json.data.gold, 77)
+
+
+func test_load_current_campaign_imports_into_game_session_via_the_injected_repository() -> void:
+	GameSession.reset()
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	var writer_session: Node = preload("res://scripts/autoload/game_session.gd").new()
+	autofree(writer_session)
+	writer_session.gold = 123
+	writer_repository.save_campaign(writer_session)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+
+	var result: Dictionary = GameManager.load_current_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.gold, 123)
+
+
+func test_load_current_campaign_never_mutates_game_session_when_the_repository_load_fails() -> void:
+	GameSession.reset()
+	GameSession.gold = 5
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	var result: Dictionary = GameManager.load_current_campaign()
+
+	assert_false(result.ok)
+	assert_eq(GameSession.gold, 5)
+
+
+func test_has_valid_save_reflects_the_injected_repository() -> void:
+	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
+
+	assert_false(GameManager.has_valid_save())
+
+	GameSession.reset()
+	GameManager.save_current_campaign()
+
+	assert_true(GameManager.has_valid_save())
