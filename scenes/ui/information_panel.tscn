@@ -35,11 +35,7 @@ layout_mode = 2
 visible = false
 text = "information.members"
 
-[node name="PendingReward" type="Label" parent="Content"]
-layout_mode = 2
-visible = false
-
-[node name="CarriedLoot" type="Label" parent="Content"]
+[node name="PartyGold" type="Label" parent="Content"]
 layout_mode = 2
 visible = false
 

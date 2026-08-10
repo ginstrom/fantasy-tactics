@@ -16,8 +16,7 @@ signal recruit_selected(candidate_id: String)
 @onready var gold_label: Label = $Content/Gold
 @onready var party_name_label: Label = $Content/PartyName
 @onready var party_members_label: Label = $Content/PartyMembers
-@onready var pending_reward_label: Label = $Content/PendingReward
-@onready var carried_loot_label: Label = $Content/CarriedLoot
+@onready var party_gold_label: Label = $Content/PartyGold
 @onready var party_view_button: Button = $Content/PartyViewButton
 @onready var adventurer_name_label: Label = $Content/AdventurerName
 @onready var adventurer_class_label: Label = $Content/AdventurerClass
@@ -74,10 +73,9 @@ func refresh_party(party_id: String, pending_reward: int = 0) -> void:
 	party_name_label.visible = true
 	party_members_label.visible = true
 	party_view_button.visible = true
-	_refresh_carried_loot()
-	pending_reward_label.visible = pending_reward > 0
+	party_gold_label.visible = pending_reward > 0
 	if pending_reward > 0:
-		pending_reward_label.text = tr("information.pending_reward") % pending_reward
+		party_gold_label.text = tr("information.party_gold") % pending_reward
 
 
 ## Shows the permanent rows plus the named adventurer's name, class, level,
@@ -153,30 +151,12 @@ func _refresh_permanent_rows() -> void:
 	gold_label.text = tr("information.gold") % GameSession.gold
 
 
-## Shown whenever the player is carrying unbanked loot (see GameSession.
-## pending_mana_crystals/pending_gear), independent of which party is
-## selected — loot is a session-wide unbanked total, not per-party. Reads
-## GameSession directly rather than taking a parameter, unlike pending_reward
-## above, since there is no existing caller-supplied value to thread through.
-func _refresh_carried_loot() -> void:
-	var mana_crystal_count := 0
-	for tier in GameSession.pending_mana_crystals:
-		mana_crystal_count += GameSession.pending_mana_crystals[tier]
-	var gear_count := 0
-	for item_id in GameSession.pending_gear:
-		gear_count += GameSession.pending_gear[item_id]
-	carried_loot_label.visible = mana_crystal_count > 0 or gear_count > 0
-	if carried_loot_label.visible:
-		carried_loot_label.text = tr("information.carried_loot") % [mana_crystal_count, gear_count]
-
-
 func _clear_party_section() -> void:
 	_selected_party_id = ""
 	party_name_label.visible = false
 	party_members_label.visible = false
 	party_view_button.visible = false
-	pending_reward_label.visible = false
-	carried_loot_label.visible = false
+	party_gold_label.visible = false
 
 
 func _clear_adventurer_section() -> void:

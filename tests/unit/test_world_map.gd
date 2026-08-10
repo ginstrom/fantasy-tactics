@@ -705,7 +705,7 @@ func test_pressing_the_panels_view_party_button_routes_to_party_details() -> voi
 	)
 
 
-func test_information_panel_shows_the_pending_reward_for_a_selected_party_with_one() -> void:
+func test_information_panel_shows_the_party_gold_for_a_selected_party_with_one() -> void:
 	GameSession.pending_reward = 15
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
@@ -713,13 +713,13 @@ func test_information_panel_shows_the_pending_reward_for_a_selected_party_with_o
 
 	world_map._handle_tile_click(world_map.party_position)
 
-	assert_true(panel.get_node("Content/PendingReward").visible)
+	assert_true(panel.get_node("Content/PartyGold").visible)
 	assert_eq(
-		panel.get_node("Content/PendingReward").text, tr("information.pending_reward") % 15
+		panel.get_node("Content/PartyGold").text, tr("information.party_gold") % 15
 	)
 
 
-func test_information_panel_hides_the_pending_reward_row_when_there_is_none() -> void:
+func test_information_panel_hides_the_party_gold_row_when_there_is_none() -> void:
 	GameSession.pending_reward = 0
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
@@ -727,7 +727,7 @@ func test_information_panel_hides_the_pending_reward_row_when_there_is_none() ->
 
 	world_map._handle_tile_click(world_map.party_position)
 
-	assert_false(panel.get_node("Content/PendingReward").visible)
+	assert_false(panel.get_node("Content/PartyGold").visible)
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:

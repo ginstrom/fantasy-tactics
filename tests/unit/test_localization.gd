@@ -114,7 +114,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("information.player") % "Aria", "Player: Aria")
 	assert_eq(tr("information.party") % "Party 1", "Party: Party 1")
 	assert_eq(tr("information.gold") % 25, "Gold: 25")
-	assert_eq(tr("information.pending_reward") % 15, "Unbanked reward: 15 gold")
+	assert_eq(tr("information.party_gold") % 15, "Party Gold: 15")
 	assert_eq(tr("settlement.title"), "Starting Settlement")
 	assert_eq(tr("settlement.description"), "Prepare your party before setting out.")
 	assert_eq(tr("settlement.encampment"), "Enter Encampment")
