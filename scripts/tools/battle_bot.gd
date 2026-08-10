@@ -11,7 +11,7 @@ extends RefCounted
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
 
-## Acts once with every living, not-yet-acted PLAYER unit on `controller`,
+## Acts with every living PLAYER unit while it has AP for legal actions,
 ## in current units-array order, and returns the resulting move/attack
 ## steps (same shape as BattleController.run_enemy_turn()'s own return
 ## value). Leaves controller.active_side untouched — ending the turn is
@@ -27,20 +27,24 @@ static func take_player_turn(controller) -> Array:
 
 static func _take_unit_actions(controller, unit) -> Array:
 	var steps: Array = []
-	var target = _nearest_living_enemy(controller, unit.grid_position)
-	if target == null:
-		return steps
-
 	controller.selected_unit = unit
-	if not target.grid_position in controller.grid.get_adjacent(unit.grid_position):
+	var guard: int = int(unit.max_action_points) + 1
+	while unit.action_points_remaining > 0 and guard > 0:
+		guard -= 1
+		var target = _nearest_living_enemy(controller, unit.grid_position)
+		if target == null:
+			break
+		if target.grid_position in controller.grid.get_adjacent(unit.grid_position):
+			if controller.try_attack_selected_unit(target.grid_position):
+				steps.append(controller.last_attack_result)
+				continue
+			break
 		var destination: Vector2i = _best_move_toward(controller, unit, target.grid_position)
 		var from: Vector2i = unit.grid_position
 		if destination != from and controller.try_move_selected_unit(destination):
 			steps.append({"type": "move", "unit": unit, "from": from, "to": destination})
-
-	if not unit.has_acted and target.is_alive() and target.grid_position in controller.grid.get_adjacent(unit.grid_position):
-		if controller.try_attack_selected_unit(target.grid_position):
-			steps.append(controller.last_attack_result)
+			continue
+		break
 
 	return steps
 

@@ -144,7 +144,7 @@ static func _build_player_unit(spec: Dictionary, index: int):
 		+ int(modifiers.get("max_health", 0))
 	)
 	var attack: int = int(base.get("attack", 0)) + int(modifiers.get("attack", 0))
-	var move_range: int = int(base.get("move_range", 0)) + int(modifiers.get("move_range", 0))
+	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
 	var damage_min: int = int(weapon.get("damage_min", 0)) + int(modifiers.get("damage_min", 0))
 	var damage_max: int = int(weapon.get("damage_max", 0)) + int(modifiers.get("damage_max", 0))
 	var defense: int = int(armor.get("defense", 0)) + int(modifiers.get("defense", 0))
@@ -157,7 +157,7 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	var color: Color = BattleControllerScript.PLAYER_COLORS[index % BattleControllerScript.PLAYER_COLORS.size()]
 	var unit := UnitScript.new(
 		position, color, BattleControllerScript.Side.PLAYER,
-		move_range, max_health, damage_min, damage_max, hit_chance,
+		action_points, max_health, damage_min, damage_max, hit_chance,
 		TranslationServer.translate(weapon.get("name_key", "")), String(spec.id), defense, resistance
 	)
 	unit.display_name = String(spec.id)
@@ -180,13 +180,13 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	var hit_chance: float = clampf(float(base.get("hit_chance", 0.0)) + float(modifiers.get("hit_chance", 0.0)), 0.0, 1.0)
 	var defense: int = int(modifiers.get("defense", 0))
 	var resistance: int = int(modifiers.get("resistance", 0))
-	var move_range: int = BattleControllerScript.UNIT_MOVE_RANGE + int(modifiers.get("move_range", 0))
+	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
 	var kill_xp: int = int(base.get("kill_xp", 0))
 
 	var position := ScenarioContractScript.position_from_dict(spec.position)
 	var unit := UnitScript.new(
 		position, BattleControllerScript.ENEMY_COLOR, BattleControllerScript.Side.ENEMY,
-		move_range, max_health, damage_min, damage_max, hit_chance,
+		action_points, max_health, damage_min, damage_max, hit_chance,
 		TranslationServer.translate(base.get("attack_name_key", "")), "", defense, resistance, kill_xp
 	)
 	unit.display_name = String(spec.id)

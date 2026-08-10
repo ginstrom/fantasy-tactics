@@ -32,8 +32,10 @@ enum Side { PLAYER, ENEMY }
 
 const GROUP := "battle_controller"
 
-const UNIT_MOVE_RANGE := 3
-const SUPER_POWER_MOVE_RANGE := 100
+const BASE_ACTION_POINTS := 6
+const MOVE_ACTION_POINT_COST := 1
+const BASIC_ATTACK_ACTION_POINT_COST := 3
+const SUPER_POWER_ACTION_POINTS := 100
 const SUPER_POWER_ATTACK_DAMAGE := 100
 const SUPER_POWER_HIT_CHANCE := 1.0
 const ENEMY_STEP_MOVE := "move"
@@ -80,7 +82,7 @@ func _ready() -> void:
 		var damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
 		var player_unit := UnitScript.new(
 			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
-			GameSession.get_effective_move_range(adventurer_id),
+			GameSession.get_effective_action_points(adventurer_id),
 			GameSession.get_effective_max_health(adventurer_id),
 			damage_range.x,
 			damage_range.y,
@@ -96,7 +98,7 @@ func _ready() -> void:
 	var enemy_type_name: String = tr(enemy_stats.name_key)
 	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
 		var enemy_unit := UnitScript.new(
-			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, UNIT_MOVE_RANGE,
+			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, BASE_ACTION_POINTS,
 			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.attack_damage, enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key), "", 0, 0, enemy_stats.get("kill_xp", 0)
 		)
@@ -232,11 +234,11 @@ func get_unit_at(pos: Vector2i):
 
 func _move_distances(unit) -> Dictionary:
 	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
-	return grid.get_tile_distances(unit.grid_position, unit.moves_remaining, is_blocked)
+	return grid.get_tile_distances(unit.grid_position, unit.action_points_remaining / MOVE_ACTION_POINT_COST, is_blocked)
 
 
 func get_legal_moves(unit) -> Array[Vector2i]:
-	if unit.moves_remaining <= 0:
+	if unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return []
 	var moves: Array[Vector2i] = []
 	moves.assign(_move_distances(unit).keys())
@@ -244,7 +246,7 @@ func get_legal_moves(unit) -> Array[Vector2i]:
 
 
 func try_move_selected_unit(target: Vector2i) -> bool:
-	if selected_unit == null:
+	if input_locked or selected_unit == null:
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -253,17 +255,17 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 
 	var distances := _move_distances(selected_unit)
 	selected_unit.grid_position = target
-	selected_unit.moves_remaining -= distances[target]
+	selected_unit.action_points_remaining -= distances[target] * MOVE_ACTION_POINT_COST
 	last_attack_result = {}
 	return true
 
 
 func try_attack_selected_unit(target_pos: Vector2i) -> bool:
-	if selected_unit == null or not selected_unit.is_alive():
+	if input_locked or selected_unit == null or not selected_unit.is_alive():
 		return false
 	if selected_unit.side != active_side:
 		return false
-	if selected_unit.has_acted:
+	if selected_unit.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
 		return false
 	if not target_pos in grid.get_adjacent(selected_unit.grid_position):
 		return false
@@ -272,7 +274,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	if target == null or target.side == selected_unit.side or not target.is_alive():
 		return false
 
-	selected_unit.has_acted = true
+	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
 	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
 	var hit: bool = hit_roll.call() < effective_hit_chance
 	var damage: int = 0
@@ -312,10 +314,10 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 		if occupant.side == selected_unit.side:
 			return false
 		return try_attack_selected_unit(target)
-	if selected_unit.moves_remaining <= 0:
+	if selected_unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return false
 	selected_unit.grid_position = target
-	selected_unit.moves_remaining -= 1
+	selected_unit.action_points_remaining -= MOVE_ACTION_POINT_COST
 	last_attack_result = {}
 	return true
 
@@ -347,8 +349,8 @@ func _get_unit_by_adventurer_id(adventurer_id: String):
 func apply_super_power() -> void:
 	for unit in units:
 		if unit.side == Side.PLAYER:
-			unit.move_range = SUPER_POWER_MOVE_RANGE
-			unit.moves_remaining = SUPER_POWER_MOVE_RANGE
+			unit.max_action_points = SUPER_POWER_ACTION_POINTS
+			unit.action_points_remaining = SUPER_POWER_ACTION_POINTS
 			unit.damage_min = SUPER_POWER_ATTACK_DAMAGE
 			unit.damage_max = SUPER_POWER_ATTACK_DAMAGE
 			unit.hit_chance = SUPER_POWER_HIT_CHANCE
@@ -360,8 +362,7 @@ func end_turn() -> void:
 	active_side = Side.ENEMY if active_side == Side.PLAYER else Side.PLAYER
 	for unit in units:
 		if unit.side == active_side:
-			unit.moves_remaining = unit.move_range
-			unit.has_acted = false
+			unit.action_points_remaining = unit.max_action_points
 	# A new round starts once control returns to the player; open it with the
 	# first party member already selected rather than forcing a manual pick.
 	_select_unit(_first_living_player_unit() if active_side == Side.PLAYER else null)
@@ -391,30 +392,41 @@ func is_battle_lost() -> bool:
 
 func run_enemy_turn() -> Array:
 	var steps: Array = []
+	# Battlefield locks player input before calling here. Enemy policy still
+	# reaches the rules exclusively through the public action methods, so let
+	# this synchronous controller-owned loop through and restore the lock before
+	# returning control to the view.
+	var was_input_locked := input_locked
+	input_locked = false
 	for unit in units.duplicate():
 		if not unit.is_alive() or unit.side != Side.ENEMY:
 			continue
 		steps.append_array(_take_enemy_unit_actions(unit))
+	input_locked = was_input_locked
 	selected_unit = null
 	return steps
 
 
 func _take_enemy_unit_actions(unit) -> Array:
 	var steps: Array = []
-	var target = _nearest_living_unit(unit.grid_position, Side.PLAYER)
-	if target == null:
-		return steps
-
 	selected_unit = unit
-	if not target.grid_position in grid.get_adjacent(unit.grid_position):
+	var guard: int = int(unit.max_action_points) + 1
+	while unit.action_points_remaining > 0 and guard > 0:
+		guard -= 1
+		var target = _nearest_living_unit(unit.grid_position, Side.PLAYER)
+		if target == null:
+			break
+		if target.grid_position in grid.get_adjacent(unit.grid_position):
+			if try_attack_selected_unit(target.grid_position):
+				steps.append(last_attack_result)
+				continue
+			break
 		var destination := _best_move_toward(unit, target.grid_position)
 		var from: Vector2i = unit.grid_position
 		if destination != from and try_move_selected_unit(destination):
 			steps.append({"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination})
-
-	if not unit.has_acted and target.is_alive() and target.grid_position in grid.get_adjacent(unit.grid_position):
-		if try_attack_selected_unit(target.grid_position):
-			steps.append(last_attack_result)
+			continue
+		break
 	return steps
 
 
@@ -488,7 +500,7 @@ func _select_unit_after_action() -> void:
 	if selected_unit == null or not selected_unit.is_alive():
 		_select_unit(null)
 		return
-	if selected_unit.moves_remaining <= 0 and selected_unit.has_acted:
+	if selected_unit.action_points_remaining <= 0:
 		_select_unit(null)
 		return
 	_select_unit(selected_unit)

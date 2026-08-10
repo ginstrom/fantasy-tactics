@@ -143,6 +143,8 @@ messages = {
 "settlement.encampment": "Enter Encampment",
 "battle.end_turn": "End Turn",
 "battle.round": "Round %d",
+"battle.action_points": "AP: %d / %d",
+"battle.end_turn.reminder": "End Turn forfeits remaining AP.",
 "battle.side.player": "Player",
 "battle.side.enemy": "Enemy",
 "battle.hint.select_unit": "%s's move. Click a unit to select it, or press 1-5. Esc: menu.",

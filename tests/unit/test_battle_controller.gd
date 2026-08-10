@@ -21,6 +21,74 @@ func _make_controller(width: int, height: int) -> Node2D:
 	return controller
 
 
+func test_units_start_their_active_side_with_six_action_points() -> void:
+	var controller := _make_controller(6, 6)
+	var player = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE)
+	var enemy = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [player, enemy]
+
+	assert_eq(player.max_action_points, 6)
+	assert_eq(player.action_points_remaining, 6)
+	controller.end_turn()
+	assert_eq(enemy.action_points_remaining, 6)
+
+
+func test_three_moves_then_an_adjacent_attack_spend_the_full_six_action_points() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+	var defender = UnitScript.new(Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	assert_true(controller.try_move_selected_unit(Vector2i(3, 0)))
+	assert_eq(attacker.action_points_remaining, 3)
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 0)
+
+
+func test_two_adjacent_basic_attacks_are_legal_with_six_action_points() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 3)
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 0)
+
+
+func test_unaffordable_attack_preserves_action_points_and_combat_state() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+	var defender = UnitScript.new(Vector2i(4, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	assert_true(controller.try_move_selected_unit(Vector2i(4, 0)))
+	var health_before: int = defender.health
+
+	assert_false(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 2)
+	assert_eq(attacker.grid_position, Vector2i(4, 0))
+	assert_eq(defender.health, health_before)
+	assert_eq(controller.last_attack_result, {})
+
+
+func test_end_turn_forfeits_departing_action_points_and_resets_only_the_new_side() -> void:
+	var controller := _make_controller(6, 6)
+	var player = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE)
+	var enemy = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [player, enemy]
+	controller.selected_unit = player
+	assert_true(controller.try_move_selected_unit(Vector2i(4, 1)))
+
+	controller.end_turn()
+
+	assert_eq(player.action_points_remaining, 3, "The departing side keeps its forfeited remainder until its next turn")
+	assert_eq(enemy.action_points_remaining, 6)
+
+
 func test_unit_moves_to_an_unoccupied_adjacent_tile() -> void:
 	var controller := _make_controller(4, 4)
 	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE)
@@ -46,7 +114,7 @@ func test_unit_cannot_move_onto_an_occupied_adjacent_tile() -> void:
 	assert_eq(mover.grid_position, Vector2i(1, 1), "Rejected move must not change position")
 
 
-func test_unit_cannot_move_to_a_non_adjacent_tile() -> void:
+func test_unit_can_move_to_an_unoccupied_tile_within_its_action_point_budget() -> void:
 	var controller := _make_controller(4, 4)
 	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
 	controller.units = [mover]
@@ -54,8 +122,8 @@ func test_unit_cannot_move_to_a_non_adjacent_tile() -> void:
 
 	var moved: bool = controller.try_move_selected_unit(Vector2i(3, 3))
 
-	assert_false(moved, "Move to a non-adjacent tile should be rejected")
-	assert_eq(mover.grid_position, Vector2i(0, 0))
+	assert_true(moved, "Click movement can spend multiple action points at once")
+	assert_eq(mover.grid_position, Vector2i(3, 3))
 
 
 func test_unit_can_move_multiple_tiles_within_its_move_range() -> void:
@@ -108,7 +176,7 @@ func test_unit_can_click_move_multiple_times_within_the_same_turn_while_points_r
 	assert_true(first_moved, "The first move (spending 1 of 3 points) should succeed")
 	assert_true(second_moved, "The second move (spending the remaining 2 points) should succeed")
 	assert_eq(mover.grid_position, Vector2i(4, 1))
-	assert_eq(mover.moves_remaining, 0, "The full budget has been spent across both moves")
+	assert_eq(mover.action_points_remaining, 0, "The full budget has been spent across both moves")
 
 
 func test_unit_cannot_move_once_its_points_budget_is_exhausted() -> void:
@@ -150,12 +218,12 @@ func test_end_turn_switches_the_active_side_and_resets_movement() -> void:
 	controller.end_turn()
 
 	assert_eq(controller.active_side, BattleControllerScript.Side.ENEMY, "End turn hands control to the other side")
-	assert_eq(enemy_unit.moves_remaining, enemy_unit.move_range, "The newly active side's units have not moved yet")
+	assert_eq(enemy_unit.action_points_remaining, enemy_unit.max_action_points, "The newly active side's units have not acted yet")
 
 	controller.end_turn()
 
 	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER, "End turn returns control to the first side")
-	assert_eq(player_unit.moves_remaining, player_unit.move_range, "The player's unit regains its movement on its next turn")
+	assert_eq(player_unit.action_points_remaining, player_unit.max_action_points, "The player's unit regains its AP on its next turn")
 
 
 func test_end_turn_selects_the_first_living_player_unit_when_a_new_round_starts() -> void:
@@ -254,7 +322,7 @@ func test_ready_spawns_the_full_party_and_the_encounters_full_enemy_count() -> v
 	assert_not_null(warrior, "Warrior should spawn at the first player start position")
 	assert_eq(warrior.side, BattleControllerScript.Side.PLAYER)
 	assert_eq(warrior.max_health, 10)
-	assert_eq(warrior.move_range, 3)
+	assert_eq(warrior.max_action_points, BattleControllerScript.BASE_ACTION_POINTS)
 	assert_eq(warrior.damage_min, 1)
 	assert_eq(warrior.damage_max, 8)
 	assert_eq(warrior.hit_chance, 0.6)
@@ -418,7 +486,7 @@ func test_ready_builds_the_player_unit_with_one_extra_move_tile_after_choosing_b
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
-	assert_eq(warrior.move_range, 4, "The bonus_move perk should add one extra move tile to the player unit")
+	assert_eq(warrior.max_action_points, 7, "The bonus_move perk should add one flexible action point")
 
 
 func test_ready_falls_back_to_the_default_warrior_when_no_party_is_selected() -> void:
@@ -428,7 +496,7 @@ func test_ready_falls_back_to_the_default_warrior_when_no_party_is_selected() ->
 
 	assert_eq(warrior.max_health, GameSession.get_effective_max_health(GameSession.WARRIOR_ID))
 	assert_eq(warrior.hit_chance, GameSession.get_effective_hit_chance(GameSession.WARRIOR_ID))
-	assert_eq(warrior.move_range, GameSession.get_effective_move_range(GameSession.WARRIOR_ID))
+	assert_eq(warrior.max_action_points, GameSession.get_effective_action_points(GameSession.WARRIOR_ID))
 
 
 func test_ready_assigns_the_adventurers_name_as_the_player_units_display_name() -> void:
@@ -497,7 +565,7 @@ func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> vo
 
 	assert_true(attacked)
 	assert_eq(defender.health, 1, "A hit applies the attacker's fixed damage")
-	assert_true(attacker.has_acted)
+	assert_eq(attacker.action_points_remaining, 0)
 
 
 func test_attack_misses_and_deals_no_damage_when_the_roll_is_at_or_above_hit_chance() -> void:
@@ -550,9 +618,9 @@ func test_attack_is_rejected_against_a_non_adjacent_target() -> void:
 	assert_eq(defender.health, defender.max_health)
 
 
-func test_attack_is_rejected_a_second_time_in_the_same_turn() -> void:
+func test_two_attacks_are_allowed_when_the_unit_can_afford_both() -> void:
 	var controller := _make_controller(6, 6)
-	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 5)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -561,7 +629,7 @@ func test_attack_is_rejected_a_second_time_in_the_same_turn() -> void:
 
 	var attacked_again: bool = controller.try_attack_selected_unit(defender.grid_position)
 
-	assert_false(attacked_again, "A unit that already attacked this turn cannot attack again")
+	assert_true(attacked_again, "A unit can spend its remaining AP on a second attack")
 
 
 func test_attack_is_rejected_for_a_unit_on_the_inactive_side() -> void:
@@ -579,7 +647,7 @@ func test_attack_is_rejected_for_a_unit_on_the_inactive_side() -> void:
 
 func test_unit_can_move_then_attack_in_the_same_turn() -> void:
 	var controller := _make_controller(6, 6)
-	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	var defender = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -594,7 +662,7 @@ func test_unit_can_move_then_attack_in_the_same_turn() -> void:
 
 func test_unit_can_attack_then_move_in_the_same_turn() -> void:
 	var controller := _make_controller(6, 6)
-	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
@@ -607,7 +675,7 @@ func test_unit_can_attack_then_move_in_the_same_turn() -> void:
 	assert_true(moved, "Moving after attacking must still be legal - order does not matter")
 
 
-func test_end_turn_resets_has_acted_for_the_newly_active_side() -> void:
+func test_end_turn_resets_action_points_for_the_newly_active_side() -> void:
 	var controller := _make_controller(6, 6)
 	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
 	var enemy_unit = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
@@ -619,7 +687,7 @@ func test_end_turn_resets_has_acted_for_the_newly_active_side() -> void:
 	controller.end_turn()
 	controller.end_turn()
 
-	assert_false(player_unit.has_acted, "The player's unit regains its attack on its next turn")
+	assert_eq(player_unit.action_points_remaining, player_unit.max_action_points, "The player's unit regains its AP on its next turn")
 
 
 func test_is_battle_won_when_no_living_enemies_remain() -> void:
@@ -683,7 +751,7 @@ func test_run_enemy_turn_attacks_without_moving_when_already_adjacent() -> void:
 func test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap() -> void:
 	var controller := _make_controller(6, 6)
 	var goblin = UnitScript.new(
-		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 0.3, "Short Sword"
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 0.3, "Short Sword"
 	)
 	var player_unit = UnitScript.new(
 		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
@@ -757,11 +825,11 @@ func test_apply_super_power_maxes_out_player_units_only() -> void:
 
 	controller.apply_super_power()
 
-	assert_eq(warrior.move_range, BattleControllerScript.SUPER_POWER_MOVE_RANGE)
+	assert_eq(warrior.max_action_points, BattleControllerScript.SUPER_POWER_ACTION_POINTS)
 	assert_eq(warrior.damage_min, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
 	assert_eq(warrior.damage_max, BattleControllerScript.SUPER_POWER_ATTACK_DAMAGE)
 	assert_eq(warrior.hit_chance, BattleControllerScript.SUPER_POWER_HIT_CHANCE)
-	assert_eq(goblin.move_range, 3, "Super Power must not affect enemy units")
+	assert_eq(goblin.max_action_points, 3, "Super Power must not affect enemy units")
 	assert_eq(goblin.damage_min, 1, "Super Power must not affect enemy units")
 	assert_eq(goblin.damage_max, 1, "Super Power must not affect enemy units")
 	assert_eq(goblin.hit_chance, 0.3, "Super Power must not affect enemy units")
@@ -777,7 +845,7 @@ func test_wasd_step_moves_one_tile_and_spends_one_movement_point() -> void:
 
 	assert_true(stepped, "A step onto an empty adjacent tile should succeed")
 	assert_eq(mover.grid_position, Vector2i(2, 1))
-	assert_eq(mover.moves_remaining, 2, "A single step spends exactly one movement point")
+	assert_eq(mover.action_points_remaining, 2, "A single step spends exactly one action point")
 
 
 func test_wasd_step_is_rejected_once_movement_points_are_exhausted() -> void:
@@ -811,7 +879,7 @@ func test_wasd_step_onto_an_enemy_tile_attacks_instead_of_moving() -> void:
 
 	assert_true(stepped, "Stepping into an enemy-occupied tile should succeed as an attack")
 	assert_eq(defender.health, 1, "The step-attack applies the attacker's fixed damage")
-	assert_true(attacker.has_acted)
+	assert_eq(attacker.action_points_remaining, 0)
 	assert_eq(attacker.grid_position, Vector2i(1, 1), "An attacking step must not move the attacker")
 
 
@@ -905,7 +973,7 @@ func test_clicking_an_attackable_enemy_still_attacks_instead_of_pinning() -> voi
 
 	controller._handle_tile_click(enemy.grid_position)
 
-	assert_true(attacker.has_acted, "An in-range click must still resolve as an attack, unchanged")
+	assert_eq(attacker.action_points_remaining, 0, "An in-range click must still resolve as an attack")
 
 
 func test_selecting_a_unit_pins_it_as_the_inspected_unit() -> void:
@@ -951,14 +1019,14 @@ func test_wasd_step_and_a_click_move_share_the_same_movement_budget_in_one_turn(
 
 	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
 	assert_eq(mover.grid_position, Vector2i(2, 1))
-	assert_eq(mover.moves_remaining, 2)
+	assert_eq(mover.action_points_remaining, 2)
 	controller.selected_unit = mover
 	var moved: bool = controller.try_move_selected_unit(Vector2i(4, 1))
 
 	assert_true(stepped, "The WASD step should succeed")
 	assert_true(moved, "The remaining budget should cover the multi-tile click move")
 	assert_eq(mover.grid_position, Vector2i(4, 1))
-	assert_eq(mover.moves_remaining, 0, "The full budget has been spent across the step and the click move")
+	assert_eq(mover.action_points_remaining, 0, "The full budget has been spent across the step and the click move")
 
 	controller.selected_unit = mover
 	var further_step: bool = controller.try_step_selected_unit(Vector2i.RIGHT)

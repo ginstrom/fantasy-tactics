@@ -240,7 +240,7 @@ func test_apply_super_power_maxes_out_player_units_on_the_active_battlefield() -
 
 	assert_eq(GameManager.apply_super_power(), OK)
 
-	assert_eq(warrior.move_range, 100)
+	assert_eq(warrior.max_action_points, BattleControllerScript.SUPER_POWER_ACTION_POINTS)
 	assert_eq(warrior.damage_min, 100)
 	assert_eq(warrior.damage_max, 100)
 	assert_eq(warrior.hit_chance, 1.0)

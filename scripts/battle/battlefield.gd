@@ -10,6 +10,7 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var log_list: VBoxContainer = %Log
 @onready var log_scroll: ScrollContainer = $HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll
 @onready var round_label: Label = %RoundLabel
+@onready var action_points_label: Label = %ActionPointsLabel
 @onready var end_turn_button: Button = %EndTurnButton
 @onready var grid: Node2D = $Grid
 @onready var level_up: Control = $HUD/LevelUp
@@ -123,15 +124,20 @@ func _on_board_changed() -> void:
 	var side_name: String = tr(SIDE_NAME_KEYS[grid.active_side])
 	var selected_unit = grid.selected_unit
 	if selected_unit == null:
+		action_points_label.text = ""
 		hint.text = tr("battle.hint.select_unit") % side_name
-	elif selected_unit.moves_remaining <= 0 and selected_unit.has_acted:
-		hint.text = tr("battle.hint.turn_complete") % side_name
-	elif selected_unit.moves_remaining <= 0:
-		hint.text = tr("battle.hint.already_moved") % side_name
 	else:
-		hint.text = tr("battle.hint.select_destination") % side_name
+		action_points_label.text = tr("battle.action_points") % [
+			selected_unit.action_points_remaining, selected_unit.max_action_points,
+		]
+		hint.text = (
+			tr("battle.hint.turn_complete") % side_name
+			if selected_unit.action_points_remaining <= 0
+			else tr("battle.hint.select_destination") % side_name
+		)
 
 	round_label.text = tr("battle.round") % round_number
+	end_turn_button.tooltip_text = tr("battle.end_turn.reminder")
 	_update_health_labels()
 	portrait_panel.refresh()
 	if not grid.last_attack_result.is_empty():

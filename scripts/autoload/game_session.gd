@@ -1575,14 +1575,15 @@ func get_effective_max_health(adventurer_id: String) -> int:
 	return adventurer.stats.max_health
 
 
-## Centralized effective move range: base move_range plus one extra tile if
-## the bonus_move perk has been chosen. Returns 0 for an unknown adventurer.
-func get_effective_move_range(adventurer_id: String) -> int:
+## Centralized effective battle AP: every unit starts with the battle baseline,
+## and Bonus Move adds one flexible AP rather than a movement-only allowance.
+## Returns 0 for an unknown adventurer.
+func get_effective_action_points(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
 	var bonus := 1 if adventurer.progression.perks.has(BONUS_MOVE_PERK_ID) else 0
-	return adventurer.stats.move_range + bonus
+	return 6 + bonus
 
 
 ## Returns (damage_min, damage_max) from the adventurer's equipped weapon, or

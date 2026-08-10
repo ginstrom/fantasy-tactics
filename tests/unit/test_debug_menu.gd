@@ -144,7 +144,7 @@ func test_super_power_button_maxes_the_party_and_closes_the_menu_during_a_battle
 	menu._on_super_power_pressed()
 
 	assert_false(menu.visible)
-	assert_eq(warrior.move_range, 100)
+	assert_eq(warrior.max_action_points, BattleControllerScript.SUPER_POWER_ACTION_POINTS)
 	assert_eq(warrior.damage_min, 100)
 	assert_eq(warrior.damage_max, 100)
 	assert_eq(warrior.hit_chance, 1.0)

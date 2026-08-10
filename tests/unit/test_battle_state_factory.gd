@@ -138,7 +138,7 @@ func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_de
 	var armor: Dictionary = GameSession.ARMORS[GameSession.DEFAULT_ARMOR_ID]
 
 	assert_eq(hero.max_health, GameSession.BASE_MAX_HEALTH)
-	assert_eq(hero.move_range, GameSession.BASE_MOVE_RANGE)
+	assert_eq(hero.max_action_points, BattleControllerScript.BASE_ACTION_POINTS)
 	assert_eq(hero.damage_min, weapon.damage_min)
 	assert_eq(hero.damage_max, weapon.damage_max)
 	assert_eq(hero.defense, armor.defense)

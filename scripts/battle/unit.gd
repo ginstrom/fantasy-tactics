@@ -3,9 +3,8 @@ extends RefCounted
 var grid_position: Vector2i
 var color: Color
 var side: int
-var move_range: int
-var moves_remaining: int
-var has_acted: bool = false
+var max_action_points: int
+var action_points_remaining: int
 var max_health: int
 var health: int
 var damage_min: int
@@ -46,7 +45,7 @@ func _init(
 	p_grid_position: Vector2i,
 	p_color: Color,
 	p_side: int = 0,
-	p_move_range: int = 1,
+	p_action_points: int = 6,
 	p_max_health: int = 3,
 	p_damage_min: int = 1,
 	p_damage_max: int = 1,
@@ -60,8 +59,8 @@ func _init(
 	grid_position = p_grid_position
 	color = p_color
 	side = p_side
-	move_range = p_move_range
-	moves_remaining = p_move_range
+	max_action_points = p_action_points
+	action_points_remaining = p_action_points
 	max_health = p_max_health
 	health = p_max_health
 	damage_min = p_damage_min

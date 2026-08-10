@@ -1721,18 +1721,18 @@ func test_get_effective_max_health_reflects_leveling() -> void:
 	assert_eq(session.get_effective_max_health("warrior_001"), 20)
 
 
-func test_get_effective_move_range_adds_the_bonus_move_perk() -> void:
+func test_get_effective_action_points_adds_the_bonus_move_perk() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 
-	assert_eq(session.get_effective_move_range("warrior_001"), 3)
+	assert_eq(session.get_effective_action_points("warrior_001"), 6)
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
 	session.choose_perk("warrior_001", "bonus_move")
 
-	assert_eq(session.get_effective_move_range("warrior_001"), 4, "bonus_move grants one extra tile of movement")
+	assert_eq(session.get_effective_action_points("warrior_001"), 7, "bonus_move grants one flexible action point")
 
 
 ## Task 4 (vacancy-timed population): a fresh campaign is sparse, and every

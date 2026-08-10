@@ -15,14 +15,14 @@ func _make_controller(width: int, height: int) -> Node2D:
 
 func test_moves_toward_the_nearest_enemy_when_out_of_attack_range() -> void:
 	var controller := _make_controller(6, 6)
-	var player := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var player := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	var enemy := UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
 	controller.units = [player, enemy]
 
 	var steps: Array = BattleBot.take_player_turn(controller)
 
 	assert_ne(player.grid_position, Vector2i(0, 0), "Bot should move the unit toward the enemy")
-	assert_false(player.has_acted, "Out of range: no attack should have been made")
+	assert_eq(player.action_points_remaining, 0, "The bot spends its AP moving toward the target")
 	assert_eq(steps.size(), 1)
 	assert_eq(steps[0].type, "move")
 
@@ -37,7 +37,7 @@ func test_attacks_an_adjacent_enemy_instead_of_moving() -> void:
 	var steps: Array = BattleBot.take_player_turn(controller)
 
 	assert_eq(player.grid_position, Vector2i(2, 2), "Already adjacent: unit should not move")
-	assert_true(player.has_acted, "Adjacent enemy should be attacked")
+	assert_eq(player.action_points_remaining, 0, "Adjacent attacks spend the full AP budget")
 	assert_eq(steps.size(), 1)
 	assert_eq(steps[0].type, "attack")
 	assert_eq(steps[0].defender, enemy)
@@ -45,7 +45,7 @@ func test_attacks_an_adjacent_enemy_instead_of_moving() -> void:
 
 func test_moves_then_attacks_in_the_same_turn_once_in_range() -> void:
 	var controller := _make_controller(6, 6)
-	var player := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var player := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	var enemy := UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
 	controller.units = [player, enemy]
 	controller.hit_roll = func() -> float: return 0.0
@@ -53,7 +53,7 @@ func test_moves_then_attacks_in_the_same_turn_once_in_range() -> void:
 	var steps: Array = BattleBot.take_player_turn(controller)
 
 	assert_eq(player.grid_position, Vector2i(1, 0), "Should move exactly one tile adjacent, not overshoot")
-	assert_true(player.has_acted)
+	assert_eq(player.action_points_remaining, 2)
 	assert_eq(steps.size(), 2)
 	assert_eq(steps[0].type, "move")
 	assert_eq(steps[1].type, "attack")
