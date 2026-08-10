@@ -42,6 +42,9 @@ var used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+var blacksmith_level: int = 0
+var blacksmith_craft_job: Dictionary = {}
+var blacksmith_sharpening_job: Dictionary = {}
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -81,6 +84,9 @@ func to_dictionary() -> Dictionary:
 		"world_turn": world_turn,
 		"gold": gold,
 		"guild_hall_level": guild_hall_level,
+		"blacksmith_level": blacksmith_level,
+		"blacksmith_craft_job": blacksmith_craft_job.duplicate(true),
+		"blacksmith_sharpening_job": blacksmith_sharpening_job.duplicate(true),
 		"pending_reward": pending_reward,
 		"mana_crystals": mana_crystals.duplicate(true),
 		"banked_gear": banked_gear.duplicate(true),
@@ -163,6 +169,16 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if not data.get(scalar_key) is int:
 			return _invalid("%s is not an int" % scalar_key)
 		normalized[scalar_key] = int(data[scalar_key])
+
+	# Added after version one shipped, so existing snapshots normalize to the
+	# harmless unbuilt/no-job state while new saves retain active work.
+	if data.has("blacksmith_level") and not data.blacksmith_level is int:
+		return _invalid("blacksmith_level is not an int")
+	normalized["blacksmith_level"] = int(data.get("blacksmith_level", 0))
+	for job_key in ["blacksmith_craft_job", "blacksmith_sharpening_job"]:
+		if data.has(job_key) and not data[job_key] is Dictionary:
+			return _invalid("%s is not a dictionary" % job_key)
+		normalized[job_key] = (data.get(job_key, {}) as Dictionary).duplicate(true)
 
 	if not data.get("has_trading_post") is bool:
 		return _invalid("has_trading_post is not a bool")

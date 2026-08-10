@@ -22,6 +22,9 @@ var adventurer_id: String
 # this plan's Phase A architecture note).
 var defense: int
 var resistance: int
+# Flat damage added immediately after rolling the equipped weapon and before
+# target resistance. It is battle-local derived state, never campaign state.
+var raw_damage_bonus: int = 0
 # XP awarded to the party when this unit is the one defeated (see
 # GameSession.*_ENEMY_STATS.kill_xp). 0 and unused for player-side units.
 var kill_xp: int = 0

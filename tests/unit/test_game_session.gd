@@ -2414,6 +2414,150 @@ func test_can_upgrade_guild_hall_is_false_at_max_level() -> void:
 	assert_false(session.can_upgrade_guild_hall())
 
 
+## --- Blacksmith ---
+
+func test_blacksmith_build_upgrade_and_craft_tier_gates() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 199
+
+	assert_false(session.start_blacksmith_craft("dagger_iron"), "A Blacksmith is required")
+	assert_true(session.build_blacksmith())
+	assert_eq(session.blacksmith_level, 1)
+	assert_eq(session.gold, 149)
+	assert_false(session.start_blacksmith_craft("dagger_iron"), "Iron requires level 2")
+	assert_true(session.upgrade_blacksmith())
+	assert_eq(session.blacksmith_level, 2)
+	assert_eq(session.gold, 99)
+	assert_true(session.start_blacksmith_craft("dagger_iron"))
+	assert_false(session.start_blacksmith_craft("dagger_steel"), "Only one craft job may run")
+
+
+func test_blacksmith_level_three_unlocks_steel_crafting_for_one_craft_slot() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 200
+
+	assert_true(session.build_blacksmith())
+	assert_true(session.upgrade_blacksmith())
+	assert_true(session.upgrade_blacksmith())
+	assert_eq(session.blacksmith_level, 3)
+	assert_eq(session.gold, 0)
+	assert_false(session.start_blacksmith_craft("dagger_steel"), "Crafting also requires its price")
+	session.gold = session.get_blacksmith_craft_cost("dagger_steel")
+	assert_true(session.start_blacksmith_craft("dagger_steel"))
+
+
+func test_blacksmith_craft_cost_is_ninety_percent_of_sale_price_rounded_up() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_item_sale_price("dagger_iron"), 5)
+	assert_eq(session.get_blacksmith_craft_cost("dagger_iron"), 5)
+	assert_eq(session.get_item_sale_price("shortsword_iron"), 10)
+	assert_eq(session.get_blacksmith_craft_cost("shortsword_iron"), 9)
+
+
+func test_blacksmith_failed_job_starts_are_atomic_and_jobs_run_in_parallel() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 110
+	assert_true(session.build_blacksmith())
+	session.banked_gear["dagger_iron"] = 1
+	var gold_before: int = session.gold
+
+	assert_false(session.start_sharpening("longsword_iron"))
+	assert_eq(session.gold, gold_before)
+	assert_eq(session.banked_gear.dagger_iron, 1)
+	assert_eq(session.blacksmith_sharpening_job, {})
+	assert_true(session.start_sharpening("dagger_iron"))
+	assert_eq(session.banked_gear.get("dagger_iron", 0), 0)
+	assert_false(session.start_sharpening("dagger_iron"))
+	assert_true(session.upgrade_blacksmith())
+	session.gold = 100
+	assert_true(session.start_blacksmith_craft("dagger_iron"))
+	assert_ne(session.blacksmith_craft_job, {})
+	assert_ne(session.blacksmith_sharpening_job, {})
+
+
+func test_blacksmith_jobs_complete_only_after_their_world_map_turn_durations() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 200
+	assert_true(session.build_blacksmith())
+	session.banked_gear["dagger_iron"] = 1
+	assert_true(session.start_sharpening("dagger_iron"))
+	assert_true(session.upgrade_blacksmith())
+	assert_true(session.start_blacksmith_craft("dagger_iron"))
+
+	for _turn in 4:
+		session.end_world_turn()
+	assert_eq(session.banked_gear.get("dagger_iron", 0), 0)
+	assert_ne(session.blacksmith_craft_job, {})
+	session.end_world_turn()
+	assert_eq(session.banked_gear.get("dagger_iron", 0), 1)
+	assert_eq(session.blacksmith_craft_job, {})
+	for _turn in 15:
+		session.end_world_turn()
+	assert_eq(session.blacksmith_sharpening_job, {})
+	assert_eq(session.banked_item_instance_ids.size(), 1)
+	var instance: Dictionary = session.owned_item_instances[session.banked_item_instance_ids[0]]
+	assert_eq(instance.treatment_id, "sharpened")
+
+
+func test_blacksmith_state_survives_a_campaign_snapshot_round_trip() -> void:
+	GameSession.gold = 200
+	assert_true(GameSession.build_blacksmith())
+	GameSession.banked_gear["dagger_iron"] = 1
+	assert_true(GameSession.start_sharpening("dagger_iron"))
+	assert_true(GameSession.upgrade_blacksmith())
+	assert_true(GameSession.start_blacksmith_craft("dagger_iron"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.blacksmith_level, 2)
+	assert_eq(GameSession.blacksmith_craft_job, snapshot.blacksmith_craft_job)
+	assert_eq(GameSession.blacksmith_sharpening_job, snapshot.blacksmith_sharpening_job)
+
+
+func test_blacksmith_snapshot_rejects_an_impossible_job_without_mutating_the_session() -> void:
+	GameSession.gold = 75
+	var before_gold := GameSession.gold
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.blacksmith_level = 1
+	snapshot.blacksmith_craft_job = {"item_id": "dagger_iron", "completion_turn": GameSession.world_turn + 5}
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_eq(GameSession.gold, before_gold)
+	assert_eq(GameSession.blacksmith_level, 0)
+
+
+func test_sharpened_owned_weapon_grants_its_raw_damage_bonus_only_when_equipped() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.banked_gear["dagger_iron"] = 1
+	assert_true(session.materialize_banked_item_instance("dagger_iron", "sharpened_dagger"))
+	assert_true(session.set_item_instance_modifier("sharpened_dagger", "treatment", "sharpened", 1))
+	assert_eq(session.get_effective_weapon_raw_damage_bonus(GameSessionScript.WARRIOR_ID), 0)
+	assert_true(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "sharpened_dagger"))
+	assert_eq(session.get_effective_weapon_raw_damage_bonus(GameSessionScript.WARRIOR_ID), 1)
+
+
+func test_snapshot_rejects_a_sharpened_treatment_without_its_modifier_tier() -> void:
+	GameSession.banked_gear["dagger_iron"] = 1
+	assert_true(GameSession.materialize_banked_item_instance("dagger_iron", "forged_dagger"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.owned_item_instances.forged_dagger.treatment_id = "sharpened"
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_eq(GameSession.owned_item_instances.forged_dagger.treatment_id, "")
+
+
 func test_assign_adventurer_to_party_rejects_fifth_member_at_level_one() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2986,6 +3130,9 @@ func _capture_durable_fields() -> Dictionary:
 		"world_turn": GameSession.world_turn,
 		"gold": GameSession.gold,
 		"guild_hall_level": GameSession.guild_hall_level,
+		"blacksmith_level": GameSession.blacksmith_level,
+		"blacksmith_craft_job": GameSession.blacksmith_craft_job.duplicate(true),
+		"blacksmith_sharpening_job": GameSession.blacksmith_sharpening_job.duplicate(true),
 		"pending_reward": GameSession.pending_reward,
 		"mana_crystals": GameSession.mana_crystals.duplicate(true),
 		"banked_gear": GameSession.banked_gear.duplicate(true),

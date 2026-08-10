@@ -164,6 +164,12 @@ const WEAPONS: Dictionary = {
 	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35},
 	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105},
 }
+const BLACKSMITH_BUILD_COST := 50
+const BLACKSMITH_UPGRADE_COSTS := {2: 50, 3: 100}
+const BLACKSMITH_MAX_LEVEL := 3
+const BLACKSMITH_CRAFT_DURATION_TURNS := 5
+const BLACKSMITH_SHARPENING_DURATION_TURNS := 20
+const SHARPENED_TREATMENT_ID := "sharpened"
 const ARMORS: Dictionary = {
 	"leather_armor": {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10},
 	"chainmail_armor": {"name_key": "item.chainmail_armor", "slot": "armor", "defense": 15, "resistance": 20, "price": 30},
@@ -398,6 +404,12 @@ var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+var blacksmith_level: int = 0
+# Each job stores only catalog input and its absolute World Map completion
+# turn. The two slots deliberately remain independent so crafting and
+# sharpening can progress in parallel.
+var blacksmith_craft_job: Dictionary = {}
+var blacksmith_sharpening_job: Dictionary = {}
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -475,6 +487,9 @@ func reset() -> void:
 	world_turn = 1
 	gold = 0
 	guild_hall_level = 1
+	blacksmith_level = 0
+	blacksmith_craft_job = {}
+	blacksmith_sharpening_job = {}
 	pending_reward = 0
 	mana_crystals = {}
 	banked_gear = {}
@@ -797,6 +812,7 @@ func end_world_turn() -> bool:
 		auto_moved = take_next_route_step()
 
 	world_turn += 1
+	_advance_blacksmith_jobs()
 	if has_trading_post:
 		gold += TRADING_POST_INCOME_PER_TURN
 	if has_deployed_party():
@@ -1006,6 +1022,108 @@ func upgrade_guild_hall() -> bool:
 	gold -= GUILD_HALL_UPGRADE_COST
 	guild_hall_level += 1
 	return true
+
+
+func can_build_blacksmith() -> bool:
+	return blacksmith_level == 0 and gold >= BLACKSMITH_BUILD_COST
+
+
+func build_blacksmith() -> bool:
+	if not can_build_blacksmith():
+		return false
+	gold -= BLACKSMITH_BUILD_COST
+	blacksmith_level = 1
+	return true
+
+
+func get_blacksmith_upgrade_cost() -> int:
+	return int(BLACKSMITH_UPGRADE_COSTS.get(blacksmith_level + 1, 0))
+
+
+func can_upgrade_blacksmith() -> bool:
+	var cost := get_blacksmith_upgrade_cost()
+	return blacksmith_level > 0 and cost > 0 and gold >= cost
+
+
+func upgrade_blacksmith() -> bool:
+	if not can_upgrade_blacksmith():
+		return false
+	gold -= get_blacksmith_upgrade_cost()
+	blacksmith_level += 1
+	return true
+
+
+func get_blacksmith_craft_cost(item_id: String) -> int:
+	if not WEAPONS.has(item_id):
+		return 0
+	return int(ceil(get_item_sale_price(item_id) * 0.9))
+
+
+func start_blacksmith_craft(item_id: String) -> bool:
+	if not blacksmith_craft_job.is_empty() or not WEAPONS.has(item_id):
+		return false
+	var required_level := _blacksmith_required_level_for_weapon(item_id)
+	var cost := get_blacksmith_craft_cost(item_id)
+	if blacksmith_level < required_level or gold < cost:
+		return false
+	gold -= cost
+	blacksmith_craft_job = {"item_id": item_id, "completion_turn": world_turn + BLACKSMITH_CRAFT_DURATION_TURNS}
+	return true
+
+
+func start_sharpening(item_id: String) -> bool:
+	if blacksmith_level < 1 or not blacksmith_sharpening_job.is_empty() or not WEAPONS.has(item_id):
+		return false
+	if banked_gear.get(item_id, 0) <= 0:
+		return false
+	var cost := get_item_sale_price(item_id) * 2
+	if gold < cost:
+		return false
+	gold -= cost
+	banked_gear[item_id] -= 1
+	blacksmith_sharpening_job = {"item_id": item_id, "completion_turn": world_turn + BLACKSMITH_SHARPENING_DURATION_TURNS}
+	return true
+
+
+func get_blacksmith_job_turns_remaining(job: Dictionary) -> int:
+	return max(0, int(job.get("completion_turn", world_turn)) - world_turn)
+
+
+func _blacksmith_required_level_for_weapon(item_id: String) -> int:
+	if item_id.ends_with("_iron"):
+		return 2
+	if item_id.ends_with("_steel"):
+		return 3
+	return BLACKSMITH_MAX_LEVEL + 1
+
+
+func _advance_blacksmith_jobs() -> void:
+	if not blacksmith_craft_job.is_empty() and get_blacksmith_job_turns_remaining(blacksmith_craft_job) == 0:
+		var crafted_item_id := str(blacksmith_craft_job.item_id)
+		banked_gear[crafted_item_id] = banked_gear.get(crafted_item_id, 0) + 1
+		blacksmith_craft_job = {}
+	if not blacksmith_sharpening_job.is_empty() and get_blacksmith_job_turns_remaining(blacksmith_sharpening_job) == 0:
+		var base_item_id := str(blacksmith_sharpening_job.item_id)
+		var instance_id := _new_blacksmith_item_instance_id()
+		# The input was consumed at job start, so this completion needs no
+		# second bank transfer. Materialize the unique record directly.
+		owned_item_instances[instance_id] = {
+			"id": instance_id,
+			"base_item_id": base_item_id,
+			"treatment_id": SHARPENED_TREATMENT_ID,
+			"enhancement_id": "",
+			"rune_id": "",
+			"modifier_tiers": {"treatment": 1},
+		}
+		banked_item_instance_ids.append(instance_id)
+		blacksmith_sharpening_job = {}
+
+
+func _new_blacksmith_item_instance_id() -> String:
+	var number := 1
+	while owned_item_instances.has("blacksmith_item_%03d" % number):
+		number += 1
+	return "blacksmith_item_%03d" % number
 
 
 func can_purchase_trading_post() -> bool:
@@ -1700,6 +1818,16 @@ func get_effective_weapon_damage_range(adventurer_id: String) -> Vector2i:
 	return Vector2i(weapon.damage_min, weapon.damage_max)
 
 
+func get_effective_weapon_raw_damage_bonus(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	var weapon_id := str(adventurer.equipment.weapon)
+	if not owned_item_instances.has(weapon_id):
+		return 0
+	return 1 if owned_item_instances[weapon_id].get("treatment_id", "") == SHARPENED_TREATMENT_ID else 0
+
+
 func get_effective_weapon_name(adventurer_id: String) -> String:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
@@ -1751,6 +1879,9 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.world_turn = world_turn
 	snapshot.gold = gold
 	snapshot.guild_hall_level = guild_hall_level
+	snapshot.blacksmith_level = blacksmith_level
+	snapshot.blacksmith_craft_job = blacksmith_craft_job.duplicate(true)
+	snapshot.blacksmith_sharpening_job = blacksmith_sharpening_job.duplicate(true)
 	snapshot.pending_reward = pending_reward
 	snapshot.mana_crystals = mana_crystals.duplicate(true)
 	snapshot.banked_gear = banked_gear.duplicate(true)
@@ -1791,6 +1922,9 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	var owned_instance_error := _validate_owned_item_instance_ownership(snapshot)
 	if not owned_instance_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": owned_instance_error}
+	var blacksmith_error := _validate_blacksmith_state(snapshot)
+	if not blacksmith_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": blacksmith_error}
 	adventurers = snapshot.adventurers.duplicate(true)
 	recruitment_candidates = snapshot.recruitment_candidates.duplicate(true)
 	recruitment_vacancies = snapshot.recruitment_vacancies.duplicate(true)
@@ -1804,6 +1938,9 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	world_turn = snapshot.world_turn
 	gold = snapshot.gold
 	guild_hall_level = snapshot.guild_hall_level
+	blacksmith_level = snapshot.blacksmith_level
+	blacksmith_craft_job = snapshot.blacksmith_craft_job.duplicate(true)
+	blacksmith_sharpening_job = snapshot.blacksmith_sharpening_job.duplicate(true)
 	pending_reward = snapshot.pending_reward
 	mana_crystals = snapshot.mana_crystals.duplicate(true)
 	banked_gear = snapshot.banked_gear.duplicate(true)
@@ -1818,6 +1955,26 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result
+
+
+func _validate_blacksmith_state(snapshot: Dictionary) -> String:
+	var level: int = snapshot.blacksmith_level
+	if level < 0 or level > BLACKSMITH_MAX_LEVEL:
+		return "blacksmith level is out of range"
+	for job_key in ["blacksmith_craft_job", "blacksmith_sharpening_job"]:
+		var job: Dictionary = snapshot[job_key]
+		if job.is_empty():
+			continue
+		if level == 0:
+			return "unbuilt blacksmith has a job"
+		if not job.get("item_id") is String or not job.get("completion_turn") is int:
+			return "blacksmith job has invalid fields"
+		var item_id := str(job.item_id)
+		if not WEAPONS.has(item_id) or int(job.completion_turn) < int(snapshot.world_turn):
+			return "blacksmith job is invalid"
+		if job_key == "blacksmith_craft_job" and level < _blacksmith_required_level_for_weapon(item_id):
+			return "blacksmith level cannot craft this weapon"
+	return ""
 
 
 ## Owned instances have exactly one location: Stores or one matching-slot
@@ -1841,6 +1998,16 @@ func _validate_owned_item_instance_ownership(snapshot: Dictionary) -> String:
 				return "owned item instance has an unknown modifier category"
 			if not instance.modifier_tiers[category] is int or int(instance.modifier_tiers[category]) <= 0:
 				return "owned item instance has an invalid modifier tier"
+		var field_by_category := {
+			"treatment": "treatment_id",
+			"enhancement": "enhancement_id",
+			"rune": "rune_id",
+		}
+		for category in field_by_category:
+			var has_modifier := not str(instance[field_by_category[category]]).is_empty()
+			var has_tier: bool = instance.modifier_tiers.has(category)
+			if has_modifier != has_tier:
+				return "owned item instance modifier and tier do not match"
 		var base_item_id := str(instance.get("base_item_id", ""))
 		if not WEAPONS.has(base_item_id) and not ARMORS.has(base_item_id):
 			return "owned item instance has an unknown base item"

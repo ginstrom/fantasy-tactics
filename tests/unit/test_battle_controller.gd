@@ -59,6 +59,20 @@ func test_two_adjacent_basic_attacks_are_legal_with_six_action_points() -> void:
 	assert_eq(attacker.action_points_remaining, 0)
 
 
+func test_sharpened_weapon_adds_one_raw_damage_before_resistance() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 1.0, "Attack", "", 0, 50)
+	attacker.raw_damage_bonus = 1
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 2
+	controller.hit_roll = func() -> float: return 0.0
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(controller.last_attack_result.damage, 2, "(2 + 1) raw damage rounds to 2 after 50% resistance")
+
+
 func test_unaffordable_attack_preserves_action_points_and_combat_state() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)

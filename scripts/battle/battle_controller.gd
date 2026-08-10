@@ -92,6 +92,7 @@ func _ready() -> void:
 			GameSession.get_effective_defense(adventurer_id),
 			GameSession.get_effective_resistance(adventurer_id)
 		)
+		player_unit.raw_damage_bonus = GameSession.get_effective_weapon_raw_damage_bonus(adventurer_id)
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
 		units.append(player_unit)
 	var enemy_count: int = enemy_stats.get("count", 1)
@@ -279,7 +280,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	var hit: bool = hit_roll.call() < effective_hit_chance
 	var damage: int = 0
 	if hit:
-		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max)
+		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max) + selected_unit.raw_damage_bonus
 		damage = int(round(raw_damage * (1.0 - target.resistance / 100.0)))
 		target.take_damage(damage)
 	var defeated: bool = hit and not target.is_alive()

@@ -10,6 +10,7 @@ extends Control
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 const GUILD_HALL_ROW_ID := "guild_hall"
+const BLACKSMITH_ROW_ID := "blacksmith"
 
 @onready var building_table: TableView = $Body/Center/VBox/BuildingTable
 
@@ -37,12 +38,17 @@ func _build_columns() -> Array[TableColumn]:
 
 
 func _build_rows() -> Array[Dictionary]:
-	return [{"id": GUILD_HALL_ROW_ID, "name": tr("buildings.guild_hall")}]
+	return [
+		{"id": GUILD_HALL_ROW_ID, "name": tr("buildings.guild_hall")},
+		{"id": BLACKSMITH_ROW_ID, "name": tr("buildings.blacksmith")},
+	]
 
 
 func _on_row_activated(row_id: Variant) -> void:
 	if str(row_id) == GUILD_HALL_ROW_ID:
 		GameManager.go_to_guild_hall()
+	elif str(row_id) == BLACKSMITH_ROW_ID:
+		GameManager.go_to_blacksmith()
 
 
 func _on_back_pressed() -> void:
