@@ -151,12 +151,11 @@ Perks are in a tree, and some have prerequisites.
 
 ## Scout perk tree
 
-* (root)
-  * Ranger (+3% missile attack)
-    * scout 1 (+10% scouting)
+* Ranger (+3% missile attack)
+  * scout 1 (+10% scouting)
       -> tracker 1 (reveals enemy Defense and Damage Resistance before battle)
       -> scout 2 (+10% scouting)
       -> tracker 2 (also reveals enemy composition and abilities)
       -> scout 3 (+10% scouting)
-    * hunter's mark (one target suffers -10% Damage Resistance from all party
+  * hunter's mark (one target suffers -10% Damage Resistance from all party
       attacks for 2 rounds; cooldown 8 rounds)
