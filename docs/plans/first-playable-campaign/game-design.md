@@ -414,8 +414,8 @@ gold and mana crystals (banked on return to Encampment), individual
 adventurer XP (awarded immediately per kill and per clear; see Adventurer
 progression above), and a chance of the killed enemy's own weapon as gear
 (see Trade, equipment, and loot above). Cleared sites are persistent but
-not permanent — each vacancy refills on its own 15-turn clock under a
-two-site cap, so the world map keeps changing within a campaign rather
+not permanent — each vacancy refills on its own variable 15 +/- 5 turn clock
+under a two-site cap, so the world map keeps changing within a campaign rather
 than only accumulating grey markers. The encounter catalogue now spans
 three star tiers (Goblin Camp, Orc Outpost, Ruined Fortress) and four
 monster types, with both the enemy composition and, for the Ruined

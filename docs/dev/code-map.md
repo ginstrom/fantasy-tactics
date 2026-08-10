@@ -107,8 +107,11 @@ often more precise than its own source comments.
   place) and its id is recorded in `completed_encounters` instead.
 - **`recruitment_candidates` / `encounter_vacancies` / `recruitment_vacancies`**
   — the vacancy-timed population system: a cleared encounter or purchased
-  recruit starts a countdown (`ENCOUNTER_VACANCY_TURNS` / `RECRUITMENT_VACANCY_TURNS`
-  world turns) that refills the slot once it expires, capped at
+  recruit starts a countdown, resolved once via `vacancy_delay_roll`/
+  `_resolve_vacancy_delay()` to a random value within
+  `ENCOUNTER_VACANCY_TURNS`/`RECRUITMENT_VACANCY_TURNS` +/-
+  `ENCOUNTER_VACANCY_JITTER_TURNS`/`RECRUITMENT_VACANCY_JITTER_TURNS` world
+  turns, that refills the slot once it expires, capped at
   `ENCOUNTER_INSTANCE_CAP` / `RECRUITMENT_OFFER_CAP`. See "Vacancy-timed
   encounter and recruitment population" in
   [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)

@@ -69,7 +69,7 @@ func test_recruitment_table_uses_the_documented_columns() -> void:
 
 ## Task 4: a fresh campaign seeds exactly one active recruitment offer
 ## (warrior_002); the other fixed templates (warrior_003/004) only appear
-## once their own 30-turn vacancy clock refills the offer list.
+## once their own variable 30 +/- 5 turn vacancy clock refills the offer list.
 func test_recruitment_lists_exactly_the_current_candidates() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
