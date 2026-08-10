@@ -63,15 +63,10 @@ Unmodified items remain stackable base ids in Stores. The first permanent improv
 
 ## Generic Action Points — prerequisite
 
-The AP foundation precedes potions, spells, active perks, and rune triggers. Each unit starts a Round with 6 AP.
-
-| Action | AP cost |
-|---|---:|
-| Move one tile | 1 |
-| Basic attack | 3 |
-| Use a carried potion | 2 |
-
-Any legal actions are allowed while AP remains: three tiles plus an attack matches today's baseline; two stationary attacks are legal; and move + potion + attack uses the full budget. Later spells, perks, and items state their own costs or AP changes explicitly.
+The [Movement and Action Points](movement-and-action-points.md) guide owns the
+AP foundation that precedes potions, spells, active perks, and rune triggers.
+Equipment effects use that shared 6-AP Round budget and must state any cost or
+AP change explicitly; they do not create a separate item-action allowance.
 
 ## Crafting buildings
 

@@ -44,7 +44,11 @@ final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
 
 ### Generic Action Points (Next slice)
 
-Every unit begins each Round with 6 Action Points (AP). Movement costs 1 AP per tile, a basic attack costs 3 AP, and using a carried potion costs 2 AP. A unit may take any legal actions while it can pay their costs: it can move three tiles and attack (matching the current baseline), attack twice while stationary, or combine movement, a potion, and an attack. Terrain, spells, perks, and equipment may later change costs or AP only through explicit, tested effects.
+The shared [Movement and Action Points](movement-and-action-points.md) guide
+defines the Round lifecycle, initial 6-AP budget, action costs, legality,
+player feedback, and extension constraints. Classes may change effective AP
+only through an explicit, tested feature; they do not introduce a separate
+class-specific action economy.
 
 ### Long-term concepts that are not yet attributes
 
