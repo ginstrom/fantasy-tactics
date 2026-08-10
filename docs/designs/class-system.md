@@ -1,161 +1,99 @@
 # Classes
 
-* Warrior
-  * Knight
-  * Archer
-* Mage
-  * Spellcaster
-  * Battle Mage
-* Cleric
-  * Healer
-  * Paladin (available only after building a high-level Temple)
-* Scout
-  * Ranger
+## Purpose and status
 
-## Class roles and power curves
+This is the long-term class vision for Fantasy Tactics. It is deliberately broader than the currently playable Warrior-only campaign. A heading marked **Shipped** describes live behaviour; **Next slice** is the approved order of delivery; **Future** is design intent only and must not be presented as a current game feature.
 
-Classes are not intended to have equal combat power at every level.
+The design grows a balanced party through four complementary roots, rather than fully implementing one class tree before the other roles exist:
 
-* Warriors begin strong and remain dependable front-line fighters.
-* Mages begin weak and resource-constrained, but Spellcasters gain the
-  highest late-game damage and control ceiling.
-* Clerics deal little direct damage, but healing, protection, and debuffs
-  make the party more resilient.
-* Paladins are a Cleric/Warrior compromise. Their late Temple recruitment
-  gate and distinctive holy perks justify a stronger late-game profile.
-* Rangers are weaker direct missile fighters than Archers. Their strength is
-  scouting: revealing information that improves expedition and battle choices.
+| Root class | Party role | Tactical emphasis | Earliest playable purpose |
+|---|---|---|---|
+| Warrior | Front line | Health, Might, Guard | Holds space and survives attacks. |
+| Scout | Ranged pressure and reconnaissance | Accuracy, Mobility | Attacks safely at range and reveals expedition risk. |
+| Cleric | Sustain and protection | Health, Guard, Resistance | Restores allies and prevents attrition. |
+| Mage | Control and burst | spell Accuracy, Mobility | Trades durability for area damage and control. |
 
-# Attributes, skills, perks
+Specializations build on a proven root role: Warrior becomes Knight or Archer, Mage becomes Spellcaster or Battle Mage, Cleric becomes Healer or Paladin, and Scout becomes Ranger. A specialization never arrives before its root's core combat loop and counterplay are playable.
 
-## Attributes
+## Shared tactical attributes
 
-* Strength (melee damage, carry weight)
-* Agility (action points, dodge)
-* Vitality (hit points)
-* Intelligence (magic points, spell ability)
-* Piety (clerical spell ability, defensive buffs)
-* Luck (critical chance, loot drops, some other die rolls)
+Every combatant—adventurer or monster—uses one compact tactical profile. An adventurer persists base values in `GameSession`; equipment, perks, effects, and class features produce effective values when a battle unit is created. Monster templates are immutable data and are likewise copied into runtime `Unit` instances.
 
-There are two derived attributes:
+| Attribute | Type | Meaning |
+|---|---:|---|
+| `max_health` | integer | Damage capacity; a unit at zero is defeated. |
+| `might` | integer | Adds to melee or natural-attack raw damage. |
+| `accuracy` | integer | Base chance to hit, expressed in percentage points. |
+| `guard` | integer | Percentage points subtracted from an attacker's Accuracy. |
+| `resistance` | integer percent | Reduces damage after a hit. |
+| `mobility` | integer tiles | Movement budget available during a Round. |
 
-* Hit points (HP): vitality x level
-* Magic points (MP): intelligence x level
+`attack_damage`/weapon damage remains an attack property, not a seventh unit attribute. This keeps a sword, a bow, a spell, and a monster bite able to use the same attributes while retaining their own range, damage, and tags.
 
-## Skills
+### Combat resolution
 
-* Melee attack (raw to-hit)
-* Missile attack (raw to-hit)
-* Scouting
+All accuracy, guard, and resistance values are percentage points.
 
-## Combat resolution
+```text
+final hit chance = clamp((attacker accuracy - defender guard) / 100, 5%, 95%)
+raw damage       = rolled attack damage + attacker might
+final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
+```
 
-Defense and Damage Resistance are distinct defenses. All bonuses and
-reductions below are percentage points unless they explicitly say otherwise.
+**Shipped compatibility:** the live game calls `accuracy` `attack`, `guard` `defense`, and `mobility` `move_range`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. The first shared-attribute slice must preserve those outcomes while migrating the names and data ownership. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
 
-* **Defense** reduces raw to-hit. Apply the final to-hit cap after Defense:
-  `final to-hit = clamp(raw to-hit - target Defense, 5%, 95%)`.
-  Raw to-hit may exceed 95%; for example, 120% raw to-hit against 50%
-  Defense results in 70% final to-hit.
-* **Damage Resistance** reduces damage after a successful hit. Penetration
-  reduces the target's Resistance for that attack:
-  `effective Resistance = clamp(target Resistance - penetration, 0%, 80%)`.
-  `final damage = max(1, round(raw damage x (1 - effective Resistance)))`.
-* Damage bonuses, such as Rage, modify raw damage before Damage Resistance.
-  Penetration and raw-damage bonuses therefore have different jobs:
-  penetration is especially valuable against resistant targets.
+### Long-term concepts that are not yet attributes
 
-## Perks
+The earlier Strength, Agility, Vitality, Intelligence, Piety, and Luck list described useful class fantasy, but it mixed immediate combat data with systems that do not exist. These concepts are retained as future design vocabulary, not persisted attributes:
 
-There are two perk trees: one generic and largely based on attributes, one
-class-specific. Additionally, units can spend perk points to raise an
-attribute by 1 point.
+| Concept | First supported expression | Deferred until |
+|---|---|---|
+| Strength | Might and melee equipment | carrying capacity |
+| Agility | Mobility and Guard | action points and dodge |
+| Vitality | max_health and Resistance | no additional system required |
+| Intelligence | Mage spell access | magic points and spellcasting |
+| Piety | Cleric spell access | healing/buff system and Temple gate |
+| Luck | none | critical hits and loot-roll modifiers |
 
-Perks are in a tree, and some have prerequisites.
+No magic points, carry weight, dodge, critical hits, or luck rolls are added merely to complete this table.
 
-### Generic perk tree
+## Advancement and perks
 
-* (root)
-  * strength
-    + rage 1 (+5% raw melee damage)
-      -> rage 2 (+5% raw melee damage)
-      -> strong back (+ carry weight)
-  * agility
-    + dodge 1 (+5% dodge) -> off balance (a miss leaves the enemy off
-      balance) -> dodge 2 (+5% dodge)
-    + speed 1 (+2 action points) -> speed 2 (+2 action points)
-  * vitality
-    + toughness 1 (+5% Damage Resistance) -> survivability (+5% HP)
-      -> toughness 2 (+10% Damage Resistance)
-  * intelligence
-    + fast learner 1 (+5% XP) -> perception (+10% scouting)
-      -> fast learner 2 (+10% XP)
-  * piety
-    + prayer 1 (+10% to defensive buffs) -> prayer 2 (+20% to defensive buffs)
-  * luck
-    + rabbit foot (+1% to luck rolls) -> horseshoe (+2% to luck rolls)
-      -> four leaf clover (+3% to luck rolls)
+**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk becomes `+1 mobility` without changing its outcome.
 
-### Warrior perk tree
+**Next slice:** retain one skill-point currency and permit only investments whose battle effect is implemented and tested. Accuracy is the sole spend until another permitted statistic is live. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
 
-* (root)
-  * Knight (+5% melee attack)
-    * parry 1 (5% chance to parry an enemy attack; a parried enemy has a 5%
-      chance to become off balance for 1 round)
-      -> fast attack 1 (+2 action points for melee attacks)
-      -> parry 2 (10%/10% parry/off-balance)
-      -> fast attack 2 (+4 action points for melee attacks)
-    * shield bash (extra shield attack; low damage but off-balances)
-      -> shield wall (10% chance to negate an enemy attack with a shield)
-      -> chain blow 1 (on hit, 10% chance to attack a nearby enemy)
-      -> chain blow 2 (on hit, 20% chance to attack a nearby enemy)
-    * thrust 1 (melee attacks ignore 10% Damage Resistance)
-      -> thrust 2 (melee attacks ignore 20% Damage Resistance)
-  * Archer (+5% missile attack)
-    * lock on 1 (+2% raw to-hit per prior consecutive attack against the same
-      target, up to +4%)
-      -> fast attack 1 (+2 action points for missile attacks)
-      -> lock on 2 (maximum Lock On bonus becomes +8%)
-      -> fast attack 2 (+4 action points for missile attacks)
-    * piercing arrow 1 (missile attacks ignore 10% Damage Resistance)
-      -> piercing arrow 2 (missile attacks ignore 20% Damage Resistance)
-    * called shot 1 (+10% raw missile to-hit for 2 rounds; cooldown 10 rounds)
-      -> called shot 2 (+15% raw missile to-hit for 3 rounds; cooldown 10 rounds)
+**Future:** perks can alter raw damage before Resistance, grant penetration, add movement, or introduce an active ability only with the supporting combat primitive. A perk description alone does not enable a mechanic.
 
-### Mage perk tree
+### Generic perk themes
 
-* (root)
-  * Spellcaster (+10 MP)
-    * sleep -> mass sleep -> charm -> mass charm
-    * fire arrow (ignores 10% Damage Resistance) -> fire arrows (3x; ignores
-      20%) -> fireball (ignores 30%) -> fire storm (ignores 30%)
-    * quicken -> haste -> quicken all -> haste all
-  * Battle Mage (+3% melee attack)
-    * ice bolt -> ice blast -> ice storm
-    * mage shield -> mage armor -> mage shell
-    * magic blade (melee attacks ignore 10% Damage Resistance)
-      -> enchanted blade (ignore 20%) -> eldritch blade (ignore 30%)
+- **Might:** Rage increases raw melee damage; Strong Back waits for inventory weight.
+- **Mobility/Guard:** Speed grants Mobility; Dodge waits for an avoidance system.
+- **Health/Resistance:** Toughness increases Resistance; Survivability increases max health.
+- **Knowledge:** Fast Learner may modify XP; perception waits for scouting.
+- **Faith and luck:** Prayer and luck perks wait for their owning systems.
 
-### Cleric perk tree
+### Class perk inventory (Future unless its primitive is shipped)
 
-* (root)
-  * Healer (+5 heal)
-    * extra heal -> heal all -> extra heal all
-    * bless -> prayer -> holy shield
-    * curse (-5% Defense and -5% Damage Resistance) -> doom (-10% Defense
-      and -10% Damage Resistance) -> paralyze -> paralyze group
-  * Paladin (+5% melee attack; Temple recruitment only)
-    * blessed sword (melee attacks ignore 10% Damage Resistance)
-      -> holy sword (ignore 20%) -> smiting sword (ignore 30%)
-    * boon -> might -> holy might
+- **Warrior / Knight:** Parry, Shield Bash, Shield Wall, Chain Blow, and Thrust. Thrust is the first candidate once penetration exists.
+- **Warrior / Archer:** Lock On, Piercing Arrow, and Called Shot. This branch waits for ranged attacks, line/range rules, and target persistence.
+- **Mage / Spellcaster:** sleep/charm control, elemental damage, and haste. This branch owns MP and spell effects when the Mage slice begins.
+- **Mage / Battle Mage:** elemental attacks, temporary Guard, and enchanted weapon penetration.
+- **Cleric / Healer:** healing, defensive buffs, curses, and paralysis.
+- **Cleric / Paladin:** Temple-gated recruitment, holy melee, and boons.
+- **Scout / Ranger:** scouting, pre-battle enemy information, and Hunter's Mark. The first Ranger slice must make scouting information useful before adding its deeper perk tree.
 
-## Scout perk tree
+## Incremental delivery roadmap
 
-* Ranger (+3% missile attack)
-  * scout 1 (+10% scouting)
-      -> tracker 1 (reveals enemy Defense and Damage Resistance before battle)
-      -> scout 2 (+10% scouting)
-      -> tracker 2 (also reveals enemy composition and abilities)
-      -> scout 3 (+10% scouting)
-  * hunter's mark (one target suffers -10% Damage Resistance from all party
-      attacks for 2 rounds; cooldown 8 rounds)
+Every slice must add an encounter pattern that rewards its role, automated combat/balance coverage, and a manual `make play` check. Do not introduce a class solely as a different stat line.
+
+| Slice | Roster | Capability added | Balance gate |
+|---|---|---|---|
+| 0 — **Shipped** | Warrior | adjacent attack, gear, health, accuracy, defense/resistance, movement | One Warrior can fight current monsters at their documented roles. |
+| 1 | Warrior + Scout/Ranger | ranged attacks, range/line-of-sight, basic scouting | Ranger pressure is valuable but cannot replace a front line. |
+| 2 | + Cleric/Healer | targeted healing, protection, durations | Healing offsets attrition but cannot make a Warrior unkillable. |
+| 3 | + Mage/Spellcaster | MP, spells, area/control effects | Mage has powerful output/control but poor durability and limited resources. |
+| 4 | root specializations | Knight, Archer, Battle Mage, Paladin | Each specialization changes decisions, not merely a percentage bonus. |
+| 5 | advanced perk branches | reactions, penetration, marks, cooldowns, multi-target effects | Effects have clear counters, stack limits, and scenario coverage. |
+
+The matching implementation plan lives in [`docs/plans/2026-08-10-class-attributes-and-monsters/`](../plans/2026-08-10-class-attributes-and-monsters/index.md).
