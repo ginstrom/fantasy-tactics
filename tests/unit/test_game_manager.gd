@@ -486,6 +486,13 @@ func test_alchemy_workshop_route_points_to_its_scene() -> void:
 	assert_string_contains(source, "func go_to_alchemy_workshop()")
 
 
+func test_runic_workshop_route_points_to_its_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/runic_workshop.tscn")
+	assert_string_contains(source, "func go_to_runic_workshop()")
+
+
 func test_entering_buildings_clears_a_stale_route_context_id() -> void:
 	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()

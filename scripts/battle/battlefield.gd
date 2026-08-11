@@ -387,6 +387,8 @@ func _update_input_lock() -> void:
 
 
 func _describe_step(step: Dictionary) -> String:
+	if step.get("thorn_triggered", false):
+		return tr("battle.status.thorn_trigger") % step.attacker.display_name
 	if step.type == "attack":
 		var attacker_name: String = tr(SIDE_NAME_KEYS[step.attacker.side])
 		if step.hit:

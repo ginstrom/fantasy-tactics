@@ -20,6 +20,7 @@ const BUILDINGS_SCENE := "res://scenes/ui/buildings.tscn"
 const GUILD_HALL_SCENE := "res://scenes/ui/guild_hall.tscn"
 const BLACKSMITH_SCENE := "res://scenes/ui/blacksmith.tscn"
 const ALCHEMY_WORKSHOP_SCENE := "res://scenes/ui/alchemy_workshop.tscn"
+const RUNIC_WORKSHOP_SCENE := "res://scenes/ui/runic_workshop.tscn"
 const TRADE_SCENE := "res://scenes/ui/trade.tscn"
 const STORES_SCENE := "res://scenes/ui/stores.tscn"
 const TRADING_POST_SCENE := "res://scenes/ui/trading_post.tscn"
@@ -213,6 +214,11 @@ func go_to_blacksmith() -> Error:
 func go_to_alchemy_workshop() -> Error:
 	_clear_detail_context()
 	return _change_scene(ALCHEMY_WORKSHOP_SCENE)
+
+
+func go_to_runic_workshop() -> Error:
+	_clear_detail_context()
+	return _change_scene(RUNIC_WORKSHOP_SCENE)
 
 
 func go_to_trade() -> Error:

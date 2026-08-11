@@ -175,6 +175,13 @@ const ALCHEMY_WORKSHOP_BUILD_COST := 50
 const ALCHEMY_WORKSHOP_UPGRADE_COST := 50
 const ALCHEMY_WORKSHOP_MAX_LEVEL := 2
 const ALCHEMY_CRAFT_DURATION_TURNS := 7
+const RUNIC_WORKSHOP_BUILD_COST := 50
+const RUNIC_WORKSHOP_UPGRADE_COST := 50
+const RUNIC_WORKSHOP_MAX_LEVEL := 2
+const RUNIC_CRAFT_DURATION_TURNS := 7
+const THORN_RUNE_ID := "thorn"
+const THORN_RUNE_GOLD_COST := 20
+const THORN_RUNE_MINIMUM_CRYSTAL_TIER := 1
 const CARRIED_ITEM_CAPACITY := 10
 const ARMORS: Dictionary = {
 	"leather_armor": {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10},
@@ -422,6 +429,8 @@ var blacksmith_craft_job: Dictionary = {}
 var blacksmith_sharpening_job: Dictionary = {}
 var alchemy_workshop_level: int = 0
 var alchemy_craft_job: Dictionary = {}
+var runic_workshop_level: int = 0
+var runic_craft_job: Dictionary = {}
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -505,6 +514,8 @@ func reset() -> void:
 	blacksmith_sharpening_job = {}
 	alchemy_workshop_level = 0
 	alchemy_craft_job = {}
+	runic_workshop_level = 0
+	runic_craft_job = {}
 	pending_reward = 0
 	mana_crystals = {}
 	banked_gear = {}
@@ -829,6 +840,7 @@ func end_world_turn() -> bool:
 	world_turn += 1
 	_advance_blacksmith_jobs()
 	_advance_alchemy_craft_job()
+	_advance_runic_craft_job()
 	if has_trading_post:
 		gold += TRADING_POST_INCOME_PER_TURN
 	if has_deployed_party():
@@ -1196,6 +1208,75 @@ func _advance_alchemy_craft_job() -> void:
 	var crafted_item_id := str(alchemy_craft_job.item_id)
 	banked_gear[crafted_item_id] = banked_gear.get(crafted_item_id, 0) + 1
 	alchemy_craft_job = {}
+
+
+func can_build_runic_workshop() -> bool:
+	return runic_workshop_level == 0 and gold >= RUNIC_WORKSHOP_BUILD_COST
+
+
+func build_runic_workshop() -> bool:
+	if not can_build_runic_workshop():
+		return false
+	gold -= RUNIC_WORKSHOP_BUILD_COST
+	runic_workshop_level = 1
+	return true
+
+
+func can_upgrade_runic_workshop() -> bool:
+	return runic_workshop_level == 1 and gold >= RUNIC_WORKSHOP_UPGRADE_COST
+
+
+func upgrade_runic_workshop() -> bool:
+	if not can_upgrade_runic_workshop():
+		return false
+	gold -= RUNIC_WORKSHOP_UPGRADE_COST
+	runic_workshop_level = 2
+	return true
+
+
+func start_runic_craft(target_instance_id: String) -> bool:
+	if runic_workshop_level < 1 or not runic_craft_job.is_empty() or target_instance_id.is_empty():
+		return false
+	if not _is_owned_armor_instance(target_instance_id):
+		return false
+	if gold < THORN_RUNE_GOLD_COST:
+		return false
+	var crystal_tier := _first_available_mana_crystal_tier(THORN_RUNE_MINIMUM_CRYSTAL_TIER)
+	if crystal_tier == 0:
+		return false
+	gold -= THORN_RUNE_GOLD_COST
+	mana_crystals[crystal_tier] -= 1
+	if mana_crystals[crystal_tier] == 0:
+		mana_crystals.erase(crystal_tier)
+	runic_craft_job = {
+		"target_instance_id": target_instance_id,
+		"rune_id": THORN_RUNE_ID,
+		"completion_turn": world_turn + RUNIC_CRAFT_DURATION_TURNS,
+	}
+	return true
+
+
+func get_runic_job_turns_remaining() -> int:
+	return max(0, int(runic_craft_job.get("completion_turn", world_turn)) - world_turn)
+
+
+func _advance_runic_craft_job() -> void:
+	if runic_craft_job.is_empty() or get_runic_job_turns_remaining() != 0:
+		return
+	var target_instance_id := str(runic_craft_job.target_instance_id)
+	# The target was validated and remains durably owned. If an invalid save or
+	# later state corruption somehow breaks that invariant, discard the paid job
+	# rather than applying a rune to an incompatible item.
+	if _is_owned_armor_instance(target_instance_id):
+		set_item_instance_modifier(target_instance_id, "rune", THORN_RUNE_ID, 1)
+	runic_craft_job = {}
+
+
+func _is_owned_armor_instance(instance_id: String) -> bool:
+	if not owned_item_instances.has(instance_id):
+		return false
+	var item: Dictionary = get_item_definition(instance_id)
+	return str(item.get("slot", "")) == "armor"
 
 
 func _new_blacksmith_item_instance_id() -> String:
@@ -2024,6 +2105,8 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.blacksmith_sharpening_job = blacksmith_sharpening_job.duplicate(true)
 	snapshot.alchemy_workshop_level = alchemy_workshop_level
 	snapshot.alchemy_craft_job = alchemy_craft_job.duplicate(true)
+	snapshot.runic_workshop_level = runic_workshop_level
+	snapshot.runic_craft_job = runic_craft_job.duplicate(true)
 	snapshot.pending_reward = pending_reward
 	snapshot.mana_crystals = mana_crystals.duplicate(true)
 	snapshot.banked_gear = banked_gear.duplicate(true)
@@ -2070,6 +2153,9 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	var alchemy_error := _validate_alchemy_workshop_state(snapshot)
 	if not alchemy_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": alchemy_error}
+	var runic_error := _validate_runic_workshop_state(snapshot)
+	if not runic_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": runic_error}
 	var carried_inventory_error := _validate_carried_inventory(snapshot)
 	if not carried_inventory_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": carried_inventory_error}
@@ -2091,6 +2177,8 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	blacksmith_sharpening_job = snapshot.blacksmith_sharpening_job.duplicate(true)
 	alchemy_workshop_level = snapshot.alchemy_workshop_level
 	alchemy_craft_job = snapshot.alchemy_craft_job.duplicate(true)
+	runic_workshop_level = snapshot.runic_workshop_level
+	runic_craft_job = snapshot.runic_craft_job.duplicate(true)
 	pending_reward = snapshot.pending_reward
 	mana_crystals = snapshot.mana_crystals.duplicate(true)
 	banked_gear = snapshot.banked_gear.duplicate(true)
@@ -2143,6 +2231,28 @@ func _validate_alchemy_workshop_state(snapshot: Dictionary) -> String:
 		return "alchemy workshop job is invalid"
 	if level < int(POTIONS[item_id].required_level):
 		return "alchemy workshop level cannot craft this potion"
+	return ""
+
+
+func _validate_runic_workshop_state(snapshot: Dictionary) -> String:
+	var level: int = snapshot.runic_workshop_level
+	if level < 0 or level > RUNIC_WORKSHOP_MAX_LEVEL:
+		return "runic workshop level is out of range"
+	var job: Dictionary = snapshot.runic_craft_job
+	if job.is_empty():
+		return ""
+	if level == 0:
+		return "unbuilt runic workshop has a job"
+	if not job.get("target_instance_id") is String or not job.get("rune_id") is String or not job.get("completion_turn") is int:
+		return "runic workshop job has invalid fields"
+	var target_instance_id := str(job.target_instance_id)
+	var owned_instances: Dictionary = snapshot.owned_item_instances
+	if target_instance_id.is_empty() or not owned_instances.has(target_instance_id) or str(job.rune_id) != THORN_RUNE_ID or int(job.completion_turn) < int(snapshot.world_turn):
+		return "runic workshop job is invalid"
+	var target_instance: Dictionary = owned_instances[target_instance_id]
+	var base_item_id := str(target_instance.get("base_item_id", ""))
+	if not ARMORS.has(base_item_id):
+		return "runic workshop job target is not armor"
 	return ""
 
 

@@ -2418,6 +2418,86 @@ func test_can_upgrade_guild_hall_is_false_at_max_level() -> void:
 
 ## --- Alchemy Workshop ---
 
+## --- Runic Workshop ---
+
+func test_runic_workshop_builds_upgrades_and_starts_one_thorn_job_atomically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 120
+	session.mana_crystals = {1: 2}
+	session.banked_gear = {"leather_armor": 1}
+	assert_true(session.materialize_banked_item_instance("leather_armor", "thorn_armor"))
+
+	assert_false(session.start_runic_craft("thorn_armor"), "A Runic Workshop is required")
+	assert_true(session.build_runic_workshop())
+	assert_eq(session.runic_workshop_level, 1)
+	assert_eq(session.gold, 70)
+	assert_true(session.start_runic_craft("thorn_armor"))
+	assert_eq(session.gold, 50)
+	assert_eq(session.mana_crystals, {1: 1})
+	assert_false(session.start_runic_craft("thorn_armor"), "Only one Runic Workshop job may run")
+	assert_true(session.upgrade_runic_workshop(), "Exactly 50 gold is sufficient to upgrade")
+	assert_eq(session.runic_workshop_level, 2)
+	assert_eq(session.gold, 0)
+
+
+func test_runic_workshop_job_state_survives_a_campaign_snapshot_round_trip() -> void:
+	GameSession.gold = 70
+	GameSession.mana_crystals = {1: 1}
+	GameSession.banked_gear = {"leather_armor": 1}
+	assert_true(GameSession.materialize_banked_item_instance("leather_armor", "thorn_armor"))
+	assert_true(GameSession.build_runic_workshop())
+	assert_true(GameSession.start_runic_craft("thorn_armor"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.runic_workshop_level, 1)
+	assert_eq(GameSession.runic_craft_job, snapshot.runic_craft_job)
+
+
+func test_runic_workshop_sockets_thorn_only_into_owned_armor_after_seven_world_map_turns() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 70
+	session.mana_crystals = {1: 1}
+	session.banked_gear = {"leather_armor": 1, "dagger_iron": 1}
+	assert_true(session.materialize_banked_item_instance("leather_armor", "thorn_armor"))
+	assert_true(session.materialize_banked_item_instance("dagger_iron", "thorn_dagger"))
+	assert_true(session.build_runic_workshop())
+
+	assert_false(session.start_runic_craft("thorn_dagger"))
+	assert_eq(session.gold, 20, "An incompatible target must not spend gold")
+	assert_eq(session.mana_crystals, {1: 1}, "An incompatible target must not spend a crystal")
+	assert_true(session.start_runic_craft("thorn_armor"))
+	for _turn in 6:
+		session.end_world_turn()
+	assert_eq(session.owned_item_instances.thorn_armor.rune_id, "")
+	assert_ne(session.runic_craft_job, {})
+
+	session.end_world_turn()
+	assert_eq(session.owned_item_instances.thorn_armor.rune_id, "thorn")
+	assert_eq(session.owned_item_instances.thorn_armor.modifier_tiers.rune, 1)
+	assert_eq(session.runic_craft_job, {})
+
+
+func test_runic_workshop_replaces_an_armor_rune_without_returning_the_displaced_rune() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 70
+	session.mana_crystals = {1: 1}
+	session.banked_gear = {"leather_armor": 1}
+	assert_true(session.materialize_banked_item_instance("leather_armor", "thorn_armor"))
+	assert_true(session.set_item_instance_modifier("thorn_armor", "rune", "old_rune", 1))
+	assert_true(session.build_runic_workshop())
+	assert_true(session.start_runic_craft("thorn_armor"))
+	for _turn in 7:
+		session.end_world_turn()
+
+	assert_eq(session.owned_item_instances.thorn_armor.rune_id, "thorn")
+	assert_eq(session.owned_item_instances.thorn_armor.modifier_tiers.rune, 1)
+	assert_false(session.banked_gear.has("old_rune"), "A displaced rune is consumed rather than returned")
+
 func test_alchemy_workshop_builds_upgrades_and_starts_only_one_eligible_recipe() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

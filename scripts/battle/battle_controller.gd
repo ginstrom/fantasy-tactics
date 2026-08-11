@@ -15,6 +15,10 @@ signal enemy_defeated(unit)
 ## new right-side unit detail panel; it never affects selection, movement,
 ## or combat.
 signal unit_focus_changed(unit)
+## Emitted after a successful hit has applied damage and any declarative rune
+## effects have resolved. Consumers can present the outcome without owning
+## combat rules.
+signal completed_hit(result)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -54,6 +58,9 @@ const ENEMY_START_POSITIONS: Array[Vector2i] = [
 ]
 const ENEMY_COLOR := Color(0.9, 0.4, 0.3)
 const MIN_HIT_CHANCE := 0.05
+const THORN_RUNE_ID := "thorn"
+const PARALYZED_STATUS_ID := "paralyzed"
+const THORN_TRIGGER_CHANCE := 0.25
 
 var grid
 var units: Array = []
@@ -66,6 +73,7 @@ var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+var rune_trigger_roll: Callable = func() -> float: return randf()
 var last_attack_result: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
@@ -96,6 +104,9 @@ func _ready() -> void:
 		)
 		player_unit.raw_damage_bonus = GameSession.get_effective_weapon_raw_damage_bonus(adventurer_id)
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
+		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
+		if GameSession.owned_item_instances.has(armor_instance_id):
+			player_unit.rune_id = str(GameSession.owned_item_instances[armor_instance_id].get("rune_id", ""))
 		units.append(player_unit)
 	var enemy_count: int = enemy_stats.get("count", 1)
 	var enemy_type_name: String = tr(enemy_stats.name_key)
@@ -241,7 +252,7 @@ func _move_distances(unit) -> Dictionary:
 
 
 func get_legal_moves(unit) -> Array[Vector2i]:
-	if unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return []
 	var moves: Array[Vector2i] = []
 	moves.assign(_move_distances(unit).keys())
@@ -250,6 +261,8 @@ func get_legal_moves(unit) -> Array[Vector2i]:
 
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -265,6 +278,8 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 
 func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -297,6 +312,9 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"damage": damage,
 		"defeated": defeated,
 	}
+	if hit:
+		_dispatch_completed_hit(selected_unit, target)
+		completed_hit.emit(last_attack_result)
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit(target)
 	return true
@@ -304,6 +322,8 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 
 func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
 		return false
 	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
 		return false
@@ -321,6 +341,8 @@ func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String
 
 func try_use_selected_potion(potion_id: String) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
 		return false
 	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
 		return false
@@ -342,6 +364,8 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 	if input_locked:
 		return false
 	if selected_unit == null or not selected_unit.is_alive():
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -399,6 +423,8 @@ func apply_super_power() -> void:
 
 func end_turn() -> void:
 	active_side = Side.ENEMY if active_side == Side.PLAYER else Side.PLAYER
+	if active_side == Side.PLAYER:
+		_clear_expired_statuses()
 	for unit in units:
 		if unit.side == active_side:
 			unit.action_points_remaining = unit.max_action_points
@@ -449,6 +475,9 @@ func run_enemy_turn() -> Array:
 func _take_enemy_unit_actions(unit) -> Array:
 	var steps: Array = []
 	selected_unit = unit
+	if has_status(unit, PARALYZED_STATUS_ID):
+		unit.action_points_remaining = 0
+		return steps
 	var guard: int = int(unit.max_action_points) + 1
 	while unit.action_points_remaining > 0 and guard > 0:
 		guard -= 1
@@ -467,6 +496,31 @@ func _take_enemy_unit_actions(unit) -> Array:
 			continue
 		break
 	return steps
+
+
+func apply_status(unit, status_id: String) -> bool:
+	if unit == null or status_id.is_empty() or has_status(unit, status_id):
+		return false
+	unit.statuses[status_id] = true
+	return true
+
+
+func has_status(unit, status_id: String) -> bool:
+	return unit != null and bool(unit.statuses.get(status_id, false))
+
+
+func _clear_expired_statuses() -> void:
+	for unit in units:
+		unit.statuses.erase(PARALYZED_STATUS_ID)
+
+
+func _dispatch_completed_hit(attacker, defender) -> void:
+	if defender.rune_id != THORN_RUNE_ID or has_status(attacker, PARALYZED_STATUS_ID):
+		return
+	if rune_trigger_roll.call() >= THORN_TRIGGER_CHANCE:
+		return
+	if apply_status(attacker, PARALYZED_STATUS_ID):
+		last_attack_result["thorn_triggered"] = true
 
 
 func _nearest_living_unit(from_pos: Vector2i, side: int):

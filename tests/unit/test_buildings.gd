@@ -35,7 +35,7 @@ func test_buildings_table_uses_the_documented_columns_and_has_building_rows() ->
 
 	assert_eq(tree.columns, 1)
 	assert_eq(tree.get_column_title(0), "Name")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Guild Hall", "Blacksmith", "Alchemy Workshop"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Guild Hall", "Blacksmith", "Alchemy Workshop", "Runic Workshop"])
 
 
 func test_activating_the_guild_hall_row_routes_via_game_manager() -> void:
@@ -50,6 +50,7 @@ func test_activating_the_guild_hall_row_routes_via_game_manager() -> void:
 	assert_string_contains(source, "GameManager.go_to_guild_hall()")
 	assert_string_contains(source, "GameManager.go_to_blacksmith()")
 	assert_string_contains(source, "GameManager.go_to_alchemy_workshop()")
+	assert_string_contains(source, "GameManager.go_to_runic_workshop()")
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:

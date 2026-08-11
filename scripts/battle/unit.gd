@@ -42,6 +42,12 @@ var display_name: String = ""
 # "Kobold" for an enemy unit (its species name, with no index) -- used to
 # group kills by type. Empty for a player unit.
 var enemy_type_name: String = ""
+# Battle-local modifiers are copied from durable equipment when a battle
+# starts. They never write back to GameSession during combat.
+var rune_id: String = ""
+# Status ids map to their remaining lifetime. Current statuses last through
+# the active round and are cleared as the next player round begins.
+var statuses: Dictionary = {}
 
 
 func _init(

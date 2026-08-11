@@ -2,6 +2,7 @@ extends GutTest
 
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const UnitScript := preload("res://scripts/battle/unit.gd")
 const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
 
 
@@ -274,6 +275,15 @@ func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
+
+
+func test_thorn_trigger_describes_the_visible_paralyzed_state() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var attacker = UnitScript.new(Vector2i.ZERO, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	attacker.display_name = "Goblin 1"
+
+	assert_eq(battlefield._describe_step({"type": "attack", "attacker": attacker, "thorn_triggered": true}), "Goblin 1 is Paralyzed!")
 	assert_eq(
 		battlefield.enemy_health.get_parent().get_parent().get_parent(),
 		battlefield.hint.get_parent()
