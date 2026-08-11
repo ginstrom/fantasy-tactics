@@ -73,6 +73,54 @@ func test_sharpened_weapon_adds_one_raw_damage_before_resistance() -> void:
 	assert_eq(controller.last_attack_result.damage, 2, "(2 + 1) raw damage rounds to 2 after 50% resistance")
 
 
+func test_selected_player_transfers_a_carried_potion_to_an_ally_for_two_action_points() -> void:
+	GameSession.recruit_adventurer()
+	var ally_id: String = GameSession.adventurers[-1].id
+	GameSession.banked_gear = {"healing_potion": 1}
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var controller := _make_controller(4, 4)
+	var holder = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 1, 1, 1.0, "Sword", GameSession.WARRIOR_ID)
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 1, 1, 1.0, "Sword", ally_id)
+	controller.units = [holder, ally]
+	controller.selected_unit = holder
+
+	assert_true(controller.try_transfer_selected_item("healing_potion", ally_id))
+	assert_eq(holder.action_points_remaining, 4)
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 0)
+	assert_eq(GameSession.get_carried_item_ids(ally_id).count("healing_potion"), 1)
+
+
+func test_selected_player_uses_a_held_potion_for_two_action_points_and_consumes_it() -> void:
+	GameSession.banked_gear = {"healing_potion": 1}
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var controller := _make_controller(4, 4)
+	var holder = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 1, 1, 1.0, "Sword", GameSession.WARRIOR_ID)
+	holder.health = 4
+	controller.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+	controller.units = [holder]
+	controller.selected_unit = holder
+
+	assert_true(controller.try_use_selected_potion("healing_potion"))
+	assert_eq(holder.action_points_remaining, 4)
+	assert_eq(holder.health, 10, "Healing is capped at the unit maximum")
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 0)
+
+
+func test_invalid_potion_use_preserves_action_points_and_inventory() -> void:
+	GameSession.banked_gear = {"healing_potion": 1}
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var controller := _make_controller(4, 4)
+	var holder = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1, 10, 1, 1, 1.0, "Sword", GameSession.WARRIOR_ID)
+	holder.health = 5
+	controller.units = [holder]
+	controller.selected_unit = holder
+
+	assert_false(controller.try_use_selected_potion("healing_potion"))
+	assert_eq(holder.action_points_remaining, 1)
+	assert_eq(holder.health, 5)
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 1)
+
+
 func test_unaffordable_attack_preserves_action_points_and_combat_state() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)

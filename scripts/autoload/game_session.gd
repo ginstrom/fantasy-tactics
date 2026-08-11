@@ -1486,6 +1486,41 @@ func get_carried_item_ids(adventurer_id: String) -> Array[String]:
 	return carried
 
 
+func transfer_carried_item(from_adventurer_id: String, to_adventurer_id: String, item_id: String) -> bool:
+	if from_adventurer_id == to_adventurer_id:
+		return false
+	var item := get_item_definition(item_id)
+	var from_index := _get_adventurer_index(from_adventurer_id)
+	var to_index := _get_adventurer_index(to_adventurer_id)
+	if item.is_empty() or from_index == -1 or to_index == -1 or get_carried_item_ids(to_adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
+		return false
+	var slot: String = item.slot
+	var inventory_key := "%s_inventory" % slot
+	var from_equipment: Dictionary = adventurers[from_index].equipment
+	var to_equipment: Dictionary = adventurers[to_index].equipment
+	var from_inventory: Array = from_equipment.get(inventory_key, [])
+	if not from_inventory.has(item_id) or (slot != "potion" and from_equipment.get(slot, "") == item_id):
+		return false
+	if not to_equipment.has(inventory_key):
+		to_equipment[inventory_key] = []
+	from_inventory.erase(item_id)
+	to_equipment[inventory_key].append(item_id)
+	return true
+
+
+func consume_carried_potion(adventurer_id: String, potion_id: String) -> bool:
+	if not POTIONS.has(potion_id):
+		return false
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	var inventory: Array = adventurers[adventurer_index].equipment.get("potion_inventory", [])
+	if not inventory.has(potion_id):
+		return false
+	inventory.erase(potion_id)
+	return true
+
+
 ## Switches the active item for `slot` ("weapon" or "armor") to item_id,
 ## which must already be in that slot's inventory array. No bank
 ## interaction. Rejects an item not carried in that slot, an unknown slot,

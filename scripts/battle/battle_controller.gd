@@ -35,6 +35,7 @@ const GROUP := "battle_controller"
 const BASE_ACTION_POINTS := 6
 const MOVE_ACTION_POINT_COST := 1
 const BASIC_ATTACK_ACTION_POINT_COST := 3
+const ITEM_ACTION_POINT_COST := 2
 const SUPER_POWER_ACTION_POINTS := 100
 const SUPER_POWER_ATTACK_DAMAGE := 100
 const SUPER_POWER_HIT_CHANCE := 1.0
@@ -64,6 +65,7 @@ var active_side: int = Side.PLAYER
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var last_attack_result: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
@@ -297,6 +299,42 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	}
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit(target)
+	return true
+
+
+func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String) -> bool:
+	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
+		return false
+	if selected_unit.action_points_remaining < ITEM_ACTION_POINT_COST:
+		return false
+	var recipient = _get_unit_by_adventurer_id(recipient_adventurer_id)
+	if recipient == null or recipient.side != Side.PLAYER or not recipient.is_alive():
+		return false
+	if not GameSession.transfer_carried_item(selected_unit.adventurer_id, recipient_adventurer_id, item_id):
+		return false
+	selected_unit.action_points_remaining -= ITEM_ACTION_POINT_COST
+	last_attack_result = {"type": "item_transfer", "item_id": item_id, "from": selected_unit, "to": recipient}
+	return true
+
+
+func try_use_selected_potion(potion_id: String) -> bool:
+	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
+		return false
+	if selected_unit.action_points_remaining < ITEM_ACTION_POINT_COST or selected_unit.health >= selected_unit.max_health:
+		return false
+	var potion := GameSession.get_item_definition(potion_id)
+	if str(potion.get("slot", "")) != "potion":
+		return false
+	if not GameSession.consume_carried_potion(selected_unit.adventurer_id, potion_id):
+		return false
+	var healed: int = healing_roll.call(int(potion.healing_min), int(potion.healing_max))
+	selected_unit.health = mini(selected_unit.max_health, selected_unit.health + healed)
+	selected_unit.action_points_remaining -= ITEM_ACTION_POINT_COST
+	last_attack_result = {"type": "potion", "potion_id": potion_id, "unit": selected_unit, "healing": healed}
 	return true
 
 
