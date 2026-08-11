@@ -2416,6 +2416,99 @@ func test_can_upgrade_guild_hall_is_false_at_max_level() -> void:
 
 ## --- Blacksmith ---
 
+## --- Alchemy Workshop ---
+
+func test_alchemy_workshop_builds_upgrades_and_starts_only_one_eligible_recipe() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 120
+	session.mana_crystals = {1: 1, 2: 1}
+
+	assert_false(session.start_alchemy_craft("healing_potion"), "An Alchemy Workshop is required")
+	assert_true(session.build_alchemy_workshop())
+	assert_eq(session.alchemy_workshop_level, 1)
+	assert_eq(session.gold, 70)
+	assert_true(session.start_alchemy_craft("healing_potion"))
+	assert_eq(session.gold, 60)
+	assert_eq(session.mana_crystals, {2: 1})
+	assert_false(session.start_alchemy_craft("healing_potion"), "The workshop has one job slot")
+	assert_false(session.start_alchemy_craft("greater_healing_potion"), "Level 2 is required")
+
+
+func test_alchemy_workshop_jobs_complete_after_seven_world_map_turns_into_stores() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 60
+	session.mana_crystals = {1: 1}
+	assert_true(session.build_alchemy_workshop())
+	assert_true(session.start_alchemy_craft("healing_potion"))
+
+	for _turn in 6:
+		session.end_world_turn()
+	assert_eq(session.banked_gear.get("healing_potion", 0), 0)
+	assert_ne(session.alchemy_craft_job, {})
+	session.end_world_turn()
+	assert_eq(session.banked_gear.get("healing_potion", 0), 1)
+	assert_eq(session.alchemy_craft_job, {})
+
+
+func test_alchemy_workshop_level_two_consumes_a_tier_two_or_higher_crystal() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 120
+	session.mana_crystals = {1: 2}
+	assert_true(session.build_alchemy_workshop())
+	assert_true(session.upgrade_alchemy_workshop())
+	assert_false(session.start_alchemy_craft("greater_healing_potion"))
+	assert_eq(session.gold, 20, "The failed recipe must not spend gold")
+	session.mana_crystals = {2: 1}
+	assert_true(session.start_alchemy_craft("greater_healing_potion"))
+	assert_eq(session.gold, 0)
+	assert_eq(session.mana_crystals, {})
+
+
+func test_potions_equip_from_stores_only_while_the_adventurer_has_a_free_total_item_slot() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.banked_gear = {"healing_potion": 10}
+
+	for _slot in 8:
+		assert_true(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "healing_potion"))
+	assert_eq(session.get_carried_item_ids(GameSessionScript.WARRIOR_ID).size(), 10)
+	assert_false(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "healing_potion"))
+	assert_eq(session.banked_gear.healing_potion, 2)
+
+
+func test_alchemy_workshop_and_potion_inventory_survive_a_campaign_snapshot_round_trip() -> void:
+	GameSession.gold = 60
+	GameSession.mana_crystals = {1: 2}
+	assert_true(GameSession.build_alchemy_workshop())
+	assert_true(GameSession.start_alchemy_craft("healing_potion"))
+	GameSession.banked_gear["healing_potion"] = 1
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
+	assert_eq(GameSession.alchemy_workshop_level, 1)
+	assert_eq(GameSession.alchemy_craft_job, snapshot.alchemy_craft_job)
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 1)
+
+
+func test_alchemy_snapshot_rejects_more_than_ten_carried_items_without_mutating_live_state() -> void:
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0].equipment["potion_inventory"] = [
+		"healing_potion", "healing_potion", "healing_potion", "healing_potion", "healing_potion",
+		"healing_potion", "healing_potion", "healing_potion", "healing_potion",
+	]
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "carried item")
+	assert_eq(_capture_durable_fields(), before)
+
 func test_blacksmith_build_upgrade_and_craft_tier_gates() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

@@ -170,12 +170,21 @@ const BLACKSMITH_MAX_LEVEL := 3
 const BLACKSMITH_CRAFT_DURATION_TURNS := 5
 const BLACKSMITH_SHARPENING_DURATION_TURNS := 20
 const SHARPENED_TREATMENT_ID := "sharpened"
+const ALCHEMY_WORKSHOP_BUILD_COST := 50
+const ALCHEMY_WORKSHOP_UPGRADE_COST := 50
+const ALCHEMY_WORKSHOP_MAX_LEVEL := 2
+const ALCHEMY_CRAFT_DURATION_TURNS := 7
+const CARRIED_ITEM_CAPACITY := 10
 const ARMORS: Dictionary = {
 	"leather_armor": {"name_key": "item.leather_armor", "slot": "armor", "defense": 10, "resistance": 10, "price": 10},
 	"chainmail_armor": {"name_key": "item.chainmail_armor", "slot": "armor", "defense": 15, "resistance": 20, "price": 30},
 	"split_armor": {"name_key": "item.split_armor", "slot": "armor", "defense": 15, "resistance": 25, "price": 50},
 	"platemail_armor": {"name_key": "item.platemail_armor", "slot": "armor", "defense": 15, "resistance": 30, "price": 200},
 	"full_plate_armor": {"name_key": "item.full_plate_armor", "slot": "armor", "defense": 15, "resistance": 35, "price": 500},
+}
+const POTIONS: Dictionary = {
+	"healing_potion": {"name_key": "item.healing_potion", "slot": "potion", "healing_min": 1, "healing_max": 6, "price": 0, "required_level": 1, "gold_cost": 10, "minimum_crystal_tier": 1},
+	"greater_healing_potion": {"name_key": "item.greater_healing_potion", "slot": "potion", "healing_min": 2, "healing_max": 8, "price": 0, "required_level": 2, "gold_cost": 20, "minimum_crystal_tier": 2},
 }
 # Loot tables (see "Trade, equipment, and loot" in
 # docs/plans/first-playable-campaign/game-design.md). Gold per kill is
@@ -410,6 +419,8 @@ var blacksmith_level: int = 0
 # sharpening can progress in parallel.
 var blacksmith_craft_job: Dictionary = {}
 var blacksmith_sharpening_job: Dictionary = {}
+var alchemy_workshop_level: int = 0
+var alchemy_craft_job: Dictionary = {}
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -490,6 +501,8 @@ func reset() -> void:
 	blacksmith_level = 0
 	blacksmith_craft_job = {}
 	blacksmith_sharpening_job = {}
+	alchemy_workshop_level = 0
+	alchemy_craft_job = {}
 	pending_reward = 0
 	mana_crystals = {}
 	banked_gear = {}
@@ -813,6 +826,7 @@ func end_world_turn() -> bool:
 
 	world_turn += 1
 	_advance_blacksmith_jobs()
+	_advance_alchemy_craft_job()
 	if has_trading_post:
 		gold += TRADING_POST_INCOME_PER_TURN
 	if has_deployed_party():
@@ -1119,6 +1133,69 @@ func _advance_blacksmith_jobs() -> void:
 		blacksmith_sharpening_job = {}
 
 
+func can_build_alchemy_workshop() -> bool:
+	return alchemy_workshop_level == 0 and gold >= ALCHEMY_WORKSHOP_BUILD_COST
+
+
+func build_alchemy_workshop() -> bool:
+	if not can_build_alchemy_workshop():
+		return false
+	gold -= ALCHEMY_WORKSHOP_BUILD_COST
+	alchemy_workshop_level = 1
+	return true
+
+
+func can_upgrade_alchemy_workshop() -> bool:
+	return alchemy_workshop_level == 1 and gold >= ALCHEMY_WORKSHOP_UPGRADE_COST
+
+
+func upgrade_alchemy_workshop() -> bool:
+	if not can_upgrade_alchemy_workshop():
+		return false
+	gold -= ALCHEMY_WORKSHOP_UPGRADE_COST
+	alchemy_workshop_level = 2
+	return true
+
+
+func start_alchemy_craft(item_id: String) -> bool:
+	if not alchemy_craft_job.is_empty() or not POTIONS.has(item_id):
+		return false
+	var potion: Dictionary = POTIONS[item_id]
+	if alchemy_workshop_level < int(potion.required_level) or gold < int(potion.gold_cost):
+		return false
+	var crystal_tier := _first_available_mana_crystal_tier(int(potion.minimum_crystal_tier))
+	if crystal_tier == 0:
+		return false
+	gold -= int(potion.gold_cost)
+	mana_crystals[crystal_tier] -= 1
+	if mana_crystals[crystal_tier] == 0:
+		mana_crystals.erase(crystal_tier)
+	alchemy_craft_job = {"item_id": item_id, "completion_turn": world_turn + ALCHEMY_CRAFT_DURATION_TURNS}
+	return true
+
+
+func _first_available_mana_crystal_tier(minimum_tier: int) -> int:
+	var matching_tiers: Array[int] = []
+	for raw_tier in mana_crystals:
+		var tier := int(raw_tier)
+		if tier >= minimum_tier and int(mana_crystals[raw_tier]) > 0:
+			matching_tiers.append(tier)
+	matching_tiers.sort()
+	return 0 if matching_tiers.is_empty() else matching_tiers[0]
+
+
+func get_alchemy_job_turns_remaining() -> int:
+	return max(0, int(alchemy_craft_job.get("completion_turn", world_turn)) - world_turn)
+
+
+func _advance_alchemy_craft_job() -> void:
+	if alchemy_craft_job.is_empty() or get_alchemy_job_turns_remaining() != 0:
+		return
+	var crafted_item_id := str(alchemy_craft_job.item_id)
+	banked_gear[crafted_item_id] = banked_gear.get(crafted_item_id, 0) + 1
+	alchemy_craft_job = {}
+
+
 func _new_blacksmith_item_instance_id() -> String:
 	var number := 1
 	while owned_item_instances.has("blacksmith_item_%03d" % number):
@@ -1167,6 +1244,8 @@ func get_item_definition(item_id: String) -> Dictionary:
 		return WEAPONS[item_id].duplicate(true)
 	if ARMORS.has(item_id):
 		return ARMORS[item_id].duplicate(true)
+	if POTIONS.has(item_id):
+		return POTIONS[item_id].duplicate(true)
 	return {}
 
 
@@ -1377,12 +1456,34 @@ func _equip_item_from(source_gear: Dictionary, adventurer_id: String, item_id: S
 		return false
 
 	var slot: String = item.slot
-	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]
+	var equipment: Dictionary = adventurers[adventurer_index].equipment
+	var inventory_key := "%s_inventory" % slot
+	if not equipment.has(inventory_key):
+		equipment[inventory_key] = []
+	var inventory: Array = equipment[inventory_key]
+	if get_carried_item_ids(adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
+		return false
+	if slot == "potion":
+		source_gear[item_id] -= 1
+		inventory.append(item_id)
+		return true
 	if not inventory.has(item_id):
 		source_gear[item_id] -= 1
 		inventory.append(item_id)
 	adventurers[adventurer_index].equipment[slot] = item_id
 	return true
+
+
+func get_carried_item_ids(adventurer_id: String) -> Array[String]:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return []
+	var carried: Array[String] = []
+	var equipment: Dictionary = adventurers[adventurer_index].equipment
+	for slot in ["weapon", "armor", "potion"]:
+		for item_id in equipment.get("%s_inventory" % slot, []):
+			carried.append(str(item_id))
+	return carried
 
 
 ## Switches the active item for `slot` ("weapon" or "armor") to item_id,
@@ -1882,6 +1983,8 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.blacksmith_level = blacksmith_level
 	snapshot.blacksmith_craft_job = blacksmith_craft_job.duplicate(true)
 	snapshot.blacksmith_sharpening_job = blacksmith_sharpening_job.duplicate(true)
+	snapshot.alchemy_workshop_level = alchemy_workshop_level
+	snapshot.alchemy_craft_job = alchemy_craft_job.duplicate(true)
 	snapshot.pending_reward = pending_reward
 	snapshot.mana_crystals = mana_crystals.duplicate(true)
 	snapshot.banked_gear = banked_gear.duplicate(true)
@@ -1925,6 +2028,12 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	var blacksmith_error := _validate_blacksmith_state(snapshot)
 	if not blacksmith_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": blacksmith_error}
+	var alchemy_error := _validate_alchemy_workshop_state(snapshot)
+	if not alchemy_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": alchemy_error}
+	var carried_inventory_error := _validate_carried_inventory(snapshot)
+	if not carried_inventory_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": carried_inventory_error}
 	adventurers = snapshot.adventurers.duplicate(true)
 	recruitment_candidates = snapshot.recruitment_candidates.duplicate(true)
 	recruitment_vacancies = snapshot.recruitment_vacancies.duplicate(true)
@@ -1941,6 +2050,8 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	blacksmith_level = snapshot.blacksmith_level
 	blacksmith_craft_job = snapshot.blacksmith_craft_job.duplicate(true)
 	blacksmith_sharpening_job = snapshot.blacksmith_sharpening_job.duplicate(true)
+	alchemy_workshop_level = snapshot.alchemy_workshop_level
+	alchemy_craft_job = snapshot.alchemy_craft_job.duplicate(true)
 	pending_reward = snapshot.pending_reward
 	mana_crystals = snapshot.mana_crystals.duplicate(true)
 	banked_gear = snapshot.banked_gear.duplicate(true)
@@ -1974,6 +2085,45 @@ func _validate_blacksmith_state(snapshot: Dictionary) -> String:
 			return "blacksmith job is invalid"
 		if job_key == "blacksmith_craft_job" and level < _blacksmith_required_level_for_weapon(item_id):
 			return "blacksmith level cannot craft this weapon"
+	return ""
+
+
+func _validate_alchemy_workshop_state(snapshot: Dictionary) -> String:
+	var level: int = snapshot.alchemy_workshop_level
+	if level < 0 or level > ALCHEMY_WORKSHOP_MAX_LEVEL:
+		return "alchemy workshop level is out of range"
+	var job: Dictionary = snapshot.alchemy_craft_job
+	if job.is_empty():
+		return ""
+	if level == 0:
+		return "unbuilt alchemy workshop has a job"
+	if not job.get("item_id") is String or not job.get("completion_turn") is int:
+		return "alchemy workshop job has invalid fields"
+	var item_id := str(job.item_id)
+	if not POTIONS.has(item_id) or int(job.completion_turn) < int(snapshot.world_turn):
+		return "alchemy workshop job is invalid"
+	if level < int(POTIONS[item_id].required_level):
+		return "alchemy workshop level cannot craft this potion"
+	return ""
+
+
+func _validate_carried_inventory(snapshot: Dictionary) -> String:
+	for adventurer in snapshot.adventurers:
+		var equipment = adventurer.get("equipment", {})
+		if not equipment is Dictionary:
+			continue
+		var carried_count := 0
+		for slot in ["weapon", "armor", "potion"]:
+			var inventory = equipment.get("%s_inventory" % slot, [])
+			if not inventory is Array:
+				return "carried item inventory is invalid"
+			for raw_item_id in inventory:
+				var item := get_item_definition(str(raw_item_id))
+				if item.is_empty() or str(item.slot) != slot:
+					return "carried item inventory has an incompatible item"
+				carried_count += 1
+		if carried_count > CARRIED_ITEM_CAPACITY:
+			return "carried item capacity is exceeded"
 	return ""
 
 

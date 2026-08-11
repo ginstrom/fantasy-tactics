@@ -45,6 +45,8 @@ var guild_hall_level: int = 1
 var blacksmith_level: int = 0
 var blacksmith_craft_job: Dictionary = {}
 var blacksmith_sharpening_job: Dictionary = {}
+var alchemy_workshop_level: int = 0
+var alchemy_craft_job: Dictionary = {}
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -87,6 +89,8 @@ func to_dictionary() -> Dictionary:
 		"blacksmith_level": blacksmith_level,
 		"blacksmith_craft_job": blacksmith_craft_job.duplicate(true),
 		"blacksmith_sharpening_job": blacksmith_sharpening_job.duplicate(true),
+		"alchemy_workshop_level": alchemy_workshop_level,
+		"alchemy_craft_job": alchemy_craft_job.duplicate(true),
 		"pending_reward": pending_reward,
 		"mana_crystals": mana_crystals.duplicate(true),
 		"banked_gear": banked_gear.duplicate(true),
@@ -179,6 +183,12 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if data.has(job_key) and not data[job_key] is Dictionary:
 			return _invalid("%s is not a dictionary" % job_key)
 		normalized[job_key] = (data.get(job_key, {}) as Dictionary).duplicate(true)
+	if data.has("alchemy_workshop_level") and not data.alchemy_workshop_level is int:
+		return _invalid("alchemy_workshop_level is not an int")
+	normalized["alchemy_workshop_level"] = int(data.get("alchemy_workshop_level", 0))
+	if data.has("alchemy_craft_job") and not data.alchemy_craft_job is Dictionary:
+		return _invalid("alchemy_craft_job is not a dictionary")
+	normalized["alchemy_craft_job"] = (data.get("alchemy_craft_job", {}) as Dictionary).duplicate(true)
 
 	if not data.get("has_trading_post") is bool:
 		return _invalid("has_trading_post is not a bool")
