@@ -63,7 +63,7 @@ func test_start_new_game_sets_the_player_name_and_resets_other_state() -> void:
 	session.start_new_game("Aria")
 
 	assert_eq(session.player_name, "Aria")
-	assert_eq(session.gold, 0)
+	assert_eq(session.gold, 200)
 
 
 func test_reset_restores_the_default_player_name() -> void:
@@ -2477,6 +2477,20 @@ func test_potions_equip_from_stores_only_while_the_adventurer_has_a_free_total_i
 	assert_eq(session.get_carried_item_ids(GameSessionScript.WARRIOR_ID).size(), 10)
 	assert_false(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "healing_potion"))
 	assert_eq(session.banked_gear.healing_potion, 2)
+
+
+func test_owned_item_instances_also_respect_the_total_carried_item_capacity() -> void:
+	var session := GameSessionScript.new()
+	session.reset()
+	session.banked_gear = {"healing_potion": 8, "dagger_iron": 1}
+	for _index in 8:
+		assert_true(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "healing_potion"))
+	assert_eq(session.get_carried_item_ids(GameSessionScript.WARRIOR_ID).size(), GameSessionScript.CARRIED_ITEM_CAPACITY)
+	assert_true(session.materialize_banked_item_instance("dagger_iron", "owned_dagger"))
+
+	assert_false(session.equip_item_from_bank(GameSessionScript.WARRIOR_ID, "owned_dagger"))
+	assert_true(session.banked_item_instance_ids.has("owned_dagger"))
+	assert_eq(session.get_carried_item_ids(GameSessionScript.WARRIOR_ID).size(), GameSessionScript.CARRIED_ITEM_CAPACITY)
 
 
 func test_alchemy_workshop_and_potion_inventory_survive_a_campaign_snapshot_round_trip() -> void:

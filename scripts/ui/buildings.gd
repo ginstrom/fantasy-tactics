@@ -11,6 +11,7 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 const GUILD_HALL_ROW_ID := "guild_hall"
 const BLACKSMITH_ROW_ID := "blacksmith"
+const ALCHEMY_WORKSHOP_ROW_ID := "alchemy_workshop"
 
 @onready var building_table: TableView = $Body/Center/VBox/BuildingTable
 
@@ -41,6 +42,7 @@ func _build_rows() -> Array[Dictionary]:
 	return [
 		{"id": GUILD_HALL_ROW_ID, "name": tr("buildings.guild_hall")},
 		{"id": BLACKSMITH_ROW_ID, "name": tr("buildings.blacksmith")},
+		{"id": ALCHEMY_WORKSHOP_ROW_ID, "name": tr("buildings.alchemy_workshop")},
 	]
 
 
@@ -49,6 +51,8 @@ func _on_row_activated(row_id: Variant) -> void:
 		GameManager.go_to_guild_hall()
 	elif str(row_id) == BLACKSMITH_ROW_ID:
 		GameManager.go_to_blacksmith()
+	elif str(row_id) == ALCHEMY_WORKSHOP_ROW_ID:
+		GameManager.go_to_alchemy_workshop()
 
 
 func _on_back_pressed() -> void:

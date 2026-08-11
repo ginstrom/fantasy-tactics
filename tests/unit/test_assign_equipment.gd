@@ -79,6 +79,17 @@ func test_activating_a_row_equips_the_item_and_returns_to_stores() -> void:
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_iron")
 
 
+func test_activating_a_row_for_a_potion_adds_it_to_the_adventurers_carried_items() -> void:
+	GameSession.banked_gear = {"healing_potion": 1}
+	GameManager.route_context_id = "healing_potion"
+	var screen: Control = AssignEquipmentScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_row_activated(GameSession.WARRIOR_ID)
+
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 1)
+
+
 func test_activating_a_row_when_party_scoped_equips_from_the_party_store_not_the_bank() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

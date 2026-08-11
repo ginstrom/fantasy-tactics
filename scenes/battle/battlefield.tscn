@@ -138,13 +138,39 @@ layout_mode = 2
 autowrap_mode = 3
 text = "battle.status.awaiting_action"
 
+[node name="ItemActions" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PotionOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="UsePotionButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "battle.item.use_potion"
+
+[node name="TransferItemOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RecipientOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TransferButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "battle.item.transfer"
+
 [node name="ScrollRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
 layout_mode = 2
 
 [node name="LogScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 70)
+custom_minimum_size = Vector2(0, 40)
 horizontal_scroll_mode = 0
 
 [node name="Log" type="VBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll"]
@@ -155,7 +181,7 @@ size_flags_horizontal = 3
 [node name="EnemyHealthScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 70)
+custom_minimum_size = Vector2(0, 40)
 horizontal_scroll_mode = 0
 
 [node name="EnemyHealth" type="VBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/EnemyHealthScroll"]
@@ -167,4 +193,6 @@ size_flags_horizontal = 3
 layout_mode = 1
 
 [connection signal="pressed" from="HUD/Margin/VBox/TopRow/TopRight/EndTurnButton" to="." method="_on_end_turn_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions/TransferButton" to="." method="_on_transfer_button_pressed"]
 [connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

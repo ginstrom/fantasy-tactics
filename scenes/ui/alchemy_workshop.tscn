@@ -1,0 +1,70 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/alchemy_workshop.gd" id="1_alchemy"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="2_camp_nav"]
+
+[node name="AlchemyWorkshop" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_alchemy")
+
+[node name="Body" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+
+[node name="CampNav" parent="Body" instance=ExtResource("2_camp_nav")]
+layout_mode = 2
+
+[node name="Center" type="CenterContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Body/Center"]
+layout_mode = 2
+custom_minimum_size = Vector2(340, 0)
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "alchemy_workshop.title"
+horizontal_alignment = 1
+
+[node name="LevelLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="BuildButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+
+[node name="UpgradeButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+
+[node name="CraftStatusLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="CraftItemOption" type="OptionButton" parent="Body/Center/VBox"]
+layout_mode = 2
+
+[node name="CraftButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[connection signal="pressed" from="Body/Center/VBox/BuildButton" to="." method="_on_build_button_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/UpgradeButton" to="." method="_on_upgrade_button_pressed"]
+[connection signal="item_selected" from="Body/Center/VBox/CraftItemOption" to="." method="_on_craft_item_option_item_selected"]
+[connection signal="pressed" from="Body/Center/VBox/CraftButton" to="." method="_on_craft_button_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

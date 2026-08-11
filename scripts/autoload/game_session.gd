@@ -2,6 +2,7 @@ extends Node
 
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
+const STARTING_GOLD := 200
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
 const RUINED_FORTRESS_ID := "ruined_fortress"
@@ -477,6 +478,7 @@ func _load_balance_config() -> void:
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 	reset()
+	gold = STARTING_GOLD
 	player_name = new_player_name
 
 
@@ -1417,6 +1419,8 @@ func _equip_item_instance_from_bank(adventurer_id: String, instance_id: String) 
 	var item := get_item_definition(instance_id)
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if item.is_empty() or adventurer_index == -1:
+		return false
+	if get_carried_item_ids(adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
 		return false
 	var slot: String = item.slot
 	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]

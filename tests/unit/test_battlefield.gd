@@ -110,6 +110,25 @@ func test_describe_step_reports_an_enemy_move() -> void:
 	assert_eq(battlefield._describe_step(step), tr("battle.status.enemy_move") % tr("battle.side.enemy"))
 
 
+func test_battlefield_exposes_the_selected_units_potion_as_a_separate_two_ap_action() -> void:
+	GameSession.banked_gear = {"healing_potion": 1}
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.selected_unit
+	warrior.health = 4
+	battlefield._refresh_item_actions()
+
+	assert_true(battlefield.use_potion_button.visible)
+	assert_eq(battlefield.potion_option.get_selected_metadata(), "healing_potion")
+	battlefield.grid.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+	battlefield._on_use_potion_pressed()
+
+	assert_eq(warrior.action_points_remaining, 4)
+	assert_eq(warrior.health, 10)
+	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 0)
+
+
 ## Task 6: the left-side portrait panel (one row per fielded party member)
 ## and the per-living-enemy HUD list that replaces the old aggregate
 ## PlayerHealth/EnemyHealth labels.

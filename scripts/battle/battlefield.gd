@@ -12,6 +12,11 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var round_label: Label = %RoundLabel
 @onready var action_points_label: Label = %ActionPointsLabel
 @onready var end_turn_button: Button = %EndTurnButton
+@onready var potion_option: OptionButton = %PotionOption
+@onready var use_potion_button: Button = %UsePotionButton
+@onready var transfer_item_option: OptionButton = %TransferItemOption
+@onready var recipient_option: OptionButton = %RecipientOption
+@onready var transfer_button: Button = %TransferButton
 @onready var grid: Node2D = $Grid
 @onready var level_up: Control = $HUD/LevelUp
 @onready var portrait_panel: Control = %PortraitPanel
@@ -140,9 +145,11 @@ func _on_board_changed() -> void:
 	end_turn_button.tooltip_text = tr("battle.end_turn.reminder")
 	_update_health_labels()
 	portrait_panel.refresh()
+	_refresh_item_actions()
 	if not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
-		_log_attack(grid.last_attack_result)
+		if grid.last_attack_result.type == "attack":
+			_log_attack(grid.last_attack_result)
 
 	if grid.is_battle_won():
 		_resolve_battle(true)
@@ -150,6 +157,50 @@ func _on_board_changed() -> void:
 
 func _on_unit_focus_changed(unit) -> void:
 	unit_info_panel.show_unit(unit)
+
+
+func _refresh_item_actions() -> void:
+	potion_option.clear()
+	transfer_item_option.clear()
+	recipient_option.clear()
+	var selected_unit = grid.selected_unit
+	var can_act: bool = selected_unit != null and selected_unit.side == BattleControllerScript.Side.PLAYER and selected_unit.is_alive()
+	if can_act:
+		for item_id in GameSession.get_carried_item_ids(selected_unit.adventurer_id):
+			var item: Dictionary = GameSession.get_item_definition(item_id)
+			if str(item.get("slot", "")) == "potion":
+				potion_option.add_item(tr(item.name_key))
+				potion_option.set_item_metadata(potion_option.item_count - 1, item_id)
+			if str(item.get("slot", "")) == "potion" or GameSession.get_adventurer(selected_unit.adventurer_id).equipment.get(str(item.get("slot", "")), "") != item_id:
+				transfer_item_option.add_item(tr(item.name_key))
+				transfer_item_option.set_item_metadata(transfer_item_option.item_count - 1, item_id)
+		for unit in grid.units:
+			if unit != selected_unit and unit.side == BattleControllerScript.Side.PLAYER and unit.is_alive():
+				recipient_option.add_item(unit.display_name)
+				recipient_option.set_item_metadata(recipient_option.item_count - 1, unit.adventurer_id)
+	potion_option.visible = potion_option.item_count > 0
+	use_potion_button.visible = potion_option.visible
+	use_potion_button.disabled = not can_act or selected_unit.action_points_remaining < 2 or selected_unit.health >= selected_unit.max_health
+	transfer_item_option.visible = transfer_item_option.item_count > 0
+	recipient_option.visible = recipient_option.item_count > 0
+	transfer_button.visible = transfer_item_option.visible and recipient_option.visible
+	transfer_button.disabled = not can_act or selected_unit.action_points_remaining < 2
+
+
+func _on_use_potion_pressed() -> void:
+	if potion_option.item_count == 0:
+		return
+	if grid.try_use_selected_potion(str(potion_option.get_selected_metadata())):
+		_on_board_changed()
+
+
+func _on_transfer_button_pressed() -> void:
+	if transfer_item_option.item_count == 0 or recipient_option.item_count == 0:
+		return
+	if grid.try_transfer_selected_item(
+		str(transfer_item_option.get_selected_metadata()), str(recipient_option.get_selected_metadata())
+	):
+		_on_board_changed()
 
 
 func _resolve_battle(victory: bool) -> void:
@@ -342,6 +393,10 @@ func _describe_step(step: Dictionary) -> String:
 			return tr("battle.status.hit") % [attacker_name, step.damage]
 		return tr("battle.status.miss") % attacker_name
 
+	if step.type == "potion":
+		return tr("battle.status.potion") % [step.unit.display_name, tr(GameSession.get_item_definition(step.potion_id).name_key), step.healing]
+	if step.type == "item_transfer":
+		return tr("battle.status.item_transfer") % [step.from.display_name, tr(GameSession.get_item_definition(step.item_id).name_key), step.to.display_name]
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
 
