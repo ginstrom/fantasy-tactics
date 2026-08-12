@@ -87,7 +87,7 @@ The first implementation slice must define, in class data, each applicable skill
 
 ### Class perk inventory (Future unless its primitive is shipped)
 
-- **Warrior / Knight:** Parry, Shield Bash, Shield Wall, Chain Blow, and Thrust. Thrust is the first candidate once penetration exists.
+- **Warrior / Knight:** Parry, Shield Bash, Chain Blow, and Thrust. Thrust is the first candidate once penetration exists.
 - **Warrior / Archer:** Lock On, Piercing Arrow, and Called Shot. This branch waits for ranged attacks, line/range rules, and target persistence.
 - **Mage / Spellcaster:** sleep/charm control, elemental damage, and haste. This branch owns MP and spell effects when the Mage slice begins.
 - **Mage / Battle Mage:** elemental attacks, temporary Guard, and enchanted weapon penetration.
