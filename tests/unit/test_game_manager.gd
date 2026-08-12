@@ -652,6 +652,34 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_eq(GameSession.get_recruitment_candidates().size(), 0)
 
 
+func test_targeted_purchase_keeps_an_eligible_party_as_the_recruitment_target() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.recruit_adventurer()
+	GameSession.gold = 10
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	autofree(manager)
+	manager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
+
+	assert_eq(manager.purchase_recruit_for_target_party("warrior_002"), OK)
+	assert_eq(manager.recruitment_target_party_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_targeted_purchase_clears_a_party_target_that_becomes_full() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	for index in 3:
+		GameSession.recruit_adventurer()
+		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	GameSession.gold = 10
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	autofree(manager)
+	manager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
+
+	assert_eq(manager.purchase_recruit_for_target_party("warrior_002"), OK)
+	assert_eq(manager.recruitment_target_party_id, "")
+
+
 func test_go_to_trade_changes_scene_and_clears_detail_context() -> void:
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)

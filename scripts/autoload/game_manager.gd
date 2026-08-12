@@ -201,8 +201,7 @@ func go_to_recruitment() -> Error:
 
 
 func go_to_recruitment_for_party(party_id: String) -> Error:
-	var party := GameSession.get_party(party_id)
-	if party.is_empty() or party.get("deployed", false) or party.get("location_id", "") != GameSession.STARTING_SETTLEMENT_ID or party.get("member_ids", []).size() >= GameSession.get_max_party_size():
+	if not _is_recruitment_target_eligible(party_id):
 		return go_to_recruitment()
 	_clear_detail_context()
 	recruitment_target_party_id = party_id
@@ -383,13 +382,13 @@ func purchase_recruit(candidate_id: String) -> Error:
 
 func purchase_recruit_for_target_party(candidate_id: String) -> Error:
 	var target := recruitment_target_party_id
-	var party := GameSession.get_party(target)
-	if target == "" or party.is_empty() or party.get("deployed", false) or party.get("location_id", "") != GameSession.STARTING_SETTLEMENT_ID or party.get("member_ids", []).size() >= GameSession.get_max_party_size():
+	if not _is_recruitment_target_eligible(target):
 		recruitment_target_party_id = ""
 		return ERR_INVALID_DATA
 	if not GameSession.purchase_recruit_for_party(candidate_id, target):
 		return ERR_INVALID_DATA
-	recruitment_target_party_id = ""
+	if not _is_recruitment_target_eligible(target):
+		recruitment_target_party_id = ""
 	return OK
 
 
@@ -564,3 +563,8 @@ func _clear_detail_context() -> void:
 	assign_equipment_party_id = ""
 	assign_equipment_origin = AssignEquipmentOrigin.STORES
 	recruitment_target_party_id = ""
+
+
+func _is_recruitment_target_eligible(party_id: String) -> bool:
+	var party := GameSession.get_party(party_id)
+	return party_id != "" and not party.is_empty() and not party.get("deployed", false) and party.get("location_id", "") == GameSession.STARTING_SETTLEMENT_ID and party.get("member_ids", []).size() < GameSession.get_max_party_size()

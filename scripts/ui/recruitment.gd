@@ -88,26 +88,23 @@ func _on_row_selected(row_id: Variant) -> void:
 	_refresh_selection()
 
 
-## The only real purchase path: routes to Roster only once GameManager.
-## purchase_recruit() reports success. A failed purchase (stale/removed
-## candidate, or insufficient funds re-checked at the boundary) clears the
-## current selection and refreshes in place instead of navigating, mirroring
-## deploy_party.gd/add_member.gd/unit_details.gd's existing
-## refresh-in-place convention.
+## The only real purchase path. A successful purchase clears its stale local
+## selection and refreshes the live candidate rows in place. Targeted purchases
+## retain their eligible party target for a later purchase; GameManager clears
+## a stale, deployed, or full target before this screen can purchase anything.
 func _on_information_panel_recruit_selected(candidate_id: String) -> void:
 	if GameManager.recruitment_target_party_id != "":
-		var target_party_id := GameManager.recruitment_target_party_id
-		if GameManager.purchase_recruit_for_target_party(candidate_id) == OK:
-			GameManager.go_to_party_details(target_party_id)
-			return
+		GameManager.purchase_recruit_for_target_party(candidate_id)
 		selected_candidate_id = ""
 		refresh()
 		return
-	if GameManager.purchase_recruit(candidate_id) == OK:
-		GameManager.go_to_roster()
-		return
+	GameManager.purchase_recruit(candidate_id)
 	selected_candidate_id = ""
 	refresh()
+
+
+func _on_view_roster_pressed() -> void:
+	GameManager.go_to_roster()
 
 
 func _on_back_pressed() -> void:
