@@ -3,8 +3,7 @@
 ## Scope and sources of truth
 
 This document records the remaining work needed to reach the broad game vision
-in [`designs/vision.md`](designs/vision.md). It is a status document, not a
-license to implement every long-term idea immediately.
+in [`designs/vision.md`](designs/vision.md).
 
 For a feature's exact rules and delivery order, use the supporting design
 documents: [`designs/class-system.md`](designs/class-system.md),
@@ -17,10 +16,6 @@ Where a supporting design marks an idea as **Future** or requires a separate
 approved rule, this document calls it a decision gate rather than an
 implementation requirement.
 
-The current checkout is the evidence for shipped state. The implementation
-plans under `docs/plans/` define individual delivery slices; this roadmap does
-not supersede their ownership or acceptance criteria.
-
 ---
 
 ## Executive summary: shipped state and remaining gaps
@@ -29,7 +24,7 @@ not supersede their ownership or acceptance criteria.
 |---|---|---|---|
 | **Tactical combat** | 6x6 grid, generic 6 AP rounds, 1-AP movement, 3-AP attacks, melee/ranged range and line-of-sight checks, potions, item transfer, and deterministic enemy AI. | Battlefield fog of war, perception, stale information, richer abilities, player-side AI delegation, and pre-battle auto-resolve. | Major gap |
 | **Classes** | Warrior and Scout are playable. Scouts recruit, equip bows/daggers, and make ranged attacks. | Cleric and Mage roots; useful Scout reconnaissance; then specializations and data-backed perk trees. | Major gap |
-| **Attributes and perks** | XP, level-up health, 10 skill points spent on Attack, and the level-3 Bonus Move perk. | A deliberate attribute model, further perk choices, and only the derived mechanics whose owning systems have been approved. | Decision gate + major gap |
+| **Skills and perks** | XP, level-up health, manual skill points spent on Attack, and the level-3 Bonus Move perk. | Replace manual point allocation with automatic class-owned skills; add further perk choices and only the derived mechanics whose owning systems have been approved. | Major gap |
 | **Equipment, loot, and crafting** | Equipment, loot, Stores, buying/selling, passive shop income, blacksmith, alchemy, runic work, mana crystals, and unique improved-item ownership are implemented. | More content and balance only where it supports a class or campaign slice; do not duplicate the existing ownership/crafting foundations. | Foundation shipped |
 | **Healing** | Healing potions are crafted and usable in battle. | Natural/rest healing, stronger encampment recovery, and Temple/Cleric healing/buffs described by the vision. | Major gap |
 | **Party management** | One party only; Guild Hall expands its size from four to five. Warrior and Scout recruitment offers refill over time. | Multiple parties, formations, simultaneous deployment, building-gated specialists, and resolution of the vision's initial four-member-party expectation. | Major gap |
@@ -94,7 +89,20 @@ class work is not a generic stat expansion:
 The long-term class design currently names seven specializations—Knight,
 Archer, Spellcaster, Battle Mage, Healer, Paladin, and Ranger—not eight.
 
-### 1.3 Attributes, perks, terrain, and reactions
+### 1.3 Skills, attributes, perks, terrain, and reactions
+
+The approved advancement direction is automatic, class-owned skill progression:
+each level advances only the skills the adventurer's class uses. For example,
+only Scouts develop Scouting; the player does not distribute a generic skill
+point pool. Melee, missile, dodge, spellcasting, and scouting are candidate
+domains, but each class slice must define the applicable skills, their starting
+values, gains, effects, UI, save migration, and balance scenarios. The current
+manual Attack point allocation is shipped compatibility that this replacement
+will retire.
+
+Perks remain player choices every three levels. They must stay distinct from
+automatic skills: a perk changes or adds a capability, while the class-owned
+skill track provides predictable level-based growth.
 
 The vision's Fallout-inspired attributes and its statement that AP derives from
 Agility are not yet a settled runtime contract. The class design intentionally
@@ -210,8 +218,10 @@ plain branch from `main`, red/green TDD, `make check`, a relevant manual
 `make play` signoff, a commit, and only then a local merge after user approval.
 
 1. **Resolve foundations and recovery.** Decide the initial party/onboarding
-   target and the attribute/AP direction; add the baseline healing lifecycle.
-   Do not silently convert deferred attributes into mechanics.
+   target, define automatic class-owned skill tracks and their migration from
+   manual Attack points, and add the baseline healing lifecycle. Keep perks at
+   the existing every-third-level cadence; do not silently convert deferred
+   attributes into mechanics.
 2. **Complete complementary class roots.** Build the ability primitive, make
    Scout reconnaissance useful, then add Cleric and Mage in independently
    balanced slices. Add their building gates and only the necessary equipment
