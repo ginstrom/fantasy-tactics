@@ -59,7 +59,7 @@ func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["Healthy"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])

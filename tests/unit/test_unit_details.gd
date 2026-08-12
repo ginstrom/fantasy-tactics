@@ -97,7 +97,7 @@ func test_renders_name_class_level_and_availability_status() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_eq(screen.get_node("Body/Center/VBox/NameLabel").text, "Warrior")
-	assert_eq(screen.get_node("Body/Center/VBox/ClassLabel").text, tr("information.class") % "warrior")
+	assert_eq(screen.get_node("Body/Center/VBox/ClassLabel").text, tr("information.class") % "Warrior")
 	assert_eq(screen.get_node("Body/Center/VBox/LevelLabel").text, tr("information.level") % 1)
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatusLabel").text, tr("unit_details.status") % tr("availability.available")
@@ -152,8 +152,8 @@ func test_equipment_label_shows_the_equipped_weapon_and_armor() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/EquipmentLabel").text,
-		tr("unit_details.equipment") % ["Iron Longsword", 1, 8, "Leather Armor", 10, 10],
-		"A fresh Warrior wears the default Iron Longsword (1-8 damage) and Leather Armor (10% defense / 10% resistance)"
+		tr("unit_details.equipment") % ["Iron Longsword", 1, 8, "1", "Leather Armor", 10, 10],
+		"A fresh Warrior wears the default Iron Longsword (1-8 damage, range 1) and Leather Armor (10% defense / 10% resistance)"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/EquipmentLabel").visible)
 
@@ -165,7 +165,7 @@ func test_equipment_label_reflects_a_changed_weapon() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/EquipmentLabel").text,
-		tr("unit_details.equipment") % ["Steel Dagger", 2, 5, "Leather Armor", 10, 10]
+		tr("unit_details.equipment") % ["Steel Dagger", 2, 5, "1", "Leather Armor", 10, 10]
 	)
 
 

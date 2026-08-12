@@ -330,9 +330,8 @@ const DEFAULT_PLAYER_NAME := "Player"
 # _spawn_next_recruitment_offer): the initial offer and every later refill
 # claims the next not-yet-offered template here before falling back to
 # minting an overflow "warrior_NNN" candidate. Templates intentionally omit
-# stats/progression — every current template matches the Warrior baseline, so
-# purchase_recruit() and _spawn_next_recruitment_offer() both seed real
-# stats/progression from DEFAULT_WARRIOR (see
+# stats/progression; purchase_recruit() and _spawn_next_recruitment_offer()
+# seed them from the matching class baseline (see
 # _seed_adventurer_baseline_stats) rather than storing (and risking stale)
 # copies here.
 const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
@@ -366,6 +365,18 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"class": "warrior",
 		"equipment": {
 			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
+		"level": 1,
+		"availability_status": "available",
+		"cost": 10,
+	},
+	{
+		"id": "scout_002",
+		"name": "Scout 2",
+		"class": "scout",
+		"equipment": {
+			"weapon": "shortbow_iron", "weapon_inventory": ["shortbow_iron"],
 			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
 		},
 		"level": 1,
@@ -708,20 +719,19 @@ func recruit_adventurer() -> void:
 	adventurers.append(adventurer)
 
 
-## Seeds a template-derived record's stats/progression with real values,
-## duplicating DEFAULT_WARRIOR's authored base stats and starting progression
-## the same way recruit_adventurer() gets them by duplicating the whole
-## DEFAULT_WARRIOR dict. RECRUITMENT_CANDIDATE_TEMPLATES intentionally omits
-## stats/progression (see its comment), so purchase_recruit() and
+## Seeds a template-derived record's stats/progression with the authored
+## baseline for its class. RECRUITMENT_CANDIDATE_TEMPLATES intentionally omits
+## those mutable fields, so purchase_recruit() and
 ## _spawn_next_recruitment_offer() both call this before a template-derived
-## record can be purchased into the roster — without it, a purchased or
-## refilled recruit would carry genuinely empty stats/progression dicts
-## instead of zeroed real ones, breaking every reader that expects real keys
-## (get_effective_max_health, _award_adventurer_xp, unit_details.gd, and the
-## deployed-party stat derivation in BattleController).
+## record can be purchased into the roster.
 func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
-	record["stats"] = get_default_warrior().stats.duplicate(true)
-	record["progression"] = get_default_warrior().progression.duplicate(true)
+	var baseline := (
+		get_default_scout(str(record.id), str(record.name))
+		if record.get("class", "warrior") == "scout"
+		else get_default_warrior()
+	)
+	record["stats"] = baseline.stats.duplicate(true)
+	record["progression"] = baseline.progression.duplicate(true)
 	return record
 
 

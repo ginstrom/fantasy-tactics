@@ -65,7 +65,7 @@ func _build_rows() -> Array[Dictionary]:
 		rows.append({
 			"id": candidate.id,
 			"name": candidate.name,
-			"class": candidate["class"],
+			"class": tr("class.%s" % candidate["class"]),
 			"level": candidate.level,
 			"cost": candidate.cost,
 		})

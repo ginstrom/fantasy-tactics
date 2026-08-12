@@ -59,7 +59,7 @@ func _build_rows() -> Array[Dictionary]:
 		rows.append({
 			"id": adventurer.id,
 			"name": adventurer.name,
-			"class": adventurer["class"],
+			"class": tr("class.%s" % adventurer["class"]),
 			"level": adventurer.level,
 			"availability_status": tr("availability.%s" % adventurer.availability_status),
 			"party_name": _party_name_for(adventurer.id),

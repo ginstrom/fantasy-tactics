@@ -66,7 +66,7 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	not_found_label.visible = false
 
 	name_label.text = adventurer["name"]
-	class_label.text = tr("information.class") % adventurer["class"]
+	class_label.text = tr("information.class") % tr("class.%s" % adventurer["class"])
 	level_label.text = tr("information.level") % adventurer["level"]
 	status_label.text = tr("unit_details.status") % tr("availability.%s" % adventurer["availability_status"])
 
@@ -83,11 +83,18 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 		% [xp_display, xp_to_next_level, raw_attack, hit_chance_percent, effective_max_health]
 	)
 
-	var weapon_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
+	var weapon_damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
+	var weapon_attack_range: Vector2i = GameSession.get_effective_weapon_attack_range(adventurer_id)
+	var weapon_range_text := (
+		str(weapon_attack_range.x)
+		if weapon_attack_range.x == weapon_attack_range.y
+		else "%d–%d" % [weapon_attack_range.x, weapon_attack_range.y]
+	)
 	equipment_label.text = (
 		tr("unit_details.equipment")
 		% [
-			GameSession.get_effective_weapon_name(adventurer_id), weapon_range.x, weapon_range.y,
+			GameSession.get_effective_weapon_name(adventurer_id), weapon_damage_range.x, weapon_damage_range.y,
+			weapon_range_text,
 			GameSession.get_effective_armor_name(adventurer_id),
 			GameSession.get_effective_defense(adventurer_id), GameSession.get_effective_resistance(adventurer_id),
 		]
