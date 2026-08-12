@@ -52,6 +52,10 @@ visible = false
 text = "recruitment.empty"
 horizontal_alignment = 1
 
+[node name="ViewRosterButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "recruitment.view_roster"
+
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
@@ -68,3 +72,4 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/ViewRosterButton" to="." method="_on_view_roster_pressed"]

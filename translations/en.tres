@@ -90,6 +90,7 @@ messages = {
 "availability.unavailable": "Unavailable",
 "recruitment.title": "Recruitment",
 "recruitment.empty": "No adventurers are available to recruit.",
+"recruitment.view_roster": "View Roster",
 "recruitment.column.name": "Name",
 "recruitment.column.class": "Class",
 "recruitment.column.level": "Level",
