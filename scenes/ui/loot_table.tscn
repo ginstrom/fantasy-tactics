@@ -33,6 +33,26 @@ layout_mode = 2
 disabled = true
 text = "loot_table.view"
 
+[node name="DirectActionBar" type="HBoxContainer" parent="Content"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ViewButton" type="Button" parent="Content/DirectActionBar"]
+layout_mode = 2
+disabled = true
+text = "loot_table.view"
+
+[node name="SellButton" type="Button" parent="Content/DirectActionBar"]
+layout_mode = 2
+disabled = true
+text = "loot_detail_panel.sell"
+
+[node name="EquipButton" type="Button" parent="Content/DirectActionBar"]
+layout_mode = 2
+disabled = true
+text = "loot_detail_panel.equip"
+
 [node name="EmptyLabel" type="Label" parent="."]
 layout_mode = 1
 anchors_preset = 15

@@ -60,56 +60,147 @@ func _select_first_stores_row(screen: Control) -> void:
 	tree.emit_signal("item_selected")
 
 
+func _direct_action_button(screen: Control, button_name: String) -> Button:
+	return screen.get_node("Body/Center/VBox/LootTable/Content/DirectActionBar/%s" % button_name)
+
+
+func test_direct_action_bar_disables_every_action_without_a_selection() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_true(_direct_action_button(screen, "ViewButton").disabled)
+	assert_true(_direct_action_button(screen, "SellButton").disabled)
+	assert_true(_direct_action_button(screen, "EquipButton").disabled)
+
+
+func test_direct_action_bar_enables_every_action_for_affordable_gear() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+
+	assert_false(_direct_action_button(screen, "ViewButton").disabled)
+	assert_false(_direct_action_button(screen, "SellButton").disabled)
+	assert_false(_direct_action_button(screen, "EquipButton").disabled)
+
+
+func test_direct_action_bar_disables_equip_for_mana_crystals() -> void:
+	GameSession.mana_crystals = {1: 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+
+	assert_false(_direct_action_button(screen, "ViewButton").disabled)
+	assert_false(_direct_action_button(screen, "SellButton").disabled)
+	assert_true(_direct_action_button(screen, "EquipButton").disabled)
+
+
+func test_direct_action_bar_disables_sell_when_the_shop_cannot_afford_the_item() -> void:
+	GameSession.shop_gold = 9
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+
+	assert_true(_direct_action_button(screen, "SellButton").disabled)
+
+
+func test_refreshing_away_the_selected_row_disables_every_direct_action() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+
+	GameSession.banked_gear = {}
+	screen.refresh()
+
+	assert_true(_direct_action_button(screen, "ViewButton").disabled)
+	assert_true(_direct_action_button(screen, "SellButton").disabled)
+	assert_true(_direct_action_button(screen, "EquipButton").disabled)
+
+
 func test_selecting_a_row_and_clicking_view_opens_the_detail_panel() -> void:
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
 	_select_first_stores_row(screen)
 
-	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
+	_direct_action_button(screen, "ViewButton").emit_signal("pressed")
 
 	var detail_panel: Control = screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel")
 	assert_true(detail_panel.visible)
 	assert_eq(detail_panel.get_node("Content/NameLabel").text, "Iron Shortsword")
 
 
-func test_equip_button_is_hidden_on_mana_crystal_rows_in_the_detail_panel() -> void:
+func test_direct_equip_emits_the_selected_item_id() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+	var loot_table: LootTable = screen.get_node("Body/Center/VBox/LootTable")
+	watch_signals(loot_table)
+
+	_direct_action_button(screen, "EquipButton").emit_signal("pressed")
+
+	assert_signal_emitted_with_parameters(loot_table, "equip_requested", ["shortsword_iron"])
+
+
+func test_detail_panel_hides_direct_actions_for_mana_crystal_rows() -> void:
 	GameSession.mana_crystals = {1: 2}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
 	_select_first_stores_row(screen)
 
-	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
+	_direct_action_button(screen, "ViewButton").emit_signal("pressed")
 
 	assert_false(
 		screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/EquipButton").visible
 	)
 
 
-func test_sell_button_is_present_with_the_starting_shop() -> void:
-	GameSession.banked_gear = {"shortsword_iron": 1}
-	var screen: Control = StoresScene.instantiate()
-	add_child_autofree(screen)
-	_select_first_stores_row(screen)
-	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
-
-	assert_true(
-		screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/SellButton").visible
-	)
-
-
-func test_pressing_sell_on_a_single_unit_row_sells_it_immediately() -> void:
+func test_direct_sell_of_one_item_updates_gold_shop_cash_and_stores_rows() -> void:
 	GameSession.has_trading_post = true
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
 	_select_first_stores_row(screen)
-	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
 
-	screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+	_direct_action_button(screen, "SellButton").emit_signal("pressed")
 
 	assert_eq(GameSession.banked_gear.shortsword_iron, 0)
 	assert_eq(GameSession.gold, 10)
+	assert_eq(GameSession.shop_gold, 90)
+	assert_true(screen.get_node("Body/Center/VBox/LootTable/EmptyLabel").visible)
+
+
+func test_direct_sale_of_multiple_items_waits_for_quantity_confirmation() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 2}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+
+	_direct_action_button(screen, "SellButton").emit_signal("pressed")
+
+	assert_eq(GameSession.banked_gear.shortsword_iron, 2)
+	assert_true(screen.get_node("Body/Center/VBox/LootTable/SellQuantityDialog").visible)
+
+
+func test_underfunded_direct_sale_leaves_state_and_rows_unchanged() -> void:
+	GameSession.shop_gold = 9
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	_select_first_stores_row(screen)
+	var loot_table: LootTable = screen.get_node("Body/Center/VBox/LootTable")
+	watch_signals(loot_table)
+
+	loot_table._handle_sell("shortsword_iron")
+
+	assert_eq(GameSession.banked_gear.shortsword_iron, 1)
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.shop_gold, 9)
+	assert_signal_not_emitted(loot_table, "sold")
 
 
 func test_pressing_equip_routes_via_game_manager() -> void:

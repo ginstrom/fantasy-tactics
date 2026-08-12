@@ -4,15 +4,11 @@ extends Control
 ## Reusable gear/mana-crystal loot listing, shared by Stores, the victory
 ## summary, and the World Map's Party Details screen. Callers supply rows
 ## via set_rows() — see GameSession.build_loot_rows() for the expected
-## id/name/type/count/price shape — and pick which actions to offer via
-## configure(). The table itself is data-only (Name/Type/Count/Price);
-## selecting a row and clicking [View] (or double-clicking the row)
-## opens LootDetailPanel, a floating overlay with real, text-labeled
-## [Sell]/[Equip] buttons. Godot's Tree control only supports icon
-## buttons, not text-labeled ones, so per-row inline action buttons in
-## the table itself can never show real text — a real PanelContainer
-## with real Button nodes can, which is the whole reason this detail-view
-## indirection exists instead of Sell/Equip living directly in the table.
+## id/name/type/count/price shape — and pick an action presentation via
+## configure(). Party Details and victory use the detail presentation;
+## Stores explicitly uses the direct action bar. Godot's Tree control only
+## supports icon buttons, not text-labeled ones, so actions live in real
+## Button nodes below the table rather than per-row Tree buttons.
 ##
 ## Selling is fully self-contained (it always means GameSession.sell_
 ## item()): a single-unit row sells immediately, a multi-unit row opens
@@ -32,17 +28,27 @@ extends Control
 signal equip_requested(item_id: String)
 signal sold
 
+enum ActionPresentation {
+	DETAIL,
+	DIRECT_ACTION_BAR,
+}
+
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var content: VBoxContainer = $Content
 @onready var table: TableView = $Content/Table
 @onready var view_button: Button = $Content/ViewButton
+@onready var direct_action_bar: HBoxContainer = $Content/DirectActionBar
+@onready var direct_view_button: Button = $Content/DirectActionBar/ViewButton
+@onready var direct_sell_button: Button = $Content/DirectActionBar/SellButton
+@onready var direct_equip_button: Button = $Content/DirectActionBar/EquipButton
 @onready var empty_label: Label = $EmptyLabel
 @onready var sell_dialog: SellQuantityDialog = $SellQuantityDialog
 @onready var detail_panel: LootDetailPanel = $LootDetailPanel
 
 var show_sell: bool = false
 var show_equip: bool = false
+var action_presentation: ActionPresentation = ActionPresentation.DETAIL
 var _rows_by_id: Dictionary = {}
 var _selected_row_id: String = ""
 
@@ -51,15 +57,26 @@ func _ready() -> void:
 	table.row_selected.connect(_on_row_selected)
 	table.row_activated.connect(_on_row_activated)
 	view_button.pressed.connect(_on_view_button_pressed)
+	direct_view_button.pressed.connect(_on_view_button_pressed)
+	direct_sell_button.pressed.connect(_on_direct_sell_button_pressed)
+	direct_equip_button.pressed.connect(_on_direct_equip_button_pressed)
 	sell_dialog.confirmed.connect(_on_sell_dialog_confirmed)
 	detail_panel.sell_requested.connect(_on_detail_sell_requested)
 	detail_panel.equip_requested.connect(_on_detail_equip_requested)
 	table.set_columns(_build_columns())
 
 
-func configure(new_show_sell: bool, new_show_equip: bool) -> void:
+func configure(
+	new_show_sell: bool,
+	new_show_equip: bool,
+	new_action_presentation: ActionPresentation = ActionPresentation.DETAIL
+) -> void:
 	show_sell = new_show_sell
 	show_equip = new_show_equip
+	action_presentation = new_action_presentation
+	view_button.visible = action_presentation == ActionPresentation.DETAIL
+	direct_action_bar.visible = action_presentation == ActionPresentation.DIRECT_ACTION_BAR
+	_refresh_action_state()
 
 
 func set_rows(rows: Array[Dictionary]) -> void:
@@ -71,7 +88,7 @@ func set_rows(rows: Array[Dictionary]) -> void:
 	content.visible = not rows.is_empty()
 	if not _rows_by_id.has(_selected_row_id):
 		_selected_row_id = ""
-	view_button.disabled = _selected_row_id == ""
+	_refresh_action_state()
 
 
 func _build_columns() -> Array[TableColumn]:
@@ -86,7 +103,7 @@ func _build_columns() -> Array[TableColumn]:
 
 func _on_row_selected(row_id: Variant) -> void:
 	_selected_row_id = str(row_id)
-	view_button.disabled = false
+	_refresh_action_state()
 
 
 func _on_row_activated(row_id: Variant) -> void:
@@ -102,7 +119,18 @@ func _open_detail_for(item_id: String) -> void:
 	var row: Dictionary = _rows_by_id.get(item_id, {})
 	if row.is_empty():
 		return
-	detail_panel.show_for_row(row, show_sell, show_equip)
+	var detail_actions_visible := action_presentation == ActionPresentation.DETAIL
+	detail_panel.show_for_row(row, show_sell and detail_actions_visible, show_equip and detail_actions_visible)
+
+
+func _on_direct_sell_button_pressed() -> void:
+	if _selected_row_id != "":
+		_handle_sell(_selected_row_id)
+
+
+func _on_direct_equip_button_pressed() -> void:
+	if _selected_row_id != "" and _can_equip_selected_item():
+		equip_requested.emit(_selected_row_id)
 
 
 func _on_detail_sell_requested(item_id: String) -> void:
@@ -135,3 +163,15 @@ func _handle_sell(item_id: String) -> void:
 func _on_sell_dialog_confirmed(item_id: String, quantity: int) -> void:
 	if GameSession.sell_item(item_id, quantity):
 		sold.emit()
+
+
+func _refresh_action_state() -> void:
+	var has_selection := _rows_by_id.has(_selected_row_id)
+	view_button.disabled = not has_selection
+	direct_view_button.disabled = not has_selection
+	direct_sell_button.disabled = not has_selection or not show_sell or not GameSession.can_sell_item(_selected_row_id)
+	direct_equip_button.disabled = not has_selection or not show_equip or not _can_equip_selected_item()
+
+
+func _can_equip_selected_item() -> bool:
+	return not _selected_row_id.begins_with(GameSession.MANA_CRYSTAL_ID_PREFIX)

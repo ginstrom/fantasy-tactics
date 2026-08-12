@@ -46,21 +46,20 @@ func test_full_trade_loop_buy_assign_and_fight_with_new_equipment() -> void:
 	assert_eq(GameSession.banked_gear.get("dagger_steel", 0), 1, "the bought dagger lands in the bank")
 	assert_eq(GameSession.gold, 0)
 
-	# Stores -> select the Steel Dagger row, open its detail view, confirm
-	# it shows an Equip button, then route to Assign Equipment the same
-	# way the real Equip button does.
+	# Stores -> select the Steel Dagger row and use the direct Equip action
+	# to route to Assign Equipment.
 	var stores_screen: Control = StoresScene.instantiate()
 	add_child_autofree(stores_screen)
 	var stores_tree: Tree = stores_screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
 	var dagger_item := stores_tree.get_root().get_first_child()
 	dagger_item.select(0)
 	stores_tree.emit_signal("item_selected")
-	stores_screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
-	assert_true(
-		stores_screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/EquipButton").visible,
-		"the gear row's detail view shows an Equip button"
+	var equip_button: Button = stores_screen.get_node(
+		"Body/Center/VBox/LootTable/Content/DirectActionBar/EquipButton"
 	)
-	GameManager.route_context_id = "dagger_steel"
+	assert_false(equip_button.disabled, "the gear row enables Stores' direct Equip action")
+	equip_button.emit_signal("pressed")
+	assert_eq(GameManager.route_context_id, "dagger_steel")
 
 	# Assign Equipment -> equip the Warrior.
 	var assign_screen: Control = AssignEquipmentScene.instantiate()
