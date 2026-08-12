@@ -60,11 +60,14 @@ strings against this page depends on it.
   summary for the World Map (`GameSession.merge_battle_loot_into_party`),
   and only added to `GameSession.gold` once the party returns to the
   Encampment (`GameSession.deposit_pending_reward`).
+- **GameConfig** — the read-only autoload that loads the shipped balance
+  configuration once and provides typed fallback-safe lookups. Never owns
+  gameplay state.
 - **GameManager** — the autoload owning navigation (scene changes) and
   thin validation wrappers. Never owns durable game state.
 - **GameSession** — the autoload owning all durable session state and game
-  rules (parties, roster, encounters, progression, gold). Never touches the
-  scene tree.
+  rules (parties, roster, encounters, progression, stores, item ownership,
+  and workshop jobs). Never touches the scene tree.
 
 See [code-map.md](code-map.md) for how these fit together in code.
 

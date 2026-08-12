@@ -71,19 +71,20 @@ Start Menu
      review XP, Attack, and any unspent skill points from Unit Details
      (skill points are spent from the in-battle Level-Up overlay, not from
      Unit Details); optionally spend gold at the Guild Hall to raise the
-     party-size cap, or at the Trading Post to buy better gear
+     party-size cap; buy and assign gear; or build and use the Blacksmith,
+     Alchemy Workshop, and Runic Workshop
 ```
 
 Party Details offers Add Member for an encamped party. Roster and
 Recruitment (below) let a new campaign grow beyond its starting single Warrior.
 
 `GameSession` owns the Warrior-only roster and each adventurer's progression
-(XP, level, Attack, unspent skill points, perks), equipment (equipped weapon
-and armor ids), player-created parties and their deployment state, world
-position, committed travel route, movement spent, world turn, encounter
-completion, active encounter/recruitment instances and their vacancy-refill
-clocks, banked gold/mana crystals/gear, and the Guild Hall's and Trading
-Post's level/ownership and resulting effects. `GameManager` owns named scene
+(XP, level, Attack, unspent skill points, perks), equipped and carried items,
+player-created parties and their deployment state, world position, committed
+travel route, movement spent, world turn, encounter completion, active
+encounter/recruitment instances and their vacancy-refill clocks, banked
+gold/mana crystals/gear, unique upgraded-item ownership, and the Guild Hall,
+Trading Post, and workshop levels/jobs. `GameManager` owns named scene
 transitions. A party is visible and movable only while deployed. World-map
 travel is deliberately simple: an in-bounds, empty-grid Manhattan route moves
 one tile per World Map turn; no terrain costs, obstacles, waypoints, or
@@ -256,13 +257,35 @@ Buildings, and Deploy Party) with two screens:
   selling. Its Buy table lists every weapon and armor in the catalog above,
   gated on affordability.
 
-This gives players a second expedition-facing spend beyond the Guild Hall's
-party-size cap: better gear changes a Warrior's damage range and survivability
-in the very next battle. The Trading Post has no upgrade tiers yet (unlike
-the Guild Hall's two levels), and mana crystals cannot yet be crafted into
-magical items — both remain future work, to be added only once this first
-buy/sell/equip loop has been playtested (see the asset and scope-expansion
-principles below).
+Normal gear remains an immutable, stackable base item in Stores. A permanent
+improvement materializes one normal weapon or armor into a unique owned item
+instance with a `base_item_id` and modifier records. That instance must be in
+exactly one location — Stores or the matching adventurer inventory — so it
+cannot be copied through assignment, save/load, or a workshop job.
+
+The Buildings screen now also contains three timed, World Map turn-driven
+workshops:
+
+- **Blacksmith** costs 50 gold to build and upgrades from level 1 to 3 for
+  50 then 100 gold. Its level gates Iron and Steel weapon crafting; one
+  five-turn craft job and one independent twenty-turn sharpening job may run
+  in parallel. Crafting adds a normal base weapon to Stores; sharpening
+  consumes one normal weapon and returns a unique sharpened instance.
+- **Alchemy Workshop** costs 50 gold to build and 50 gold to reach level 2.
+  It runs one seven-turn potion job at a time, consuming gold and an eligible
+  mana crystal. The level-1 Healing Potion heals 1–6, while the level-2
+  Greater Healing Potion heals 2–8.
+- **Runic Workshop** costs 50 gold to build and 50 gold to reach level 2.
+  Its current seven-turn job sockets the 20-gold, tier-1-crystal **Thorn**
+  rune into an owned armor instance. After a successful melee hit against
+  Thorn armor, the attacker can be paralyzed; this is the only shipped rune.
+
+Potions are assigned from Stores into an adventurer's shared ten-item carried
+capacity. During a player Battle Round, a selected, un-paralyzed adventurer
+can consume a carried potion or transfer one to an ally for 2 AP; an invalid
+action leaves both AP and inventory unchanged. The Trading Post has no
+upgrade tiers. Further recipes, runes, modifiers, and crafting content remain
+future scope (see the asset and scope-expansion principles below).
 
 Escape opens a pause-menu overlay from the settlement, encampment, party
 manager, world map, and battlefield. The overlay can return to the unchanged
@@ -308,13 +331,14 @@ scenario list.
 ## Next work
 
 The prototype now fields a full party against a full, star-tier-randomized
-enemy composition, up to 8 enemies strong; the Guild Hall and the Trading
-Post give players their first two gold-funded tactical decisions (a larger
-party, and better gear); loot (gold, mana crystals, gear) joins XP as
-expedition rewards; and the encounter catalogue now spans three star tiers
-and four monster types (Goblin, Orc, Kobold, Hobgoblin), with a refill's
-tier chosen at random, weighted by the player's growing power. The next
-implementation work should focus on these unfinished outcomes, in order:
+enemy composition, up to 8 enemies strong. Its upgrade loop includes the
+Guild Hall, Trading Post, normal stackable gear, unique sharpened/rune-ready
+instances, carried crafted potions, and three timed workshops; loot (gold,
+mana crystals, gear) joins XP as expedition rewards. The encounter catalogue
+spans three star tiers and four monster types (Goblin, Orc, Kobold,
+Hobgoblin), with a refill's tier chosen at random, weighted by the player's
+growing power. The next implementation work should focus on these unfinished
+outcomes, in order:
 
 1. Assemble Milestone 5's first campaign slice — onboarding and pacing — now
    that both the encounter catalogue and the upgrade path have several
@@ -322,7 +346,11 @@ implementation work should focus on these unfinished outcomes, in order:
    short first-campaign guide covers the opening loop (see Save, load, and
    first-campaign guidance above). What remains is compact-area assembly and
    pacing/difficulty playtesting.
-2. Add durable presentation assets only when their associated gameplay choices
+2. Broaden crafting only after the current weapon, potion, and Thorn-rune
+   choices have been playtested: further recipes, runes, modifier families,
+   and content must preserve the immutable-base/unique-instance ownership
+   contract.
+3. Add durable presentation assets only when their associated gameplay choices
    have been playtested, following the asset policy below.
 
 Developer verification remains a supporting concern rather than a player
@@ -483,8 +511,8 @@ language rather than creating bespoke art for every prototype variation.
 ## Milestone 4: Encampment and party management
 
 **Status: encampment UI, party browsing/deployment, recruitment, individual
-adventurer progression, and two gold-funded buildings (Guild Hall and
-Trading Post) are shipped.** The prototype has an encampment UI shell
+adventurer progression, and the Guild Hall, Trading Post, Blacksmith, Alchemy
+Workshop, and Runic Workshop are shipped.** The prototype has an encampment UI shell
 (Units, Buildings, Trade, Deploy Party) and Units -> Parties -> Party Details
 -> Unit Details browsing with deliberate party deployment. An encamped party
 can use Add Member to assign an existing available adventurer, or Roster can
@@ -494,9 +522,10 @@ offers a small, vacancy-timed pool of gold-costed Warrior candidates (see
 Vacancy-timed encounter and recruitment population above) rather than a fixed
 catalogue. Adventurers gain XP, levels, Attack points, equipment, and perks
 from expeditions (see Adventurer progression and Trade, equipment, and loot
-above), legible from Unit Details. Buildings still offers only the Guild
-Hall; Trade is its own top-level destination (see Trade, equipment, and loot
-above) rather than a Buildings entry.
+above), legible from Unit Details. Buildings offers the Guild Hall,
+Blacksmith, Alchemy Workshop, and Runic Workshop; Trade is its own top-level
+destination (see Trade, equipment, and loot above) rather than a Buildings
+entry.
 
 ### Player outcome
 
@@ -527,14 +556,15 @@ encampment investment that changes future expeditions.
   and future parties whose members are all dead or incapacitated.
 - Add an intentionally small development choice, such as one recruit,
   training option, skill point, or equipment improvement. *(Done: the
-  Trading Post's buy/sell/equip loop — see Trade, equipment, and loot
-  above.)*
-- Present town growth as card-like buildings and services. Start with one or
-  two meaningful options, such as a blacksmith or a temple.
-- Each town choice must state and deliver an expedition-facing benefit. A
-  temple may attract a cleric or unlock training; a blacksmith may improve
-  equipment. *(Done for gear: the Trading Post sells better weapons and
-  armor, which changes a Warrior's damage range and survivability directly.)*
+  Trading Post's buy/sell/equip loop and the three workshops — see Trade,
+  equipment, and loot above.)*
+- Present town growth as card-like buildings and services. *(Done: the Guild
+  Hall, Blacksmith, Alchemy Workshop, and Runic Workshop expose their costs,
+  levels, active jobs, and expedition-facing effects.)*
+- Each town choice must state and deliver an expedition-facing benefit.
+  *(Done: the Trading Post changes immediately available gear; the Blacksmith
+  crafts or sharpens weapons; Alchemy provides carried healing; and the Runic
+  Workshop applies the Thorn counterattack.)*
 - Do not build a freeform city-construction interface.
 
 ### Completion criteria
@@ -553,23 +583,23 @@ characterful, durable assets are justified.
 
 ### Deferred encampment surfaces and data
 
-The encampment UI shell shows these destinations early to establish the
-campaign's shape, but this first UI slice implements only Units -> Parties ->
-Party Details -> Unit Details, Deploy Party, and Trade -> Stores/Trading Post.
-The remaining destinations remain visibly unavailable or labelled TBD; they
-must not simulate systems that do not exist yet.
+The encampment UI shell now implements Units -> Parties -> Party Details ->
+Unit Details, Deploy Party, Trade -> Stores/Trading Post, and Buildings ->
+Guild Hall/Blacksmith/Alchemy Workshop/Runic Workshop. The following broader
+surfaces and data remain deferred rather than being simulated by placeholder
+UI.
 
-- **Buildings:** the Guild Hall is the only building card there, with a real
-  cost (50 gold), an upgrade level (1-2), and a service effect (a raised
-  party-size cap). The Trading Post is bought and used from Trade instead of
-  Buildings (see Trade, equipment, and loot above). Further building cards,
-  construction prerequisites, and associated art remain TBD; implement each
-  after its expedition-facing benefit is proven.
+- **Buildings:** Guild Hall, Blacksmith, Alchemy Workshop, and Runic Workshop
+  are real Building routes with the costs, levels, and timed jobs described
+  in Trade, equipment, and loot above. The Trading Post is bought and used
+  from Trade instead of Buildings. Further building cards, construction
+  prerequisites, and associated art remain TBD; implement each after its
+  expedition-facing benefit is proven.
 - **Trade:** Stores and the Trading Post are shipped (see Trade, equipment,
-  and loot above): buy/sell inventory, prices, stock, and equipment
-  ownership are all real. Trading Post upgrade tiers and crafting mana
-  crystals into magical items remain TBD — do not add either before the
-  current buy/sell/equip loop has been playtested.
+  and loot above): buy/sell inventory, prices, stock, stackable base gear,
+  unique item ownership, and potion assignment are all real. Trading Post
+  upgrade tiers and further crafting recipes, runes, and modifier families
+  remain TBD — do not add them before the current loops have been playtested.
 - **Roster and Recruitment growth:** this slice intentionally has no search,
   pagination, town-size rules, building prerequisites, or class-specific
   combat behavior. Refill delay is randomized per vacancy (see Vacancy-timed

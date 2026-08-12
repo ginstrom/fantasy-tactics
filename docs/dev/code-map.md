@@ -4,16 +4,17 @@ A reference for getting oriented before making a change. This is a map, not
 a tutorial — see [running-the-game.md](running-the-game.md) and
 [testing.md](testing.md) for task instructions.
 
-## The two autoloads own everything
+## The autoloads have distinct responsibilities
 
-Two singletons (declared under `[autoload]` in `project.godot`) split the
+Three singletons (declared under `[autoload]` in `project.godot`) split the
 codebase's responsibilities cleanly. Every scene script is a thin view over
-one or both of them.
+one or both gameplay autoloads; `GameConfig` supplies read-only configuration.
 
 | Autoload | File | Owns | Never does |
 |---|---|---|---|
+| `GameConfig` | `scripts/autoload/game_config.gd` | Read-only, typed access to `config/game_config.json` with built-in fallback defaults | Hold gameplay state or mutate configuration at runtime |
 | `GameManager` | `scripts/autoload/game_manager.gd` | Scene navigation (`go_to_*`, `_change_scene`), short-lived UI routing context (`route_context_id`), thin `Error`-returning wrappers around `GameSession` calls | Hold durable game state |
-| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), gold, Guild Hall level | Touch the scene tree |
+| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), stores/item ownership, and building/workshop jobs | Touch the scene tree |
 
 A scene's `_on_*_pressed()` handler almost always does one of two things:
 call a `GameManager.go_to_*()`/action method (which may call into
@@ -64,6 +65,8 @@ scenes/                          scripts/
 │    information_panel,          │                widgets (table_view.gd, table_column.gd) —
 │    party_manager, level_up,    │                note: portrait_panel.gd lives in scripts/battle/
 │    buildings, guild_hall,      │                above, not here
+│    blacksmith, alchemy_workshop,│
+│    runic_workshop,             │
 │    trade, stores,              └── world/       world_map.gd
 │    trading_post,
 │    assign_equipment,
@@ -81,14 +84,14 @@ often more precise than its own source comments.
 ## Domain model (as tracked by `GameSession`)
 
 - **`adventurers: Array[Dictionary]`** — the full roster, whether or not a
-  member is assigned to a party. Each entry: `id`, `name`, `class`,
-  `equipment` (`{weapon: String, armor: String}` — item ids into
-  `GameSession.WEAPONS`/`GameSession.ARMORS`; see "Trade, equipment, and
-  loot" in
+  member is assigned to a party. Each entry: `id`, `name`, `class`, and
+  `equipment` (active `weapon`/`armor` ids plus their inventories and
+  `potion_inventory`; item ids resolve through `GameSession.get_item_definition()`),
+  along with `level`, `availability_status`, `stats` (`max_health`, `attack`,
+  `move_range` — base values), and progression (`xp: float`, `skill_points`,
+  `perks: Array`). See "Trade, equipment, and loot" in
   [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
-  for the shipped catalog and combat formulas), `level`,
-  `availability_status`, `stats` (`max_health`, `attack`, `move_range` —
-  base values), `progression` (`xp: float`, `skill_points`, `perks: Array`).
+  for the shipped catalog and combat formulas.
 - **`parties: Array[Dictionary]`** — currently always at most one
   (`FIRST_PARTY_ID = "party_001"`). Each entry: `id`, `member_ids`,
   `location_id`, `world_position: Vector2i`, `deployed: bool`,
@@ -123,7 +126,7 @@ often more precise than its own source comments.
   `GameManager.go_to_world_map()`), and from there to `gold` only once the
   party reaches the Encampment (`deposit_pending_reward()`, called from
   `GameManager.go_to_encampment()`).
-- **`mana_crystals` / `banked_gear`** — permanent loot storage, populated by
+- **`mana_crystals` / `banked_gear`** — permanent, stackable loot storage, populated by
   `deposit_pending_reward()` from the matching `pending_mana_crystals` /
   `pending_gear` fields queued on encounter victory (see
   `_roll_and_queue_loot()`). `has_trading_post` gates selling
@@ -131,6 +134,15 @@ often more precise than its own source comments.
   `ENEMY_LOOT_TABLES` are the backing content tables — see "Trade,
   equipment, and loot" in
   [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md).
+- **`owned_item_instances` / `banked_item_instance_ids`** — unique records
+  for modified gear. Each instance identifies an immutable base item and its
+  treatment, enhancement, and rune modifiers. An owned instance has exactly
+  one durable location: banked or in the matching adventurer inventory.
+- **Workshop state** — `blacksmith_level` plus independent craft/sharpening
+  jobs, `alchemy_workshop_level` plus one potion-craft job, and
+  `runic_workshop_level` plus one rune job. `end_world_turn()` advances their
+  absolute completion-turn records; scenes only render and request the
+  `GameSession` operations.
 
 **Effective vs. base stats**: `adventurers[i].stats` holds base values.
 Always read combat/display stats through `GameSession.get_effective_*()`
@@ -214,8 +226,9 @@ in `tests/unit/test_world_map.gd`).
 
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
 identically into every Encampment screen — Encampment, Units, Buildings,
-Deploy Party, Roster, Parties, Recruitment, Party Details, Unit Details,
-Add Member — to give a persistent left-hand nav. It is deliberately absent
+Guild Hall, Blacksmith, Alchemy Workshop, Runic Workshop, Trade, Stores,
+Trading Post, Deploy Party, Roster, Parties, Recruitment, Party Details,
+Unit Details, and Add Member — to give a persistent left-hand nav. It is deliberately absent
 from the World Map: that screen isn't part of the Encampment, and a party
 returns home by clicking the settlement tile instead. It renders six
 buttons, all enabled and routing through `GameManager` — Trade opens
@@ -273,3 +286,13 @@ Run via `make simulate`; see
 This exists for balance/AI-tuning data (damage/kills/gold per battle),
 not for testing — `tests/unit/test_battle_bot.gd` already covers
 `BattleBot`'s decision logic in isolation without needing a real battle.
+
+## Deterministic battle scenarios
+
+`scripts/tools/battle_scenarios/` is the scene-free runner for reproducible
+combat-policy experiments. `scenario_runner_main.gd` defers loading the
+autoload-dependent runner until the SceneTree is ready, then normalizes and
+validates the JSON scenario, expands its cases, and writes a JSONL record set
+plus summary report. Run it with `make scenario`; see
+[running-the-game.md](running-the-game.md#run-reproducible-battle-scenarios).
+These reports are local evidence, not repository content.
