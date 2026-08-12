@@ -53,7 +53,7 @@ func test_stocked_stores_creates_a_staffed_party_with_a_trading_post_and_banked_
 	assert_true(GameSession.has_trading_post)
 	assert_eq(GameSession.mana_crystals, {1: 2})
 	assert_eq(GameSession.banked_gear, {"shortsword_iron": 1})
-	assert_eq(GameSession.gold, 500, "Enough gold to actually buy something from the Trading Post")
+	assert_eq(GameSession.gold, 500, "Enough gold to actually buy something from the Shop")
 
 
 func test_scenario_ids_are_in_display_order() -> void:

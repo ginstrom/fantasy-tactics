@@ -56,7 +56,7 @@ non-debug export build.
    | Goblin Camp Battle | Battlefield | Staffed party deployed directly onto, and battling, the Goblin Camp encounter |
    | Orc Outpost Battle | Battlefield | Staffed party deployed directly onto, and battling, the Orc Outpost encounter |
    | Ruined Fortress Battle | Battlefield | Staffed party deployed directly onto, and battling, the Ruined Fortress encounter, forced to its maximum eight-Kobold composition |
-   | Stocked Trading Post + Stores | Encampment | Staffed encamped party; Trading Post already owned; Stores pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword; 500 gold — for exercising the Trade loop (Stores/Trading Post/Assign Equipment) without playing through a battle first |
+   | Stocked Shop + Stores | Encampment | Staffed encamped party; Shop available; Stores pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword; 500 gold — for exercising the Trade loop (Stores/Shop/Assign Equipment) without playing through a battle first |
 
 4. Two more buttons act on the *current* state rather than resetting it:
    - **Super Power** — maxes out the player unit's move range, attack

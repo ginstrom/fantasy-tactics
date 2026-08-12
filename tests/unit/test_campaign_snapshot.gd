@@ -57,6 +57,8 @@ func _full_snapshot() -> CampaignSnapshot:
 	snapshot.battle_mana_crystals = {1: 1}
 	snapshot.battle_gear = {"dagger_iron": 1}
 	snapshot.has_trading_post = true
+	snapshot.shop_level = 2
+	snapshot.shop_gold = 150
 	snapshot.player_name = "Ryan"
 	snapshot.tutorial_progress = {"formed_party": true}
 	return snapshot
@@ -110,6 +112,8 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.battle_mana_crystals, {1: 1})
 	assert_eq(snapshot.battle_gear, {"dagger_iron": 1})
 	assert_eq(snapshot.has_trading_post, true)
+	assert_eq(snapshot.shop_level, 2)
+	assert_eq(snapshot.shop_gold, 150)
 	assert_eq(snapshot.player_name, "Ryan")
 	assert_eq(snapshot.tutorial_progress, {"formed_party": true})
 
@@ -281,3 +285,25 @@ func test_rejects_a_selected_encounter_that_does_not_reference_any_known_encount
 	var result := CampaignSnapshot.from_dictionary(data)
 
 	assert_false(result.ok)
+
+
+func test_legacy_trading_post_true_migrates_to_a_level_one_shop() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.erase("shop_level")
+	data.erase("shop_gold")
+	data.has_trading_post = true
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.shop_level, 1)
+	assert_eq(result.snapshot.shop_gold, 100)
+
+
+func test_legacy_trading_post_false_migrates_to_a_locked_shop() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.erase("shop_level")
+	data.erase("shop_gold")
+	data.has_trading_post = false
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.shop_level, 0)
+	assert_eq(result.snapshot.shop_gold, 0)

@@ -231,9 +231,14 @@ func go_to_stores() -> Error:
 	return _change_scene(STORES_SCENE)
 
 
-func go_to_trading_post() -> Error:
+func go_to_shop() -> Error:
 	_clear_detail_context()
 	return _change_scene(TRADING_POST_SCENE)
+
+
+# Compatibility alias for internal callers during the route rename.
+func go_to_trading_post() -> Error:
+	return go_to_shop()
 
 
 ## Mirrors go_to_unit_details()'s validate-then-route shape: an unknown item

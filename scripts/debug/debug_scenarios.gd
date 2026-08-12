@@ -40,7 +40,7 @@ static func apply(scenario_id: String) -> bool:
 		"ruined_fortress":
 			return _deploy_at_ruined_fortress()
 		"stocked_stores":
-			return _stock_trading_post_and_stores()
+			return _stock_shop_and_stores()
 	return false
 
 
@@ -71,15 +71,15 @@ static func _create_three_warrior_party() -> bool:
 	return true
 
 
-## For testing the Trade loop directly: a staffed encamped party, a Trading
-## Post already owned (so Stores' Sell button is enabled), Stores
+## For testing the Shop loop directly: a staffed encamped party with a Shop
+## (so Stores' Sell button is enabled), Stores
 ## pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword,
-## and 500 gold so the Trading Post's Buy tab is actually usable rather
+## and 500 gold so the Shop Buy tab is actually usable rather
 ## than every purchase being unaffordable.
-static func _stock_trading_post_and_stores() -> bool:
+static func _stock_shop_and_stores() -> bool:
 	if not _create_staffed_party():
 		return false
-	GameSession.has_trading_post = true
+	GameSession.shop_level = 1
 	GameSession.mana_crystals = {1: 2}
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	GameSession.gold = 500

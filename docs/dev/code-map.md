@@ -32,7 +32,7 @@ loads `config/game_config.json` once at startup and exposes typed
 accessors. It owns no gameplay state and is never mutated at runtime.
 `GameSession._load_balance_config()` reads every tunable balance constant
 from it in `_ready()` — combat formula inputs, level-up growth, Guild Hall
-and Trading Post caps/costs, population caps/timers (see that function for
+and Shop caps/costs, population caps/timers (see that function for
 the exact list). Every other `GameSession` constant (ids, the `EXPEDITIONS`/
 `STAR_ENEMY_COMPOSITIONS`/`WEAPONS`/`ARMORS`/`ENEMY_LOOT_TABLES` content
 tables, grid dimensions) is still a plain code constant — only genuinely
@@ -129,7 +129,7 @@ often more precise than its own source comments.
 - **`mana_crystals` / `banked_gear`** — permanent, stackable loot storage, populated by
   `deposit_pending_reward()` from the matching `pending_mana_crystals` /
   `pending_gear` fields queued on encounter victory (see
-  `_roll_and_queue_loot()`). `has_trading_post` gates selling
+  `_roll_and_queue_loot()`). `shop_level` gates selling
   (`sell_item()`) and buying (`buy_item()`); `WEAPONS`/`ARMORS`/
   `ENEMY_LOOT_TABLES` are the backing content tables — see "Trade,
   equipment, and loot" in
@@ -227,7 +227,7 @@ in `tests/unit/test_world_map.gd`).
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
 identically into every Encampment screen — Encampment, Units, Buildings,
 Guild Hall, Blacksmith, Alchemy Workshop, Runic Workshop, Trade, Stores,
-Trading Post, Deploy Party, Roster, Parties, Recruitment, Party Details,
+Shop, Deploy Party, Roster, Parties, Recruitment, Party Details,
 Unit Details, and Add Member — to give a persistent left-hand nav. It is deliberately absent
 from the World Map: that screen isn't part of the Encampment, and a party
 returns home by clicking the settlement tile instead. It renders six

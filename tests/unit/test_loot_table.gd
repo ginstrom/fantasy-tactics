@@ -96,17 +96,11 @@ func test_equip_requested_from_the_detail_panel_bubbles_up_with_the_item_id() ->
 	assert_signal_emitted_with_parameters(loot_table, "equip_requested", ["shortsword_iron"])
 
 
-func test_sell_button_absent_without_a_trading_post_and_present_with_one_via_the_detail_panel() -> void:
+func test_sell_button_is_present_via_the_shop_detail_panel() -> void:
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var loot_table := _open(true, false)
 	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
 	_select_first_row(loot_table)
-	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
-
-	assert_false(loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").visible, "No Trading Post yet")
-
-	GameSession.has_trading_post = true
-	loot_table.get_node("LootDetailPanel")._on_close_button_pressed()
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
 	assert_true(loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").visible)
@@ -158,6 +152,17 @@ func test_confirming_the_quantity_dialog_sells_that_many_and_emits_sold() -> voi
 	assert_signal_emitted(loot_table, "sold")
 
 
+func test_multi_sale_quantity_is_capped_by_shop_cash() -> void:
+	GameSession.shop_gold = 10
+	GameSession.banked_gear = {"shortsword_iron": 3}
+	var loot_table := _open(true, false)
+	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
+	_select_first_row(loot_table)
+	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
+	loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+	assert_eq(loot_table.get_node("SellQuantityDialog")._max_quantity, 1)
+
+
 func test_a_selection_that_no_longer_exists_after_set_rows_disables_the_view_button() -> void:
 	var loot_table := _open(true, true)
 	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1}, {}))
@@ -168,3 +173,18 @@ func test_a_selection_that_no_longer_exists_after_set_rows_disables_the_view_but
 	loot_table.set_rows(GameSession.build_loot_rows({"dagger_iron": 1}, {}))
 
 	assert_true(loot_table.get_node("Content/ViewButton").disabled)
+
+
+func test_underfunded_sale_is_disabled_and_does_not_emit_sold() -> void:
+	GameSession.shop_gold = 9
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	var loot_table := _open(true, false)
+	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
+	_select_first_row(loot_table)
+	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
+	assert_true(loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").disabled)
+	watch_signals(loot_table)
+	loot_table._handle_sell("shortsword_iron")
+	assert_eq(GameSession.banked_gear.shortsword_iron, 1)
+	assert_eq(GameSession.gold, 0)
+	assert_signal_not_emitted(loot_table, "sold")

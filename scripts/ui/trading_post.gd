@@ -1,7 +1,6 @@
 extends Control
 
-## Shows the Trading Post's passive per-turn income and a Buy table listing
-## every catalog item (GameSession.WEAPONS + GameSession.ARMORS). Selecting a
+## Shows Shop status and its unlocked weapon catalogue. Selecting a
 ## row shows its detail and a Buy action gated on affordability, mirroring
 ## recruitment.gd's row-selection-drives-a-gated-purchase-button pattern.
 ## Note: no upgrade tiers here — see this plan's Phase C architecture note.
@@ -29,31 +28,29 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
-	income_label.text = tr("trading_post.income") % GameSession.TRADING_POST_INCOME_PER_TURN
+	income_label.text = tr("shop.status") % [GameSession.shop_level, GameSession.shop_gold, GameSession.shop_gold_cap()]
 	buy_table.set_rows(_build_rows())
 	_refresh_selection()
 
 
 func _build_columns() -> Array[TableColumn]:
-	var name_column := TableColumnDescriptor.new(&"name", tr("trading_post.column.name"))
+	var name_column := TableColumnDescriptor.new(&"name", tr("shop.column.name"))
 	name_column.expand = true
 	name_column.expand_ratio = 2
-	var type_column := TableColumnDescriptor.new(&"type", tr("trading_post.column.type"))
-	var price_column := TableColumnDescriptor.new(&"price", tr("trading_post.column.price"), TableColumnDescriptor.Type.INTEGER)
+	var type_column := TableColumnDescriptor.new(&"type", tr("shop.column.type"))
+	var price_column := TableColumnDescriptor.new(&"price", tr("shop.column.price"), TableColumnDescriptor.Type.INTEGER)
 	return [name_column, type_column, price_column]
 
 
 func _build_rows() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
-	for item_id in GameSession.WEAPONS:
+	for item_id in GameSession.get_shop_catalogue_item_ids():
 		rows.append(_row_for(item_id, GameSession.WEAPONS[item_id]))
-	for item_id in GameSession.ARMORS:
-		rows.append(_row_for(item_id, GameSession.ARMORS[item_id]))
 	return rows
 
 
 func _row_for(item_id: String, item: Dictionary) -> Dictionary:
-	return {"id": item_id, "name": tr(item.name_key), "type": tr("trading_post.type.%s" % item.slot), "price": item.price}
+	return {"id": item_id, "name": tr(item.name_key), "type": tr("shop.type.%s" % item.slot), "price": item.price}
 
 
 func _refresh_selection() -> void:
@@ -65,9 +62,9 @@ func _refresh_selection() -> void:
 		return
 
 	selected_item_label.visible = true
-	selected_item_label.text = tr("trading_post.selected") % [tr(item.name_key), item.price]
+	selected_item_label.text = tr("shop.selected") % [tr(item.name_key), item.price]
 	buy_button.visible = true
-	buy_button.disabled = GameSession.gold < int(item.price)
+	buy_button.disabled = GameSession.gold < int(item.price) or not GameSession.get_shop_catalogue_item_ids().has(selected_item_id)
 
 
 func _on_row_selected(row_id: Variant) -> void:

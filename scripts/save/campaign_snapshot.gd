@@ -60,6 +60,8 @@ var battle_reward: int = 0
 var battle_mana_crystals: Dictionary = {}
 var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
+var shop_level: int = 1
+var shop_gold: int = 100
 var player_name: String = ""
 # Compact durable record of which first-campaign guide messages have already
 # been shown/dismissed (see docs/plans/2026-08-10-initial-campaign-and-
@@ -106,6 +108,8 @@ func to_dictionary() -> Dictionary:
 		"battle_mana_crystals": battle_mana_crystals.duplicate(true),
 		"battle_gear": battle_gear.duplicate(true),
 		"has_trading_post": has_trading_post,
+		"shop_level": shop_level,
+		"shop_gold": shop_gold,
 		"player_name": player_name,
 		"tutorial_progress": tutorial_progress.duplicate(true),
 	}
@@ -203,6 +207,16 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not data.get("has_trading_post") is bool:
 		return _invalid("has_trading_post is not a bool")
 	normalized["has_trading_post"] = data.has_trading_post
+	if data.has("shop_level") and not data.shop_level is int:
+		return _invalid("shop_level is not an int")
+	if data.has("shop_gold") and not data.shop_gold is int:
+		return _invalid("shop_gold is not an int")
+	# Version-one snapshots use their old building flag to infer the first
+	# Shop tier and a safe cash pool.
+	normalized["shop_level"] = int(data.get("shop_level", 1 if data.has_trading_post else 0))
+	normalized["shop_gold"] = int(data.get("shop_gold", 100 if data.has_trading_post else 0))
+	if normalized.shop_level < 0 or normalized.shop_level > 2 or normalized.shop_gold < 0:
+		return _invalid("shop state is out of range")
 
 	if not data.get("player_name") is String:
 		return _invalid("player_name is not a string")

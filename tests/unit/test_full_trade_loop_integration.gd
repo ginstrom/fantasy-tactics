@@ -1,7 +1,7 @@
 extends GutTest
 
 ## Proves the whole Trade loop works together, not just each screen in
-## isolation: purchase the Trading Post, buy a weapon, assign it to the
+## isolation: upgrade the Shop, buy a weapon, assign it to the
 ## Warrior, then field that Warrior in battle and confirm the equipped
 ## weapon's damage range -- not the old default's -- is what's live.
 ## Mirrors test_first_campaign_ui_flow.gd's real-battle-through-to-
@@ -30,17 +30,14 @@ func after_each() -> void:
 func test_full_trade_loop_buy_assign_and_fight_with_new_equipment() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST + GameSession.WEAPONS.dagger_steel.price
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST + GameSession.WEAPONS.dagger_steel.price
 
-	# Trade -> purchase the Trading Post.
+	# Trade -> Shop is immediately available; upgrade it for steel weapons.
 	var trade_screen: Control = TradeScene.instantiate()
 	add_child_autofree(trade_screen)
-	var purchase_button: Button = trade_screen.get_node("Body/Center/VBox/PurchaseTradingPostButton")
-	assert_false(purchase_button.disabled, "gold covers the Trading Post's cost")
-	purchase_button.emit_signal("pressed")
-	assert_true(GameSession.has_trading_post)
+	assert_true(GameSession.upgrade_shop())
 
-	# Trading Post -> buy a Steel Dagger.
+	# Shop -> buy a Steel Dagger.
 	var trading_post_screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(trading_post_screen)
 	trading_post_screen.selected_item_id = "dagger_steel"

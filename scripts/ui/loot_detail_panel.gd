@@ -28,7 +28,8 @@ func show_for_row(row: Dictionary, show_sell: bool, show_equip: bool) -> void:
 	_item_id = str(row.id)
 	name_label.text = str(row.name)
 	detail_label.text = tr("loot_detail_panel.detail") % [str(row.type), int(row.count), int(row.price)]
-	sell_button.visible = show_sell and GameSession.has_trading_post
+	sell_button.visible = show_sell and GameSession.shop_level > 0
+	sell_button.disabled = not GameSession.can_sell_item(_item_id)
 	equip_button.visible = show_equip and not _item_id.begins_with(GameSession.MANA_CRYSTAL_ID_PREFIX)
 	visible = true
 

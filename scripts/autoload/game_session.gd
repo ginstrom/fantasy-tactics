@@ -262,6 +262,11 @@ var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 4
 var GUILD_HALL_LEVEL_2_PARTY_CAP: int = 5
 var GUILD_HALL_UPGRADE_COST: int = 50
 var GUILD_HALL_MAX_LEVEL: int = 2
+const SHOP_UPGRADE_COST := 50
+const SHOP_LEVEL_ONE_GOLD_CAP := 100
+const SHOP_LEVEL_TWO_GOLD_CAP := 200
+var SHOP_INCOME_PER_TURN: int = 1
+# Legacy save compatibility only. New games always have a level-one Shop.
 var TRADING_POST_PURCHASE_COST: int = 50
 var TRADING_POST_INCOME_PER_TURN: int = 1
 var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
@@ -509,6 +514,8 @@ var battle_reward: int = 0
 var battle_mana_crystals: Dictionary = {}
 var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
+var shop_level: int = 1
+var shop_gold: int = SHOP_LEVEL_ONE_GOLD_CAP
 var player_name: String = DEFAULT_PLAYER_NAME
 # Compact durable record of which first-campaign guide messages have already
 # been shown/dismissed (see docs/plans/2026-08-10-initial-campaign-and-
@@ -539,8 +546,8 @@ func _load_balance_config() -> void:
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_UPGRADE_COST = GameConfig.get_int("guild_hall", "upgrade_cost", GUILD_HALL_UPGRADE_COST)
 	GUILD_HALL_MAX_LEVEL = GameConfig.get_int("guild_hall", "max_level", GUILD_HALL_MAX_LEVEL)
-	TRADING_POST_PURCHASE_COST = GameConfig.get_int("trading_post", "purchase_cost", TRADING_POST_PURCHASE_COST)
-	TRADING_POST_INCOME_PER_TURN = GameConfig.get_int("trading_post", "income_per_turn", TRADING_POST_INCOME_PER_TURN)
+	SHOP_INCOME_PER_TURN = GameConfig.get_int("shop", "income_per_turn", SHOP_INCOME_PER_TURN)
+	TRADING_POST_INCOME_PER_TURN = SHOP_INCOME_PER_TURN
 	ENCOUNTER_INSTANCE_CAP = GameConfig.get_int("population", "encounter_instance_cap", ENCOUNTER_INSTANCE_CAP)
 	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
 	ENCOUNTER_VACANCY_TURNS = GameConfig.get_int("population", "encounter_vacancy_turns", ENCOUNTER_VACANCY_TURNS)
@@ -590,7 +597,9 @@ func reset() -> void:
 	battle_reward = 0
 	battle_mana_crystals = {}
 	battle_gear = {}
-	has_trading_post = false
+	has_trading_post = true
+	shop_level = 1
+	shop_gold = SHOP_LEVEL_ONE_GOLD_CAP
 	player_name = DEFAULT_PLAYER_NAME
 	tutorial_progress = {}
 
@@ -903,8 +912,10 @@ func end_world_turn() -> bool:
 	_advance_blacksmith_jobs()
 	_advance_alchemy_craft_job()
 	_advance_runic_craft_job()
-	if has_trading_post:
-		gold += TRADING_POST_INCOME_PER_TURN
+	if shop_level >= 1:
+		gold += SHOP_INCOME_PER_TURN
+	if shop_level >= 1 and world_turn % 10 == 0:
+		shop_gold = max(shop_gold, shop_gold_cap())
 	if has_deployed_party():
 		parties[_get_selected_party_index()].movement_spent = false
 	_advance_encounter_vacancies()
@@ -1349,14 +1360,36 @@ func _new_blacksmith_item_instance_id() -> String:
 
 
 func can_purchase_trading_post() -> bool:
-	return not has_trading_post and gold >= TRADING_POST_PURCHASE_COST
+	return false
 
 
 func purchase_trading_post() -> bool:
-	if not can_purchase_trading_post():
+	return false
+
+
+func shop_gold_cap() -> int:
+	return SHOP_LEVEL_TWO_GOLD_CAP if shop_level >= 2 else SHOP_LEVEL_ONE_GOLD_CAP
+
+
+func get_shop_catalogue_item_ids() -> Array[String]:
+	var item_ids: Array[String] = []
+	if shop_level <= 0:
+		return item_ids
+	for item_id in WEAPONS:
+		if item_id.ends_with("_iron") or (shop_level >= 2 and item_id.ends_with("_steel")):
+			item_ids.append(item_id)
+	return item_ids
+
+
+func can_upgrade_shop() -> bool:
+	return shop_level == 1 and gold >= SHOP_UPGRADE_COST
+
+
+func upgrade_shop() -> bool:
+	if not can_upgrade_shop():
 		return false
-	gold -= TRADING_POST_PURCHASE_COST
-	has_trading_post = true
+	gold -= SHOP_UPGRADE_COST
+	shop_level = 2
 	return true
 
 
@@ -1503,19 +1536,22 @@ func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary, i
 	return rows
 
 
-## Requires a Trading Post (design doc: selling is only available "if we have
-## a Trading Post") and at least `quantity` of item_id in stock (banked_gear
+## Requires an unlocked Shop and at least `quantity` of item_id in stock (banked_gear
 ## for gear, mana_crystals for a "mana_crystal_<tier>" id). Rejects and
 ## mutates nothing otherwise.
 func sell_item(item_id: String, quantity: int = 1) -> bool:
-	if not has_trading_post or quantity <= 0:
+	if shop_level <= 0 or quantity <= 0:
+		return false
+	var total_price := get_item_sale_price(item_id) * quantity
+	if total_price <= 0 or shop_gold < total_price:
 		return false
 	if item_id.begins_with(MANA_CRYSTAL_ID_PREFIX):
 		var tier := int(item_id.trim_prefix(MANA_CRYSTAL_ID_PREFIX))
 		if mana_crystals.get(tier, 0) < quantity:
 			return false
 		mana_crystals[tier] -= quantity
-		gold += get_item_sale_price(item_id) * quantity
+		gold += total_price
+		shop_gold -= total_price
 		return true
 	if owned_item_instances.has(item_id):
 		if quantity != 1 or not banked_item_instance_ids.has(item_id):
@@ -1524,25 +1560,39 @@ func sell_item(item_id: String, quantity: int = 1) -> bool:
 		banked_item_instance_ids.erase(item_id)
 		owned_item_instances.erase(item_id)
 		gold += sale_price
+		shop_gold -= sale_price
 		return true
 	if banked_gear.get(item_id, 0) < quantity:
 		return false
 	banked_gear[item_id] -= quantity
-	gold += get_item_sale_price(item_id) * quantity
+	gold += total_price
+	shop_gold -= total_price
 	return true
 
 
-## Requires a Trading Post and enough gold for item_id's full catalog price.
+func can_sell_item(item_id: String, quantity: int = 1) -> bool:
+	if shop_level <= 0 or quantity <= 0:
+		return false
+	var total_price := get_item_sale_price(item_id) * quantity
+	if total_price <= 0 or shop_gold < total_price:
+		return false
+	if item_id.begins_with(MANA_CRYSTAL_ID_PREFIX):
+		return mana_crystals.get(int(item_id.trim_prefix(MANA_CRYSTAL_ID_PREFIX)), 0) >= quantity
+	return banked_gear.get(item_id, 0) >= quantity or (quantity == 1 and banked_item_instance_ids.has(item_id))
+
+
+## Requires an unlocked Shop and enough gold for item_id's full catalog price.
 ## Buys exactly one unit, banking it into banked_gear.
 func buy_item(item_id: String) -> bool:
-	if not has_trading_post:
-		return false
 	# Buying is a catalog operation: an owned instance must never be treated as
 	# a template and turned into a second stack entry.
-	var item: Dictionary = WEAPONS.get(item_id, ARMORS.get(item_id, {}))
+	if not get_shop_catalogue_item_ids().has(item_id):
+		return false
+	var item: Dictionary = WEAPONS.get(item_id, {})
 	if item.is_empty() or gold < int(item.price):
 		return false
 	gold -= int(item.price)
+	shop_gold += int(item.price)
 	banked_gear[item_id] = banked_gear.get(item_id, 0) + 1
 	return true
 
@@ -2213,6 +2263,8 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.battle_mana_crystals = battle_mana_crystals.duplicate(true)
 	snapshot.battle_gear = battle_gear.duplicate(true)
 	snapshot.has_trading_post = has_trading_post
+	snapshot.shop_level = shop_level
+	snapshot.shop_gold = shop_gold
 	snapshot.player_name = player_name
 	snapshot.tutorial_progress = tutorial_progress.duplicate(true)
 	return snapshot.to_dictionary()
@@ -2285,6 +2337,8 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	battle_mana_crystals = snapshot.battle_mana_crystals.duplicate(true)
 	battle_gear = snapshot.battle_gear.duplicate(true)
 	has_trading_post = snapshot.has_trading_post
+	shop_level = snapshot.shop_level
+	shop_gold = snapshot.shop_gold
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result
@@ -2538,11 +2592,11 @@ func _campaign_guide_party_on_active_encounter() -> bool:
 ## equipment case without needing to inspect banked_gear, which loot pickups
 ## populate too and would otherwise be a false positive.
 func _campaign_guide_first_improvement_made() -> bool:
-	return guild_hall_level > 1 or has_trading_post or adventurers.size() > 1
+	return guild_hall_level > 1 or shop_level > 1 or adventurers.size() > 1
 
 
 func _campaign_guide_has_affordable_improvement() -> bool:
-	if can_upgrade_guild_hall() or can_purchase_trading_post():
+	if can_upgrade_guild_hall() or can_upgrade_shop():
 		return true
 	for candidate in recruitment_candidates:
 		if gold >= int(candidate.get("cost", 0)):

@@ -86,19 +86,11 @@ func test_equip_button_is_hidden_on_mana_crystal_rows_in_the_detail_panel() -> v
 	)
 
 
-func test_sell_button_is_absent_without_a_trading_post_and_present_with_one() -> void:
+func test_sell_button_is_present_with_the_starting_shop() -> void:
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
 	_select_first_stores_row(screen)
-	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
-
-	assert_false(
-		screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/SellButton").visible
-	)
-
-	GameSession.has_trading_post = true
-	screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel")._on_close_button_pressed()
 	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
 
 	assert_true(

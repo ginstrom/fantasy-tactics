@@ -34,8 +34,7 @@ const DEFAULTS: Dictionary = {
 		"encounter_vacancy_jitter_turns": 5,
 		"recruitment_vacancy_jitter_turns": 5,
 	},
-	"trading_post": {
-		"purchase_cost": 50,
+	"shop": {
 		"income_per_turn": 1,
 	},
 }

@@ -16,10 +16,10 @@ func test_trading_post_shows_the_title_income_and_back_action() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "trading_post.title")
+	assert_eq(screen.get_node("Body/Center/VBox/Title").text, "shop.title")
 	assert_eq(
 		screen.get_node("Body/Center/VBox/IncomeLabel").text,
-		tr("trading_post.income") % GameSession.TRADING_POST_INCOME_PER_TURN
+		tr("shop.status") % [1, 100, 100]
 	)
 	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
@@ -36,14 +36,14 @@ func test_back_button_returns_to_trade() -> void:
 	assert_string_contains(source, "GameManager.go_to_trade()")
 
 
-func test_buy_table_lists_every_weapon_and_armor() -> void:
+func test_buy_table_lists_only_level_one_iron_weapons() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/BuyTable/Tree")
 
 	assert_eq(
 		UiTestHelpers.tree_row_values(tree, 0).size(),
-		GameSession.WEAPONS.size() + GameSession.ARMORS.size()
+		GameSession.get_shop_catalogue_item_ids().size()
 	)
 
 
@@ -59,7 +59,7 @@ func test_every_weapon_and_armor_name_in_the_buy_table_is_distinct() -> void:
 
 	assert_eq(
 		unique_names.size(), names.size(),
-		"every weapon/armor name in the Trading Post catalog must be distinct, e.g. Iron Dagger vs. Steel Dagger, not two rows both reading 'Dagger'"
+		"every Shop catalog name must be distinct, e.g. Iron Dagger vs. Steel Dagger, not two rows both reading 'Dagger'"
 	)
 
 
@@ -69,8 +69,8 @@ func test_type_column_uses_trading_posts_own_translation_keys() -> void:
 	var tree: Tree = screen.get_node("Body/Center/VBox/BuyTable/Tree")
 
 	var row_values := UiTestHelpers.tree_row_values(tree, 1)
-	assert_true(row_values.has(tr("trading_post.type.weapon")))
-	assert_true(row_values.has(tr("trading_post.type.armor")))
+	assert_true(row_values.has(tr("shop.type.weapon")))
+	assert_false(row_values.has(tr("shop.type.armor")))
 
 
 func test_selecting_a_row_shows_its_detail_and_the_buy_button() -> void:
@@ -103,7 +103,6 @@ func test_buy_button_is_disabled_when_unaffordable_and_enabled_once_affordable()
 
 func test_pressing_buy_purchases_the_selected_item_and_refreshes() -> void:
 	GameSession.gold = 1000
-	GameSession.has_trading_post = true
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)
 	screen.selected_item_id = "dagger_iron"

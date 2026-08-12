@@ -24,14 +24,9 @@ func test_show_for_row_displays_name_and_detail_and_becomes_visible() -> void:
 	assert_eq(panel.get_node("Content/DetailLabel").text, tr("loot_detail_panel.detail") % ["Weapon", 3, 10])
 
 
-func test_sell_button_hidden_without_trading_post_and_shown_with_one() -> void:
+func test_sell_button_is_shown_for_the_always_available_shop() -> void:
 	var row := {"id": "shortsword_iron", "name": "Iron Shortsword", "type": "Weapon", "count": 3, "price": 10}
 	var panel := _open(true, false, row)
-	assert_false(panel.get_node("Content/ButtonRow/SellButton").visible)
-
-	GameSession.has_trading_post = true
-	panel.show_for_row(row, true, false)
-
 	assert_true(panel.get_node("Content/ButtonRow/SellButton").visible)
 
 

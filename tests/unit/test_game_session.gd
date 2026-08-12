@@ -2947,43 +2947,101 @@ func test_kobold_and_hobgoblin_loot_ids_already_have_loot_table_rows() -> void:
 	assert_true(GameSessionScript.ENEMY_LOOT_TABLES.has(GameSessionScript.HOBGOBLIN_ENEMY_STATS.loot_id))
 
 
-func test_new_session_has_no_trading_post() -> void:
-	assert_false(GameSession.has_trading_post)
+func test_new_session_starts_with_a_level_one_shop_and_cash() -> void:
+	assert_eq(GameSession.shop_level, 1)
+	assert_eq(GameSession.shop_gold, 100)
 
 
-func test_can_purchase_trading_post_requires_enough_gold_and_not_already_owning_one() -> void:
-	assert_false(GameSession.can_purchase_trading_post(), "No gold, cannot afford it")
-
-	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
-	assert_true(GameSession.can_purchase_trading_post())
-
-	GameSession.purchase_trading_post()
-	assert_false(GameSession.can_purchase_trading_post(), "Already owning one blocks a second purchase")
+func test_shop_catalogue_unlocks_iron_then_steel_weapons() -> void:
+	assert_true(GameSession.get_shop_catalogue_item_ids().all(func(item_id): return item_id.ends_with("_iron")))
+	assert_false(GameSession.buy_item("dagger_steel"))
+	GameSession.gold = 50
+	assert_true(GameSession.upgrade_shop())
+	assert_true(GameSession.get_shop_catalogue_item_ids().has("dagger_steel"))
 
 
-func test_purchase_trading_post_deducts_gold_and_sets_the_flag_once() -> void:
-	GameSession.reset()
-	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+func test_level_zero_legacy_shop_has_no_catalogue_or_sales() -> void:
+	GameSession.shop_level = 0
+	GameSession.shop_gold = 0
+	GameSession.banked_gear = {"dagger_iron": 1}
+	GameSession.gold = 100
+	assert_eq(GameSession.get_shop_catalogue_item_ids(), [] as Array[String])
+	assert_false(GameSession.buy_item("dagger_iron"))
+	assert_false(GameSession.sell_item("dagger_iron"))
 
-	var purchased: bool = GameSession.purchase_trading_post()
 
-	assert_true(purchased)
-	assert_true(GameSession.has_trading_post)
+func test_shop_sale_is_atomic_when_cash_is_insufficient() -> void:
+	GameSession.banked_gear = {"shortsword_iron": 1}
+	GameSession.shop_gold = 9
+	assert_false(GameSession.sell_item("shortsword_iron"))
+	assert_eq(GameSession.banked_gear.shortsword_iron, 1)
 	assert_eq(GameSession.gold, 0)
-	assert_false(GameSession.purchase_trading_post(), "A second purchase must fail")
+	assert_eq(GameSession.shop_gold, 9)
 
 
-func test_end_world_turn_adds_trading_post_income_only_once_purchased() -> void:
-	GameSession.reset()
+func test_shop_buy_transfers_player_gold_to_shop() -> void:
+	GameSession.gold = 10
+	assert_true(GameSession.buy_item("dagger_iron"))
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.shop_gold, 110)
+
+
+func test_shop_refills_on_turn_ten_but_never_lowers_overcap_cash() -> void:
+	GameSession.world_turn = 9
+	GameSession.shop_gold = 1
+	GameSession.end_world_turn()
+	assert_eq(GameSession.shop_gold, 100)
+	GameSession.world_turn = 19
+	GameSession.shop_gold = 300
+	GameSession.end_world_turn()
+	assert_eq(GameSession.shop_gold, 300)
+
+
+func test_blocked_end_turn_does_not_refill_shop_at_turn_boundary() -> void:
+	GameSession.world_turn = 9
+	GameSession.shop_gold = 1
+	GameSession.selected_encounter = GameSession.GOBLIN_CAMP_ID
+	assert_false(GameSession.end_world_turn())
+	assert_eq(GameSession.world_turn, 9)
+	assert_eq(GameSession.shop_gold, 1)
+
+
+func test_locked_legacy_shop_successful_turn_adds_no_income_or_refill() -> void:
+	GameSession.shop_level = 0
+	GameSession.shop_gold = 1
+	GameSession.gold = 10
+	GameSession.world_turn = 9
+	GameSession.end_world_turn()
+	assert_eq(GameSession.gold, 10)
+	assert_eq(GameSession.shop_gold, 1)
+
+
+func test_invalid_shop_snapshot_keeps_live_state_unchanged() -> void:
+	GameSession.gold = 77
+	GameSession.shop_level = 2
+	GameSession.shop_gold = 150
+	var data := GameSession.export_campaign_snapshot()
+	data.shop_level = 3
+	var result := GameSession.import_campaign_snapshot(data)
+	assert_false(result.ok)
+	assert_eq(GameSession.gold, 77)
+	assert_eq(GameSession.shop_level, 2)
+	assert_eq(GameSession.shop_gold, 150)
+
+
+func test_shop_upgrade_requires_fifty_gold_and_is_one_time() -> void:
+	assert_false(GameSession.can_upgrade_shop())
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
+	assert_true(GameSession.upgrade_shop())
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.shop_level, 2)
+	assert_false(GameSession.upgrade_shop())
+
+
+func test_end_world_turn_adds_shop_income() -> void:
 	GameSession.create_party()
 	GameSession.end_world_turn()
-	assert_eq(GameSession.gold, 0, "No income without a Trading Post")
-
-	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
-	GameSession.purchase_trading_post()
-	GameSession.end_world_turn()
-
-	assert_eq(GameSession.gold, GameSession.TRADING_POST_INCOME_PER_TURN)
+	assert_eq(GameSession.gold, GameSession.SHOP_INCOME_PER_TURN)
 
 
 func test_get_item_sale_price_halves_gear_price_and_keeps_mana_crystal_value_full() -> void:
@@ -3017,24 +3075,21 @@ func test_build_loot_rows_skips_zero_and_negative_counts() -> void:
 	assert_eq(rows, [] as Array[Dictionary])
 
 
-func test_sell_item_requires_a_trading_post_and_enough_stock() -> void:
+func test_sell_item_requires_enough_stock_and_shop_cash() -> void:
 	GameSession.reset()
 	GameSession.banked_gear = {"shortsword_iron": 1}
 
-	assert_false(GameSession.sell_item("shortsword_iron"), "No Trading Post yet")
-
-	GameSession.has_trading_post = true
 	assert_false(GameSession.sell_item("shortsword_iron", 2), "Only 1 in stock")
 
 	var sold: bool = GameSession.sell_item("shortsword_iron", 1)
 	assert_true(sold)
 	assert_eq(GameSession.banked_gear.shortsword_iron, 0)
 	assert_eq(GameSession.gold, 10)
+	assert_eq(GameSession.shop_gold, 90)
 
 
 func test_sell_item_handles_mana_crystals() -> void:
 	GameSession.reset()
-	GameSession.has_trading_post = true
 	GameSession.mana_crystals = {1: 2}
 
 	var sold: bool = GameSession.sell_item("mana_crystal_1", 2)
@@ -3044,11 +3099,8 @@ func test_sell_item_handles_mana_crystals() -> void:
 	assert_eq(GameSession.gold, 10)
 
 
-func test_buy_item_requires_a_trading_post_and_enough_gold_then_banks_the_item() -> void:
+func test_buy_item_requires_enough_gold_then_banks_the_item() -> void:
 	GameSession.reset()
-	assert_false(GameSession.buy_item("dagger_iron"), "No Trading Post yet")
-
-	GameSession.has_trading_post = true
 	assert_false(GameSession.buy_item("dagger_iron"), "No gold yet")
 
 	GameSession.gold = 10
@@ -3057,6 +3109,7 @@ func test_buy_item_requires_a_trading_post_and_enough_gold_then_banks_the_item()
 	assert_true(bought)
 	assert_eq(GameSession.gold, 0)
 	assert_eq(GameSession.banked_gear.dagger_iron, 1)
+	assert_eq(GameSession.shop_gold, 110)
 
 
 func test_equip_item_from_bank_adds_the_new_item_and_activates_it_without_evicting_the_old_one() -> void:
@@ -3217,11 +3270,11 @@ func test_unequip_to_bank_rejects_the_active_item_an_uncarried_item_or_an_unknow
 
 
 func test_reset_clears_the_trading_post() -> void:
-	GameSession.has_trading_post = true
+	GameSession.shop_level = 2
 
 	GameSession.reset()
 
-	assert_false(GameSession.has_trading_post)
+	assert_eq(GameSession.shop_level, 1)
 
 
 func test_player_power_is_adventurer_count_plus_guild_hall_level() -> void:
@@ -3331,6 +3384,8 @@ func _capture_durable_fields() -> Dictionary:
 		"battle_mana_crystals": GameSession.battle_mana_crystals.duplicate(true),
 		"battle_gear": GameSession.battle_gear.duplicate(true),
 		"has_trading_post": GameSession.has_trading_post,
+		"shop_level": GameSession.shop_level,
+		"shop_gold": GameSession.shop_gold,
 		"player_name": GameSession.player_name,
 		"tutorial_progress": GameSession.tutorial_progress.duplicate(true),
 	}
@@ -3429,6 +3484,7 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"GUILD_HALL_MAX_LEVEL": true,
 		"TRADING_POST_PURCHASE_COST": true,
 		"TRADING_POST_INCOME_PER_TURN": true,
+		"SHOP_INCOME_PER_TURN": true,
 		"EFFECTIVE_HIT_CHANCE_CAP": true,
 		"ATTACK_TO_HIT_CHANCE_DIVISOR": true,
 		"ENCOUNTER_INSTANCE_CAP": true,
@@ -3707,7 +3763,7 @@ func test_campaign_guide_clears_once_the_first_improvement_is_made() -> void:
 
 
 ## _campaign_guide_first_improvement_made()'s other two branches (recruiting
-## is covered above): a Guild Hall upgrade or a Trading Post purchase must
+## is covered above): a Guild Hall or Shop upgrade must
 ## each independently count as "the first improvement" too.
 func test_campaign_guide_clears_once_the_guild_hall_is_upgraded() -> void:
 	GameSession.reset()
@@ -3724,17 +3780,17 @@ func test_campaign_guide_clears_once_the_guild_hall_is_upgraded() -> void:
 	assert_eq(GameSession.get_campaign_guide_state(), "")
 
 
-func test_campaign_guide_clears_once_the_trading_post_is_purchased() -> void:
+func test_campaign_guide_clears_once_the_shop_is_upgraded() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.depart_selected_party()
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.gold = GameSession.TRADING_POST_PURCHASE_COST
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
 	GameSession.record_campaign_guide_progress(GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
 
-	assert_true(GameSession.purchase_trading_post())
+	assert_true(GameSession.upgrade_shop())
 
 	assert_eq(GameSession.get_campaign_guide_state(), "")
 

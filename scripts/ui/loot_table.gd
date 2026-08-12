@@ -114,18 +114,24 @@ func _on_detail_equip_requested(item_id: String) -> void:
 
 
 func _handle_sell(item_id: String) -> void:
-	if not GameSession.has_trading_post:
+	if GameSession.shop_level <= 0:
 		return
 	var row: Dictionary = _rows_by_id.get(item_id, {})
 	if row.is_empty():
 		return
 	if int(row.count) <= 1:
-		GameSession.sell_item(item_id, 1)
-		sold.emit()
+		if GameSession.sell_item(item_id, 1):
+			sold.emit()
 		return
-	sell_dialog.show_for_item(item_id, str(row.name), int(row.count), int(row.price))
+	var unit_price := int(row.price)
+	if unit_price <= 0:
+		return
+	var affordable_quantity := mini(int(row.count), GameSession.shop_gold / unit_price)
+	if affordable_quantity <= 0:
+		return
+	sell_dialog.show_for_item(item_id, str(row.name), affordable_quantity, unit_price)
 
 
 func _on_sell_dialog_confirmed(item_id: String, quantity: int) -> void:
-	GameSession.sell_item(item_id, quantity)
-	sold.emit()
+	if GameSession.sell_item(item_id, quantity):
+		sold.emit()
