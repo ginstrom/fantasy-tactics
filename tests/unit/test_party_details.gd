@@ -11,6 +11,7 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameManager.recruitment_target_party_id = ""
 
 
 func _open_party_details(party_id: String) -> Control:
@@ -28,14 +29,40 @@ func test_party_details_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
-func test_add_member_is_enabled_for_an_encamped_party_with_an_available_adventurer() -> void:
+func test_add_from_roster_is_enabled_for_an_encamped_party_with_an_available_adventurer() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
-	assert_true(add_button.visible, "Add Member must be offered for an encamped party")
-	assert_false(add_button.disabled, "An available adventurer exists, so Add Member must be usable")
-	assert_eq(add_button.text, "party_details.add_member")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddFromRosterButton")
+	assert_true(add_button.visible)
+	assert_false(add_button.disabled)
+	assert_eq(add_button.text, "party_details.add_from_roster")
+
+
+func test_add_from_roster_and_recruit_are_available_for_an_eligible_encamped_party() -> void:
+	GameSession.create_party()
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	assert_false(screen.get_node("Body/Center/VBox/AddFromRosterButton").disabled)
+	assert_false(screen.get_node("Body/Center/VBox/RecruitButton").disabled)
+	screen.get_node("Body/Center/VBox/RecruitButton").emit_signal("pressed")
+	assert_eq(GameManager.recruitment_target_party_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_add_from_roster_and_recruit_disable_at_cap_and_hide_when_deployed() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	for index in 3:
+		GameSession.recruit_adventurer()
+		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	assert_true(screen.get_node("Body/Center/VBox/AddFromRosterButton").disabled)
+	assert_true(screen.get_node("Body/Center/VBox/RecruitButton").disabled)
+	GameSession.return_deployed_party_to_settlement()
+	GameSession.get_party(GameSession.FIRST_PARTY_ID)
+	GameSession.parties[0].deployed = true
+	screen.refresh()
+	assert_false(screen.get_node("Body/Center/VBox/AddFromRosterButton").visible)
+	assert_false(screen.get_node("Body/Center/VBox/RecruitButton").visible)
 
 
 func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
@@ -43,7 +70,7 @@ func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddFromRosterButton")
 	assert_true(add_button.visible)
 	assert_true(add_button.disabled, "The only adventurer is already a member of this party")
 
@@ -67,16 +94,16 @@ func test_add_member_is_disabled_when_party_is_at_the_level_one_cap() -> void:
 	GameSession.assign_adventurer_to_selected_party("warrior_005")
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	var add_button: Button = screen.get_node("Body/Center/VBox/AddMemberButton")
+	var add_button: Button = screen.get_node("Body/Center/VBox/AddFromRosterButton")
 	assert_true(add_button.visible, "Add Member must still be offered even though the party is full")
 	assert_true(add_button.disabled, "The party is at the level-1 cap of 4 members")
 
 
-func test_pressing_add_member_routes_to_the_add_member_screen_with_this_partys_id() -> void:
+func test_pressing_add_from_roster_routes_to_the_add_member_screen_with_this_partys_id() -> void:
 	GameSession.create_party()
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
-	screen.get_node("Body/Center/VBox/AddMemberButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/AddFromRosterButton").emit_signal("pressed")
 
 	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 
@@ -88,7 +115,7 @@ func test_add_member_is_hidden_entirely_for_a_deployed_party() -> void:
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_false(
-		screen.get_node("Body/Center/VBox/AddMemberButton").visible,
+		screen.get_node("Body/Center/VBox/AddFromRosterButton").visible,
 		"You can't add a member to a party that's out in the field"
 	)
 

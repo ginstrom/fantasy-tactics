@@ -1455,6 +1455,92 @@ func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adven
 	assert_false(recruit.has("cost"), "The adventurer record should not carry a purchase cost")
 
 
+func test_purchase_recruit_for_party_is_atomic_and_assigns_the_purchased_candidate() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.gold = 10
+	assert_true(session.purchase_recruit_for_party("warrior_002", session.FIRST_PARTY_ID))
+	assert_eq(session.gold, 0)
+	assert_false(session.has_recruitment_candidate("warrior_002"))
+	assert_eq(session.get_party(session.FIRST_PARTY_ID).member_ids, ["warrior_002"])
+	assert_eq(session.recruitment_vacancies.size(), 1)
+
+
+func test_purchase_recruit_for_party_rejects_every_invalid_guard_without_mutation() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.gold = 10
+	var invalid_requests := [["missing", session.FIRST_PARTY_ID], ["warrior_002", "missing"]]
+	for request in invalid_requests:
+		var gold_before: int = session.gold
+		var candidates_before: Array = session.get_recruitment_candidates()
+		var roster_before: Array = session.adventurers.duplicate(true)
+		var members_before: Array = session.get_party(session.FIRST_PARTY_ID).member_ids.duplicate()
+		var vacancies_before: Array = session.recruitment_vacancies.duplicate(true)
+		assert_false(session.purchase_recruit_for_party(request[0], request[1]))
+		assert_eq(session.gold, gold_before)
+		assert_eq(session.get_recruitment_candidates(), candidates_before)
+		assert_eq(session.adventurers, roster_before)
+		assert_eq(session.get_party(session.FIRST_PARTY_ID).member_ids, members_before)
+		assert_eq(session.recruitment_vacancies, vacancies_before)
+
+
+func _assert_direct_recruit_rejection_is_atomic(session: Node, candidate_id: String, party_id: String) -> void:
+	var gold_before: int = session.gold
+	var candidates_before: Array = session.get_recruitment_candidates()
+	var roster_before: Array = session.adventurers.duplicate(true)
+	var members_before: Array = session.get_party(party_id).member_ids.duplicate()
+	var vacancies_before: Array = session.recruitment_vacancies.duplicate(true)
+	assert_false(session.purchase_recruit_for_party(candidate_id, party_id))
+	assert_eq(session.gold, gold_before)
+	assert_eq(session.get_recruitment_candidates(), candidates_before)
+	assert_eq(session.adventurers, roster_before)
+	assert_eq(session.get_party(party_id).member_ids, members_before)
+	assert_eq(session.recruitment_vacancies, vacancies_before)
+
+
+func test_purchase_recruit_for_party_rejects_insufficient_funds_atomically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+
+
+func test_purchase_recruit_for_party_rejects_a_roster_id_collision_atomically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.gold = 10
+	var colliding_adventurer: Dictionary = session.get_default_warrior()
+	colliding_adventurer.id = "warrior_002"
+	session.adventurers.append(colliding_adventurer)
+	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+
+
+func test_purchase_recruit_for_party_rejects_a_deployed_target_atomically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party(session.WARRIOR_ID)
+	session.deploy_party(session.FIRST_PARTY_ID)
+	session.gold = 10
+	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+
+
+func test_purchase_recruit_for_party_rejects_a_full_target_atomically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party(session.WARRIOR_ID)
+	for index in 3:
+		session.recruit_adventurer()
+		session.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	session.gold = 10
+	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+
+
 ## Regression test: RECRUITMENT_CANDIDATE_TEMPLATES used to seed purchased
 ## and refilled recruits with genuinely empty "stats": {} / "progression": {}
 ## dicts (only the roster's starting Warrior, DEFAULT_WARRIOR, had real

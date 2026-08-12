@@ -62,6 +62,8 @@ var route_context_id: String = ""
 # route rather than left to go stale.
 var unit_details_origin: String = ""
 var add_member_return_party_id: String = ""
+var recruitment_target_party_id: String = ""
+var last_created_party_id: String = ""
 
 ## Scopes Assign Equipment to one party's own members (the victory summary
 ## and World Map Party Details' [Equip] — see Steps 6/7 of
@@ -145,8 +147,10 @@ func go_to_world_map_from_game_menu() -> Error:
 ## The session owns the single-party restriction; this UI-facing wrapper only
 ## converts its success value into the Error contract used by screen actions.
 func create_party(party_name: String = "Party 1") -> Error:
+	last_created_party_id = ""
 	if not GameSession.create_party(party_name):
 		return ERR_INVALID_DATA
+	last_created_party_id = GameSession.selected_party_id
 	return OK
 
 
@@ -193,6 +197,15 @@ func go_to_roster() -> Error:
 
 func go_to_recruitment() -> Error:
 	_clear_detail_context()
+	return _change_scene(RECRUITMENT_SCENE)
+
+
+func go_to_recruitment_for_party(party_id: String) -> Error:
+	var party := GameSession.get_party(party_id)
+	if party.is_empty() or party.get("deployed", false) or party.get("location_id", "") != GameSession.STARTING_SETTLEMENT_ID or party.get("member_ids", []).size() >= GameSession.get_max_party_size():
+		return go_to_recruitment()
+	_clear_detail_context()
+	recruitment_target_party_id = party_id
 	return _change_scene(RECRUITMENT_SCENE)
 
 
@@ -368,6 +381,18 @@ func purchase_recruit(candidate_id: String) -> Error:
 	return OK
 
 
+func purchase_recruit_for_target_party(candidate_id: String) -> Error:
+	var target := recruitment_target_party_id
+	var party := GameSession.get_party(target)
+	if target == "" or party.is_empty() or party.get("deployed", false) or party.get("location_id", "") != GameSession.STARTING_SETTLEMENT_ID or party.get("member_ids", []).size() >= GameSession.get_max_party_size():
+		recruitment_target_party_id = ""
+		return ERR_INVALID_DATA
+	if not GameSession.purchase_recruit_for_party(candidate_id, target):
+		return ERR_INVALID_DATA
+	recruitment_target_party_id = ""
+	return OK
+
+
 func open_game_menu() -> void:
 	_game_menu.refresh()
 	_game_menu.visible = true
@@ -538,3 +563,4 @@ func _clear_detail_context() -> void:
 	add_member_return_party_id = ""
 	assign_equipment_party_id = ""
 	assign_equipment_origin = AssignEquipmentOrigin.STORES
+	recruitment_target_party_id = ""

@@ -95,6 +95,14 @@ func _on_row_selected(row_id: Variant) -> void:
 ## deploy_party.gd/add_member.gd/unit_details.gd's existing
 ## refresh-in-place convention.
 func _on_information_panel_recruit_selected(candidate_id: String) -> void:
+	if GameManager.recruitment_target_party_id != "":
+		var target_party_id := GameManager.recruitment_target_party_id
+		if GameManager.purchase_recruit_for_target_party(candidate_id) == OK:
+			GameManager.go_to_party_details(target_party_id)
+			return
+		selected_candidate_id = ""
+		refresh()
+		return
 	if GameManager.purchase_recruit(candidate_id) == OK:
 		GameManager.go_to_roster()
 		return

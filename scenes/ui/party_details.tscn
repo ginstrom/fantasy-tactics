@@ -70,9 +70,13 @@ visible = false
 text = "party_details.no_members"
 horizontal_alignment = 1
 
-[node name="AddMemberButton" type="Button" parent="Body/Center/VBox"]
+[node name="AddFromRosterButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
-text = "party_details.add_member"
+text = "party_details.add_from_roster"
+
+[node name="RecruitButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "party_details.recruit"
 
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
@@ -89,5 +93,6 @@ theme_override_constants/margin_bottom = 16
 unique_name_in_owner = true
 layout_mode = 2
 
-[connection signal="pressed" from="Body/Center/VBox/AddMemberButton" to="." method="_on_add_member_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/AddFromRosterButton" to="." method="_on_add_from_roster_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RecruitButton" to="." method="_on_recruit_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

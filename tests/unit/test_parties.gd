@@ -49,7 +49,7 @@ func test_an_empty_party_list_shows_the_empty_state_without_errors() -> void:
 	assert_eq(screen.selected_party_id, "")
 
 
-func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table() -> void:
+func test_create_party_action_creates_exactly_one_party_and_routes_to_its_details() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	var create_button: Button = screen.get_node("Body/Center/VBox/CreatePartyButton")
@@ -62,8 +62,7 @@ func test_create_party_action_creates_exactly_one_party_and_refreshes_the_table(
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.selected_party_id, GameSession.FIRST_PARTY_ID)
-	assert_eq(UiTestHelpers.tree_row_values(screen.get_node("Body/Center/VBox/PartyTable/Tree"), 0), ["Party 1"])
-	assert_true(create_button.disabled)
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 
 
 func test_create_party_button_reveals_the_name_entry_instead_of_creating_immediately() -> void:
@@ -127,7 +126,7 @@ func test_submitting_the_name_field_confirms_like_pressing_ok() -> void:
 	assert_eq(GameSession.parties[0].name, "Alpha Party")
 
 
-func test_confirming_the_party_name_creates_the_party_with_that_name_and_hides_the_entry() -> void:
+func test_confirming_the_party_name_creates_the_party_with_that_name_and_routes() -> void:
 	var screen: Control = PartiesScene.instantiate()
 	add_child_autofree(screen)
 	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
@@ -138,7 +137,29 @@ func test_confirming_the_party_name_creates_the_party_with_that_name_and_hides_t
 
 	assert_eq(GameSession.parties.size(), 1)
 	assert_eq(GameSession.parties[0].name, "Alpha Party")
-	assert_false(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_confirming_a_party_name_routes_to_the_created_partys_details() -> void:
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").emit_signal("pressed")
+	screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput").text = "Alpha Party"
+	screen._on_party_name_confirm_pressed()
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_failed_party_creation_keeps_the_form_and_does_not_route() -> void:
+	GameSession.create_party("Existing")
+	GameManager.route_context_id = "unchanged"
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/CreatePartyButton").visible = false
+	screen.get_node("Body/Center/VBox/PartyNameEntry").visible = true
+	screen.get_node("Body/Center/VBox/PartyNameEntry/NameRow/NameInput").text = "Rejected"
+	screen._on_party_name_confirm_pressed()
+	assert_true(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_eq(GameManager.route_context_id, "unchanged")
 
 
 func test_cancelling_the_party_name_entry_creates_nothing_and_restores_the_button() -> void:

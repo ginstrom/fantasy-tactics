@@ -117,10 +117,8 @@ func _on_party_name_confirm_pressed() -> void:
 	var entered_name := party_name_input.text.strip_edges()
 	if entered_name.is_empty():
 		return
-	GameManager.create_party(entered_name)
-	party_name_entry.visible = false
-	create_party_button.visible = true
-	refresh()
+	if GameManager.create_party(entered_name) == OK:
+		GameManager.go_to_party_details(GameManager.last_created_party_id)
 
 
 func _on_party_name_cancel_pressed() -> void:

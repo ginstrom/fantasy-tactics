@@ -9,12 +9,14 @@ func before_each() -> void:
 	GameSession.reset()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
+	GameManager.recruitment_target_party_id = ""
 
 
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
+	GameManager.recruitment_target_party_id = ""
 
 
 func test_recruitment_shows_the_title_and_the_back_action() -> void:
@@ -173,6 +175,67 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster
 		"",
 		"A successful purchase must route through go_to_roster(), which clears route context"
 	)
+
+
+func test_targeted_recruitment_assigns_only_the_requested_encamped_party() -> void:
+	GameSession.create_party()
+	GameSession.gold = 10
+	assert_eq(GameManager.go_to_recruitment_for_party(GameSession.FIRST_PARTY_ID), OK)
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+	screen.get_node("%InformationPanel/Content/RecruitButton").emit_signal("pressed")
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, ["warrior_002"])
+	assert_eq(GameManager.recruitment_target_party_id, "")
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_stale_targeted_recruitment_falls_back_without_assigning_elsewhere() -> void:
+	GameSession.gold = 10
+	GameManager.recruitment_target_party_id = "missing_party"
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	screen._on_information_panel_recruit_selected("warrior_002")
+	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
+	assert_eq(GameManager.recruitment_target_party_id, "")
+
+
+func _assert_stale_target_purchase_is_inert() -> void:
+	var gold_before: int = GameSession.gold
+	var candidates_before: Array = GameSession.get_recruitment_candidates()
+	var roster_before: Array = GameSession.adventurers.duplicate(true)
+	var members_before: Array = GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids.duplicate()
+	var vacancies_before: Array = GameSession.recruitment_vacancies.duplicate(true)
+	assert_eq(GameManager.purchase_recruit_for_target_party("warrior_002"), ERR_INVALID_DATA)
+	assert_eq(GameSession.gold, gold_before)
+	assert_eq(GameSession.get_recruitment_candidates(), candidates_before)
+	assert_eq(GameSession.adventurers, roster_before)
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, members_before)
+	assert_eq(GameSession.recruitment_vacancies, vacancies_before)
+	assert_eq(GameManager.recruitment_target_party_id, "")
+
+
+func test_targeted_recruitment_becomes_ordinary_when_the_target_deploys() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.gold = 10
+	assert_eq(GameManager.go_to_recruitment_for_party(GameSession.FIRST_PARTY_ID), OK)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	_assert_stale_target_purchase_is_inert()
+
+
+func test_targeted_recruitment_becomes_ordinary_when_the_target_fills() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.gold = 10
+	assert_eq(GameManager.go_to_recruitment_for_party(GameSession.FIRST_PARTY_ID), OK)
+	for index in 3:
+		GameSession.recruit_adventurer()
+		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	_assert_stale_target_purchase_is_inert()
 
 
 func test_a_second_purchase_attempt_of_the_same_now_gone_candidate_does_not_purchase_again() -> void:

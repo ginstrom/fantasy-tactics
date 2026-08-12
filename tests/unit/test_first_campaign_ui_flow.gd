@@ -87,14 +87,12 @@ func test_fresh_campaign_ui_reaches_a_deployed_first_party() -> void:
 	parties.get_node("Body/Center/VBox/PartyNameEntry/NameRow/ConfirmButton").emit_signal("pressed")
 	assert_eq(GameSession.parties.size(), 1)
 
-	var party_table: Tree = parties.get_node("Body/Center/VBox/PartyTable/Tree")
-	party_table.get_root().get_first_child().select(0)
-	party_table.emit_signal("item_activated")
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 	var details: Control = PartyDetailsScene.instantiate()
 	add_child_autofree(details)
 	assert_eq(details.party_id, GameSession.FIRST_PARTY_ID)
 
-	var add_member_button: Button = details.get_node("Body/Center/VBox/AddMemberButton")
+	var add_member_button: Button = details.get_node("Body/Center/VBox/AddFromRosterButton")
 	assert_true(add_member_button.visible)
 	assert_false(add_member_button.disabled)
 	add_member_button.emit_signal("pressed")

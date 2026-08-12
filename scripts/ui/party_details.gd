@@ -31,7 +31,8 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 @onready var loot_table: LootTable = $Body/Center/VBox/LootTable
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
-@onready var add_member_button: Button = $Body/Center/VBox/AddMemberButton
+@onready var add_from_roster_button: Button = $Body/Center/VBox/AddFromRosterButton
+@onready var recruit_button: Button = $Body/Center/VBox/RecruitButton
 @onready var information_panel: PanelContainer = %InformationPanel
 
 var party_id: String = ""
@@ -74,9 +75,14 @@ func refresh() -> void:
 	# sense to offer, so it disappears entirely rather than merely staying
 	# disabled. An encamped party with nobody left to recruit keeps the
 	# button visible but disabled, so its presence isn't a mystery.
-	add_member_button.visible = not deployed
-	add_member_button.disabled = (
+	add_from_roster_button.visible = not deployed
+	recruit_button.visible = not deployed
+	add_from_roster_button.disabled = (
 		GameSession.get_available_adventurers().is_empty()
+		or party.get("member_ids", []).size() >= GameSession.get_max_party_size()
+	)
+	recruit_button.disabled = (
+		GameSession.get_recruitment_candidates().is_empty()
 		or party.get("member_ids", []).size() >= GameSession.get_max_party_size()
 	)
 	_refresh_selection()
@@ -137,8 +143,12 @@ func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
 	GameManager.go_to_unit_details_from_party_details(adventurer_id, party_id)
 
 
-func _on_add_member_pressed() -> void:
+func _on_add_from_roster_pressed() -> void:
 	GameManager.go_to_add_member(party_id)
+
+
+func _on_recruit_pressed() -> void:
+	GameManager.go_to_recruitment_for_party(party_id)
 
 
 func _on_equip_requested(item_id: String) -> void:

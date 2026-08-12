@@ -5,9 +5,20 @@ extends Control
 @onready var units_label: Label = $Body/Center/VBox/UnitsLabel
 @onready var information_panel: PanelContainer = %InformationPanel
 @onready var campaign_guide: PanelContainer = %CampaignGuide
+@onready var first_party_dialog: PanelContainer = $FirstPartyDialog
+@onready var first_party_title: Label = $FirstPartyDialog/Content/Title
+@onready var first_party_message: Label = $FirstPartyDialog/Content/Message
+@onready var first_party_create_button: Button = $FirstPartyDialog/Content/Buttons/CreateButton
+@onready var first_party_dismiss_button: Button = $FirstPartyDialog/Content/Buttons/DismissButton
+
+var first_party_dialog_dismissed := false
 
 
 func _ready() -> void:
+	first_party_title.text = tr("encampment.first_party.title")
+	first_party_message.text = tr("encampment.first_party.message")
+	first_party_create_button.text = tr("encampment.first_party.create")
+	first_party_dismiss_button.text = tr("encampment.first_party.dismiss")
 	refresh()
 
 
@@ -23,6 +34,16 @@ func refresh() -> void:
 	units_label.text = tr("encampment.units_count") % _count_encamped_units()
 	information_panel.refresh()
 	campaign_guide.refresh()
+	first_party_dialog.visible = GameSession.parties.is_empty() and not first_party_dialog_dismissed
+
+
+func _on_first_party_create_pressed() -> void:
+	GameManager.go_to_parties()
+
+
+func _on_first_party_dismiss_pressed() -> void:
+	first_party_dialog_dismissed = true
+	first_party_dialog.visible = false
 
 
 ## Adventurers currently physically present at the encampment: the roster

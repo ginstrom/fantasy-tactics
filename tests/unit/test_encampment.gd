@@ -70,6 +70,31 @@ func test_refresh_updates_the_counts() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
 
 
+func test_first_party_dialog_dismisses_only_for_this_scene_visit() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var dialog: Control = screen.get_node("FirstPartyDialog")
+	assert_true(dialog.visible)
+	dialog.get_node("Content/Buttons/DismissButton").emit_signal("pressed")
+	assert_false(dialog.visible)
+	screen.refresh()
+	assert_false(dialog.visible)
+	var returned: Control = EncampmentScene.instantiate()
+	add_child_autofree(returned)
+	assert_true(returned.get_node("FirstPartyDialog").visible)
+
+
+func test_first_party_dialog_uses_the_exact_prompt_and_create_routes_to_parties() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	assert_eq(screen.get_node("FirstPartyDialog/Content/Title").text, tr("encampment.first_party.title"))
+	assert_eq(screen.get_node("FirstPartyDialog/Content/Message").text, tr("encampment.first_party.message"))
+	assert_eq(screen.get_node("FirstPartyDialog/Content/Buttons/CreateButton").text, tr("encampment.first_party.create"))
+	assert_eq(screen.get_node("FirstPartyDialog/Content/Buttons/DismissButton").text, tr("encampment.first_party.dismiss"))
+	screen.get_node("FirstPartyDialog/Content/Buttons/CreateButton").emit_signal("pressed")
+	assert_eq(GameManager.route_context_id, "")
+
+
 func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)

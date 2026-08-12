@@ -803,6 +803,30 @@ func purchase_recruit(candidate_id: String) -> bool:
 	return true
 
 
+## Purchases an active offer directly into one specific encamped party. All
+## guards run before state changes, so a rejected request is fully inert.
+func purchase_recruit_for_party(candidate_id: String, party_id: String) -> bool:
+	var candidate_index := _get_recruitment_candidate_index(candidate_id)
+	var party_index := _get_party_index(party_id)
+	if (
+		candidate_index == -1
+		or party_index == -1
+		or gold < recruitment_candidates[candidate_index].cost
+		or _has_adventurer(candidate_id)
+		or not _is_party_encamped(parties[party_index])
+		or parties[party_index].member_ids.size() >= get_max_party_size()
+	):
+		return false
+	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
+	gold -= candidate.cost
+	recruitment_candidates.remove_at(candidate_index)
+	candidate.erase("cost")
+	adventurers.append(_seed_adventurer_baseline_stats(candidate))
+	parties[party_index].member_ids.append(candidate_id)
+	_start_recruitment_vacancy()
+	return true
+
+
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
 	var party_index := _get_selected_party_index()
 	if party_index == -1:

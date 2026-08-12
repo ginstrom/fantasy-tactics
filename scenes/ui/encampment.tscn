@@ -75,3 +75,46 @@ offset_top = -160.0
 offset_right = 332.0
 offset_bottom = -16.0
 grow_vertical = 0
+
+[node name="FirstPartyDialog" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -100.0
+offset_right = 220.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="VBoxContainer" parent="FirstPartyDialog"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="FirstPartyDialog/Content"]
+layout_mode = 2
+text = "encampment.first_party.title"
+horizontal_alignment = 1
+
+[node name="Message" type="Label" parent="FirstPartyDialog/Content"]
+layout_mode = 2
+text = "encampment.first_party.message"
+autowrap_mode = 2
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="FirstPartyDialog/Content"]
+layout_mode = 2
+alignment = 1
+
+[node name="CreateButton" type="Button" parent="FirstPartyDialog/Content/Buttons"]
+layout_mode = 2
+text = "encampment.first_party.create"
+
+[node name="DismissButton" type="Button" parent="FirstPartyDialog/Content/Buttons"]
+layout_mode = 2
+text = "encampment.first_party.dismiss"
+
+[connection signal="pressed" from="FirstPartyDialog/Content/Buttons/CreateButton" to="." method="_on_first_party_create_pressed"]
+[connection signal="pressed" from="FirstPartyDialog/Content/Buttons/DismissButton" to="." method="_on_first_party_dismiss_pressed"]
