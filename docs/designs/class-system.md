@@ -2,7 +2,7 @@
 
 ## Purpose and status
 
-This is the long-term class vision for Fantasy Tactics. It is deliberately broader than the currently playable Warrior-only campaign. A heading marked **Shipped** describes live behaviour; **Next slice** is the approved order of delivery; **Future** is design intent only and must not be presented as a current game feature.
+This is the long-term class vision for Fantasy Tactics. It is deliberately broader than the currently playable Warrior-and-Scout campaign. A heading marked **Shipped** describes live behaviour; **Next slice** is the approved order of delivery; **Future** is design intent only and must not be presented as a current game feature.
 
 The design grows a balanced party through four complementary roots, rather than fully implementing one class tree before the other roles exist:
 
@@ -67,9 +67,13 @@ No magic points, carry weight, dodge, critical hits, or luck rolls are added mer
 
 ## Advancement and perks
 
-**Shipped:** a level grants 10 skill points. They currently raise raw Attack, which becomes `accuracy` in the shared tactical model. The level-3 Bonus Move perk grants `+1 Action Point`.
+**Shipped compatibility:** a level currently grants 10 skill points. They raise raw Attack, which becomes `accuracy` in the shared tactical model. This manual allocation is a temporary implementation, not the target advancement model. The level-3 Bonus Move perk grants `+1 Action Point`.
 
-**Next slice:** retain one skill-point currency and permit only investments whose battle effect is implemented and tested. Accuracy is the sole spend until another permitted statistic is live. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
+**Approved replacement:** levels advance class-owned skills automatically; the player does not allocate a generic skill-point currency. A class declares the skills it owns and their level-up progression. Skills that do not belong to a class do not appear or advance for that adventurer—for example, Scouting belongs only to Scouts. Melee, missile, dodge, spellcasting, and scouting are examples of skill domains, not a required universal list.
+
+The first implementation slice must define, in class data, each applicable skill's starting value, per-level gain, combat or campaign effect, UI presentation, save migration, and balance coverage. It must remove the manual Attack-spending flow rather than keeping two competing advancement systems.
+
+**Perks:** every third level still grants one perk choice. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
 
 **Future:** perks can alter raw damage before Resistance, grant penetration, add movement, or introduce an active ability only with the supporting combat primitive. A perk description alone does not enable a mechanic.
 

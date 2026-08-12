@@ -32,8 +32,10 @@ Class system combined with attributes/skills/perks in line with Fallout 1/2.
 Turn-based tactical combat in a fantasy setting. Think mix between XCOM and D&D.
 Character development is heavily inspired by XCOM/Xenonauts and Fallout 1/2. In short:
 * XP to level up
-* On level up, skill points are distributed
-* Every 3 levels, character can choose a perk (including chance to increase attribute score)
+* On level up, class-appropriate skills advance automatically. A unit only
+  advances skills its class uses—for example, only Scouts develop Scouting.
+* Every 3 levels, character can choose a perk (including a chance to increase
+  an attribute score)
 
 The other way to improve character power is through gear, which can be found through adventuring or crafted as town buildings level up.
 
@@ -57,7 +59,8 @@ Units heal naturally over time, more if they don't move, and more if they are in
 
 The player starts with a single party of 4 members, but various research and buildings can increase the number and size of parties. I envision creating specialized parties like scouts, bandit hunting, and dungeon diving.
 
-A rich unit and party UI is required, inspired by XCOM/Xenonauts: Recruitment, development/skill point/equipment, party formation, stats.
+A rich unit and party UI is required, inspired by XCOM/Xenonauts: recruitment,
+development/skills/equipment, party formation, and stats.
 
 As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. For example, building and upgrading a temple attracts clerics and later paladins; building and upgrading a fighter's guild attracts warriors, and so on.
 

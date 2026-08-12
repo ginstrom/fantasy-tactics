@@ -8,7 +8,10 @@ The canonical monster data is eventually a template table owned by `GameSession`
 
 ## Calibration baseline
 
-All first-pass values are calibrated against a fresh Warrior with the shipped starter gear, before perks or upgraded equipment:
+The current shipped values below are calibrated against a fresh Warrior with the
+starter gear, before perks or upgraded equipment. They are a compatibility
+baseline for the still-live manual skill-point system, not the target
+automatic-skill progression model:
 
 | Baseline | max_health | accuracy | guard | resistance | mobility | attack |
 |---|---:|---:|---:|---:|---:|---|
@@ -16,7 +19,13 @@ All first-pass values are calibrated against a fresh Warrior with the shipped st
 | Level 2 Warrior, unspent points | 20 | 60 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
 | Level 2 Warrior, all 10 points in Accuracy | 20 | 70 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
 
-The current campaign awards level 2 at 20 XP and grants 10 skill points; it does not force a player to spend them. Both level-2 rows are therefore valid test baselines. These tables assume flat, open terrain and no healing, perks, party allies, or upgraded equipment.
+The current campaign awards level 2 at 20 XP and grants 10 skill points; it does
+not force a player to spend them. Both level-2 rows are therefore valid current
+test baselines. When automatic class-owned skills replace manual spending, this
+table must be recalibrated from the Warrior's declared automatic progression;
+the manual-Accuracy row must be removed rather than retained as a player
+choice. These tables assume flat, open terrain and no healing, perks, party
+allies, or upgraded equipment.
 
 For rough review, use expected damage per attack (hit chance multiplied by post-Resistance damage) and expected player attacks to defeat. These are comparison tools, not an auto-balance rule: movement, terrain, enemy count, and player choices can deliberately change an encounter's difficulty.
 
@@ -49,10 +58,13 @@ The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0
 |---|---:|---:|---|---|
 | Kobold | 2.2 | 0.15 | Individually weak; threatening as a 4–8-unit swarm. | A swarm remains a positioning test, not a solo duel. |
 | Goblin | 4.8 | 0.40 | Introductory solo enemy; player-favoured but not free. | Reliably cleared alone. |
-| Orc | 8.1 | 1.20 | Near-even solo bruiser for a fresh Warrior. | Becomes a favourable solo fight, particularly after Accuracy investment. |
+| Orc | 8.1 | 1.20 | Near-even solo bruiser for a fresh Warrior. | Current manual-Accuracy investment makes this more favourable; recalibrate for automatic skills. |
 | Hobgoblin | 11.1 | 2.00 | Elite; defeats an unprepared level-1 Warrior in a straight duel. | Dangerous solo target; intended for a formed party or better gear. |
 
-Expected attacks to defeat use the Warrior's 60% Accuracy and 4.5 mean Longsword damage. Expected incoming damage applies the Warrior's 10 Guard and 10% Resistance. At level 2, additional health is the principal change; Accuracy investment reduces expected attacks to defeat by roughly 14%.
+Expected attacks to defeat use the Warrior's 60% Accuracy and 4.5 mean
+Longsword damage. Expected incoming damage applies the Warrior's 10 Guard and
+10% Resistance. The automatic-skill implementation must replace this
+manual-investment comparison with reproducible level-2 Warrior values.
 
 ## Encounter use by slice
 
