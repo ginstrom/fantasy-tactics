@@ -328,8 +328,8 @@ const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
 # A pool of recruitment templates that vacancy-timed refills draw from (see
 # _spawn_next_recruitment_offer): the initial offer and every later refill
-# claims the next not-yet-offered template here before falling back to
-# minting an overflow "warrior_NNN" candidate. Templates intentionally omit
+# claims an unclaimed template matching the rolled class before falling back
+# to minting an overflow candidate of that class. Templates intentionally omit
 # stats/progression; purchase_recruit() and _spawn_next_recruitment_offer()
 # seed them from the matching class baseline (see
 # _seed_adventurer_baseline_stats) rather than storing (and risking stale)
@@ -418,10 +418,13 @@ var enemy_count_roll: Callable = func(min_value: int, max_value: int) -> int: re
 ## [minimum, maximum] jitter range and expected to return a value in that
 ## range once per newly opened vacancy.
 var vacancy_delay_roll: Callable = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
+## Injectable class policy for recruitment refills. Production picks Warrior
+## or Scout with equal probability; tests may force either outcome without
+## waiting through unrelated offers.
+var recruitment_class_roll: Callable = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
 
 
-## Restores enemy_composition_roll, enemy_count_roll, star_weight_roll, and
-## vacancy_delay_roll to their real-random default implementations.
+## Restores injectable rolls to their real-random default implementations.
 ## Deliberately NOT called by reset() -- these Callables are intentionally
 ## never touched by reset() (see each var's own doc comment) so a test can
 ## pin one, then call reset() for unrelated setup, without losing its pin.
@@ -432,6 +435,7 @@ func reset_injectable_rolls() -> void:
 	enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
+	recruitment_class_roll = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
 
 
 # Injectable so tests can force deterministic loot instead of depending on
@@ -458,7 +462,7 @@ var encounter_vacancies: Array[Dictionary] = []
 # from (see that function's docstring) -- it no longer influences which
 # template a refill chooses; see _choose_encounter_template() for that.
 # Recruitment offers do not need an equivalent: a purchased offer's id lives
-# on in the roster forever, so _is_warrior_id_taken already answers "has this
+# on in the roster forever, so _is_recruitment_id_taken already answers "has this
 # template been used" for that category.
 var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
@@ -709,7 +713,7 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 func recruit_adventurer() -> void:
 	var recruit_number := adventurers.size() + 1
 	var candidate_id := "warrior_%03d" % recruit_number
-	while _is_warrior_id_taken(candidate_id):
+	while _is_recruitment_id_taken(candidate_id):
 		recruit_number += 1
 		candidate_id = "warrior_%03d" % recruit_number
 
@@ -735,11 +739,10 @@ func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
 	return record
 
 
-## Shared id-collision predicate for both the debug recruit-mint path above
-## and the recruitment-offer overflow mint path (see
-## _spawn_next_recruitment_offer). A "warrior_NNN" id is taken if it already
-## names either a roster adventurer or a still-live recruitment offer.
-func _is_warrior_id_taken(candidate_id: String) -> bool:
+## Shared id-collision predicate for debug and recruitment-offer mint paths.
+## A candidate id is taken if it already names either a roster adventurer or
+## a still-live recruitment offer.
+func _is_recruitment_id_taken(candidate_id: String) -> bool:
 	return _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1
 
 
@@ -1931,27 +1934,27 @@ func _advance_recruitment_vacancies() -> void:
 	recruitment_vacancies = still_pending
 
 
-## Deterministic: the first fixed template (in RECRUITMENT_CANDIDATE_TEMPLATES
-## order) not already claimed by a live offer or a roster adventurer. Once
-## every fixed template has been claimed, mints a fresh "warrior_NNN"
-## candidate via the same collision-avoiding convention recruit_adventurer()
-## uses, so a refill never silently fails once the small fixed pool is
-## exhausted.
+## Selects a Warrior or Scout through recruitment_class_roll, then claims the
+## first unclaimed matching template. Once that class's templates are claimed,
+## mints a matching-class overflow candidate, so refills stay class-diverse
+## rather than silently becoming Warrior-only.
 func _spawn_next_recruitment_offer() -> Dictionary:
+	var class_id: String = recruitment_class_roll.call()
 	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
-		if not _is_warrior_id_taken(template.id):
+		if template["class"] == class_id and not _is_recruitment_id_taken(template.id):
 			return _seed_adventurer_baseline_stats(template.duplicate(true))
 
 	var overflow_number := adventurers.size() + recruitment_candidates.size() + 1
-	var overflow_id := "warrior_%03d" % overflow_number
-	while _is_warrior_id_taken(overflow_id):
+	var overflow_id := "%s_%03d" % [class_id, overflow_number]
+	while _is_recruitment_id_taken(overflow_id):
 		overflow_number += 1
-		overflow_id = "warrior_%03d" % overflow_number
+		overflow_id = "%s_%03d" % [class_id, overflow_number]
 
-	var offer: Dictionary = RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)
+	var offer := get_default_scout(overflow_id, "Scout %d" % overflow_number) if class_id == "scout" else get_default_warrior()
 	offer.id = overflow_id
-	offer.name = "Warrior %d" % overflow_number
-	return _seed_adventurer_baseline_stats(offer)
+	offer.name = "%s %d" % ["Scout" if class_id == "scout" else "Warrior", overflow_number]
+	offer["cost"] = 10
+	return offer
 
 
 ## Divides amount evenly across party_id's members and adds each member's

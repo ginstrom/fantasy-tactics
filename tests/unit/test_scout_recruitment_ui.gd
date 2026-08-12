@@ -12,15 +12,14 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	GameSession.reset_injectable_rolls()
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
 	GameManager.add_member_return_party_id = ""
 
 
 func _next_scout_offer() -> Dictionary:
-	GameSession.recruitment_candidates = [
-		GameSession.RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true),
-	]
+	GameSession.recruitment_class_roll = func() -> String: return "scout"
 	return GameSession._spawn_next_recruitment_offer()
 
 
@@ -33,9 +32,11 @@ func test_recruitment_candidates_can_include_scouts() -> void:
 	assert_eq(scout_offer.stats, {"max_health": 12, "attack": 65, "move_range": 3})
 
 
-func test_first_recruitment_vacancy_refills_with_a_scout_offer() -> void:
+func test_recruitment_vacancies_follow_the_injected_scout_then_warrior_class_policy() -> void:
+	var classes := ["scout", "warrior"]
+	GameSession.recruitment_class_roll = func() -> String: return classes.pop_front()
 	GameSession.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 1
-	GameSession.gold = 10
+	GameSession.gold = 20
 
 	assert_true(GameSession.purchase_recruit("warrior_002"))
 	GameSession.end_world_turn()
@@ -44,6 +45,24 @@ func test_first_recruitment_vacancy_refills_with_a_scout_offer() -> void:
 	assert_eq(candidates.size(), 1)
 	assert_eq(candidates[0].id, "scout_002")
 	assert_eq(candidates[0]["class"], "scout")
+	assert_true(GameSession.purchase_recruit("scout_002"))
+	GameSession.end_world_turn()
+
+	candidates = GameSession.get_recruitment_candidates()
+	assert_eq(candidates.size(), 1)
+	assert_eq(candidates[0]["class"], "warrior")
+
+
+func test_scout_policy_mints_a_scout_overflow_offer_after_the_fixed_scout_is_claimed() -> void:
+	GameSession.recruitment_class_roll = func() -> String: return "scout"
+	GameSession.adventurers.append(GameSession.get_default_scout("scout_002", "Scout 2"))
+	GameSession.recruitment_candidates.clear()
+
+	var offer := GameSession._spawn_next_recruitment_offer()
+
+	assert_eq(offer["class"], "scout")
+	assert_eq(offer.equipment.weapon, "shortbow_iron")
+	assert_true(offer.id.begins_with("scout_"))
 
 
 func test_scout_recruitment_purchases_valid_scout_adventurer() -> void:

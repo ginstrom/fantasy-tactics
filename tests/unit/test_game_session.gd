@@ -2194,6 +2194,7 @@ func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> 
 	autofree(session)
 	# Force the base result -- see test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock.
 	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
+	session.recruitment_class_roll = func() -> String: return "scout"
 	session.gold = 10
 	session.purchase_recruit("warrior_002")
 
