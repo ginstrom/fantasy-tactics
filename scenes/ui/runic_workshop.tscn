@@ -22,6 +22,7 @@ grow_vertical = 2
 
 [node name="CampNav" parent="Body" instance=ExtResource("2")]
 layout_mode = 2
+category = 2
 
 [node name="Center" type="CenterContainer" parent="Body"]
 layout_mode = 2

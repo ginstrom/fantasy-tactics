@@ -24,6 +24,7 @@ theme_override_constants/separation = 16
 
 [node name="CampNav" parent="Body" instance=ExtResource("3_camp_nav")]
 layout_mode = 2
+category = 3
 
 [node name="Center" type="CenterContainer" parent="Body"]
 layout_mode = 2

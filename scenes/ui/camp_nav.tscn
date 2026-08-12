@@ -15,26 +15,101 @@ theme_override_constants/separation = 8
 [node name="EncampmentButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "encampment.title"
+alignment = 0
 
 [node name="UnitsButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "encampment.units"
+alignment = 0
+
+[node name="UnitsSubmenuMargin" type="MarginContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 16
+
+[node name="Submenu" type="VBoxContainer" parent="VBox/UnitsSubmenuMargin"]
+layout_mode = 2
+
+[node name="RosterButton" type="Button" parent="VBox/UnitsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "units.roster"
+alignment = 0
+
+[node name="PartiesButton" type="Button" parent="VBox/UnitsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "units.parties"
+alignment = 0
+
+[node name="RecruitmentButton" type="Button" parent="VBox/UnitsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "units.recruitment"
+alignment = 0
 
 [node name="BuildingsButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "encampment.buildings"
+alignment = 0
+
+[node name="BuildingsSubmenuMargin" type="MarginContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 16
+
+[node name="Submenu" type="VBoxContainer" parent="VBox/BuildingsSubmenuMargin"]
+layout_mode = 2
+
+[node name="GuildHallButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "buildings.guild_hall"
+alignment = 0
+
+[node name="BlacksmithButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "buildings.blacksmith"
+alignment = 0
+
+[node name="AlchemyWorkshopButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "buildings.alchemy_workshop"
+alignment = 0
+
+[node name="RunicWorkshopButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "buildings.runic_workshop"
+alignment = 0
 
 [node name="TradeButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "encampment.trade"
+alignment = 0
+
+[node name="TradeSubmenuMargin" type="MarginContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 16
+
+[node name="Submenu" type="VBoxContainer" parent="VBox/TradeSubmenuMargin"]
+layout_mode = 2
+
+[node name="StoresButton" type="Button" parent="VBox/TradeSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "stores.title"
+alignment = 0
+
+[node name="ShopButton" type="Button" parent="VBox/TradeSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "shop.title"
+alignment = 0
 
 [node name="DeployPartyButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "encampment.deploy_party"
+alignment = 0
 
 [node name="WorldMapButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "camp_nav.world_map"
+alignment = 0
 
 [connection signal="pressed" from="VBox/EncampmentButton" to="." method="_on_encampment_button_pressed"]
 [connection signal="pressed" from="VBox/UnitsButton" to="." method="_on_units_button_pressed"]
@@ -42,3 +117,12 @@ text = "camp_nav.world_map"
 [connection signal="pressed" from="VBox/TradeButton" to="." method="_on_trade_button_pressed"]
 [connection signal="pressed" from="VBox/DeployPartyButton" to="." method="_on_deploy_party_button_pressed"]
 [connection signal="pressed" from="VBox/WorldMapButton" to="." method="_on_world_map_button_pressed"]
+[connection signal="pressed" from="VBox/UnitsSubmenuMargin/Submenu/RosterButton" to="." method="_on_roster_button_pressed"]
+[connection signal="pressed" from="VBox/UnitsSubmenuMargin/Submenu/PartiesButton" to="." method="_on_parties_button_pressed"]
+[connection signal="pressed" from="VBox/UnitsSubmenuMargin/Submenu/RecruitmentButton" to="." method="_on_recruitment_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/GuildHallButton" to="." method="_on_guild_hall_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/BlacksmithButton" to="." method="_on_blacksmith_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/AlchemyWorkshopButton" to="." method="_on_alchemy_workshop_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/RunicWorkshopButton" to="." method="_on_runic_workshop_button_pressed"]
+[connection signal="pressed" from="VBox/TradeSubmenuMargin/Submenu/StoresButton" to="." method="_on_stores_button_pressed"]
+[connection signal="pressed" from="VBox/TradeSubmenuMargin/Submenu/ShopButton" to="." method="_on_shop_button_pressed"]
