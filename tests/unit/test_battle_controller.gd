@@ -608,6 +608,20 @@ func test_ready_builds_the_player_unit_from_the_first_partys_effective_stats() -
 	assert_eq(warrior.health, 20, "A fresh unit starts at full (derived) health")
 
 
+func test_ready_builds_the_player_unit_with_its_equipped_weapon_range() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	assert_eq(
+		Vector2i(warrior.attack_min_range, warrior.attack_max_range),
+		GameSession.get_effective_weapon_attack_range(GameSession.WARRIOR_ID),
+		"Battle range must be copied from the equipped weapon definition"
+	)
+
+
 func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_when_raw_attack_reaches_one_hundred() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

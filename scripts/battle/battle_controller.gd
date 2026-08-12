@@ -90,6 +90,7 @@ func _ready() -> void:
 	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
 		var adventurer_id: String = _player_adventurer_ids[index]
 		var damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
+		var attack_range: Vector2i = GameSession.get_effective_weapon_attack_range(adventurer_id)
 		var player_unit := UnitScript.new(
 			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
 			GameSession.get_effective_action_points(adventurer_id),
@@ -102,6 +103,8 @@ func _ready() -> void:
 			GameSession.get_effective_defense(adventurer_id),
 			GameSession.get_effective_resistance(adventurer_id)
 		)
+		player_unit.attack_min_range = attack_range.x
+		player_unit.attack_max_range = attack_range.y
 		player_unit.raw_damage_bonus = GameSession.get_effective_weapon_raw_damage_bonus(adventurer_id)
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)

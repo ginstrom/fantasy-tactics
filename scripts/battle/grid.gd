@@ -74,8 +74,6 @@ func get_attackable_tiles(
 			var distance: int = get_manhattan_distance(from_pos, tile)
 			if distance < min_range or distance > max_range:
 				continue
-			if blocking_tiles.has(tile):
-				continue
 			if has_line_of_sight(from_pos, tile, blocking_tiles):
 				attackable.append(tile)
 	return attackable

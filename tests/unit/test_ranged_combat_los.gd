@@ -32,7 +32,7 @@ func test_attackable_tiles_include_only_in_range_positions_with_line_of_sight() 
 
 	assert_true(tiles.has(Vector2i(1, 0)))
 	assert_true(tiles.has(Vector2i(2, 0)))
-	assert_false(tiles.has(Vector2i(0, 1)))
+	assert_true(tiles.has(Vector2i(0, 1)), "An occupied target tile remains attackable")
 	assert_false(tiles.has(Vector2i(0, 2)))
 	assert_false(tiles.has(Vector2i(0, 3)))
 	assert_false(tiles.has(Vector2i(3, 1)), "Positions farther than the maximum Manhattan range are excluded")

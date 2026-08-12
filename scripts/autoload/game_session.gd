@@ -156,14 +156,14 @@ const STAR_WEIGHT_MIN: int = 1
 # attacker's effective hit chance; resistance reduces incoming damage by that
 # percent, rounded to the nearest integer when applied (see BattleController).
 const WEAPONS: Dictionary = {
-	"dagger_iron": {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "price": 10},
-	"dagger_steel": {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "price": 30},
-	"shortsword_iron": {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "price": 20},
-	"shortsword_steel": {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "price": 60},
-	"longsword_iron": {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "price": 30},
-	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "price": 90},
-	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "price": 35},
-	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "price": 105},
+	"dagger_iron": {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "min_range": 1, "max_range": 1, "price": 10},
+	"dagger_steel": {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "min_range": 1, "max_range": 1, "price": 30},
+	"shortsword_iron": {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20},
+	"shortsword_steel": {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 1, "price": 60},
+	"longsword_iron": {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 1, "price": 30},
+	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90},
+	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35},
+	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105},
 }
 const BLACKSMITH_BUILD_COST := 50
 const BLACKSMITH_UPGRADE_COSTS := {2: 50, 3: 100}
@@ -2037,6 +2037,20 @@ func get_effective_weapon_damage_range(adventurer_id: String) -> Vector2i:
 	if weapon.is_empty():
 		return Vector2i.ZERO
 	return Vector2i(weapon.damage_min, weapon.damage_max)
+
+
+## Ranged weapon data is optional while the catalog contains only melee
+## weapons. Missing or invalid records remain safely adjacent-only.
+func get_effective_weapon_attack_range(adventurer_id: String) -> Vector2i:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return Vector2i.ONE
+	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
+	if weapon.is_empty():
+		return Vector2i.ONE
+	var min_range: int = maxi(int(weapon.get("min_range", 1)), 1)
+	var max_range: int = maxi(int(weapon.get("max_range", 1)), min_range)
+	return Vector2i(min_range, max_range)
 
 
 func get_effective_weapon_raw_damage_bonus(adventurer_id: String) -> int:
