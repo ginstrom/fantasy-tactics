@@ -85,8 +85,17 @@ func test_lists_exactly_the_available_adventurers() -> void:
 
 	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+
+
+func test_add_member_localizes_a_scout_class() -> void:
+	GameSession.adventurers.append(GameSession.get_default_scout("scout_001", "Scout"))
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Scout"])
 
 
 ## Selection alone must never assign — only activating a row (see

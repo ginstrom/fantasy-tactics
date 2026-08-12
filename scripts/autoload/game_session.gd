@@ -348,6 +348,18 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"cost": 10,
 	},
 	{
+		"id": "scout_002",
+		"name": "Scout 2",
+		"class": "scout",
+		"equipment": {
+			"weapon": "shortbow_iron", "weapon_inventory": ["shortbow_iron"],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
+		"level": 1,
+		"availability_status": "available",
+		"cost": 10,
+	},
+	{
 		"id": "warrior_003",
 		"name": "Warrior 3",
 		"class": "warrior",
@@ -365,18 +377,6 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 		"class": "warrior",
 		"equipment": {
 			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
-			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
-		},
-		"level": 1,
-		"availability_status": "available",
-		"cost": 10,
-	},
-	{
-		"id": "scout_002",
-		"name": "Scout 2",
-		"class": "scout",
-		"equipment": {
-			"weapon": "shortbow_iron", "weapon_inventory": ["shortbow_iron"],
 			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
 		},
 		"level": 1,

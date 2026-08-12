@@ -103,7 +103,7 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 		rows.append({
 			"id": adventurer.id,
 			"name": adventurer.name,
-			"class": adventurer["class"],
+			"class": tr("class.%s" % adventurer["class"]),
 			"level": adventurer.level,
 		})
 	return rows

@@ -229,8 +229,18 @@ func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 
 	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+
+
+func test_party_details_localizes_a_scout_class() -> void:
+	GameSession.adventurers.append(GameSession.get_default_scout("scout_001", "Scout"))
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("scout_001")
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
+
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Scout"])
 
 
 func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> void:

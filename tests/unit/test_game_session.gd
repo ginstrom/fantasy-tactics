@@ -2202,7 +2202,7 @@ func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> 
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
 	assert_eq(candidates.size(), 1, "Turn 30 after the purchase should refill exactly one new offer")
-	assert_eq(candidates[0].id, "warrior_003", "Deterministic refill picks the next fixed template in order")
+	assert_eq(candidates[0].id, "scout_002", "The first deterministic refill offers the Scout template")
 	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary], "A fired clock is consumed, not rescheduled")
 
 
@@ -2297,9 +2297,10 @@ func test_generated_encounter_instance_ids_never_collide_with_historical_ones() 
 func test_generated_recruitment_offer_ids_never_collide_with_the_roster_or_live_offers() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	# Exhaust every fixed template (warrior_002/003/004) as roster members, so
+	# Exhaust every fixed template (warrior_002, scout_002, warrior_003/004) as roster members, so
 	# the overflow mint path must synthesize a fresh id.
 	session.adventurers.append(_adventurer("warrior_002", "available"))
+	session.adventurers.append(_adventurer("scout_002", "available"))
 	session.adventurers.append(_adventurer("warrior_003", "available"))
 	session.adventurers.append(_adventurer("warrior_004", "available"))
 	session.recruitment_candidates = [] as Array[Dictionary]
@@ -2311,7 +2312,7 @@ func test_generated_recruitment_offer_ids_never_collide_with_the_roster_or_live_
 	assert_eq(candidates.size(), 1, "The overflow mint path must still deliver exactly one new offer")
 	var new_id: String = candidates[0].id
 	assert_false(
-		["warrior_002", "warrior_003", "warrior_004"].has(new_id),
+		["warrior_002", "scout_002", "warrior_003", "warrior_004"].has(new_id),
 		"The overflow id must not reuse an already-claimed fixed template id"
 	)
 	var all_ids: Array = []

@@ -20,8 +20,6 @@ func after_each() -> void:
 func _next_scout_offer() -> Dictionary:
 	GameSession.recruitment_candidates = [
 		GameSession.RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true),
-		GameSession.RECRUITMENT_CANDIDATE_TEMPLATES[1].duplicate(true),
-		GameSession.RECRUITMENT_CANDIDATE_TEMPLATES[2].duplicate(true),
 	]
 	return GameSession._spawn_next_recruitment_offer()
 
@@ -33,6 +31,19 @@ func test_recruitment_candidates_can_include_scouts() -> void:
 	assert_eq(scout_offer.equipment.weapon, "shortbow_iron")
 	assert_eq(scout_offer.equipment.armor, "leather_armor")
 	assert_eq(scout_offer.stats, {"max_health": 12, "attack": 65, "move_range": 3})
+
+
+func test_first_recruitment_vacancy_refills_with_a_scout_offer() -> void:
+	GameSession.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 1
+	GameSession.gold = 10
+
+	assert_true(GameSession.purchase_recruit("warrior_002"))
+	GameSession.end_world_turn()
+
+	var candidates := GameSession.get_recruitment_candidates()
+	assert_eq(candidates.size(), 1)
+	assert_eq(candidates[0].id, "scout_002")
+	assert_eq(candidates[0]["class"], "scout")
 
 
 func test_scout_recruitment_purchases_valid_scout_adventurer() -> void:
