@@ -2834,14 +2834,14 @@ func test_load_balance_config_populates_every_section_from_game_config() -> void
 
 
 func test_weapons_catalog_has_the_documented_iron_and_steel_damage_price_and_melee_range() -> void:
-	assert_eq(GameSessionScript.WEAPONS.dagger_iron, {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "min_range": 1, "max_range": 1, "price": 10})
-	assert_eq(GameSessionScript.WEAPONS.dagger_steel, {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "min_range": 1, "max_range": 1, "price": 30})
-	assert_eq(GameSessionScript.WEAPONS.shortsword_iron, {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20})
-	assert_eq(GameSessionScript.WEAPONS.shortsword_steel, {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 1, "price": 60})
-	assert_eq(GameSessionScript.WEAPONS.longsword_iron, {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 1, "price": 30})
-	assert_eq(GameSessionScript.WEAPONS.longsword_steel, {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90})
-	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_iron, {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35})
-	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_steel, {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105})
+	assert_eq(GameSessionScript.WEAPONS.dagger_iron, {"name_key": "item.dagger_iron", "slot": "weapon", "category": "dagger", "damage_min": 1, "damage_max": 4, "min_range": 1, "max_range": 1, "price": 10})
+	assert_eq(GameSessionScript.WEAPONS.dagger_steel, {"name_key": "item.dagger_steel", "slot": "weapon", "category": "dagger", "damage_min": 2, "damage_max": 5, "min_range": 1, "max_range": 1, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_iron, {"name_key": "item.shortsword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20})
+	assert_eq(GameSessionScript.WEAPONS.shortsword_steel, {"name_key": "item.shortsword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 1, "price": 60})
+	assert_eq(GameSessionScript.WEAPONS.longsword_iron, {"name_key": "item.longsword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 1, "price": 30})
+	assert_eq(GameSessionScript.WEAPONS.longsword_steel, {"name_key": "item.longsword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_iron, {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35})
+	assert_eq(GameSessionScript.WEAPONS.two_handed_sword_steel, {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105})
 
 
 func test_armors_catalog_has_the_documented_defense_resistance_and_price() -> void:

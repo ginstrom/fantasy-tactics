@@ -156,14 +156,26 @@ const STAR_WEIGHT_MIN: int = 1
 # attacker's effective hit chance; resistance reduces incoming damage by that
 # percent, rounded to the nearest integer when applied (see BattleController).
 const WEAPONS: Dictionary = {
-	"dagger_iron": {"name_key": "item.dagger_iron", "slot": "weapon", "damage_min": 1, "damage_max": 4, "min_range": 1, "max_range": 1, "price": 10},
-	"dagger_steel": {"name_key": "item.dagger_steel", "slot": "weapon", "damage_min": 2, "damage_max": 5, "min_range": 1, "max_range": 1, "price": 30},
-	"shortsword_iron": {"name_key": "item.shortsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20},
-	"shortsword_steel": {"name_key": "item.shortsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 1, "price": 60},
-	"longsword_iron": {"name_key": "item.longsword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 1, "price": 30},
-	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90},
-	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35},
-	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105},
+	"dagger_iron": {"name_key": "item.dagger_iron", "slot": "weapon", "category": "dagger", "damage_min": 1, "damage_max": 4, "min_range": 1, "max_range": 1, "price": 10},
+	"dagger_steel": {"name_key": "item.dagger_steel", "slot": "weapon", "category": "dagger", "damage_min": 2, "damage_max": 5, "min_range": 1, "max_range": 1, "price": 30},
+	"shortsword_iron": {"name_key": "item.shortsword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20},
+	"shortsword_steel": {"name_key": "item.shortsword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 1, "price": 60},
+	"longsword_iron": {"name_key": "item.longsword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 1, "price": 30},
+	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90},
+	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35},
+	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105},
+	"shortbow_iron": {"name_key": "item.shortbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 3, "price": 30},
+	"hunting_bow_steel": {"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 4, "price": 75},
+}
+const CLASS_DEFINITIONS: Dictionary = {
+	"warrior": {
+		"allowed_weapon_categories": ["sword", "dagger", "axe"],
+		"base_stats": {"max_health": 10, "attack": 60, "move_range": 3},
+	},
+	"scout": {
+		"allowed_weapon_categories": ["dagger", "bow"],
+		"base_stats": {"max_health": 12, "attack": 65, "move_range": 3},
+	},
 }
 const BLACKSMITH_BUILD_COST := 50
 const BLACKSMITH_UPGRADE_COSTS := {2: 50, 3: 100}
@@ -284,6 +296,26 @@ func get_default_warrior() -> Dictionary:
 		},
 		# Durable leveling state. xp is a float so fractional party XP awards are
 		# never truncated; display-facing rounding is a UI concern.
+		"progression": {
+			"xp": 0.0,
+			"skill_points": 0,
+			"perks": [],
+		},
+	}
+
+
+func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictionary:
+	return {
+		"id": adventurer_id,
+		"name": adventurer_name,
+		"class": "scout",
+		"equipment": {
+			"weapon": "shortbow_iron", "weapon_inventory": ["shortbow_iron"],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
+		"level": 1,
+		"availability_status": "available",
+		"stats": CLASS_DEFINITIONS.scout.base_stats.duplicate(true),
 		"progression": {
 			"xp": 0.0,
 			"skill_points": 0,
@@ -1499,7 +1531,7 @@ func _equip_item_instance_from_bank(adventurer_id: String, instance_id: String) 
 		return false
 	var item := get_item_definition(instance_id)
 	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if item.is_empty() or adventurer_index == -1:
+	if item.is_empty() or adventurer_index == -1 or not can_adventurer_equip_item(adventurer_id, instance_id):
 		return false
 	if get_carried_item_ids(adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
 		return false
@@ -1538,6 +1570,8 @@ func _equip_item_from(source_gear: Dictionary, adventurer_id: String, item_id: S
 		return false
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if adventurer_index == -1:
+		return false
+	if not can_adventurer_equip_item(adventurer_id, item_id):
 		return false
 
 	var slot: String = item.slot
@@ -1622,8 +1656,23 @@ func activate_carried_item(adventurer_id: String, slot: String, item_id: String)
 	var item := get_item_definition(item_id)
 	if not inventory.has(item_id) or item.is_empty() or item.slot != slot:
 		return false
+	if not can_adventurer_equip_item(adventurer_id, item_id):
+		return false
 	adventurers[adventurer_index].equipment[slot] = item_id
 	return true
+
+
+## Returns whether an adventurer may use an item. Weapon categories are class
+## restricted; armor and consumables remain available to every class.
+func can_adventurer_equip_item(adventurer_id: String, item_id: String) -> bool:
+	var adventurer := get_adventurer(adventurer_id)
+	var item := get_item_definition(item_id)
+	if adventurer.is_empty() or item.is_empty():
+		return false
+	if item.slot != "weapon":
+		return true
+	var class_definition: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
+	return class_definition.get("allowed_weapon_categories", []).has(str(item.get("category", "")))
 
 
 ## Removes item_id from slot's inventory array and returns one unit to
