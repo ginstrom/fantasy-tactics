@@ -10,7 +10,7 @@ extends Control
 
 
 func _ready() -> void:
-	loot_table.configure(true, true)
+	loot_table.configure(true, true, LootTable.ActionPresentation.DIRECT_ACTION_BAR)
 	loot_table.equip_requested.connect(_on_equip_requested)
 	loot_table.sold.connect(refresh)
 	refresh()
