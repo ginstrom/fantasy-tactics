@@ -91,6 +91,23 @@ const GOBLIN_ENEMY_STATS: Dictionary = {
 	"kill_xp": 5,
 	"loot_id": "goblin",
 }
+const GOBLIN_ARCHER_ENEMY_STATS: Dictionary = {
+	"id": "goblin_archer",
+	"tier": 2,
+	"name_key": "battle.enemy.goblin_archer",
+	"attack_name_key": "battle.enemy.goblin_archer.attack",
+	"max_health": 10,
+	"attack_damage": 1,
+	"damage_min": 1,
+	"damage_max": 4,
+	"hit_chance": 0.4,
+	"move_range": 3,
+	"attack_min_range": 1,
+	"attack_max_range": 3,
+	"kill_xp": 6,
+	"role": "ranged_skirmisher",
+	"loot_id": "goblin",
+}
 const ORC_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.orc",
 	"attack_name_key": "battle.enemy.orc.attack",

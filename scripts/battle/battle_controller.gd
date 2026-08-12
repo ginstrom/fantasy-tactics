@@ -116,9 +116,12 @@ func _ready() -> void:
 	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
 		var enemy_unit := UnitScript.new(
 			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, BASE_ACTION_POINTS,
-			enemy_stats.max_health, enemy_stats.attack_damage, enemy_stats.attack_damage, enemy_stats.hit_chance,
+			enemy_stats.max_health, enemy_stats.get("damage_min", int(enemy_stats.get("attack_damage", 1))),
+			enemy_stats.get("damage_max", int(enemy_stats.get("attack_damage", 1))), enemy_stats.hit_chance,
 			tr(enemy_stats.attack_name_key), "", 0, 0, enemy_stats.get("kill_xp", 0)
 		)
+		enemy_unit.attack_min_range = int(enemy_stats.get("attack_min_range", 1))
+		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
 		enemy_unit.display_name = "%s %d" % [enemy_type_name, index + 1]
 		enemy_unit.enemy_type_name = enemy_type_name
 		units.append(enemy_unit)
@@ -506,18 +509,47 @@ func _take_enemy_unit_actions(unit) -> Array:
 		var target = _nearest_living_unit(unit.grid_position, Side.PLAYER)
 		if target == null:
 			break
-		if target.grid_position in grid.get_adjacent(unit.grid_position):
+		if get_legal_attack_targets(unit).has(target):
 			if try_attack_selected_unit(target.grid_position):
 				steps.append(last_attack_result)
 				continue
 			break
-		var destination := _best_move_toward(unit, target.grid_position)
+		var destination := _best_enemy_move(unit, target)
 		var from: Vector2i = unit.grid_position
 		if destination != from and try_move_selected_unit(destination):
 			steps.append({"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination})
 			continue
 		break
 	return steps
+
+
+func _best_enemy_move(unit, target) -> Vector2i:
+	if unit.attack_max_range <= 1:
+		return _best_move_toward(unit, target.grid_position)
+	var distances := _move_distances(unit)
+	var best: Vector2i = unit.grid_position
+	var best_cost := -1
+	for candidate in distances:
+		var move_cost: int = int(distances[candidate]) * MOVE_ACTION_POINT_COST
+		if unit.action_points_remaining - move_cost < BASIC_ATTACK_ACTION_POINT_COST:
+			continue
+		if not _can_attack_target_from(unit, candidate, target):
+			continue
+		if best_cost == -1 or move_cost < best_cost or (move_cost == best_cost and _reading_order_is_earlier(candidate, best)):
+			best = candidate
+			best_cost = move_cost
+	return best if best_cost >= 0 else _best_move_toward(unit, target.grid_position)
+
+
+func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
+	var distance: int = grid.get_manhattan_distance(from_pos, target.grid_position)
+	if distance < unit.attack_min_range or distance > unit.attack_max_range:
+		return false
+	var blocking_tiles: Array[Vector2i] = []
+	for candidate in units:
+		if candidate != unit and candidate.is_alive():
+			blocking_tiles.append(candidate.grid_position)
+	return grid.has_line_of_sight(from_pos, target.grid_position, blocking_tiles)
 
 
 func apply_status(unit, status_id: String) -> bool:
