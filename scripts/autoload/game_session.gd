@@ -1611,7 +1611,9 @@ func transfer_carried_item(from_adventurer_id: String, to_adventurer_id: String,
 	var item := get_item_definition(item_id)
 	var from_index := _get_adventurer_index(from_adventurer_id)
 	var to_index := _get_adventurer_index(to_adventurer_id)
-	if item.is_empty() or from_index == -1 or to_index == -1 or get_carried_item_ids(to_adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
+	if item.is_empty() or from_index == -1 or to_index == -1 or not can_adventurer_equip_item(to_adventurer_id, item_id):
+		return false
+	if get_carried_item_ids(to_adventurer_id).size() >= CARRIED_ITEM_CAPACITY:
 		return false
 	var slot: String = item.slot
 	var inventory_key := "%s_inventory" % slot
@@ -2330,13 +2332,31 @@ func _validate_carried_inventory(snapshot: Dictionary) -> String:
 			if not inventory is Array:
 				return "carried item inventory is invalid"
 			for raw_item_id in inventory:
-				var item := get_item_definition(str(raw_item_id))
+				var item := _get_snapshot_item_definition(snapshot, str(raw_item_id))
 				if item.is_empty() or str(item.slot) != slot:
 					return "carried item inventory has an incompatible item"
+				if slot == "weapon":
+					var class_definition: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
+					if not class_definition.get("allowed_weapon_categories", []).has(str(item.get("category", ""))):
+						return "carried item inventory has a class incompatible weapon"
 				carried_count += 1
 		if carried_count > CARRIED_ITEM_CAPACITY:
 			return "carried item capacity is exceeded"
 	return ""
+
+
+## Resolves an imported inventory id against the candidate snapshot rather
+## than the live session, so an owned instance's base item is validated before
+## import mutates any durable state.
+func _get_snapshot_item_definition(snapshot: Dictionary, item_id: String) -> Dictionary:
+	var owned_instances = snapshot.get("owned_item_instances", {})
+	if owned_instances is Dictionary and owned_instances.has(item_id):
+		var instance = owned_instances[item_id]
+		if not instance is Dictionary:
+			return {}
+		var base_item_id := str(instance.get("base_item_id", ""))
+		return WEAPONS.get(base_item_id, ARMORS.get(base_item_id, POTIONS.get(base_item_id, {})))
+	return WEAPONS.get(item_id, ARMORS.get(item_id, POTIONS.get(item_id, {})))
 
 
 ## Owned instances have exactly one location: Stores or one matching-slot
