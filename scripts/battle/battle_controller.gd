@@ -259,6 +259,26 @@ func get_legal_moves(unit) -> Array[Vector2i]:
 	return moves
 
 
+## Combat legality is centralized here so player input, keyboard attacks,
+## enemy policy, and later UI previews all use the same range and LoS rules.
+func get_legal_attack_targets(unit) -> Array:
+	var legal_targets: Array = []
+	if unit == null or not unit.is_alive():
+		return legal_targets
+	var blocking_tiles: Array[Vector2i] = []
+	for candidate in units:
+		if candidate != unit and candidate.is_alive():
+			blocking_tiles.append(candidate.grid_position)
+	for target in units:
+		if target.side != unit.side and target.is_alive():
+			var distance: int = grid.get_manhattan_distance(unit.grid_position, target.grid_position)
+			if distance < unit.attack_min_range or distance > unit.attack_max_range:
+				continue
+			if grid.has_line_of_sight(unit.grid_position, target.grid_position, blocking_tiles):
+				legal_targets.append(target)
+	return legal_targets
+
+
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
 		return false
@@ -285,11 +305,10 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		return false
 	if selected_unit.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
 		return false
-	if not target_pos in grid.get_adjacent(selected_unit.grid_position):
-		return false
-
 	var target = get_unit_at(target_pos)
 	if target == null or target.side == selected_unit.side or not target.is_alive():
+		return false
+	if not get_legal_attack_targets(selected_unit).has(target):
 		return false
 
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST

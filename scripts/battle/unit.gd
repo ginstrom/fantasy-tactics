@@ -11,6 +11,11 @@ var damage_min: int
 var damage_max: int
 var hit_chance: float
 var attack_name: String
+# Kept on the battle-local unit so combat legality has no dependency on the
+# campaign inventory shape. Step 2 populates these from weapon definitions;
+# existing melee units retain the one-tile default.
+var attack_min_range: int = 1
+var attack_max_range: int = 1
 # Empty for a unit with no backing adventurer record (e.g. every enemy).
 # Lets Battlefield match a leveled-up adventurer id (from
 # GameSession.award_party_xp()) back to the on-field unit whose health it
