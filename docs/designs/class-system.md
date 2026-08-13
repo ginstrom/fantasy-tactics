@@ -48,6 +48,9 @@ mage              n/a      n/a     low       n/a     med
 spellcaster       n/a      n/a     low       n/a     hi
 battlemage        low      med     low       low     med
 scout/ranger      low      low     hi        low     n/a
+priest            low      low     low       low     med
+healer            low      low     low       low     hi
+paladin           med      med     low       med     med      
 ```
 low = 1-2 points
 med = 3-4 points
