@@ -5,16 +5,22 @@
 This document records the remaining work needed to reach the broad game vision
 in [`designs/vision.md`](designs/vision.md).
 
-For a feature's exact rules and delivery order, use the supporting design
-documents: [`designs/class-system.md`](designs/class-system.md),
-[`designs/equipment-handbook.md`](designs/equipment-handbook.md),
-[`designs/monster-manual.md`](designs/monster-manual.md),
-[`designs/movement-and-action-points.md`](designs/movement-and-action-points.md),
-[`designs/weapon-armor-inventory.md`](designs/weapon-armor-inventory.md), and
-[`designs/UI-Layout-Design-Guidelines.md`](designs/UI-Layout-Design-Guidelines.md).
+For a feature's exact rules, formulas, and delivery order, use the supporting design
+documents:
+- [`designs/class-system.md`](designs/class-system.md)
+- [`designs/combat-system.md`](designs/combat-system.md)
+- [`designs/equipment-handbook.md`](designs/equipment-handbook.md)
+- [`designs/monster-manual.md`](designs/monster-manual.md)
+- [`designs/movement-and-action-points.md`](designs/movement-and-action-points.md)
+- [`designs/weapon-armor-inventory.md`](designs/weapon-armor-inventory.md)
+- [`designs/UI-Layout-Design-Guidelines.md`](designs/UI-Layout-Design-Guidelines.md)
+- [`design-resolutions.md`](design-resolutions.md)
+
 Where a supporting design marks an idea as **Future** or requires a separate
 approved rule, this document calls it a decision gate rather than an
-implementation requirement.
+implementation requirement. Approved design decisions for cross-document ambiguities
+are cataloged in [`design-resolutions.md`](design-resolutions.md) and form the baseline for
+this roadmap.
 
 ---
 
@@ -22,32 +28,35 @@ implementation requirement.
 
 | Subsystem | Shipped in `main` | Remaining to meet the vision | Status |
 |---|---|---|---|
-| **Tactical combat** | 6x6 grid, generic 6 AP rounds, 1-AP movement, 3-AP attacks, melee/ranged range and line-of-sight checks, potions, item transfer, and deterministic enemy AI. | Battlefield fog of war, perception, stale information, richer abilities, player-side AI delegation, and pre-battle auto-resolve. | Major gap |
-| **Classes** | Warrior and Scout are playable. Scouts recruit, equip bows/daggers, and make ranged attacks. | Cleric and Mage roots; useful Scout reconnaissance; then specializations and data-backed perk trees. | Major gap |
-| **Skills and perks** | XP, level-up health, manual skill points spent on Attack, and the level-3 Bonus Move perk. | Replace manual point allocation with automatic class-owned skills; add further perk choices and only the derived mechanics whose owning systems have been approved. | Major gap |
-| **Equipment, loot, and crafting** | Equipment, loot, Stores, buying/selling, passive shop income, blacksmith, alchemy, runic work, mana crystals, and unique improved-item ownership are implemented. | More content and balance only where it supports a class or campaign slice; do not duplicate the existing ownership/crafting foundations. | Foundation shipped |
-| **Healing** | Healing potions are crafted and usable in battle. | Natural/rest healing, stronger encampment recovery, and Temple/Cleric healing/buffs described by the vision. | Major gap |
-| **Party management** | One party only; Guild Hall expands its size from four to five. Warrior and Scout recruitment offers refill over time. | Multiple parties, formations, simultaneous deployment, building-gated specialists, and resolution of the vision's initial four-member-party expectation. | Major gap |
-| **Town and economy** | Encampment building screens, shop income, item commerce, and timed crafting jobs exist. | Card-oriented town decisions, specialist-attracting buildings, training, trade-route safety, caravans, and an economy that outgrows adventuring income. | Major gap |
-| **World map** | Visible 7x7 map, selected party route movement, active encounter instances, vacancy-timed refill, and power-weighted encounter selection. | Map fog, settlement/party vision, watchtowers, vague distant intelligence, and wandering threats. | Major gap |
-| **Dungeon, story, and endgame** | World Map encounters enter fixed tactical arenas; first-campaign guidance covers the existing loop. | Local dungeon exploration, formations, narrative/clue progression, final encounter, and sandbox continuation. | Major gap |
+| **Tactical combat** | 6x6 grid, generic 6 AP rounds, 1-AP tile movement, 3-AP basic attacks, 2-AP potion consumption/tactical item/transfer, melee & missile range and line-of-sight checks, potions, item transfer, and deterministic enemy AI. | Battlefield fog of war (unexplored, visible, stale), perception, cover (+25%/+50% Guard), flanking (-20%/-50% Guard, +50% rear damage), dodge, parry, attacks of opportunity (-10% hit penalty), wound debuffs (50% HP -> -10%; 20% HP -> -25%), spell resolution pipeline & magic resistance rolls, richer abilities, in-battle AI delegation toggle, and pre-battle auto-resolve contract. | Major gap |
+| **Classes & RPG Attributes** | Warrior and Scout roots playable. Primary attribute creation ranges (1–10: Warrior Str 6–8/Int 1–4; Scout Str 4–6/Int 3–5; Mage Str 1–3/Int 6–8; Priest Str 4–5/Int 4–6), base hit % scaling (`agility * 10 * class_multiplier %`), and class multipliers. | Cleric and Mage roots; automatic class-owned skill progression (random roll within low/med/hi tier ranges: low=1–2, med=3–4, hi=4–5 per level) replacing manual Attack point spending; Level Up Screen displaying skill gains and perk choice button; 7 class specializations (Knight, Archer, Spellcaster, Battle Mage, Healer, Paladin, Ranger). | Major gap |
+| **Skills and perks** | XP accumulation, level-up health, manual Attack point spending (shipped compatibility), and level-3 Bonus Move perk (+1 AP). | Replace manual Attack spending with automatic class-owned skills (random roll in tier range); Level Up Screen with perk choice button; data-backed perk trees (Robust, Tank, Glass Cannon, etc.); high agility AP scaling (+1 AP per point above 6). | Major gap |
+| **Equipment, loot, and crafting** | Uniform item representation, item instance schema (`enhancements: {smithing, enchantment, runes}`), Stores, buying/selling, passive shop income, Blacksmith (Sharpened +1 damage), Alchemy Workshop (potions, Accuracy Tonic, Guard Tonic, Basic Accuracy), Runic Workshop (Thorn Rune socketing, Blood Rune), mana crystals, multi-item unit inventory (`weapon_inventory`, `armor_inventory`) with active pointers & unequip/activate API, and returning replaced runes to Stores. | Item scrapping mechanic for base materials, advanced runes, and additional gear content supporting class or campaign slices. | Foundation shipped |
+| **Healing** | Healing potions are crafted (Alchemy Workshop) and usable in battle (2 AP). | Natural/rest healing over time (faster stationary, faster in Encampment), Temple building recovery, and Cleric healing/protection abilities. | Major gap |
+| **Party management** | Single active party (`party_001`, 4 members starter onboarding), Guild Hall roster size expansion, vacancy-timed recruitment refill, and multi-item unit equipment inventory carrying multiple weapons/armors per slot. | Multiple active parties on world map, party formations (pre-battle formation setup for dungeon transitions), simultaneous deployment, building-gated specialist recruitment (Temple -> Clerics/Paladins, Fighter's Guild -> Warriors, Mage Tower -> Mages, etc.). | Major gap |
+| **Town and economy** | Encampment UI shell, Shop level & passive income, item commerce, and timed workshop jobs (Blacksmith, Alchemy, Runic). | Card-oriented town decisions (Rome: Total War style building choices), specialist-attracting buildings (Temple, Mage Tower, Fighter's Guild, Scout post), recruit training, trade routes, trade route safety/patrols, caravans, and an economy that outgrows adventuring income. | Major gap |
+| **World map** | 5x5 board, turn-based route movement (1 step/turn), active encounter instances, vacancy refill timers, and power-weighted encounter selection. World map turn time freezes during tactical battle rounds. | World map fog of war, settlement vision radius & watchtower upgrades, party/unit vision (Scout utility), vague distant intelligence, and roaming monster threats/caravans. | Major gap |
+| **Dungeon, story, and endgame** | World Map encounter tiles transition directly to tactical battle arenas; first-campaign guidance loop. | Local turn-based dungeon exploration (free party movement in formation until line-of-sight/trigger distance), narrative event/clue progression (magical dungeon generation source), final encounter, and post-game sandbox continuation. | Major gap |
+
+---
 
 ## Current implementation notes that constrain the roadmap
 
 - A fresh campaign begins with one Warrior and no party; the player creates the
-  first party. This differs from the vision's stated starting party of four.
-  Treat the difference as an explicit product decision before changing
+  first party (with 4 members baseline). This differs from the vision's stated starting party of four already formed.
+  Treat the difference as an explicit onboarding/product decision before changing
   onboarding or balance.
 - Encounters are live instances, not permanently static map nodes. Clearing an
   instance opens a vacancy clock; a later refill can choose a template and a
   different position. The current system is a useful population foundation,
   but it is not roaming enemy-party simulation.
-- Goblin Archer data exists, but it is not part of the active
+- Goblin Archer data exists in design documentation, but it is not part of the active
   `STAR_ENEMY_COMPOSITIONS` table. Do not describe it as a fully fielded
   campaign enemy until an encounter uses it.
 - The live combat model still calls its stored accuracy value `attack` and its
   mitigation value `defense`. A schema migration to the shared tactical names
   is not required merely to add a new feature.
+- Multi-item inventories (`weapon_inventory`, `armor_inventory`) operate alongside active item pointers (`weapon`, `armor`) in `GameSession`, allowing units to carry extra gear without in-battle switching.
 
 ---
 
@@ -72,79 +81,63 @@ Remaining work:
 4. Ensure AI target selection and player action validation use the same
    information rules.
 
-### 1.2 Classes, abilities, and resources
+### 1.2 Classes, primary attributes, and combat formulas
 
-Warrior and Scout are already the first two playable roots. The remaining
-class work is not a generic stat expansion:
+Warrior and Scout are already the first two playable roots. Character creation rolls primary attributes on a 1–10 scale based on class-specific ranges:
+* **Warrior:** Strength 6–8, Intelligence 1–4
+* **Scout:** Strength 4–6, Intelligence 3–5
+* **Mage:** Strength 1–3, Intelligence 6–8
+* **Priest:** Strength 4–5, Intelligence 4–6
 
-1. Give Scout a useful reconnaissance loop before adding Ranger specialization
-   perks.
-2. Add a tested action/ability primitive with explicit AP cost, range, target
-   shape, resolution order, failure behavior, UI feedback, and AI treatment.
+Initial combat skills scale directly from primary attributes and class multipliers:
+* **Base hit chance (`melee` and `missile`):** `(agility * 10 * class_multiplier)%`
+  * Class multipliers: Warrior: 1.5, Paladin: 1.25, Scout: 1.0, Priest: 0.8, Mage: 0.5.
+* **Max Health:** `vitality * level * perk_modifiers` (e.g., `Robust` and `Tank` perks grant percentage HP bonuses; `Glass Cannon` grants spell damage at the expense of a percentage HP penalty).
+
+The standardized combat profile across adventurers and monsters uses 9 attributes: `max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, and `action_points`.
+
+Combat formulas:
+* **Physical hit chance:** `final hit chance = clamp(attacker melee_or_missile - defender guard, 5%, 95%)`
+* **Guard Stacking:** Armor Guard adds directly as a percentage to unit Base Guard (`base_guard + armor_guard_bonus`, capped at 95%).
+* **Damage Resistance:** `final damage = max(1, round(raw damage * (1 - defender damage resistance / 100)))` (capped at 95%).
+* **Spell Resolution:** Guard applies exclusively to physical attacks. Spells land automatically initially (future high-level spells will check `spellcasting` vs unit level), but the defender rolls `magic_resistance` (`(magic_resistance - spellcasting) / 100`) to negate or reduce effects (e.g., Fire Bolt damage halved). Future immunities (e.g., Fire Immunity) cannot be overcome by spellcasting level.
+* **Action Points (AP):** Fixed base budget of 6 AP for all units per Round. Action costs: Movement = 1 AP/tile, Basic Attack = 3 AP, Consume Potion = 2 AP, Use Tactical Item = 2 AP, Transfer Item to Adjacent Unit = 2 AP. High Agility grants AP bonuses (+1 AP per point above 6), as do Haste spells and speed items. AP debuffs apply for wounds, slow, or entanglement.
+
+The remaining class work is not a generic stat expansion:
+1. Give Scout a useful reconnaissance loop before adding Ranger specialization perks.
+2. Add tested action/ability primitives with explicit AP costs, range, target shape, resolution order, failure behavior, UI feedback, and AI treatment.
 3. Add Cleric healing/protection and its recruitment/building gate.
 4. Add Mage MP, spells, area/control effects, and their counterplay.
-5. Add specializations only after their root's combat loop is proven in an
-   encounter and balance scenario.
+5. Add specializations (Knight, Archer, Spellcaster, Battle Mage, Healer, Paladin, Ranger) only after their root's combat loop is proven.
 
-The long-term class design currently names seven specializations—Knight,
-Archer, Spellcaster, Battle Mage, Healer, Paladin, and Ranger—not eight.
+### 1.3 Skills, perks, terrain, and tactical combat subsystems
 
-### 1.3 Skills, attributes, perks, terrain, and reactions
+The approved advancement direction is automatic, class-owned skill progression: each level advances only the skills the adventurer's class uses (random roll within tier ranges: `low` = 1–2, `med` = 3–4, `hi` = 4–5). On level up, a dedicated **Level Up Screen** displays the increased skills and presents a perk choice button if earned (or defer selection to Unit Details). The current manual Attack point allocation is shipped compatibility that this replacement will retire.
 
-The approved advancement direction is automatic, class-owned skill progression:
-each level advances only the skills the adventurer's class uses. For example,
-only Scouts develop Scouting; the player does not distribute a generic skill
-point pool. Melee, missile, dodge, spellcasting, and scouting are candidate
-domains, but each class slice must define the applicable skills, their starting
-values, gains, effects, UI, save migration, and balance scenarios. The current
-manual Attack point allocation is shipped compatibility that this replacement
-will retire.
+Perks remain player choices every three levels. They stay distinct from automatic skills: a perk changes or adds a capability, while the class-owned skill track provides predictable level-based growth.
 
-Perks remain player choices every three levels. They must stay distinct from
-automatic skills: a perk changes or adds a capability, while the class-owned
-skill track provides predictable level-based growth.
-
-The vision's Fallout-inspired attributes and its statement that AP derives from
-Agility are not yet a settled runtime contract. The class design intentionally
-keeps Strength, Agility, Vitality, Intelligence, Piety, and Luck as future
-vocabulary while dodge, critical hits, carrying capacity, MP, and luck rolls
-lack owning systems.
-
-Before implementing these concepts, approve a rule that specifies persisted
-data, derived values, migration behavior, UI, and balance tests. In
-particular, do not add an arbitrary dodge or critical-hit formula in this
-roadmap.
-
-Likewise, terrain costs, cover, reactions, and opportunity attacks require
-their own approved rule and tests. The shipped AP baseline remains flat
-1-AP-per-tile movement; it must remain legible as extensions are added.
+Approved rules for tactical combat subsystems (from [`design-resolutions.md`](design-resolutions.md)):
+1. **Dodge:** Small chance to evade an attack; on success, the attacker becomes off-balanced (-10% Guard next round).
+2. **Parry:** Small chance to evade a melee attack; on success, the attacker is off-balanced (-10% Guard), and defender gains a counter-bonus (+10% `melee` to-hit against that attacker on next turn).
+3. **Cover:** Provides direct `guard` bonus against missile attacks: Low Cover = +25% Guard; High Cover = +50% Guard.
+4. **Flanking:** Attack angle modifiers: Side/Oblique Flank = -20% defender Guard; Rear Flank = -50% defender Guard and +50% raw damage multiplier for attacker.
+5. **Attacks of Opportunity (AoO):** If a unit moves out of a tile adjacent to an enemy, that enemy gets a free melee attack at a -10% `melee` hit penalty.
+6. **Wounds:** HP <= 50% Max HP -> -10% to all combat stats, available AP, and world map movement speed; HP < 20% Max HP -> -25% to all combat stats, available AP, and world map speed.
 
 ### 1.4 Automation
 
-[`battle_bot.gd`](../scripts/tools/battle_bot.gd) and the scenario tools prove
-that the synchronous combat controller can be driven without player clicks,
-but they are not runtime player controls.
+[`battle_bot.gd`](../scripts/tools/battle_bot.gd) and scenario tools prove that the synchronous combat controller can be driven without player clicks.
 
 Remaining work:
+1. Add a player-facing in-battle auto-combat toggle (AI delegation) that uses standard public combat actions and can be stopped safely.
+2. Design a pre-battle auto-resolve result contract before implementing a button. It must define outcome, casualties/injuries, rewards, XP, and deterministic test inputs rather than bypassing campaign rules.
 
-1. Add a player-facing in-battle auto-combat toggle that uses the same public
-   combat actions as the player and can be stopped safely.
-2. Design a pre-battle auto-resolve result contract before implementing a
-   button. It must define outcome, casualties/injuries, rewards, XP, and
-   deterministic test inputs rather than silently bypassing campaign rules.
-
-### 1.5 Dungeon crawling and advanced monster behavior
+### 1.5 Dungeon crawling and monster roster
 
 Encounters currently transition directly from the World Map to tactical battle.
-The vision still requires a local, turn-based exploration map, group selection,
-formation-preserving movement, and a clean transition into and out of combat.
+The vision requires a local, turn-based exploration map: party movement out of combat is free (units move in unison maintaining formation as a single sprite, Baldur's Gate style) until combat is triggered (line of sight or trigger distance), at which point tactical turn-based combat begins.
 
-Future monster families and behavior—pack tactics, webs, resistances,
-incorporeal movement, and area attacks—should arrive only with the combat
-primitive they need, an encounter that exposes their role, rewards, and
-automated balance evidence. The current live campaign enemies are Goblin, Orc,
-Kobold, and Hobgoblin; generic AI and the Thorn Rune's paralyze interaction do
-not satisfy the full monster-manual vision.
+Monsters adopt the shared tactical unit attributes (might, melee, missile, guard, spellcasting, magic_resistance, resistance, mobility), with non-applicable attributes set to 0. Shipped initial roster: Kobold, Goblin, Orc, Hobgoblin. Future skirmisher/archer equipped variants (slings/bows) and monster families (Bandits, Skeletons, Wolves, Giant Spiders, Ogres, Wraiths) enter only alongside encounter templates, AI behavior, rewards, and balance coverage.
 
 ---
 
@@ -152,41 +145,29 @@ not satisfy the full monster-manual vision.
 
 ### 2.1 Party scale and formation
 
-`GameSession` deliberately permits only one party, and the World Map renders
-only the selected deployed party. Remaining work is to make multiple parties a
-coherent campaign system rather than merely allowing extra records:
+`GameSession` currently permits one active party (`party_001`), rendered on the World Map. Remaining work:
 
-1. Resolve the initial-party-size decision and preserve a clear first-playable
-   onboarding path.
+1. Resolve initial-party onboarding (1 Warrior vs 4-hero vision starting party) as a product decision while preserving a clean first-playable onboarding path.
 2. Add party-slot and party-size unlocking rules.
-3. Define selected-party and multi-party World Map ownership, movement, and
-   encounter collision behavior.
-4. Add party formation data and UI before local-dungeon group movement relies
-   on it.
+3. Define selected-party and multi-party World Map ownership, movement, and encounter collision behavior.
+4. Add party formation data and UI for pre-battle deployment and local-dungeon group movement.
 
 ### 2.2 Town growth, recruitment, and trade
 
-The current economy is no longer a placeholder: shop transactions and passive
-income, loot banking, equipment ownership, and workshop jobs are live.
-Remaining town work is the strategic layer around those foundations:
+The economy includes shop transactions, passive income, loot banking, uniform item representations (`enhancements: {smithing, enchantment, runes}`), multi-item equipment inventory, and workshop jobs (Blacksmith, Alchemy, Runic). Remaining town work:
 
-1. Add card-oriented building choices and specialist buildings such as a
-   Temple, Mage Tower, and Archery/Scout facility.
-2. Gate specialist recruitment, spells, and training behind those buildings.
-3. Define trade-route records, safety, guarding, and turn-based caravan
-   outcomes in `GameSession`; screens should render and request those state
-   transitions rather than own them.
-4. Balance passive income against adventuring rewards with deterministic
-   campaign scenarios.
+1. Add card-oriented building choices (Rome: Total War style) and specialist buildings (Temple, Mage Tower, Fighter's Guild, Scout Post).
+2. Gate specialist recruitment, spells, and recruit training behind those buildings.
+3. Add item scrapping mechanic in workshops to break down unneeded gear into base materials.
+4. Define trade-route records, safety, guarding, patrols, and turn-based caravan outcomes in `GameSession`.
+5. Balance passive income against adventuring rewards with deterministic campaign scenarios so settlement income eventually outgrows adventuring income.
 
 ### 2.3 Healing and recovery
 
-Healing is a separate vision requirement, not a consequence of adding Clerics.
-The remaining design must specify recovery timing and durability state across
-battles, World Map turns, and returns to Encampment. Implement, in order:
+Healing potions cost 2 AP and restore health in combat. Out-of-combat recovery timing across World Map turns and Encampment returns must be implemented in order:
 
-1. Baseline natural/rest recovery.
-2. The stronger Encampment recovery rule.
+1. Baseline natural/rest recovery over time (faster when stationary).
+2. Stronger Encampment recovery rules.
 3. Potion, Temple, and Cleric modifiers after their relevant systems exist.
 
 ---
@@ -195,46 +176,33 @@ battles, World Map turns, and returns to Encampment. Implement, in order:
 
 ### 3.1 World-map information and threats
 
-The World Map is fully visible. Remaining work is a fog-and-intelligence system
-with settlement vision, watchtower upgrades, party/unit vision, and intentionally
-vague information beyond known tiles. Roaming monsters or enemy parties must
-have explicit movement, encounter, and loss-resolution rules before they are
-added to `end_world_turn()`.
+Time on the World Map advances in **Turns** (governing repopulation, recruit availability, crafting, etc.), while combat advances in **Rounds**. World map turn time freezes during tactical combat.
+
+Remaining work:
+1. World map fog of war: fixed settlement vision radius, watchtower upgrades, party/unit vision (Scout utility), and vague distant intelligence beyond known tiles.
+2. Roaming monster parties and bandit threats with explicit movement, encounter, and loss-resolution rules in `end_world_turn()`.
 
 ### 3.2 Narrative arc and sandbox
 
-The three expedition templates and campaign guide provide a mechanical opening,
-not the Vision's story arc. The campaign still needs narrative events and clues
-that lead from borderland incursions to the source of dungeon generation, a
-final encounter, and a post-story sandbox state with wandering monsters and
-naturally occurring dungeons.
+The campaign needs story progression:
+1. Land grant grant background quelling borderland incursions.
+2. Narrative events and clues revealing that dungeons are being generated by an unknown magical source.
+3. Source investigation leading to a final climactic battle.
+4. Post-story sandbox state with wandering monsters and naturally occurring dungeons.
 
 ---
 
 ## 4. Dependency-ordered roadmap
 
 Every slice follows the repository workflow in [`AGENTS.md`](../AGENTS.md): a
-plain branch from `main`, red/green TDD, `make check`, a relevant manual
-`make play` signoff, a commit, and only then a local merge after user approval.
+plain branch off `main`, red/green TDD, `make check`, relevant manual
+`make play` signoff, commit, and local merge.
 
-1. **Resolve foundations and recovery.** Decide the initial party/onboarding
-   target, define automatic class-owned skill tracks and their migration from
-   manual Attack points, and add the baseline healing lifecycle. Keep perks at
-   the existing every-third-level cadence; do not silently convert deferred
-   attributes into mechanics.
-2. **Complete complementary class roots.** Build the ability primitive, make
-   Scout reconnaissance useful, then add Cleric and Mage in independently
-   balanced slices. Add their building gates and only the necessary equipment
-   content.
-3. **Improve tactical information and control.** Add battlefield fog and
-   perception, then runtime auto-combat. Treat auto-resolve as a separately
-   specified campaign outcome contract.
-4. **Expand strategic play.** Add multiple-party/formation foundations,
-   town-building choices, recruitment gates, map fog, and trade-route systems.
-   Roaming threats follow only after World Map state and loss rules are clear.
-5. **Deliver dungeon and narrative endgame.** Use the established formation,
-   fog, class, and campaign systems for local dungeon exploration, story
-   events, the final battle, and sandbox continuation.
+1. **Core RPG Attributes & Automatic Skill Progression.** Implement creation attribute rolling (1–10), initial hit % scaling (`agility * 10 * class_multiplier %`), `max_health` calculation (`vitality * level * modifiers`), and automatic class-owned skill gains (random rolls in low/med/hi tier ranges) on level up. Add Level Up Screen with perk choice button and perk selection.
+2. **Combat Systems & Tactical Mechanics.** Enforce 2-AP item/potion/transfer costs. Implement tactical combat subsystems: dodge, parry, cover (+25%/+50% Guard), flanking (-20%/-50% Guard, +50% rear damage), attacks of opportunity (-10% hit penalty), wound debuffs (50% / 20% HP thresholds), and basic spell/magic resistance pipeline (`(magic_resistance - spellcasting) / 100`).
+3. **Complementary Class Roots & Abilities.** Add tested action/ability primitive framework. Give Scout useful reconnaissance loops, then add Cleric (healing/protection) and Mage (MP, spells, control) roots with their respective building gates and equipment.
+4. **Tactical Fog, Perception & Exploration.** Implement battlefield fog of war (unexplored, visible, stale tiles) and 360° line-of-sight perception. Add local turn-based dungeon exploration with free formation movement out of combat and line-of-sight combat initiation.
+5. **Strategic Expansion & Town Buildings.** Implement card-oriented town building decisions, specialist recruitment gates (Temple, Mage Tower, Fighter's Guild, Scout Post), item scrapping mechanic, multiple active parties, party formations, trade routes, trade route safety/patrols, caravans, and world map fog/watchtowers.
+6. **Narrative Arc, Specializations & Endgame.** Deliver root specializations (Knight, Archer, Spellcaster, Battle Mage, Healer, Paladin, Ranger), story events/clues, final climactic encounter, and sandbox continuation.
 
-This order deliberately keeps the generic AP and item-ownership foundations
-stable while dependent rules are introduced one at a time.
+This order keeps the generic AP, uniform item representation, and workshop job foundations stable while introducing dependent systems cleanly one at a time.
