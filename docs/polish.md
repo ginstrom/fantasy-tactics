@@ -72,3 +72,7 @@ The same will go for "magic points"/"MP" when this is introduced.
     ```
 
 Later, we will make a tabbed unit details view, with general info / skills / perks on one tab, and inventory on another. Inspiration for design is Baldur's Gate 2 and Fallout 2.
+
+## Debug menu
+
+The Orc battle debug scenario shortcut should have 4 warriors and 2 orcs.
