@@ -127,7 +127,7 @@ func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		"XP: 0 / 20 — Melee: 60 (60%) — Missile: 60 (60%) — Guard: 0 — Might: 0 — Health: 10 / 10"
+		"XP: 0 / 20 — Hit points: 10 / 10 — Action points: 6 — Damage resistance: 10% — Magic resistance: 10% — Effects: None"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/StatsLabel").visible)
 
@@ -248,7 +248,8 @@ func test_weapons_and_armor_lists_are_hidden_for_an_unknown_unit() -> void:
 func test_skills_label_shows_class_skills_and_growth_tiers() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
-	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").text.contains("Skills: Melee: 60"))
+	var expected_skills := "Skills:\n   Melee: 60%\n   Missile: 60%\n   Guard: 0%\n   Might: 0%"
+	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, expected_skills)
 	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").visible)
 
 
@@ -257,7 +258,7 @@ func test_perks_label_shows_bonus_move_not_yet_learned_before_a_perk_choice() ->
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/PerksLabel").text,
-		tr("unit_details.perks") % tr("unit_details.perk_status.not_learned")
+		"Perks: None"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/PerksLabel").visible)
 
@@ -271,8 +272,9 @@ func test_perks_label_shows_bonus_move_learned_after_choosing_it() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/PerksLabel").text,
-		tr("unit_details.perks") % tr("unit_details.perk_status.learned")
+		"Perks:\n* Bonus Move"
 	)
+
 
 
 func test_an_unknown_unit_id_shows_a_not_found_message_and_hides_detail_rows() -> void:
