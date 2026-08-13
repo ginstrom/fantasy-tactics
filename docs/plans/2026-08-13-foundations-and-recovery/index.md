@@ -19,7 +19,7 @@ That decomposes into three steps, executed in order:
 | # | Step file | Summary | Depends on |
 |---|---|---|---|
 | 1 | [01-onboarding-decision.md](01-onboarding-decision.md) | Record the initial-party/onboarding decision and implement it: generated instance ids for units and items, 4-warrior starting roster, four starting recruitment offers, party size/count caps with a Parties-screen indicator | — |
-| 2 | [02-class-owned-skill-tracks.md](02-class-owned-skill-tracks.md) | Replace manual Attack-point allocation with automatic class-owned skill progression (melee/missile/guard/might tracks, vitality-derived max health), including save migration | — (no code dependency on step 1; the roadmap orders the decision first) |
+| 2 | [02-class-owned-skill-tracks.md](02-class-owned-skill-tracks.md) | Replace manual Attack-point allocation with automatic class-owned skill progression (random roll within low/med/hi tier ranges for melee/missile/guard/might tracks, vitality-derived max health, Level Up UI with perk choice button), including save migration | — (no code dependency on step 1; the roadmap orders the decision first) |
 | 3 | [03-baseline-healing-lifecycle.md](03-baseline-healing-lifecycle.md) | Persist battle damage and add natural/rest/encampment recovery across world turns | step 2 merged (step 3's save migration extends the nested snapshot-normalization pass step 1 introduces and step 2 extends; both also touch leveling UI, `game_config`, and the same test files) |
 
 Each step file is self-contained: setup, red/green TDD task list,
@@ -52,14 +52,13 @@ These facts drove the step designs; re-verify before starting each step:
   (`progression.*`) via `GameConfig`, locked key-by-key by
   `tests/unit/test_game_config.gd`.
 - **Combat channels.** Hit resolution is
-  `max(attacker hit_chance − target defense / 100, 5%)` in
+  `clamp(attacker hit_chance − target defense / 100, 5%, 95%)` in
   `battle_controller.gd`; player `defense` comes only from armor
   (`get_effective_defense()`). Ranged attacks are already shipped (Scouts
   equip bows with range 1–3/1–4), but one stored `attack` value feeds hit
   chance for every weapon category. Damage is
-  `round((roll + raw_damage_bonus) × (1 − resistance / 100))` with no
-  damage floor and no Resistance cap in code (armor values sit far below the
-  design's 95% temporary cap). Monster units carry their own `hit_chance` /
+  `max(1, round((roll + raw_damage_bonus + might) × (1 − resistance / 100)))`
+  with Resistance capped at 95%. Monster units carry their own `hit_chance` /
   `defense` from templates and keep them in every step of this plan.
 - **Classes.** `CLASS_DEFINITIONS` (warrior, scout) holds
   `allowed_weapon_categories` and `base_stats` only. Recruits are seeded from
@@ -94,22 +93,15 @@ These facts drove the step designs; re-verify before starting each step:
   `scenarios/battle/*.json`; schema covered by `test_scenario_contract.gd`,
   leveled units by `battle_state_factory.gd`). Generated reports are local
   evidence, never committed.
-- **Design updates (2026-08-13).** `docs/designs/class-system.md` now splits
-  the old `accuracy` attribute into `melee` and `missile` skills, adds
-  `spellcasting`/`magic_resistance` as future Mage-slice attributes, defines
-  a per-class skill-growth table (low 1–2 / med 3–4 / hi 4–5 points per
-  level for might/melee/missile/guard/spellcasting), and states max health
-  is calculated as vitality × level. `docs/designs/combat-system.md` defines
-  to-hit as attack skill minus defense skill clamped 5%–95%, a 95% ceiling
-  on damage resistance, generic action points, and the deferred mechanics
-  (dodge, parry, cover, flanking, attacks of opportunity, scouting, line of
-  sight). Step 2 implements the parts of this whose effect channels already
-  exist in `main` (see its "Which skills ship" table); everything else stays
-  future vocabulary per constraint 2.
+- **Design resolutions & documents.** `docs/design-resolutions.md` and
+  `docs/designs/class-system.md` define character primary attribute ranges (1–10 scale),
+  hit chance scaling `(agility * 10 * class_multiplier)%`, the 9-attribute combat profile
+  (`max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `action_points`),
+  and random rolls within per-class skill-growth tiers (`low`: 1–2, `med`: 3–4, `hi`: 4–5 points per level for might/melee/missile/guard/spellcasting). `max_health` is calculated as `vitality × level × modifiers`. Step 2 implements the automatic class-owned skill tracks and Level Up UI with perk selection button; step 3 implements the baseline natural/rest healing lifecycle.
 
 ## Constraints carried into every step
 
-From the gap analysis, `docs/designs/class-system.md`, and
+From the gap analysis, `docs/design-resolutions.md`, `docs/designs/class-system.md`, and
 `docs/designs/combat-system.md`:
 
 1. **Perk cadence is invariant.** One perk choice every third level;
@@ -117,7 +109,7 @@ From the gap analysis, `docs/designs/class-system.md`, and
    touches leveling keeps (and regression-tests) this cadence.
 2. **No deferred attributes become mechanics.** No critical hits, magic
    points, carrying capacity, luck rolls, or Strength/Agility/Intelligence/
-   Piety/Luck attributes; no dodge, parry, cover, flanking, attacks of
+   Piety/Luck attributes as standalone combat variables; no dodge, parry, cover, flanking, attacks of
    opportunity, scouting, or line of sight (all combat-system.md design
    intent without owning systems). New skills may only map to effect channels
    that already exist in `main` — today: melee/missile → hit chance (ranged
@@ -125,13 +117,10 @@ From the gap analysis, `docs/designs/class-system.md`, and
    might → the raw-damage bonus slot. `spellcasting`/`magic_resistance` need
    a spell system and belong to roadmap part 2. The one sanctioned exception:
    per-class **vitality** derives max health in step 2 (designer decision,
-   2026-08-13; the class design marks Vitality as needing no additional
-   system).
+   2026-08-13; `max_health = vitality × level × modifiers`). Primary attributes (1–10) govern creation rolls.
 3. **Skill tracks replace stored Attack.** Step 2 splits the live `attack`
    value into `melee`/`missile` and adds `guard`/`might` per the class
-   design's tactical profile. No other renames: monster template fields and
-   the armor `defense`/`resistance` fields keep their names (the guard skill
-   adds to `get_effective_defense()` rather than renaming it).
+   design's tactical profile. On level up, skill point gains are determined by a **random roll** within the tier range (`low`: 1–2, `med`: 3–4, `hi`: 4–5). No other renames: monster template fields and the armor `defense`/`resistance` fields keep their names.
 4. **Live combat enemy data is unchanged.** No new enemies, encounters, or
    composition tables in this plan.
 5. **Repo workflow** (`AGENTS.md`): plain branch off `main` (no worktrees),
@@ -146,8 +135,7 @@ From the gap analysis, `docs/designs/class-system.md`, and
    numbering; names stay purely cosmetic, ids are hidden from the player,
    and the collision-scanning machinery the sequential schemes required is
    deleted with them. Records that already exist keep their ids as opaque
-   strings — no save-wide re-minting. The same rule binds later roadmap
-   parts (e.g. party ids when multi-party arrives in part 4).
+   strings — no save-wide re-minting.
 
 ## Decisions (recorded 2026-08-13)
 
@@ -162,7 +150,8 @@ From the gap analysis, `docs/designs/class-system.md`, and
    World Map behavior stay in roadmap part 4 (§2.1).
 3. **Vitality-derived max health.** Step 2 replaces the flat +10 max health
    per level with per-class vitality (`max_health = vitality × level`), per
-   the updated class design.
+   the updated class design and resolutions.
+4. **Random skill gain within tier ranges.** Step 2 rolls skill gains randomly within each class's skill tier range (`low` = 1–2, `med` = 3–4, `hi` = 4–5) on level up, using injectable roll helpers for deterministic TDD test coverage.
 
 ## Shared setup for every step
 
@@ -204,13 +193,6 @@ make check   # confirm a green baseline before touching anything
   consequence of the onboarding decision; campaign balance work that must
   respect constraint 4 (no encounter/composition changes in this plan).
   Step 1's evidence captures the current numbers for that future pass.
-- Making the design's 95% Resistance ceiling and `max(1, damage)` floor
-  configurable combat rules — required before any effect can modify
-  Resistance, which nothing in this plan does.
-- Migrating encounter-instance minting (`encounter_%03d` sequential scan)
-  onto the generated-id rule of constraint 6 — nothing in this plan mints or
-  renames encounter instances (constraint 4); convert them when the
-  world-map threat work next touches that path.
 
 ## Plan lifecycle
 

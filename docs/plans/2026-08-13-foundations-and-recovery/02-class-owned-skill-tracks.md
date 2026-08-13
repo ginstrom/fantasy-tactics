@@ -3,7 +3,8 @@
 **Branch:** `class-owned-skill-tracks`
 **Status:** pending
 **Implements:** gap analysis §4 step 1 ("define automatic class-owned skill
-tracks and their migration from manual Attack points"), §1.3, and
+tracks and their migration from manual Attack points"), §1.3,
+`docs/design-resolutions.md` §1.1, §1.4, §1.5, and
 `docs/designs/class-system.md` → "Shared tactical attributes" (the skill
 model) + "Advancement and perks" → *Approved replacement*.
 
@@ -15,15 +16,15 @@ allocates a generic skill-point currency. The manual Attack-spending flow is
 manual Attack-spending flow rather than keeping two competing advancement
 systems."*
 
-Per the class-system design, this first slice must define, in class data:
-each applicable skill's starting value, per-level gain, combat or campaign
-effect, UI presentation, save migration, and balance coverage. The 2026-08-13
-design update makes that concrete: the single stored `attack` value splits
-into the `melee` and `missile` skills, class tracks grow `guard` and
-`might`, and per-class `vitality` derives max health
-(`max_health = vitality × level`, replacing the flat +10 per level — index
-decision 3). `spellcasting`/`magic_resistance` stay design-only until the
-Mage slice owns a spell system (roadmap part 2).
+Per the class-system design and approved design resolutions (`design-resolutions.md` §1.5):
+1. Upon leveling up, skill point gains within specified tiers are determined by a **random roll** in the specified tier range:
+   - `low` = 1–2 points (random roll)
+   - `med` = 3–4 points (random roll)
+   - `hi`  = 4–5 points (random roll)
+2. Character primary attributes on a 1–10 scale govern initial character creation (Warrior: Str 6–8, Int 1–4; Scout: Str 4–6, Int 3–5), with base hit chance scaling `(agility * 10 * class_multiplier)%` (Warrior multiplier 1.5, Scout 1.0).
+3. The single stored `attack` value splits into `melee` and `missile` skills, class tracks grow `guard` and `might`, and per-class `vitality` derives max health (`max_health = vitality × level × perk_modifiers`, replacing flat +10 per level).
+4. On level up, a dedicated **Level Up Screen** displays the increased skills and presents a perk choice button when earned (or defer selection to choose from Unit Details).
+5. `spellcasting`/`magic_resistance` stay design-only until the Mage slice owns a spell system (roadmap part 2).
 
 ## Design
 
@@ -33,49 +34,46 @@ The design's growth table gives both shipped classes tracks for might,
 melee, missile, and guard (spellcasting is `n/a` for them). All four map to
 effect channels that already exist in `main`:
 
-| Skill | Effect channel in `main` |
-|---|---|
-| `melee` | Hit chance with non-bow weapons. `get_effective_hit_chance()` feeds player-unit creation in `battle_controller.gd`; combat-system.md: "To-hit is governed by the melee attack skill." |
-| `missile` | Hit chance with bow attacks — ranged combat is already shipped (Scouts equip bows with range 1–3/1–4); the same hit-chance path serves them. |
-| `guard` | Subtracted from incoming attackers' hit chance (`hit_chance − target.defense / 100` in `battle_controller.gd`). Today `get_effective_defense()` is armor-only; the guard skill adds to it. |
-| `might` | Added to raw damage before Resistance (`roll + raw_damage_bonus`). Player Might is effectively zero today; the class track supplies it. |
+| Skill | Tier (Warrior) | Tier (Scout) | Effect channel in `main` |
+|---|---|---|---|
+| `melee` | `med` (3–4) | `low` (1–2) | Hit chance with non-bow weapons. `get_effective_hit_chance()` feeds player-unit creation in `battle_controller.gd`. |
+| `missile` | `med` (3–4) | `hi` (4–5) | Hit chance with bow attacks — ranged combat is shipped (Scouts equip bows with range 1–3/1–4); the same hit-chance path serves them. |
+| `guard` | `low` (1–2) | `low` (1–2) | Subtracted from incoming attackers' hit chance (`clamp(hit_chance − defender guard, 5%, 95%)` in `battle_controller.gd`). Guard skill adds to armor defense in `get_effective_defense()`. |
+| `might` | `med` (3–4) | `low` (1–2) | Added to raw damage before Resistance (`max(1, round((roll + raw_damage_bonus + might) × (1 − resistance / 100)))`). |
 
 Deferred — no owning system, so no data, per index constraint 2:
 `spellcasting`/`magic_resistance` (Mage slice, part 2), dodge and parry
 (combat-system.md "Defending"), cover/flanking/attacks of opportunity,
-scouting and line of sight. The data shape stays open for all of them:
-skills are a per-class dictionary, not a hardcoded field list.
+scouting and line of sight.
 
 ### Class data
 
-Extend `CLASS_DEFINITIONS` in `scripts/autoload/game_session.gd` (stays a
-code constant, like `base_stats` — this is class design data, not a
-tunable). `vitality` joins `base_stats`; `attack` splits into
-`melee`/`missile`; `guard`/`might` start at 0. Class keys here are type
-identifiers — a stable design vocabulary — not instance identity; the
-generated-id rule of index constraint 6 applies to adventurers and item
-instances, not to class data.
+Extend `CLASS_DEFINITIONS` in `scripts/autoload/game_session.gd`. `vitality` and primary creation attribute ranges join `base_stats`; `attack` splits into `melee`/`missile`; `guard`/`might` start at 0. Skill growth specifies tier range data (`min_gain`, `max_gain`):
 
 ```gdscript
 const CLASS_DEFINITIONS: Dictionary = {
     "warrior": {
         "allowed_weapon_categories": ["sword", "dagger", "axe"],
         "base_stats": {"max_health": 10, "vitality": 10, "melee": 60, "missile": 60, "guard": 0, "might": 0, "move_range": 3},
+        "primary_attribute_ranges": {"strength": Vector2i(6, 8), "agility": Vector2i(6, 8), "vitality": Vector2i(6, 8), "intelligence": Vector2i(1, 4), "piety": Vector2i(1, 4), "luck": Vector2i(1, 10)},
+        "class_multiplier": 1.5,
         "skills": {
-            "melee": {"gain_per_level": 3},
-            "missile": {"gain_per_level": 3},
-            "guard": {"gain_per_level": 1},
-            "might": {"gain_per_level": 3},
+            "melee": {"tier": "med", "min_gain": 3, "max_gain": 4},
+            "missile": {"tier": "med", "min_gain": 3, "max_gain": 4},
+            "guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+            "might": {"tier": "med", "min_gain": 3, "max_gain": 4},
         },
     },
     "scout": {
         "allowed_weapon_categories": ["dagger", "bow"],
         "base_stats": {"max_health": 12, "vitality": 12, "melee": 65, "missile": 65, "guard": 0, "might": 0, "move_range": 3},
+        "primary_attribute_ranges": {"strength": Vector2i(4, 6), "agility": Vector2i(6, 8), "vitality": Vector2i(4, 6), "intelligence": Vector2i(3, 5), "piety": Vector2i(1, 4), "luck": Vector2i(1, 10)},
+        "class_multiplier": 1.0,
         "skills": {
-            "melee": {"gain_per_level": 1},
-            "missile": {"gain_per_level": 4},
-            "guard": {"gain_per_level": 1},
-            "might": {"gain_per_level": 1},
+            "melee": {"tier": "low", "min_gain": 1, "max_gain": 2},
+            "missile": {"tier": "hi", "min_gain": 4, "max_gain": 5},
+            "guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+            "might": {"tier": "low", "min_gain": 1, "max_gain": 2},
         },
     },
 }
@@ -83,129 +81,55 @@ const CLASS_DEFINITIONS: Dictionary = {
 
 Rules and rationale:
 
-- Per-level gains follow the design table's bands — low 1–2, med 3–4, hi
-  4–5 points: warrior melee/missile med, guard low, might med; scout melee
-  low, missile hi, guard/might low. The concrete values above start at the
-  low end of each band; the balance gate below decides whether they stand.
-- A skill's **starting value** is the class's `base_stats` entry at level 1;
-  `gain_per_level` applies on each level-up from level 2 on.
-- Splitting `attack` copies the old value to both `melee` and `missile`
-  (warrior 60/60, scout 65/65), so every level-1 combat number is exactly
-  what it is today and the baseline evidence must not move.
-- **Max health** becomes `vitality × level`, recomputed on level-up and on
-  migration. Warrior vitality 10 reproduces today's 10/20/30…; scout
-  vitality 12 gives 12/24/36 (was 12/22/32 with the flat +10) — covered by
-  the balance gate.
-- `get_effective_hit_chance(adventurer_id)` reads the equipped weapon's
-  category: `bow` → `missile`, everything else → `melee`. The `/100`
-  divisor and the 95% cap are unchanged (combat-system.md's 5% floor already
-  lives in `battle_controller.gd`). Monsters keep their template
-  `hit_chance` — their data is untouched (index constraint 4).
-- `get_effective_defense(adventurer_id)` returns `stats.guard` plus the
-  armor's defense.
-- New `get_effective_might(adventurer_id)`; `battle_controller.gd` adds it
-  to the player unit's raw damage at creation, alongside the weapon's
-  `raw_damage_bonus` (sharpening).
+- Skill point gains on level up roll randomly within the tier range (`randi_range(min_gain, max_gain)`). Follow the injectable-roll pattern (`skill_gain_roll`) so tests can pin rolls deterministically.
+- A skill's **starting value** is the class's `base_stats` entry at level 1; random tier rolls apply on each level-up from level 2 on.
+- Initial base hit chance scales as `(agility × 10 × class_multiplier)%`.
+- **Max health** becomes `vitality × level × perk_modifiers`, recomputed on level-up and migration.
+- `get_effective_hit_chance(adventurer_id)` reads the equipped weapon's category: `bow` → `missile`, everything else → `melee`. The hit chance is clamped between 5% and 95% in combat resolution.
+- `get_effective_defense(adventurer_id)` returns `stats.guard` + armor defense bonus.
+- New `get_effective_might(adventurer_id)` returns the stored Might; `battle_controller.gd` adds it to player raw damage.
 
 ### Level-up application
 
-In `_award_adventurer_xp()`: remove the
-`progression.skill_points += LEVEL_UP_SKILL_POINTS` and
-`stats.max_health += LEVEL_UP_MAX_HEALTH_BONUS` lines; after `level += 1`,
-recompute `stats.max_health = vitality × level` and apply the class's skill
-gains (`stats.<skill> += gain_per_level` per skill), via a small effect
-dispatch (plain `match`/`if` on the skill id — no framework).
+In `_award_adventurer_xp()`:
+1. Remove `progression.skill_points += LEVEL_UP_SKILL_POINTS` and `stats.max_health += LEVEL_UP_MAX_HEALTH_BONUS`.
+2. After `level += 1`, recompute `stats.max_health = vitality × level`.
+3. Roll random skill gain per class skill (`gain = skill_gain_roll.call(min_gain, max_gain)`) and apply `stats.<skill> += gain`.
 
 ### Removals (all of these, or the step is not done)
 
 - `GameSession.spend_attack_points()` and its tests.
-- The `LEVEL_UP_SKILL_POINTS` and `LEVEL_UP_MAX_HEALTH_BONUS` vars, their
-  `_load_balance_config()` lines, the `progression.level_up_skill_points`
-  and `progression.level_up_max_health_bonus` keys in
-  `config/game_config.json`, the matching `game_config.gd` `DEFAULTS`
-  entries, and the `test_game_config.gd` lockstep rows.
-- The `BASE_ATTACK` and `BASE_MAX_HEALTH` vars with their
-  `combat.base_attack` / `combat.base_max_health` config plumbing (same
-  three-place removal). Class base values now live in `CLASS_DEFINITIONS`;
-  `get_default_warrior()` / `get_default_scout()` both seed `stats` from
-  their class definition (the scout already does; convert the warrior).
-  `ATTACK_TO_HIT_CHANCE_DIVISOR` stays.
-- `"skill_points": 0` from `get_default_warrior()` / `get_default_scout()`
-  progression dicts (recruits inherit via `_seed_adventurer_baseline_stats()`).
-- Level-up overlay spend UI: `SkillPointsLabel` and the `AttackRow`
-  (+/− buttons) nodes in `scenes/ui/level_up.tscn` and their handlers in
-  `scripts/ui/level_up.gd`.
-- Translation key `level_up.skill_points` (`translations/en.tres` and
-  `tests/unit/test_localization.gd`).
+- The `LEVEL_UP_SKILL_POINTS` and `LEVEL_UP_MAX_HEALTH_BONUS` vars, their `_load_balance_config()` lines, config JSON keys, `game_config.gd` DEFAULTS, and `test_game_config.gd` rows.
+- The `BASE_ATTACK` and `BASE_MAX_HEALTH` vars with their config plumbing. Class base values now live in `CLASS_DEFINITIONS`.
+- `"skill_points": 0` from adventurer progression dicts.
+- Level-up overlay spend UI: `SkillPointsLabel` and `AttackRow` (+/− buttons) in `scenes/ui/level_up.tscn` and `scripts/ui/level_up.gd`.
+- Translation key `level_up.skill_points`.
 
 ### UI presentation
 
 - **Level-up overlay** (`scripts/ui/level_up.gd`, `scenes/ui/level_up.tscn`):
-  keep Name/XP/Level/HealthGain rows and the perk flow unchanged — the
-  HealthGain delta is now the vitality-derived max-health increase. Replace
-  the spend row with one **skill-gain row per gained skill** ("Melee 63
-  (+3)", "Might 3 (+3)", …). Follow the existing `health_before` pattern,
-  generalized: `battlefield.gd` captures a small before-stats snapshot per
-  member before `award_party_xp()` and passes it through
-  `_queue_level_up()` / `show_for_adventurer()` so the deltas can be
-  displayed after GameSession has already mutated the values.
-  - `scripts/tools/battle_sim.gd`'s `_resolve_level_up()` needs **no change**
-    (it only resolves perks and clicks Continue — verify, don't rewrite).
-  - `tests/unit/test_first_campaign_ui_flow.gd` only presses
-    `continue_button` — verify it still passes unchanged.
-- **Unit Details** (`scripts/ui/unit_details.gd`): the skills section lists
-  the class's skills with current value and growth, e.g.
-  "Melee: 63 (+3 per level)" (rework the `unit_details.skills` translation
-  key). The stats row shows Melee/Missile where it shows raw Attack today;
-  derived hit chances continue to display as they do now.
+  - Displays one skill-gain row per gained skill ("Melee 63 (+3)", "Might 3 (+4)", …) with before/after deltas.
+  - Displays HealthGain row.
+  - If a perk choice is earned, presents a prominent perk selection button allowing immediate selection (or deferral to choose from Unit Details).
+- **Unit Details** (`scripts/ui/unit_details.gd`):
+  - Skills section lists class skills with current value and tier growth rate ("Melee: 63 (+3–4 per level)").
+  - Stats row displays Melee / Missile hit chances and Guard / Might stats.
 
 ### Save migration (CampaignSnapshot)
 
-Extend the nested per-adventurer normalization pass introduced in step 1
-(it already infers recruitment `template_id` there; the snapshot reaches
-class constants via its `_GameSessionScript` preload), applying to every
-adventurer and recruitment candidate:
-
-1. Drop a legacy `progression.skill_points` key if present.
-2. Split attack into the class tracks: for each of `melee`/`missile`,
-   `track = base + gain_per_level × (level − 1)`;
-   `value = max(stored_attack, track)`.
-3. Normalize `guard`/`might` (absent in legacy saves) to
-   `max(stored if present else 0, track)`.
+Extend the nested per-adventurer normalization pass:
+1. Drop legacy `progression.skill_points` key.
+2. Split attack into class tracks: for each of `melee`/`missile`, calculate minimum track threshold using baseline tier gains and set `value = max(stored_attack, track)`.
+3. Normalize `guard`/`might` to `max(stored if present else 0, track)`.
 4. Recompute `max_health = max(stored, vitality × level)`.
-
-Record ids (generated per index constraint 6, or legacy opaque strings)
-pass through verbatim — migration touches stats and progression only.
-`max()` is the fairness rule: legacy players who spent points keep their
-progress, hoarded points are replaced by track values, and nobody ever loses
-a point or a hit point. Unknown class ids leave stats untouched. New saves
-never contain `skill_points` or an `attack` stat, so `FORMAT_VERSION` stays
-`1` — same pattern as the workshop/shop fields added after v1.
+5. Retain opaque record IDs.
 
 ### Scenario factory and scenarios
 
-`scripts/tools/battle_scenarios/battle_state_factory.gd` derives leveled
-state from flat `BASE_ATTACK`/`BASE_MAX_HEALTH` defaults (its comment says
-Attack growth is player-driven). Rework the level-derived block in
-`_build_player_unit()`:
-
-- Base values come from the class's `CLASS_DEFINITIONS` entry. Player
-  templates resolve through `_read_player_template_base_stats()`, whose
-  `template_id` is a class id — currently only `"warrior"` exists
-  (`scenario_contract.gd`'s `KNOWN_PLAYER_TEMPLATES`), and no scout template
-  is needed for this step's scenarios.
-- `max_health = vitality × level`; each class skill is
-  `base + gain_per_level × (level − 1)`; fix the stale comment (the
-  "GameConfig's current tuning" rationale for reading live `BASE_*` vars
-  dies with them — class base data is deliberately non-tunable).
-- The modifier vocabulary follows the skill model: `baseline-offense.json`'s
-  `attack` modifier becomes `melee` (the scenario's warrior fights with a
-  melee weapon; the numbers carry over unchanged), and
-  `baseline-defense.json`'s `defense` modifier becomes `guard` (`resistance`
-  unchanged). Unit hit chance picks melee or missile by the spec's
-  `weapon_id` category, mirroring `get_effective_hit_chance()`. Update
-  `scenario_runner_main.gd` schema validation and
-  `tests/unit/test_scenario_contract.gd` in the same red/green pass.
+Rework `scripts/tools/battle_scenarios/battle_state_factory.gd`:
+- Base values load from `CLASS_DEFINITIONS`.
+- `max_health = vitality × level`; skills calculate from base stats plus tier gains.
+- Scenario schema uses `melee` and `guard` keys.
 
 ## Setup
 
@@ -215,82 +139,27 @@ git checkout -b class-owned-skill-tracks
 make check   # green baseline
 ```
 
-**Capture baseline evidence before writing any code** (needed for the
-balance gate):
-
+Capture baseline evidence:
 ```bash
 make scenario SCENARIO=scenarios/battle/baseline-party-viability.json SEED=20260810 ITERATIONS=20
 make simulate RUNS=20
 ```
 
-Note the win/loss/stalemate summaries from the terminal output.
-
 ## TDD task list (red → green, in this order)
 
-Write each failing test first, run it to confirm the failure, then
-implement. Run focused subsets with
-`godot --headless -s addons/gut/gut_cmdln.gd -gselect=<file> -gexit` while
-iterating; finish each task group with `make check`.
-
 1. **GameSession automatic growth** (`tests/unit/test_game_session.gd`):
-   - Leveling a Warrior once raises melee/missile/guard/might by the class's
-     `gain_per_level` values, recomputes max health as `vitality × level`,
-     and grants **no** skill points; the Scout follows the Scout's track.
-   - `get_effective_hit_chance()` follows the equipped weapon category:
-     sword/dagger/axe → melee, bow → missile (equip a Scout with each).
-   - `get_effective_defense()` = armor defense + guard skill;
-     `get_effective_might()` returns the stored might.
-   - Fresh `get_default_warrior()` / `get_default_scout()` records and
-     `purchase_recruit()`-seeded records carry the class base stats — no
-     `skill_points`, no `attack` key.
-   - Regression guard: level 3 still pends exactly one perk choice and
-     `choose_perk(BONUS_MOVE_PERK_ID)` still consumes it (cadence invariant).
-   - Replace the existing
-     `test_each_level_gained_adds_one_max_health_and_ten_skill_points` and
-     both `test_spend_attack_points_*` tests (the function disappears).
-2. **Battle integration** (`tests/unit/test_battle_controller.gd`): player
-   units start with the weapon-appropriate hit chance, and damage rolls add
-   Might. Set `stats.melee`/`stats.missile`/`stats.might` directly per
-   testing.md's "jump state directly" convention — this also replaces the
-   known `spend_attack_points(WARRIOR_ID, 40)` usage (~line 629) that forced
-   hit chance.
-3. **Save migration** (`tests/unit/test_campaign_snapshot.gd`):
-   - Legacy adventurer dict with `skill_points` and an attack below the
-     tracks loads with `skill_points` gone, melee/missile raised to their
-     track values, guard/might at their track values, and max health
-     `= max(stored, vitality × level)`.
-   - Legacy adventurer whose stored attack exceeds the tracks keeps the
-     excess on both melee and missile.
-   - Current-format round-trip: exported snapshots contain no `skill_points`
-     and no `attack` stat.
-4. **Removals:** delete `spend_attack_points()`, `LEVEL_UP_SKILL_POINTS`,
-   `LEVEL_UP_MAX_HEALTH_BONUS`, `BASE_ATTACK`, `BASE_MAX_HEALTH`, and their
-   config keys + `DEFAULTS` + `test_game_config.gd` lockstep rows; fix every
-   remaining caller (task 2 covers the known battle-controller one).
-5. **Level-up overlay** (`tests/unit/test_level_up.gd` rewrite): shows one
-   skill-gain row per gained skill with the correct deltas and the
-   vitality-derived health row; has no spend buttons or skill-point label
-   (assert the nodes are gone); perk flow and Continue unchanged. Update
-   `scenes/ui/level_up.tscn`, `scripts/ui/level_up.gd`, and `battlefield.gd`'s
-   before-stats plumbing.
-6. **Unit Details** (`tests/unit/test_unit_details.gd`): skills section
-   shows class skill values + growth (replace
-   `test_skills_label_shows_unspent_skill_points`); stats row shows
-   Melee/Missile.
-7. **Scenario factory and schema**
-   (`tests/unit/test_battle_state_factory.gd`,
-   `tests/unit/test_scenario_contract.gd`): leveled units follow
-   `vitality × level` and the class skill tracks; modifiers use the new
-   `melee`/`guard` keys; update `scenarios/battle/baseline-offense.json` and
-   `baseline-defense.json` to match.
-8. **Translations:** rework `level_up.*` / `unit_details.skills`, delete
-   `level_up.skill_points`; update `tests/unit/test_localization.gd` (it
-   asserts the old key's exact output).
-9. **Docs:** update `docs/dev/code-map.md` — the adventurer-record bullet
-   (stats now melee/missile/guard/might with vitality-derived max health;
-   progression no longer has `skill_points`) and the Progression formulas
-   section (class-track and vitality rules next to the XP/hit-chance/perk
-   rules).
+   - Leveling a Warrior once rolls skill gains within tier ranges (melee: 3–4, missile: 3–4, guard: 1–2, might: 3–4) using pinned `skill_gain_roll`, recomputes max health as `vitality × level`, and grants **no** skill points.
+   - `get_effective_hit_chance()` follows equipped weapon category.
+   - `get_effective_defense()` = armor defense + guard skill; `get_effective_might()` returns stored might.
+   - Fresh warrior/scout records carry class base stats — no `skill_points`, no `attack` key.
+   - Regression guard: level 3 pends perk choice; Level Up UI presents perk button.
+2. **Battle integration** (`tests/unit/test_battle_controller.gd`): player units start with weapon-appropriate hit chance, and damage rolls add Might.
+3. **Save migration** (`tests/unit/test_campaign_snapshot.gd`): legacy adventurer dicts load with `skill_points` removed, stats migrated to class tracks, and max health recalculated.
+4. **Removals:** delete `spend_attack_points()`, obsolete config constants, and spend UI code.
+5. **Level-up overlay** (`tests/unit/test_level_up.gd`): shows skill-gain rows with deltas, vitality health row, and perk selection button when earned.
+6. **Unit Details** (`tests/unit/test_unit_details.gd`): skills section displays class skills and tier growth ranges.
+7. **Scenario factory and schema:** update `battle_state_factory.gd` and scenario contracts.
+8. **Translations & Docs:** update localization keys and `docs/dev/code-map.md`.
 
 ## Verification
 
@@ -298,62 +167,23 @@ iterating; finish each task group with `make check`.
 make check
 ```
 
-Green, including all new tests. Then the balance gate:
-
-1. Add `scenarios/battle/class-skill-progression.json` modeled on
-   `baseline-party-viability.json`, matrixed over levels 1 / 3 / 5 for a
-   2-member warrior party vs. goblin and orc (use `battle_state_factory`'s
-   level support; if the scenario schema does not yet carry a per-unit
-   `level` field, extend the schema in `scenario_runner_main.gd` validation
-   and `test_scenario_contract.gd` first — red test, then schema change).
-2. Run it pinned:
-   ```bash
-   make scenario SCENARIO=scenarios/battle/class-skill-progression.json SEED=20260813 ITERATIONS=20
-   ```
-   **Gate:** no stalemates; win rate at levels 3 and 5 is ≥ level-1 win rate
-   (growth — hit chance, guard, might, vitality health — must help, not
-   hurt). If the gate fails, adjust only the `gain_per_level` values and, if
-   needed, the per-class `vitality` in `CLASS_DEFINITIONS`, then re-run.
-3. Re-run the baseline evidence commands from Setup and confirm
-   `baseline-party-viability`, `baseline-offense`, `baseline-defense`, and
-   `make simulate` outcomes match the pre-change baseline at level 1
-   (level-1 units have no growth and the stat split is value-preserving, so
-   results must be identical modulo the scenario runner's RNG-free
-   determinism).
-
-Reports are local evidence — do not commit them.
+Balance gate:
+```bash
+make scenario SCENARIO=scenarios/battle/class-skill-progression.json SEED=20260813 ITERATIONS=20
+```
+**Gate:** no stalemates; win rate at levels 3 and 5 is ≥ level-1 win rate.
 
 ## Manual verification (user sign-off)
 
-1. `make play`, press **FN+F9** → **Orc Outpost Battle** (its kill+clear XP
-   always crosses the level-2 threshold — see `docs/dev/code-map.md`).
-2. Win the fight. The level-up overlay must show the skill-gain rows
-   ("Melee +3", "Might +3", … for a Warrior) and the vitality-derived health
-   row, **no** +/− buttons, **no** unspent-points row. Screenshot it.
-3. Replay until a member reaches level 3: the overlay offers Bonus Move
-   exactly as before (cadence unchanged). Choose it; battle continues.
-4. Encampment → Units/Party Details → Unit Details: skills section shows the
-   class skills and growth. Screenshot it. With a Scout equipped with a bow,
-   confirm the missile skill drives their to-hit in a fight (Unit Details
-   stats row before, hit rolls during).
-5. Save (game menu), then check the save contains no skill points or attack
-   stat:
-   ```bash
-   SAVE="$(find ~/.local/share/godot -name campaign-save.json | head -1)"
-   grep -c skill_points "$SAVE" || true   # expect: 0
-   grep -c '"attack"' "$SAVE" || true     # expect: 0
-   ```
-   Then Load and confirm the Unit Details stats are unchanged.
-6. *Optional migration check:* with a save present, hand-add
-   `"skill_points": 7` and an old-style `"attack": 60` to one adventurer's
-   `progression`/`stats` in the JSON and lower their level-2 values; Load —
-   the game must start, the legacy fields must be gone, and melee/missile
-   must be at least their track values.
+1. `make play` → **FN+F9** → **Orc Outpost Battle**. Win fight.
+2. Level-up overlay shows random skill-gain rows within tier ranges (e.g. "Melee +3", "Might +4") and vitality health row.
+3. Upon reaching level 3, confirm perk choice button appears on Level Up Screen.
+4. Unit Details: confirm skills section lists class skills and growth tiers.
 
 ## Commit and merge
 
 ```bash
-git add -A && git status   # confirm only intended paths are staged
+git add -A && git status
 git commit -m "feat: replace manual skill points with automatic class-owned skill tracks"
 # after user sign-off:
 git checkout main && git merge class-owned-skill-tracks && git branch -d class-owned-skill-tracks
@@ -361,11 +191,7 @@ git checkout main && git merge class-owned-skill-tracks && git branch -d class-o
 
 ## Milestone (concretely verifiable)
 
-- `grep -rn "skill_points\|spend_attack_points\|LEVEL_UP_SKILL_POINTS\|LEVEL_UP_MAX_HEALTH_BONUS\|BASE_ATTACK\|BASE_MAX_HEALTH" scripts/ tests/ config/ translations/`
-  returns **nothing**, and no adventurer/class base stats carry an `attack`
-  key (monster `attack_damage`/`attack_name_key` fields are untouched).
+- `grep -rn "skill_points\|spend_attack_points"` returns **nothing**.
 - `make check` green.
-- `make scenario` class-skill-progression report: win rate non-decreasing
-  with level, zero stalemates; baseline scenario and sim outputs identical
-  to the pre-change capture at level 1.
-- Signed-off screenshots: new level-up overlay, Unit Details skills section.
+- Win rate non-decreasing with level in `make scenario` class-skill-progression report.
+- Signed-off screenshots: Level Up Screen (showing skill gains & perk button) and Unit Details.
