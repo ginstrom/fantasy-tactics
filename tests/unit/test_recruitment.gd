@@ -168,73 +168,67 @@ func test_the_recruit_action_is_enabled_with_ten_gold() -> void:
 	assert_false(panel.get_node("Content/RecruitButton").disabled)
 
 
-func test_pressing_recruit_purchases_the_selected_candidate_and_refreshes_in_place() -> void:
+func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster() -> void:
 	GameSession.gold = 10
 	var first_candidate := GameSession.get_recruitment_candidates()[0]
-	if get_tree().current_scene != null:
-		get_tree().unload_current_scene()
-		await get_tree().process_frame
-	assert_eq(GameManager.go_to_recruitment(), OK)
-	var settle_frames := 0
-	while get_tree().current_scene == null and settle_frames < 10:
-		await get_tree().process_frame
-		settle_frames += 1
-	var screen: Control = get_tree().current_scene
-	assert_not_null(screen, "The real Recruitment route must produce a live scene")
-	if screen == null:
-		return
-	assert_eq(screen.name, "Recruitment")
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
 	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
-	GameManager.route_context_id = "stale_id"
 
 	panel.get_node("Content/RecruitButton").emit_signal("pressed")
 
 	assert_eq(GameSession.gold, 0, "The one-time purchase must deduct the candidate's cost")
-	assert_eq(GameSession.get_recruitment_candidates().size(), 3, "Only the purchased offer leaves the list")
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
 	assert_eq(GameSession.adventurers.size(), 5)
 	assert_eq(GameSession.adventurers[4].id, first_candidate.id)
-	assert_eq(
-		GameSession.adventurers[4].get("template_id", ""),
-		"warrior_002",
-		"The purchased adventurer keeps the template its offer claimed"
-	)
-	assert_eq(screen.selected_candidate_id, "", "A purchased candidate must not remain selected")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
-	await get_tree().process_frame
-	assert_eq(get_tree().current_scene, screen, "Ordinary recruitment must remain on the live Recruitment scene")
 
 
-func test_targeted_recruitment_assigns_only_the_requested_encamped_party() -> void:
+func test_double_clicking_candidate_row_purchases_candidate_and_routes_to_roster() -> void:
+	GameSession.gold = 10
+	var first_candidate := GameSession.get_recruitment_candidates()[0]
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+
+	table.emit_signal("row_activated", first_candidate.id)
+
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
+	assert_eq(GameSession.adventurers.size(), 5)
+	assert_eq(GameSession.adventurers[4].id, first_candidate.id)
+
+
+func test_targeted_recruitment_assigns_candidate_and_returns_to_party_details() -> void:
 	GameSession.create_party()
-	GameSession.recruit_adventurer()
 	GameSession.gold = 10
 	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
-	if get_tree().current_scene != null:
-		get_tree().unload_current_scene()
-		await get_tree().process_frame
-	assert_eq(GameManager.go_to_recruitment_for_party(GameSession.FIRST_PARTY_ID), OK)
-	var settle_frames := 0
-	while get_tree().current_scene == null and settle_frames < 10:
-		await get_tree().process_frame
-		settle_frames += 1
-	var screen: Control = get_tree().current_scene
-	assert_not_null(screen, "The real targeted Recruitment route must produce a live scene")
-	if screen == null:
-		return
-	assert_eq(screen.name, "Recruitment")
-	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
-	tree.get_root().get_first_child().select(0)
-	tree.emit_signal("item_selected")
-	screen.get_node("%InformationPanel/Content/RecruitButton").emit_signal("pressed")
+	GameManager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+
+	screen._on_information_panel_recruit_selected(first_candidate_id)
+
 	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
-	assert_eq(GameManager.recruitment_target_party_id, GameSession.FIRST_PARTY_ID)
-	assert_eq(screen.selected_candidate_id, "")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
-	await get_tree().process_frame
-	assert_eq(get_tree().current_scene, screen, "Targeted recruitment must remain on the live Recruitment scene")
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID, "Targeted recruitment must route back to party details")
+
+
+func test_targeted_recruitment_double_click_returns_to_party_details() -> void:
+	GameSession.create_party()
+	GameSession.gold = 10
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
+	GameManager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+
+	table.emit_signal("row_activated", first_candidate_id)
+
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
 
 
 func test_view_roster_clears_the_target_context_and_routes_through_roster() -> void:

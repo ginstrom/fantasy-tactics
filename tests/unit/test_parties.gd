@@ -11,6 +11,8 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
+	GameManager.create_party_on_open = false
+
 
 
 func test_parties_shows_the_title_and_the_back_action() -> void:

@@ -9,6 +9,8 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameManager.close_game_menu()
+	GameManager.create_party_on_open = false
+
 
 
 func test_encampment_contains_the_camp_nav() -> void:

@@ -16,11 +16,14 @@ func before_each() -> void:
 	GameManager.route_context_id = ""
 	GameManager.unit_details_origin = ""
 	GameManager.add_member_return_party_id = ""
+	GameManager.create_party_on_open = false
 
 
 func after_each() -> void:
+	GameManager.create_party_on_open = false
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
+
 
 
 ## The two "real post-victory scene change" tests above drive a genuine

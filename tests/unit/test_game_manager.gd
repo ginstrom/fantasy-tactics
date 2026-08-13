@@ -32,8 +32,10 @@ func after_each() -> void:
 	get_tree().paused = false
 	GameManager.add_member_return_party_id = ""
 	GameManager.battle_result_summary = {}
+	GameManager.create_party_on_open = false
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
+
 	# Save-related tests inject a repository pointed at TEST_SAVE_PATH instead
 	# of the real campaign-save.json; put GameManager back on a fresh default
 	# repository and remove any file this run may have left behind so no test

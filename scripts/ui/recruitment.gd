@@ -21,9 +21,11 @@ var selected_candidate_id: String = ""
 func _ready() -> void:
 	information_panel.recruit_selected.connect(_on_information_panel_recruit_selected)
 	recruitment_table.row_selected.connect(_on_row_selected)
+	recruitment_table.row_activated.connect(_on_row_activated)
 	recruitment_table.set_columns(_build_columns())
 	information_panel.refresh()
 	refresh()
+
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -88,19 +90,27 @@ func _on_row_selected(row_id: Variant) -> void:
 	_refresh_selection()
 
 
-## The only real purchase path. A successful purchase clears its stale local
-## selection and refreshes the live candidate rows in place. Targeted purchases
-## retain their eligible party target for a later purchase; GameManager clears
-## a stale, deployed, or full target before this screen can purchase anything.
+func _on_row_activated(row_id: Variant) -> void:
+	_perform_recruitment(str(row_id))
+
+
 func _on_information_panel_recruit_selected(candidate_id: String) -> void:
+	_perform_recruitment(candidate_id)
+
+
+func _perform_recruitment(candidate_id: String) -> void:
 	if GameManager.recruitment_target_party_id != "":
-		GameManager.purchase_recruit_for_target_party(candidate_id)
-		selected_candidate_id = ""
-		refresh()
-		return
-	GameManager.purchase_recruit(candidate_id)
+		var target_id := GameManager.recruitment_target_party_id
+		if GameManager.purchase_recruit_for_target_party(candidate_id) == OK:
+			GameManager.go_to_party_details(target_id)
+			return
+	else:
+		if GameManager.purchase_recruit(candidate_id) == OK:
+			GameManager.go_to_roster()
+			return
 	selected_candidate_id = ""
 	refresh()
+
 
 
 func _on_view_roster_pressed() -> void:
