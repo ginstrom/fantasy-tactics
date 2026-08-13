@@ -89,8 +89,10 @@ These are a backlog, not spawnable content. Each family must enter through a sep
 | Skeleton | resistant undead | Resistance and Cleric interaction |
 | Wolf | fast flanker | Mobility/pack AI |
 | Giant Spider | control skirmisher | status effects and cleansing |
-| Ogre | high-health bruiser | multi-party encounter pacing |
+| Ogre | high-health bruiser | multi-unit party encounter pacing |
 | Wraith | magical elite | spells, magical damage, or resistance rules |
+
+Additionally, we will add skirmisher/archer versions of kobold/goblin/orc/hobgoblin equipped with slings (kobold) or bows (short for goblin, otherwise longbows)
 
 ## Addition checklist
 

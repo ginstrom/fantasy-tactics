@@ -39,7 +39,7 @@ Normal gear is a base item only. Improved gear adds a treatment. Magical gear ad
 |---|---:|---:|
 | Leather | +10 | 10% |
 | Chainmail | +15 | 20% |
-| Split armor | +15 | 25% |
+| Splint armor | +15 | 25% |
 | Platemail | +15 | 30% |
 | Full plate | +15 | 35% |
 
@@ -54,7 +54,7 @@ All items share the exact same representation; base weapons simply have their im
 ```text
 Item                         Type     Qty   Sale Price
 Iron Longsword               Weapon   3     10
-Sharpened Iron Longsword     Weapon   1     10
+Sharpened Iron Longsword     Weapon   1     20
 ```
 
 An item instance has one slot per enhancement family (one smithing treatment, one alchemical enchantment family, and socketed runes):
@@ -62,6 +62,8 @@ An item instance has one slot per enhancement family (one smithing treatment, on
 ```yaml
 id: "gear_00042"
 base_item_id: "longsword_iron"
+type: "weapon"
+material: "iron"
 enhancements:
   smithing: "sharpened"
   enchantment: "accuracy_1"
@@ -106,7 +108,7 @@ Potions use the generic timed-effect system, not bespoke `Unit` flags or free UI
 
 An item begins with a fixed number of rune sockets (initially 1 socket). When socketing a new rune over an existing one, **the displaced rune is returned to the Stores**. (A future scrapping mechanic will allow breaking down items for base materials).
 
-The first reference rune is **Thorn Rune** for armor: when a wearer is hit by a melee attack, it has a stated chance to apply Paralyze to the attacker. It requires common trigger timing, attack tags, chance resolution, duration, immunity, stacking/refresh rules, UI feedback, and AI treatment. A special-case paralyze callback is out of scope.
+The first reference rune is **Thorn Rune** for armor: when a wearer is hit by a melee attack, it has a stated chance to apply Paralyze to the attacker. It requires common trigger timing, attack tags, chance resolution, duration, immunity, stacking/refresh rules, UI feedback, and AI treatment. A special-case paralyze callback is out of scope. The initial weapon rune is **Blood Rune** which on hit inflicts 1-3 bleeding damage for the next 3 rounds.
 
 ## Delivery and verification
 

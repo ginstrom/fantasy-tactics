@@ -28,6 +28,8 @@ enemy, or destination cannot move, attack, or consume an item.
 
 In dungeons, party movement out of combat is **free** (units move in unison and maintain formation). Tactical AP accounting and round turn-sequencing initiate when a battle is triggered (usually upon establishing line of sight with an enemy or crossing a trigger distance).
 
+For simplicity, movement out of combat in dungeons/other encounter locations (e.g. ruined temple) moves the party as a single sprite; when a battle commences, we go to the battle screen with the party arrayed in rough combat formation (chosen beforehand like in Baldur's Gate 1/2).
+
 ## Shipped movement baseline & Action Costs
 
 Every living unit begins its active Battle Round with a fixed base budget of **6 AP**. Action costs are deducted from this budget:
@@ -44,6 +46,8 @@ AP is generic: it replaces the old distinction between movement and a
 once-per-turn attack allowance. A unit may take any sequence of legal actions while
 it can pay every cost. It may make as many basic attacks or item uses as its AP permits;
 there is no separate once-per-turn attack limit.
+
+The next enhancement will be to give bonuses to AP for high agility (each point above 6 gives +1 AP). Also spells such as haste and certain items (e.g. boots of speed, potions) will also give AP bonuses. Slow spell, wounds, and other debuffs will reduce AP. Sometimes a buff or debuff will only apply to movement AP or attack AP (e.g. entanglement applies debuff to movement)
 
 ## Movement and action legality
 

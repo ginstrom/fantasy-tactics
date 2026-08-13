@@ -25,7 +25,7 @@ All items share a uniform data representation. Unimproved base weapons and armor
 ```text
 Item                         Type     Qty   Sale Price
 Iron Longsword               Weapon   3     10
-Sharpened Iron Longsword     Weapon   1     10
+Sharpened Iron Longsword     Weapon   1     20
 ```
 
 `adventurer.equipment` has two array fields alongside the existing
@@ -39,6 +39,7 @@ scalar pointers, which keep their exact current meaning:
     "armor_inventory": ["leather_armor"],    # everything carried; always includes the active id
 }
 ```
+(This representation is for simplicity; `longsword_iron` etc. need to be replaced with the actual rich data structures of weapons/armor)
 
 **Invariant:** `equipment.weapon` is always a member of
 `equipment.weapon_inventory` (same for armor) — never a dangling pointer to
