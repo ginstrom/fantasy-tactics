@@ -96,7 +96,8 @@ func _build_columns() -> Array[TableColumn]:
 	var level_column := TableColumnDescriptor.new(
 		&"level", tr("party_details.column.level"), TableColumnDescriptor.Type.INTEGER
 	)
-	return [name_column, class_column, level_column]
+	var health_column := TableColumnDescriptor.new(&"health", tr("party_details.column.health"))
+	return [name_column, class_column, level_column, health_column]
 
 
 func _build_rows(party: Dictionary) -> Array[Dictionary]:
@@ -106,11 +107,14 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 		var adventurer := GameSession.get_adventurer(adventurer_id)
 		if adventurer.is_empty():
 			continue
+		var current_hp := GameSession.get_current_health(adventurer.id)
+		var max_hp := GameSession.get_effective_max_health(adventurer.id)
 		rows.append({
 			"id": adventurer.id,
 			"name": adventurer.name,
 			"class": tr("class.%s" % adventurer["class"]),
 			"level": adventurer.level,
+			"health": "%d / %d" % [current_hp, max_hp],
 		})
 	return rows
 

@@ -127,7 +127,7 @@ func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		"XP: 0 / 20 — Melee: 60 (60%) — Missile: 60 (60%) — Guard: 0 — Might: 0 — Health: 10"
+		"XP: 0 / 20 — Melee: 60 (60%) — Missile: 60 (60%) — Guard: 0 — Might: 0 — Health: 10 / 10"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/StatsLabel").visible)
 

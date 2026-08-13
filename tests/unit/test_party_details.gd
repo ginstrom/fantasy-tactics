@@ -239,10 +239,11 @@ func test_party_details_table_uses_the_documented_columns() -> void:
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
 
-	assert_eq(tree.columns, 3)
+	assert_eq(tree.columns, 4)
 	assert_eq(tree.get_column_title(0), "Name")
 	assert_eq(tree.get_column_title(1), "Class")
 	assert_eq(tree.get_column_title(2), "Level")
+	assert_eq(tree.get_column_title(3), "Health")
 
 
 func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
@@ -255,6 +256,7 @@ func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
 	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["10 / 10"])
 
 
 func test_party_details_localizes_a_scout_class() -> void:

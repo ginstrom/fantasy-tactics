@@ -1,7 +1,7 @@
 # Step 3 — Baseline healing lifecycle (persistent damage + natural recovery)
 
 **Branch:** `baseline-healing-lifecycle`
-**Status:** pending
+**Status:** complete
 **Implements:** gap analysis §4 step 1 ("add the baseline healing lifecycle")
 and §2.3 item 1 ("Baseline natural/rest recovery"), per
 `docs/designs/vision.md` → "Healing": *"Units heal naturally over time, more

@@ -283,6 +283,9 @@ var TRADING_POST_PURCHASE_COST: int = 50
 var TRADING_POST_INCOME_PER_TURN: int = 1
 var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
 var ATTACK_TO_HIT_CHANCE_DIVISOR: float = 100.0
+var HEAL_RATE_ENCAMPED: int = 4
+var HEAL_RATE_RESTING: int = 2
+var HEAL_RATE_MOVING: int = 1
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
 # A campaign starts sparse (two active encounters, one active recruitment
@@ -326,6 +329,7 @@ func get_default_warrior(adventurer_id: String = WARRIOR_ID, adventurer_name: St
 		"level": 1,
 		"availability_status": "available",
 		"stats": CLASS_DEFINITIONS.warrior.base_stats.duplicate(true),
+		"health": CLASS_DEFINITIONS.warrior.base_stats.max_health,
 		"progression": {
 			"xp": 0.0,
 			"perks": [],
@@ -345,6 +349,7 @@ func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictio
 		"level": 1,
 		"availability_status": "available",
 		"stats": CLASS_DEFINITIONS.scout.base_stats.duplicate(true),
+		"health": CLASS_DEFINITIONS.scout.base_stats.max_health,
 		"progression": {
 			"xp": 0.0,
 			"perks": [],
@@ -585,6 +590,9 @@ func _load_balance_config() -> void:
 	RECRUITMENT_VACANCY_TURNS = GameConfig.get_int("population", "recruitment_vacancy_turns", RECRUITMENT_VACANCY_TURNS)
 	ENCOUNTER_VACANCY_JITTER_TURNS = GameConfig.get_int("population", "encounter_vacancy_jitter_turns", ENCOUNTER_VACANCY_JITTER_TURNS)
 	RECRUITMENT_VACANCY_JITTER_TURNS = GameConfig.get_int("population", "recruitment_vacancy_jitter_turns", RECRUITMENT_VACANCY_JITTER_TURNS)
+	HEAL_RATE_ENCAMPED = GameConfig.get_int("healing", "encamped_rate", HEAL_RATE_ENCAMPED)
+	HEAL_RATE_RESTING = GameConfig.get_int("healing", "resting_rate", HEAL_RATE_RESTING)
+	HEAL_RATE_MOVING = GameConfig.get_int("healing", "moving_rate", HEAL_RATE_MOVING)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -794,6 +802,7 @@ func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
 		else get_default_warrior()
 	)
 	record["stats"] = baseline.stats.duplicate(true)
+	record["health"] = baseline.health
 	record["progression"] = baseline.progression.duplicate(true)
 	return record
 
@@ -1000,6 +1009,7 @@ func end_world_turn() -> bool:
 		gold += SHOP_INCOME_PER_TURN
 	if shop_level >= 1 and world_turn % 10 == 0:
 		shop_gold = max(shop_gold, shop_gold_cap())
+	_apply_natural_recovery()
 	if has_deployed_party():
 		parties[_get_selected_party_index()].movement_spent = false
 	_advance_encounter_vacancies()
@@ -2143,11 +2153,15 @@ func _award_adventurer_xp(adventurer_id: String, amount: float) -> bool:
 
 	var leveled_up := false
 	while adventurer.progression.xp >= get_level_xp_threshold(adventurer.level + 1):
+		var old_max_health: int = adventurer.stats.max_health
 		adventurer.level += 1
 		var class_id: String = adventurer.get("class", "warrior")
 		var class_def: Dictionary = CLASS_DEFINITIONS.get(class_id, CLASS_DEFINITIONS.warrior)
 		var vitality: int = int(adventurer.stats.get("vitality", class_def.base_stats.get("vitality", 10)))
 		adventurer.stats.max_health = vitality * adventurer.level
+		var health_delta: int = adventurer.stats.max_health - old_max_health
+		var current_hp: int = int(adventurer.get("health", old_max_health))
+		adventurer["health"] = clampi(current_hp + health_delta, 1, adventurer.stats.max_health)
 		var skills: Dictionary = class_def.get("skills", {})
 		for skill_name in skills:
 			var skill_info: Dictionary = skills[skill_name]
@@ -2228,6 +2242,60 @@ func get_effective_max_health(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return 0
 	return adventurer.stats.max_health
+
+
+## Returns current persistent health for adventurer_id (clamped in [1, max_health]),
+## or 0 for an unknown adventurer.
+func get_current_health(adventurer_id: String) -> int:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return 0
+	var adventurer: Dictionary = adventurers[adventurer_index]
+	var max_hp := get_effective_max_health(adventurer_id)
+	return clampi(int(adventurer.get("health", max_hp)), 1, max_hp)
+
+
+## Sets persistent health for adventurer_id, clamped to [1, max_health].
+## Returns false for an unknown adventurer.
+func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	var max_hp := get_effective_max_health(adventurer_id)
+	adventurers[adventurer_index]["health"] = clampi(amount, 1, max_hp)
+	return true
+
+
+## Batch write-back used by the battlefield after victory or defeat.
+## For each entry, persists max(1, reported) clamped to max health.
+func apply_battle_aftermath(health_by_id: Dictionary) -> void:
+	for id_key in health_by_id:
+		var adventurer_id := String(id_key)
+		var reported := int(health_by_id[id_key])
+		set_adventurer_health(adventurer_id, max(1, reported))
+
+
+func _get_party_for_adventurer(adventurer_id: String) -> Dictionary:
+	for party in parties:
+		if adventurer_id in party.member_ids:
+			return party
+	return {}
+
+
+func _apply_natural_recovery() -> void:
+	for adventurer in adventurers:
+		var adv_id := String(adventurer.id)
+		var party: Dictionary = _get_party_for_adventurer(adv_id)
+		var rate := HEAL_RATE_ENCAMPED
+		if not party.is_empty() and bool(party.get("deployed", false)):
+			if bool(party.get("movement_spent", false)):
+				rate = HEAL_RATE_MOVING
+			else:
+				rate = HEAL_RATE_RESTING
+		var current_hp := get_current_health(adv_id)
+		var max_hp := get_effective_max_health(adv_id)
+		if current_hp < max_hp:
+			adventurers[_get_adventurer_index(adv_id)]["health"] = mini(current_hp + rate, max_hp)
 
 
 ## Centralized effective battle AP: every unit starts with the battle baseline,

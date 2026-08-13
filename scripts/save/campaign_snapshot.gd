@@ -382,6 +382,13 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 		var calc_max_health := vitality * level
 		stats["max_health"] = max(int(stats.get("max_health", 0)), calc_max_health)
 
+		# Health
+		var max_hp := int(stats.max_health)
+		if copy.has("health"):
+			copy["health"] = clampi(int(copy.health), 1, max_hp)
+		else:
+			copy["health"] = max_hp
+
 		normalized.append(copy)
 	return normalized
 

@@ -11,13 +11,13 @@ const CampaignSnapshot := preload("res://scripts/save/campaign_snapshot.gd")
 func _full_snapshot() -> CampaignSnapshot:
 	var snapshot := CampaignSnapshot.new()
 	snapshot.adventurers = [
-		{"id": "warrior_001", "name": "Warrior", "level": 1, "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
+		{"id": "warrior_001", "name": "Warrior", "level": 1, "health": 10, "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
 		# A purchased recruit in the current format: a generated instance id
 		# plus the explicit template_id it claimed at purchase time.
-		{"id": "3f2a9c1e-7b4d-4e8a-9c6f-1d2e3f4a5b6c", "name": "Warrior 5", "level": 1, "template_id": "warrior_002", "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
+		{"id": "3f2a9c1e-7b4d-4e8a-9c6f-1d2e3f4a5b6c", "name": "Warrior 5", "level": 1, "template_id": "warrior_002", "health": 10, "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
 	]
 	snapshot.recruitment_candidates = [
-		{"id": "offer-abc-123", "name": "Warrior 6", "cost": 10, "template_id": "warrior_003", "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
+		{"id": "offer-abc-123", "name": "Warrior 6", "cost": 10, "template_id": "warrior_003", "health": 10, "stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10}},
 	]
 	snapshot.recruitment_vacancies = [{"turns_remaining": 12}]
 	snapshot.parties = [
@@ -380,3 +380,4 @@ func test_legacy_adventurer_stats_migrate_attack_to_skill_tracks_and_recalculate
 	assert_eq(adv.stats.guard, 1)
 	assert_eq(adv.stats.might, 3)
 	assert_eq(adv.stats.max_health, 20)
+	assert_eq(adv.get("health", 0), 20, "Legacy save without health key normalizes to max_health")

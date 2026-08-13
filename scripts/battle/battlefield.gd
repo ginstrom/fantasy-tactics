@@ -245,6 +245,7 @@ func _apply_battle_outcome(victory: bool) -> void:
 			return
 		_finish_victory()
 	else:
+		_persist_battle_aftermath()
 		GameManager.fail_battle()
 
 
@@ -348,6 +349,7 @@ func _on_level_up_queue_drained() -> void:
 ## World Map), which also routes through go_to_world_map() and so also
 ## merges correctly.
 func _finish_victory() -> void:
+	_persist_battle_aftermath()
 	GameSession.complete_current_encounter()
 
 	var party := GameSession.get_party(GameSession.selected_party_id)
@@ -364,6 +366,15 @@ func _finish_victory() -> void:
 		"loot_gear_counts": GameSession.battle_gear.duplicate(),
 	}
 	GameManager.go_to_battle_result(summary)
+
+
+func _persist_battle_aftermath() -> void:
+	var health_by_id: Dictionary = {}
+	if grid != null and grid.get("units") != null:
+		for unit in grid.units:
+			if unit.side == BattleControllerScript.Side.PLAYER and unit.adventurer_id != "":
+				health_by_id[unit.adventurer_id] = unit.health
+	GameSession.apply_battle_aftermath(health_by_id)
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

@@ -107,6 +107,7 @@ func _ready() -> void:
 		player_unit.attack_max_range = attack_range.y
 		player_unit.raw_damage_bonus = GameSession.get_effective_weapon_raw_damage_bonus(adventurer_id)
 		player_unit.might = GameSession.get_effective_might(adventurer_id)
+		player_unit.health = max(1, GameSession.get_current_health(adventurer_id))
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
 		if GameSession.owned_item_instances.has(armor_instance_id):

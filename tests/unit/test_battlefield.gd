@@ -727,6 +727,49 @@ func test_apply_battle_outcome_false_returns_the_party_home_without_completing()
 	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue or bank any gold")
 
 
+func test_battle_start_reads_stored_adventurer_health() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.set_adventurer_health("warrior_001", 4)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var unit = battlefield.grid.units[0]
+
+	assert_eq(unit.health, 4, "Battlefield unit starts with the adventurer's stored health (4)")
+	assert_eq(unit.max_health, 10)
+
+
+func test_victory_aftermath_persists_surviving_player_unit_health() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	battlefield.grid.units[0].health = 6
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(GameSession.get_current_health("warrior_001"), 6, "Surviving unit health (6) persists after victory")
+
+
+func test_defeat_aftermath_persists_downed_player_units_at_one_health() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	battlefield.grid.units[0].health = 0
+
+	battlefield._apply_battle_outcome(false)
+
+	assert_eq(GameSession.get_current_health("warrior_001"), 1, "Downed units persist at 1 health on defeat")
+
+
 ## Task 2: battle XP events (kill XP on an enemy defeat, clear XP on victory),
 ## awarded exactly once per encounter attempt regardless of repeated events.
 

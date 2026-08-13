@@ -81,10 +81,11 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	var might_stat: int = adventurer.stats.get("might", 0)
 	var melee_hit := int(round(minf(melee_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP) * 100.0))
 	var missile_hit := int(round(minf(missile_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP) * 100.0))
+	var current_health: int = GameSession.get_current_health(adventurer_id)
 	var effective_max_health: int = GameSession.get_effective_max_health(adventurer_id)
 	stats_label.text = (
-		"XP: %d / %d — Melee: %d (%d%%) — Missile: %d (%d%%) — Guard: %d — Might: %d — Health: %d"
-		% [xp_display, xp_to_next_level, melee_stat, melee_hit, missile_stat, missile_hit, guard_stat, might_stat, effective_max_health]
+		"XP: %d / %d — Melee: %d (%d%%) — Missile: %d (%d%%) — Guard: %d — Might: %d — Health: %d / %d"
+		% [xp_display, xp_to_next_level, melee_stat, melee_hit, missile_stat, missile_hit, guard_stat, might_stat, current_health, effective_max_health]
 	)
 
 	var weapon_damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)

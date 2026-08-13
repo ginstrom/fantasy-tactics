@@ -117,6 +117,7 @@ messages = {
 "party_details.column.name": "Name",
 "party_details.column.class": "Class",
 "party_details.column.level": "Level",
+"party_details.column.health": "Health",
 "battle_result.title": "Victory!",
 "battle_result.kills": "Enemies defeated: %s",
 "battle_result.no_kills": "No enemies defeated.",

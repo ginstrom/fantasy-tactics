@@ -1761,6 +1761,86 @@ func test_leveling_rolls_skill_gains_within_tier_ranges_and_recomputes_max_healt
 	assert_eq(warrior.stats.might, 4, "Might tier med max gain (+4)")
 
 
+func test_fresh_adventurers_and_recruits_start_at_full_health() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.health, 10)
+	assert_eq(session.get_current_health("warrior_001"), 10)
+
+
+func test_get_current_health_and_set_adventurer_health_clamp_and_reject_unknown_ids() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(session.get_current_health("unknown_id"), 0)
+	assert_false(session.set_adventurer_health("unknown_id", 5))
+
+	assert_true(session.set_adventurer_health("warrior_001", 4))
+	assert_eq(session.get_current_health("warrior_001"), 4)
+
+	session.set_adventurer_health("warrior_001", 0)
+	assert_eq(session.get_current_health("warrior_001"), 1, "Health cannot drop below 1 outside battle")
+
+	session.set_adventurer_health("warrior_001", 999)
+	assert_eq(session.get_current_health("warrior_001"), 10, "Health cannot exceed effective max health")
+
+
+func test_apply_battle_aftermath_persists_reported_health_with_a_floor_of_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.apply_battle_aftermath({"warrior_001": 3, "unknown_id": 10})
+	assert_eq(session.get_current_health("warrior_001"), 3)
+
+	session.apply_battle_aftermath({"warrior_001": 0})
+	assert_eq(session.get_current_health("warrior_001"), 1, "Downed units persist at 1 health")
+
+
+func test_leveling_up_raises_current_health_by_the_vitality_delta() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.set_adventurer_health("warrior_001", 4)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.stats.max_health, 20)
+	assert_eq(warrior.health, 14, "Leveling raises current health by the 10-point vitality delta")
+
+
+func test_end_world_turn_applies_natural_recovery_based_on_encamped_resting_and_moving_states() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.HEAL_RATE_ENCAMPED = 4
+	session.HEAL_RATE_RESTING = 2
+	session.HEAL_RATE_MOVING = 1
+
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	# Party is not deployed -> Encamped rate (4)
+	session.set_adventurer_health("warrior_001", 2)
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 6, "Encamped recovery heals 4")
+
+	# Deploy party -> Deployed resting rate (2) when not moved
+	session.deploy_selected_party()
+	session.set_adventurer_health("warrior_001", 2)
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 4, "Deployed resting recovery heals 2")
+
+	# Deployed moving rate (1) when movement_spent is true
+	session.set_adventurer_health("warrior_001", 2)
+	session.parties[0].movement_spent = true
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 3, "Deployed moving recovery heals 1")
+
+	# Full health is a no-op
+	session.set_adventurer_health("warrior_001", 10)
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 10)
+
+
 func test_choose_perk_accepts_bonus_move_only_once_and_only_when_pending() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

@@ -87,9 +87,10 @@ often more precise than its own source comments.
   member is assigned to a party. Each entry: `id`, `name`, `class`, and
   `equipment` (active `weapon`/`armor` ids plus their inventories and
   `potion_inventory`; item ids resolve through `GameSession.get_item_definition()`),
-  along with `level`, `availability_status`, `stats` (`max_health`, `vitality`, `melee`,
-  `missile`, `guard`, `might`, `move_range` — base and class-growth values), and progression (`xp: float`,
-  `perks: Array`). Identity is generated: every newly minted unit gets a
+  along with `level`, `availability_status`, `health` (durable current health, `1 <= health <= max_health`),
+  `stats` (`max_health`, `vitality`, `melee`, `missile`, `guard`, `might`, `move_range` — base and class-growth values),
+  and progression (`xp: float`, `perks: Array`). Natural recovery occurs during `end_world_turn()`
+  (encamped: 4, resting: 2, moving: 1). Identity is generated: every newly minted unit gets a
   collision-free GUID-style id from `_new_instance_id()` (injectable via
   `instance_id_roll`); names are cosmetic per-class counter strings, and
   records minted from a recruitment template carry its `template_id`

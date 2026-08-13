@@ -1,7 +1,7 @@
 # Foundations and Recovery — Implementation Plan (Gap-Analysis Roadmap Part 1)
 
 **Date:** 2026-08-13
-**Status:** proposed
+**Status:** complete
 **Implements:** [`docs/gap-analysis.md`](../../gap-analysis.md) §4, roadmap step 1 —
 *"Resolve foundations and recovery."*
 

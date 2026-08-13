@@ -7,6 +7,11 @@
 	"progression": {
 		"perk_level_interval": 3
 	},
+	"healing": {
+		"encamped_rate": 4,
+		"resting_rate": 2,
+		"moving_rate": 1
+	},
 	"guild_hall": {
 		"level_1_party_cap": 4,
 		"level_2_party_cap": 5,
