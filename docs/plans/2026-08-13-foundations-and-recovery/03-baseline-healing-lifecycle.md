@@ -47,8 +47,10 @@ items 2–3).
 - **Defeat:** `_apply_battle_outcome(false)` does the same collection before
   `GameManager.fail_battle()` (an all-down party persists everyone at 1).
 - **Level-up:** `_award_adventurer_xp()` raises current health by the same
-  `LEVEL_UP_MAX_HEALTH_BONUS` it adds to max health (mirrors the existing
-  mid-battle `_refresh_unit_health()` behavior); never above the new max.
+  vitality-derived delta it applies to max health (per step 2,
+  `max_health = vitality × level`, so the delta is the class's vitality;
+  this mirrors the existing mid-battle `_refresh_unit_health()` behavior);
+  never above the new max.
 
 **Decision — no permadeath in this slice.** Downed units survive at 1
 health. Permadeath/injury rules are a separate approved rule (the vision's
@@ -84,9 +86,12 @@ of the existing `progression` section.
 
 ### Save migration
 
-Extend the nested per-adventurer normalization pass added in step 2 (or add
-it, reading step 2's migration design, if the ordering changed): an absent
-`health` key normalizes to that adventurer's `stats.max_health`. Legacy
+Extend the nested per-adventurer normalization pass introduced in step 1
+and extended in step 2 — which by then already handles recruitment
+`template_id` inference, the skill-track split, guard/might defaults, and
+vitality-derived max health (or read both steps' migration designs and add
+it, if the ordering changed): an absent `health` key normalizes to that
+adventurer's `stats.max_health`. Legacy
 saves therefore load once at full health — deliberate, documented in the
 normalizer comment; `FORMAT_VERSION` stays `1` (established post-v1-field
 pattern).
@@ -146,8 +151,8 @@ make simulate RUNS=20
    health equals the unit's surviving health after the battle resolves.
 4. **Defeat write-back**: force a loss, assert every member persists at 1.
 5. **Level-up health coupling**: `_award_adventurer_xp()` crossing a level
-   raises current health by the max-health gain, capped at the new max
-   (test at partial health).
+   raises current health by the vitality-derived max-health delta, capped at
+   the new max (test at partial health).
 6. **Natural recovery** (`tests/unit/test_game_session.gd`): three rate
    tests (encamped / deployed-resting / deployed-moved) driven through
    `end_world_turn()` with the `HEAL_RATE_*` vars set to distinctive values;
