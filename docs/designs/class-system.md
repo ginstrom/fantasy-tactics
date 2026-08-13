@@ -21,14 +21,37 @@ Every combatant—adventurer or monster—uses one compact tactical profile. An 
 
 | Attribute | Type | Meaning |
 |---|---:|---|
-| `max_health` | integer | Damage capacity; a unit at zero is defeated. |
+| `max_health` | integer | Damage capacity; a unit at zero is defeated. calculated as vitality * level |
 | `might` | integer | Adds to melee or natural-attack raw damage. |
-| `accuracy` | integer | Base chance to hit, expressed in percentage points. |
+| `melee` | integer | Base chance to hit with melee weapons, expressed in percentage points. |
+| `missile` | integer | Base chance to hit with missile weapons, expressed in percentage points. |
 | `guard` | integer | Percentage points subtracted from an attacker's Accuracy. |
+| `spellcasting` | integer | Percentage points for spell success. Overcomes magic resistance |
+| `magic_resistance` | integer | Percentage points for negating or reducing effects of magic (if applicable) |
 | `resistance` | integer percent | Reduces damage after a hit. |
 | `action_points` | integer | Generic budget for movement, attacks, items, and future abilities during a Round. |
 
 `attack_damage`/weapon damage remains an attack property, not a seventh unit attribute. This keeps a sword, a bow, a spell, and a monster bite able to use the same attributes while retaining their own range, damage, and tags.
+
+Depending on spell type, magic resistance will negate the effect, reduce the
+effect, or have no effect. Chance of magic resistance is
+`(magic_resistance - spellcasting) / 100`
+
+### Skills leveled up by class
+
+```
+class             might |  melee | missile | guard | spellcasting
+warrior           med      med     med       low     n/a
+knight            med      hi      low       low     n/a
+archer            low      low     hi        low     n/a
+mage              n/a      n/a     low       n/a     med
+spellcaster       n/a      n/a     low       n/a     hi
+battlemage        low      med     low       low     med
+scout/ranger      low      low     hi        low     n/a
+```
+low = 1-2 points
+med = 3-4 points
+hi  = 4-5 points
 
 ### Combat resolution
 
@@ -39,6 +62,8 @@ final hit chance = clamp((attacker accuracy - defender guard) / 100, 5%, 95%)
 raw damage       = rolled attack damage + attacker might
 final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
 ```
+
+maximum defender resistance is 95%.
 
 **Shipped compatibility:** the live game calls `accuracy` `attack` and `guard` `defense`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
 
