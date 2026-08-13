@@ -706,7 +706,8 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	battlefield._apply_battle_outcome(true)
 
 	assert_true(GameSession.is_encounter_complete("goblin_camp"))
-	assert_eq(GameSession.battle_reward, 1, "Victory should queue the goblin camp's rolled reward in the battle store")
+	assert_eq(GameSession.battle_reward, 19, "Victory should queue the goblin camp's rolled reward in the battle store")
+
 	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 
@@ -1150,9 +1151,10 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 	# here) one gear drop -- this battle's own loot, freshly rolled into the
 	# battle store and reported straight from there.
 	assert_eq(
-		GameManager.battle_result_summary.loot_gold, 1,
+		GameManager.battle_result_summary.loot_gold, 19,
 		"Only this battle's own gold, not the 50 already carried over"
 	)
+
 	assert_eq(
 		GameManager.battle_result_summary.loot_mana_crystal_counts, {1: 1},
 		"Only this battle's own mana crystal, not the 3 already carried over"

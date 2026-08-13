@@ -1123,9 +1123,10 @@ func complete_current_encounter() -> void:
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
 		_roll_and_queue_loot(expedition.get("enemy", {}))
-		battle_reward += loot_gold_roll.call(0, 5) * int(expedition.get("difficulty", 1))
+		battle_reward += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
 		_clear_active_encounter(selected_encounter)
 	selected_encounter = ""
+
 
 
 ## Rolls loot once per kill in the resolved enemy composition (a battle can
@@ -1520,12 +1521,14 @@ func get_item_definition(item_id: String) -> Dictionary:
 ## recipe calls; this boundary establishes the ownership transfer they will
 ## rely on. Every validation is intentionally before the first mutation so a
 ## failed conversion is atomic.
-func materialize_banked_item_instance(base_item_id: String) -> String:
+func materialize_banked_item_instance(base_item_id: String, explicit_instance_id: String = "") -> Variant:
 	if banked_gear.get(base_item_id, 0) <= 0:
-		return ""
+		return "" if explicit_instance_id.is_empty() else false
 	if get_item_definition(base_item_id).is_empty():
-		return ""
-	var instance_id := _new_instance_id()
+		return "" if explicit_instance_id.is_empty() else false
+	var instance_id := explicit_instance_id if not explicit_instance_id.is_empty() else _new_instance_id()
+	if explicit_instance_id != "" and owned_item_instances.has(instance_id):
+		return false
 	banked_gear[base_item_id] -= 1
 	owned_item_instances[instance_id] = {
 		"id": instance_id,
@@ -1536,7 +1539,12 @@ func materialize_banked_item_instance(base_item_id: String) -> String:
 		"modifier_tiers": {},
 	}
 	banked_item_instance_ids.append(instance_id)
-	return instance_id
+	return instance_id if explicit_instance_id.is_empty() else true
+
+
+
+
+
 
 
 ## Assigns one permanent modifier category.  Categories deliberately map to

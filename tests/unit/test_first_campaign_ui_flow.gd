@@ -182,7 +182,7 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
 	assert_eq(GameSession.selected_encounter, "", "Victory should clear the encounter selection")
-	assert_eq(GameSession.battle_reward, 1, "The goblin camp's rolled reward should be queued in the battle store")
+	assert_eq(GameSession.battle_reward, 19, "The goblin camp's rolled reward should be queued in the battle store")
 	assert_eq(GameSession.pending_reward, 0, "The battle store only merges into the party's own once the player leaves the summary screen")
 	assert_eq(GameSession.gold, 0, "Winning the battle alone must not bank the reward")
 
@@ -193,7 +193,7 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	# scene transition (see the routing note above), so it calls the same
 	# merge go_to_world_map() would trigger directly.
 	GameSession.merge_battle_loot_into_party()
-	assert_eq(GameSession.pending_reward, 1, "Leaving the summary screen merges the battle store into the party's own")
+	assert_eq(GameSession.pending_reward, 19, "Leaving the summary screen merges the battle store into the party's own")
 
 	# Move party back to encampment, bank reward: walk the party home (again
 	# jumping position, per this test's routing note above) and click the
@@ -209,13 +209,14 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	return_map._handle_tile_click(return_map.party_position)
 
 	assert_false(GameSession.has_deployed_party())
-	assert_eq(GameSession.gold, 1, "Returning to the encampment must bank the queued reward")
+	assert_eq(GameSession.gold, 19, "Returning to the encampment must bank the queued reward")
 	assert_eq(GameSession.pending_reward, 0)
 
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
 	var information_panel: Control = encampment.get_node("%InformationPanel")
-	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 1)
+	assert_eq(information_panel.get_node("Content/Gold").text, tr("information.gold") % 19)
+
 
 
 ## Every other test in this file either checks GameSession state directly

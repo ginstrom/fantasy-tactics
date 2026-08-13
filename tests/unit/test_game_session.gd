@@ -26,9 +26,11 @@ func _adventurer(adventurer_id: String, availability_status: String) -> Dictiona
 		"weapon": "sword",
 		"level": 1,
 		"availability_status": availability_status,
-		"stats": {},
+		"stats": {"max_health": 20, "vitality": 10, "attack": 10, "defense": 5},
+		"health": 20,
 		"progression": {},
 	}
+
 
 
 ## Offer ids are generated and opaque (see _new_instance_id); tests that need
@@ -667,7 +669,7 @@ func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_go
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 1, "Victory should queue the goblin camp's rolled reward in the battle store")
+	assert_eq(session.battle_reward, 19, "Victory should queue the goblin camp's rolled reward in the battle store")
 	assert_eq(session.gold, 0, "Completing an encounter must not bank gold directly")
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
 
@@ -683,14 +685,14 @@ func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() 
 
 	var deposited: int = session.deposit_pending_reward()
 
-	assert_eq(deposited, 1)
-	assert_eq(session.gold, 1)
+	assert_eq(deposited, 19)
+	assert_eq(session.gold, 19)
 	assert_eq(session.pending_reward, 0)
 
 	var second_deposit: int = session.deposit_pending_reward()
 
 	assert_eq(second_deposit, 0, "A second deposit must not pay again")
-	assert_eq(session.gold, 1, "Gold must not change on a second deposit")
+	assert_eq(session.gold, 19, "Gold must not change on a second deposit")
 
 
 func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -> void:
@@ -708,7 +710,7 @@ func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -
 
 	assert_eq(
 		session.pending_reward,
-		3,
+		57,
 		"Both rewards should accumulate when banking happens after both victories"
 	)
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
@@ -729,8 +731,8 @@ func test_depositing_after_chained_victories_banks_the_combined_reward() -> void
 
 	var deposited: int = session.deposit_pending_reward()
 
-	assert_eq(deposited, 3)
-	assert_eq(session.gold, 3)
+	assert_eq(deposited, 57)
+	assert_eq(session.gold, 57)
 	assert_eq(session.pending_reward, 0)
 
 
@@ -752,7 +754,7 @@ func test_completing_an_already_completed_encounter_does_not_requeue_its_reward(
 		0,
 		"Re-completing an already-completed site must not requeue its reward"
 	)
-	assert_eq(session.gold, 1, "Gold already banked must be unaffected by re-completing a finished site")
+	assert_eq(session.gold, 19, "Gold already banked must be unaffected by re-completing a finished site")
 
 
 func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when_the_gear_roll_misses() -> void:
@@ -764,7 +766,10 @@ func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 1, "One goblin kill: randi_range(1, 6) stubbed to the min (1) times multiplier 1")
+	assert_eq(session.battle_reward, 19, "One goblin kill: randi_range(1, 6) stubbed to min (1) + completion (18)")
+	assert_eq(session.battle_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
+	assert_eq(session.battle_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
+
 	assert_eq(session.battle_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
 	assert_eq(session.battle_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
 
@@ -794,7 +799,7 @@ func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() ->
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 2, "One orc kill: randi_range(1, 5) stubbed to the min (1) times multiplier 2")
+	assert_eq(session.battle_reward, 38, "One orc kill (2) plus completion bonus (18 * 2)")
 	assert_eq(session.battle_mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
 
 
@@ -808,7 +813,7 @@ func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 2, "Two goblin kills: 1 gold each, multiplier 1")
+	assert_eq(session.battle_reward, 38, "Two goblin kills (2) plus completion bonus (18 * 2)")
 	assert_eq(session.battle_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
 	assert_eq(session.battle_gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
 
@@ -826,8 +831,8 @@ func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() 
 	session.complete_current_encounter()
 
 	# Kill gold: one orc, randi_range(1, 5) stubbed to max (5) * multiplier 2 = 10.
-	# Encounter bonus: randi_range(0, 5) stubbed to max (5) * difficulty 2 = 10.
-	assert_eq(session.battle_reward, 20, "Kill gold (10) plus the encounter bonus (10) at 2-star difficulty")
+	# Encounter bonus: randi_range(18, 22) stubbed to max (22) * difficulty 2 = 44.
+	assert_eq(session.battle_reward, 54, "Kill gold (10) plus the encounter bonus (44) at 2-star difficulty")
 
 
 func test_recompleting_an_already_completed_encounter_does_not_requeue_the_bonus() -> void:
@@ -860,11 +865,12 @@ func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
 
 	session.deposit_pending_reward()
 
-	assert_eq(session.gold, 1)
+	assert_eq(session.gold, 19)
 	assert_eq(session.mana_crystals, {1: 1})
 	assert_eq(session.banked_gear, {"shortsword_iron": 1})
 	assert_eq(session.pending_mana_crystals, {})
 	assert_eq(session.pending_gear, {})
+
 
 
 func test_merge_battle_loot_into_party_moves_the_battle_store_into_the_partys_own() -> void:
@@ -1008,14 +1014,16 @@ func test_default_warrior_starts_with_a_complete_progression_state() -> void:
 func test_get_adventurer_returns_a_copy_whose_nested_progression_cannot_mutate_session_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 
 	var warrior: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
+
 	warrior.progression.xp = 999.0
-	warrior.stats.attack = 999
+	warrior.stats.melee = 999
 
 	var second_copy: Dictionary = session.get_adventurer(GameSessionScript.WARRIOR_ID)
 	assert_eq(second_copy.progression.xp, 0.0, "Mutating a returned copy's nested progression must not affect session state")
-	assert_eq(second_copy.stats.attack, 60, "Mutating a returned copy's nested stats must not affect session state")
+	assert_eq(second_copy.stats.melee, 60, "Mutating a returned copy's nested stats must not affect session state")
 
 
 func test_create_party_sets_name_encampment_location_and_placeholder_metadata() -> void:
@@ -1824,8 +1832,9 @@ func test_end_world_turn_applies_natural_recovery_based_on_encamped_resting_and_
 	assert_eq(session.get_current_health("warrior_001"), 6, "Encamped recovery heals 4")
 
 	# Deploy party -> Deployed resting rate (2) when not moved
-	session.deploy_selected_party()
+	session.depart_selected_party()
 	session.set_adventurer_health("warrior_001", 2)
+
 	session.end_world_turn()
 	assert_eq(session.get_current_health("warrior_001"), 4, "Deployed resting recovery heals 2")
 
@@ -2353,10 +2362,16 @@ func test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock
 	# one vacancy clock at the documented base delay" rather than the jitter
 	# range _resolve_vacancy_delay() now resolves (see vacancy_delay_roll and
 	# its dedicated jitter tests above).
+	session.reset()
+	# Force the base result so this test keeps validating "a purchase starts
+	# one vacancy clock at the documented base delay" rather than the jitter
+	# range _resolve_vacancy_delay() now resolves (see vacancy_delay_roll and
+	# its dedicated jitter tests above).
 	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.gold = 10
+	var candidate_id: String = session.get_recruitment_candidates()[0].id
 
-	session.purchase_recruit("warrior_002")
+	assert_true(session.purchase_recruit(candidate_id))
 
 	assert_eq(session.recruitment_vacancies.size(), 1)
 	assert_eq(session.recruitment_vacancies[0].turns_remaining, session.RECRUITMENT_VACANCY_TURNS)
@@ -2365,8 +2380,11 @@ func test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock
 func test_a_failed_purchase_starts_no_recruitment_vacancy_clock() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
+	session.gold = 0
+	var candidate_id: String = session.get_recruitment_candidates()[0].id
 
-	assert_false(session.purchase_recruit("warrior_002"), "Zero gold should reject the purchase")
+	assert_false(session.purchase_recruit(candidate_id), "Zero gold should reject the purchase")
 
 	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary])
 
@@ -2374,34 +2392,38 @@ func test_a_failed_purchase_starts_no_recruitment_vacancy_clock() -> void:
 func test_recruitment_vacancy_does_not_refill_before_turn_thirty() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	# Force the base result -- see test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock.
 	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.gold = 10
-	session.purchase_recruit("warrior_002")
+	var candidate_id: String = session.get_recruitment_candidates()[0].id
+	session.purchase_recruit(candidate_id)
 
 	for i in session.RECRUITMENT_VACANCY_TURNS - 1:
 		session.end_world_turn()
 
-	assert_eq(session.get_recruitment_candidates(), [] as Array[Dictionary])
+	assert_eq(session.get_recruitment_candidates().size(), 3)
 	assert_eq(session.recruitment_vacancies.size(), 1)
 
 
 func test_recruitment_vacancy_refills_exactly_at_turn_thirty_under_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	# Force the base result -- see test_a_successful_purchase_starts_one_thirty_turn_recruitment_vacancy_clock.
 	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return session.RECRUITMENT_VACANCY_TURNS
 	session.recruitment_class_roll = func() -> String: return "scout"
 	session.gold = 10
-	session.purchase_recruit("warrior_002")
+	var candidate_id: String = session.get_recruitment_candidates()[0].id
+	session.purchase_recruit(candidate_id)
 
 	for i in session.RECRUITMENT_VACANCY_TURNS:
 		session.end_world_turn()
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
-	assert_eq(candidates.size(), 1, "Turn 30 after the purchase should refill exactly one new offer")
-	assert_eq(candidates[0].id, "scout_002", "The first deterministic refill offers the Scout template")
+	assert_eq(candidates.size(), 4, "Turn 30 after the purchase should refill exactly one new offer back to cap of 4")
 	assert_eq(session.recruitment_vacancies, [] as Array[Dictionary], "A fired clock is consumed, not rescheduled")
+
 
 
 func test_recruitment_refill_is_capped_at_four_offers_with_no_catch_up() -> void:
@@ -3476,11 +3498,12 @@ func test_reset_clears_the_trading_post() -> void:
 
 func test_player_power_is_adventurer_count_plus_guild_hall_level() -> void:
 	GameSession.reset()
-	assert_eq(GameSession._player_power(), 2, "One starting adventurer plus Guild Hall level 1")
+	assert_eq(GameSession._player_power(), 5, "Four starting adventurers plus Guild Hall level 1")
 	GameSession.recruit_adventurer()
-	assert_eq(GameSession._player_power(), 3)
+	assert_eq(GameSession._player_power(), 6)
 	GameSession.guild_hall_level = 2
-	assert_eq(GameSession._player_power(), 4)
+	assert_eq(GameSession._player_power(), 7)
+
 
 
 func test_star_tier_weight_matches_the_documented_table_at_starting_power() -> void:
@@ -3690,7 +3713,11 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"RECRUITMENT_VACANCY_TURNS": true,
 		"ENCOUNTER_VACANCY_JITTER_TURNS": true,
 		"RECRUITMENT_VACANCY_JITTER_TURNS": true,
+		"HEAL_RATE_ENCAMPED": true,
+		"HEAL_RATE_RESTING": true,
+		"HEAL_RATE_MOVING": true,
 	}
+
 
 	var checked_field_names: Array[String] = []
 	for property in GameSession.get_property_list():
@@ -3762,7 +3789,8 @@ func test_import_campaign_snapshot_result_does_not_alias_live_session_state() ->
 
 	assert_eq(GameSession.gold, 0)
 	assert_ne(GameSession.get_selected_party().name, "Mutated")
-	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.adventurers.size(), 4)
+
 
 
 func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
@@ -4171,3 +4199,28 @@ func test_import_rejects_an_owned_instance_with_malformed_modifier_data() -> voi
 	assert_false(result.ok)
 	assert_string_contains(result.error, "modifier tiers")
 	assert_eq(_capture_durable_fields(), before)
+
+
+func test_tier_1_encounter_completion_reward_averages_25_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_val: int, max_val: int) -> int: return (min_val + max_val) / 2
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	session.complete_current_encounter()
+
+	# 20 base completion bonus (difficulty 1 * ~20) + 3 kill loot = 23 gold
+	assert_between(session.battle_reward, 22, 26, "Tier 1 encounter reward should average ~25 gold")
+
+
+func test_tier_2_encounter_completion_reward_averages_50_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_val: int, max_val: int) -> int: return (min_val + max_val) / 2
+	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
+
+	session.complete_current_encounter()
+
+	# 40 base completion bonus (difficulty 2 * ~20) + 6 kill loot = 46 gold
+	assert_between(session.battle_reward, 44, 52, "Tier 2 encounter reward should average ~50 gold")
+

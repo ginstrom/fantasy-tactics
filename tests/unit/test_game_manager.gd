@@ -180,13 +180,14 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 1, "Entering the encampment must bank the queued reward")
+	assert_eq(GameSession.gold, 19, "Entering the encampment must bank the queued reward")
 	assert_eq(GameSession.pending_reward, 0)
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 1, "A second visit must not pay the reward again")
+	assert_eq(GameSession.gold, 19, "A second visit must not pay the reward again")
 	assert_eq(GameSession.pending_reward, 0)
+
 
 
 func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_deployed() -> void:
