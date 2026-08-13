@@ -31,6 +31,16 @@ func _adventurer(adventurer_id: String, availability_status: String) -> Dictiona
 	}
 
 
+## Offer ids are generated and opaque (see _new_instance_id); tests that need
+## a specific fixed-pool offer discover it by the template_id it claims.
+## Returns "" when no live offer claims the template.
+func _candidate_id_for_template(session: Node, template_id: String) -> String:
+	for candidate in session.get_recruitment_candidates():
+		if candidate.get("template_id", "") == template_id:
+			return candidate.id
+	return ""
+
+
 func after_each() -> void:
 	GameSession.reset_injectable_rolls()
 
@@ -39,11 +49,29 @@ func before_each() -> void:
 	GameSession.reset()
 
 
-func test_new_session_has_one_unassigned_warrior_and_no_party() -> void:
+func test_new_session_starts_with_four_unassigned_warriors_and_no_party() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.adventurers, [session.get_default_warrior()])
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE)
+	assert_eq(session.adventurers[0], session.get_default_warrior())
+	assert_eq(session.adventurers[0].id, GameSessionScript.WARRIOR_ID)
+	var template_ids: Array = []
+	for template in GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		template_ids.append(template.id)
+	var seen_ids: Dictionary = {}
+	for index in session.adventurers.size():
+		var adventurer: Dictionary = session.adventurers[index]
+		assert_eq(adventurer["class"], "warrior")
+		assert_eq(adventurer.level, 1)
+		assert_eq(adventurer.availability_status, "available")
+		assert_eq(adventurer.stats, session.get_default_warrior().stats)
+		assert_eq(adventurer.name, "Warrior" if index == 0 else "Warrior %d" % (index + 1))
+		if index > 0:
+			assert_ne(adventurer.id, "", "Roster ids beyond the legacy first warrior are generated")
+			assert_false(template_ids.has(adventurer.id))
+		assert_false(seen_ids.has(adventurer.id), "Roster ids must be unique")
+		seen_ids[adventurer.id] = true
 	assert_eq(session.parties, [])
 	assert_eq(session.selected_party_id, "")
 
@@ -101,13 +129,14 @@ func test_deploy_and_return_change_only_the_selected_party_state() -> void:
 	assert_false(session.has_deployed_party())
 	assert_eq(session.get_selected_party().location_id, "starting_settlement")
 
-func test_cannot_create_a_second_party() -> void:
+func test_get_max_party_count_is_one_and_create_party_fails_at_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
+	assert_eq(session.get_max_party_count(), 1)
 	assert_true(session.create_party())
-	assert_false(session.create_party())
-	assert_eq(session.parties.size(), 1)
+	assert_false(session.create_party(), "create_party() must reject once the party-count cap is reached")
+	assert_eq(session.parties.size(), session.get_max_party_count())
 	assert_eq(session.get_selected_party().id, GameSessionScript.FIRST_PARTY_ID)
 
 
@@ -117,7 +146,9 @@ func test_public_ui_eligibility_queries_report_current_state_without_mutating_it
 
 	assert_true(session.is_adventurer_available(GameSessionScript.WARRIOR_ID))
 	assert_false(session.is_adventurer_available("missing"))
-	assert_true(session.has_recruitment_candidate("warrior_002"))
+	var warrior_offer_id := _candidate_id_for_template(session, "warrior_002")
+	assert_ne(warrior_offer_id, "")
+	assert_true(session.has_recruitment_candidate(warrior_offer_id))
 	assert_false(session.is_party_deployable(GameSessionScript.FIRST_PARTY_ID))
 	session.create_party()
 	session.assign_adventurer_to_selected_party(GameSessionScript.WARRIOR_ID)
@@ -125,8 +156,8 @@ func test_public_ui_eligibility_queries_report_current_state_without_mutating_it
 	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
 	assert_false(session.is_party_deployable(GameSessionScript.FIRST_PARTY_ID))
 	session.gold = 10
-	session.purchase_recruit("warrior_002")
-	assert_false(session.has_recruitment_candidate("warrior_002"))
+	session.purchase_recruit(warrior_offer_id)
+	assert_false(session.has_recruitment_candidate(warrior_offer_id))
 
 
 func test_cannot_assign_an_unknown_or_already_assigned_adventurer() -> void:
@@ -143,10 +174,14 @@ func test_available_adventurers_excludes_assigned_warrior() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.get_available_adventurers(), [session.get_default_warrior()])
+	assert_eq(session.get_available_adventurers().size(), GameSessionScript.STARTING_ROSTER_SIZE)
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
-	assert_eq(session.get_available_adventurers(), [])
+
+	var available: Array[Dictionary] = session.get_available_adventurers()
+	assert_eq(available.size(), GameSessionScript.STARTING_ROSTER_SIZE - 1, "Assigning one warrior leaves the rest available")
+	for adventurer in available:
+		assert_ne(adventurer.id, "warrior_001")
 
 
 func test_empty_party_cannot_depart() -> void:
@@ -393,7 +428,8 @@ func test_reset_restores_a_deep_duplicated_default_warrior() -> void:
 	session.adventurers[0].name = "Changed"
 	session.reset()
 
-	assert_eq(session.adventurers, [session.get_default_warrior()])
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE)
+	assert_eq(session.adventurers[0], session.get_default_warrior())
 
 
 func test_orc_outpost_id_constant_is_orc_outpost() -> void:
@@ -1262,67 +1298,92 @@ func test_assign_adventurer_to_selected_party_still_works_as_a_thin_wrapper() ->
 	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
 
 
-## Only warrior_002 is a live, unpurchased recruitment offer on a fresh
-## session (see the reset()-seeds-one-offer tests below), so a fresh debug
-## recruit id only needs to skip that one.
+## --- Generated instance ids (_new_instance_id) ---
+
+func test_new_instance_id_returns_non_empty_ids_that_stay_unique_across_a_large_batch() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	var template_ids: Array = []
+	for template in GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		template_ids.append(template.id)
+
+	var seen_ids: Dictionary = {}
+	for _draw in 200:
+		var instance_id: String = session._new_instance_id()
+		assert_ne(instance_id, "")
+		assert_false(seen_ids.has(instance_id), "Generated ids must stay unique across draws; duplicate: %s" % instance_id)
+		assert_false(template_ids.has(instance_id), "A generated id must never equal a recruitment template id")
+		seen_ids[instance_id] = true
+
+
+## The injectable-roll convention (see instance_id_roll) lets a test pin the
+## entropy and assert the exact minted sequence — here through a full reset(),
+## whose roster/offer seeding is the heaviest single minting site.
+func test_new_instance_id_entropy_is_pinnable_for_deterministic_tests() -> void:
+	var session_a: Node = GameSessionScript.new()
+	autofree(session_a)
+	var session_b: Node = GameSessionScript.new()
+	autofree(session_b)
+	for session in [session_a, session_b]:
+		var counter := [0]
+		session.instance_id_roll = func() -> String:
+			counter[0] += 1
+			return "gen-%04d" % counter[0]
+		session.reset()
+
+	for index in session_a.adventurers.size():
+		assert_eq(session_a.adventurers[index].id, session_b.adventurers[index].id)
+	assert_eq(session_a.adventurers[0].id, GameSessionScript.WARRIOR_ID, "The legacy first warrior keeps its id")
+	assert_eq(session_a.adventurers[1].id, "gen-0001")
+	assert_eq(session_a.adventurers[2].id, "gen-0002")
+	assert_eq(session_a.adventurers[3].id, "gen-0003")
+	for index in session_a.recruitment_candidates.size():
+		assert_eq(session_a.recruitment_candidates[index].id, session_b.recruitment_candidates[index].id)
+	assert_eq(session_a.recruitment_candidates[0].id, "gen-0004")
+	assert_eq(session_a.recruitment_candidates[3].id, "gen-0007")
+
+
+## Debug recruits mint generated ids (see _new_instance_id), so their names
+## come from the cosmetic per-class counter: at a fresh start four roster
+## warriors plus three live warrior offers already count, hence "Warrior 8".
 func test_recruit_adventurer_appends_a_new_available_adventurer_with_a_fresh_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	session.recruit_adventurer()
 
-	assert_eq(session.adventurers.size(), 2)
-	var recruit: Dictionary = session.adventurers[1]
-	assert_eq(recruit.id, "warrior_003")
-	assert_eq(recruit.name, "Warrior 3")
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE + 1)
+	var recruit: Dictionary = session.adventurers[session.adventurers.size() - 1]
+	assert_ne(recruit.id, "", "A debug recruit gets a generated id")
+	assert_eq(recruit.name, "Warrior 8")
 	assert_eq(recruit["class"], "warrior")
 	assert_eq(recruit.availability_status, "available")
 	assert_true(session.get_available_adventurers().has(recruit))
 
 
-func test_recruit_adventurer_never_collides_with_an_earlier_recruit() -> void:
+## Generated ids replace the old collision-scanning machinery: repeated
+## recruits must stay unique among themselves, never equal a template id,
+## and never equal a live offer's id.
+func test_recruit_adventurer_ids_stay_unique_across_repeated_recruits() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.recruit_adventurer()
+	var template_ids: Array = []
+	for template in GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		template_ids.append(template.id)
 
 	session.recruit_adventurer()
-
-	assert_eq(session.adventurers.size(), 3)
-	assert_eq(session.adventurers[2].id, "warrior_004")
-
-
-## Reproduces the original reported hazard, adapted to the vacancy-timed
-## catalog: a debug recruit must not mint an id any still-live recruitment
-## offer is using, nor one an earlier debug recruit already used. Manually
-## seeds an extra live offer (as if a vacancy refill had already fired) to
-## exercise the skip without waiting on a real 30-turn clock.
-func test_recruit_adventurer_never_collides_with_a_live_candidate() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.recruitment_candidates.append(_recruitment_candidate("warrior_003"))
-
 	session.recruit_adventurer()
 
-	var recruited: Dictionary = session.adventurers[session.adventurers.size() - 1]
-	assert_eq(
-		recruited.id,
-		"warrior_004",
-		"The debug recruit must skip both the seeded warrior_002 and the still-live warrior_003 offer"
-	)
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE + 2)
 	var live_candidate_ids: Array = []
 	for candidate in session.get_recruitment_candidates():
 		live_candidate_ids.append(candidate.id)
-	assert_false(
-		live_candidate_ids.has(recruited.id),
-		"A debug recruit must never mint an id a still-live candidate is offering"
-	)
-	var all_ids: Array = []
-	for adventurer in session.adventurers:
-		all_ids.append(adventurer.id)
 	var seen_ids: Dictionary = {}
-	for id in all_ids:
-		assert_false(seen_ids.has(id), "Adventurer ids must be unique; found a duplicate: %s" % id)
-		seen_ids[id] = true
+	for adventurer in session.adventurers:
+		assert_false(seen_ids.has(adventurer.id), "Adventurer ids must be unique; found a duplicate: %s" % adventurer.id)
+		assert_false(template_ids.has(adventurer.id), "A generated id must never equal a recruitment template id")
+		assert_false(live_candidate_ids.has(adventurer.id), "A generated id must never equal a live offer's id")
+		seen_ids[adventurer.id] = true
 
 
 func _recruitment_candidate(candidate_id: String) -> Dictionary:
@@ -1331,19 +1392,48 @@ func _recruitment_candidate(candidate_id: String) -> Dictionary:
 	return candidate
 
 
-func test_get_recruitment_candidates_returns_the_one_seeded_warrior_candidate() -> void:
+## The onboarding decision seeds all four fixed-pool templates as live
+## offers (3 warriors + 1 scout), each a fresh record: generated id, the
+## claimed template_id, a cosmetic counter name, and class baselines.
+func test_get_recruitment_candidates_returns_the_four_seeded_offers() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	var template_ids: Array = []
+	for template in GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		template_ids.append(template.id)
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
 
-	assert_eq(candidates.size(), 1, "A fresh campaign seeds exactly one recruitable Warrior")
-	assert_eq(candidates[0].id, "warrior_002")
-	for candidate in candidates:
-		assert_eq(candidate["class"], "warrior")
+	assert_eq(candidates.size(), GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES.size())
+	var seen_ids: Dictionary = {}
+	var warrior_count := 0
+	for index in candidates.size():
+		var candidate: Dictionary = candidates[index]
+		assert_eq(candidate.template_id, template_ids[index], "Offers seed in template-pool order")
+		assert_ne(candidate.id, "", "Offer ids are generated")
+		assert_ne(candidate.id, candidate.template_id, "An offer's identity is no longer the template's identity")
+		assert_false(template_ids.has(candidate.id))
+		assert_false(seen_ids.has(candidate.id), "Offer ids must be unique")
+		seen_ids[candidate.id] = true
 		assert_eq(candidate.level, 1, "A recruitment candidate starts at level 1")
 		assert_eq(candidate.availability_status, "available")
 		assert_eq(candidate.cost, 10, "Every fixed candidate costs 10 gold")
+		assert_eq(candidate.name, _expected_offer_name(session, index))
+		if candidate["class"] == "warrior":
+			warrior_count += 1
+	assert_eq(warrior_count, 3, "The seeded composition is 3 warriors and 1 scout")
+
+
+## Cosmetic counter names for the seeded offers: the four roster warriors
+## count first, so the warrior offers continue at 5 and the first-ever
+## scout is plain "Scout" (offer 1 is minted between offers 0 and 2).
+func _expected_offer_name(session: Node, offer_index: int) -> String:
+	match offer_index:
+		0: return "Warrior 5"
+		1: return "Scout"
+		2: return "Warrior 6"
+		3: return "Warrior 7"
+	return ""
 
 
 func test_get_recruitment_candidates_returns_a_copy_that_cannot_mutate_the_catalog() -> void:
@@ -1356,35 +1446,38 @@ func test_get_recruitment_candidates_returns_a_copy_that_cannot_mutate_the_catal
 	var second_candidates: Array[Dictionary] = session.get_recruitment_candidates()
 	assert_eq(
 		second_candidates[0].name,
-		"Warrior 2",
+		_expected_offer_name(session, 0),
 		"Mutating a returned candidate must not affect the catalog"
 	)
 
 
-func test_reset_restores_the_single_seeded_recruitment_candidate() -> void:
+func test_reset_restores_the_four_seeded_recruitment_offers() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.gold = 10
-	session.purchase_recruit("warrior_002")
+	session.purchase_recruit(_candidate_id_for_template(session, "warrior_002"))
 
 	session.reset()
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
-	var ids: Array = []
+	var template_ids: Array = []
 	for candidate in candidates:
-		ids.append(candidate.id)
-	assert_eq(ids, ["warrior_002"], "reset() must restore exactly the one seeded offer")
+		template_ids.append(candidate.template_id)
+	var expected_template_ids: Array = []
+	for template in GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		expected_template_ids.append(template.id)
+	assert_eq(template_ids, expected_template_ids, "reset() must restore all four seeded offers")
 
 
 func test_purchase_recruit_fails_without_enough_gold_and_changes_nothing() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_false(session.purchase_recruit("warrior_002"))
+	assert_false(session.purchase_recruit(_candidate_id_for_template(session, "warrior_002")))
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.get_recruitment_candidates().size(), 1)
-	assert_eq(session.adventurers.size(), 1)
+	assert_eq(session.get_recruitment_candidates().size(), GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES.size())
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE)
 
 
 func test_purchase_recruit_fails_for_an_unknown_candidate_id() -> void:
@@ -1395,60 +1488,46 @@ func test_purchase_recruit_fails_for_an_unknown_candidate_id() -> void:
 	assert_false(session.purchase_recruit("no_such_candidate"))
 
 	assert_eq(session.gold, 10)
-	assert_eq(session.get_recruitment_candidates().size(), 1)
-	assert_eq(session.adventurers.size(), 1)
+	assert_eq(session.get_recruitment_candidates().size(), GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES.size())
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE)
 
 
 func test_purchase_recruit_fails_for_an_already_purchased_candidate() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.gold = 20
-	session.purchase_recruit("warrior_002")
+	var candidate_id := _candidate_id_for_template(session, "warrior_002")
+	session.purchase_recruit(candidate_id)
 
-	assert_false(session.purchase_recruit("warrior_002"))
+	assert_false(session.purchase_recruit(candidate_id))
 
 	assert_eq(session.gold, 10, "Only the first purchase should deduct gold")
-	assert_eq(session.adventurers.size(), 2, "A repeated purchase must not append a second adventurer")
-
-
-## Guards the other direction of the same id-collision hazard: if a debug
-## recruit (or any other path) already put an adventurer with this exact id
-## on the roster, buying the same-id candidate must be refused outright
-## rather than appending a second, permanently-unassignable record.
-func test_purchase_recruit_refuses_when_an_adventurer_already_holds_that_id() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.gold = 10
-	session.adventurers.append(_adventurer("warrior_002", "available"))
-
-	assert_false(session.purchase_recruit("warrior_002"))
-
-	assert_eq(session.gold, 10, "A refused purchase must not deduct gold")
 	assert_eq(
-		session.get_recruitment_candidates().size(),
-		1,
-		"A refused purchase must not remove the candidate from the catalog"
+		session.adventurers.size(),
+		GameSessionScript.STARTING_ROSTER_SIZE + 1,
+		"A repeated purchase must not append a second adventurer"
 	)
-	assert_eq(session.adventurers.size(), 2, "A refused purchase must not append a second adventurer")
 
 
 func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.gold = 10
+	var candidate_id := _candidate_id_for_template(session, "warrior_002")
 
-	assert_true(session.purchase_recruit("warrior_002"))
+	assert_true(session.purchase_recruit(candidate_id))
 
 	assert_eq(session.gold, 0, "The exact candidate cost must be deducted")
 	assert_eq(
-		session.get_recruitment_candidates(),
-		[] as Array[Dictionary],
-		"The purchased candidate should be removed from the catalog, leaving no other offers seeded"
+		session.get_recruitment_candidates().size(),
+		GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES.size() - 1,
+		"The purchased candidate should be removed from the catalog, leaving the other seeded offers"
 	)
 
-	assert_eq(session.adventurers.size(), 2)
-	var recruit: Dictionary = session.adventurers[1]
-	assert_eq(recruit.id, "warrior_002")
+	assert_eq(session.adventurers.size(), GameSessionScript.STARTING_ROSTER_SIZE + 1)
+	var recruit: Dictionary = session.adventurers[session.adventurers.size() - 1]
+	assert_eq(recruit.id, candidate_id)
+	assert_eq(recruit.template_id, "warrior_002", "The purchased adventurer keeps the claimed template_id")
 	assert_eq(recruit["class"], "warrior")
 	assert_eq(recruit.level, 1)
 	assert_eq(recruit.availability_status, "available")
@@ -1460,10 +1539,11 @@ func test_purchase_recruit_for_party_is_atomic_and_assigns_the_purchased_candida
 	autofree(session)
 	session.create_party()
 	session.gold = 10
-	assert_true(session.purchase_recruit_for_party("warrior_002", session.FIRST_PARTY_ID))
+	var candidate_id := _candidate_id_for_template(session, "warrior_002")
+	assert_true(session.purchase_recruit_for_party(candidate_id, session.FIRST_PARTY_ID))
 	assert_eq(session.gold, 0)
-	assert_false(session.has_recruitment_candidate("warrior_002"))
-	assert_eq(session.get_party(session.FIRST_PARTY_ID).member_ids, ["warrior_002"])
+	assert_false(session.has_recruitment_candidate(candidate_id))
+	assert_eq(session.get_party(session.FIRST_PARTY_ID).member_ids, [candidate_id])
 	assert_eq(session.recruitment_vacancies.size(), 1)
 
 
@@ -1472,7 +1552,7 @@ func test_purchase_recruit_for_party_rejects_every_invalid_guard_without_mutatio
 	autofree(session)
 	session.create_party()
 	session.gold = 10
-	var invalid_requests := [["missing", session.FIRST_PARTY_ID], ["warrior_002", "missing"]]
+	var invalid_requests := [["missing", session.FIRST_PARTY_ID], [_candidate_id_for_template(session, "warrior_002"), "missing"]]
 	for request in invalid_requests:
 		var gold_before: int = session.gold
 		var candidates_before: Array = session.get_recruitment_candidates()
@@ -1505,18 +1585,7 @@ func test_purchase_recruit_for_party_rejects_insufficient_funds_atomically() -> 
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
-	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
-
-
-func test_purchase_recruit_for_party_rejects_a_roster_id_collision_atomically() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.create_party()
-	session.gold = 10
-	var colliding_adventurer: Dictionary = session.get_default_warrior()
-	colliding_adventurer.id = "warrior_002"
-	session.adventurers.append(colliding_adventurer)
-	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+	_assert_direct_recruit_rejection_is_atomic(session, _candidate_id_for_template(session, "warrior_002"), session.FIRST_PARTY_ID)
 
 
 func test_purchase_recruit_for_party_rejects_a_deployed_target_atomically() -> void:
@@ -1526,19 +1595,17 @@ func test_purchase_recruit_for_party_rejects_a_deployed_target_atomically() -> v
 	session.assign_adventurer_to_selected_party(session.WARRIOR_ID)
 	session.deploy_party(session.FIRST_PARTY_ID)
 	session.gold = 10
-	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+	_assert_direct_recruit_rejection_is_atomic(session, _candidate_id_for_template(session, "warrior_002"), session.FIRST_PARTY_ID)
 
 
 func test_purchase_recruit_for_party_rejects_a_full_target_atomically() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
-	session.assign_adventurer_to_selected_party(session.WARRIOR_ID)
-	for index in 3:
-		session.recruit_adventurer()
-		session.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	for adventurer in session.adventurers.duplicate():
+		session.assign_adventurer_to_selected_party(adventurer.id)
 	session.gold = 10
-	_assert_direct_recruit_rejection_is_atomic(session, "warrior_002", session.FIRST_PARTY_ID)
+	_assert_direct_recruit_rejection_is_atomic(session, _candidate_id_for_template(session, "warrior_002"), session.FIRST_PARTY_ID)
 
 
 ## Regression test: RECRUITMENT_CANDIDATE_TEMPLATES used to seed purchased
@@ -1558,13 +1625,14 @@ func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() 
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.gold = 10
-	assert_true(session.purchase_recruit("warrior_002"))
+	var candidate_id := _candidate_id_for_template(session, "warrior_002")
+	assert_true(session.purchase_recruit(candidate_id))
 
 	session.create_party()
-	session.assign_adventurer_to_selected_party("warrior_002")
+	session.assign_adventurer_to_selected_party(candidate_id)
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
 
-	var recruit: Dictionary = session.get_adventurer("warrior_002")
+	var recruit: Dictionary = session.get_adventurer(candidate_id)
 	assert_eq(
 		recruit.stats.max_health,
 		session.get_default_warrior().stats.max_health,
@@ -1590,15 +1658,16 @@ func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() 
 func test_award_party_xp_divides_a_five_point_award_evenly_between_two_members() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.recruit_adventurer()
+	var first_member_id: String = session.adventurers[0].id
+	var second_member_id: String = session.adventurers[1].id
 	session.create_party()
-	session.assign_adventurer_to_selected_party("warrior_001")
-	session.assign_adventurer_to_selected_party("warrior_003")
+	session.assign_adventurer_to_selected_party(first_member_id)
+	session.assign_adventurer_to_selected_party(second_member_id)
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 5.0)
 
-	assert_eq(session.get_adventurer("warrior_001").progression.xp, 2.5)
-	assert_eq(session.get_adventurer("warrior_003").progression.xp, 2.5)
+	assert_eq(session.get_adventurer(first_member_id).progression.xp, 2.5)
+	assert_eq(session.get_adventurer(second_member_id).progression.xp, 2.5)
 
 
 func test_award_party_xp_ignores_an_unknown_party() -> void:
@@ -1859,14 +1928,17 @@ func test_reset_seeds_goblin_camp_first_among_two_encounters() -> void:
 	assert_eq(active[0].position, Vector2i(4, 4))
 
 
-func test_reset_seeds_exactly_one_active_warrior_recruitment_offer() -> void:
+func test_reset_seeds_all_four_recruitment_offers_from_the_template_pool() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
 
-	assert_eq(candidates.size(), 1, "A fresh campaign starts with exactly one recruitable Warrior")
-	assert_eq(candidates[0].id, "warrior_002")
+	assert_eq(candidates.size(), GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES.size(), "A fresh campaign seeds every fixed-pool template as a live offer")
+	var template_ids: Array = []
+	for candidate in candidates:
+		template_ids.append(candidate.template_id)
+	assert_eq(template_ids, ["warrior_002", "scout_002", "warrior_003", "warrior_004"])
 
 
 func test_reset_starts_with_zero_vacancy_clocks_running() -> void:
@@ -1967,7 +2039,7 @@ func test_recruitment_vacancy_rolls_the_inclusive_base_plus_or_minus_jitter_once
 		return maximum
 	session.gold = 10
 
-	session.purchase_recruit("warrior_002")
+	session.purchase_recruit(_candidate_id_for_template(session, "warrior_002"))
 
 	assert_eq(calls[0], 1)
 	assert_eq(session.recruitment_vacancies[0].turns_remaining, 35)
@@ -1994,7 +2066,7 @@ func test_recruitment_vacancy_stores_the_base_delay_when_the_roll_returns_it() -
 	session.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 30
 	session.gold = 10
 
-	session.purchase_recruit("warrior_002")
+	session.purchase_recruit(_candidate_id_for_template(session, "warrior_002"))
 
 	assert_eq(session.recruitment_vacancies[0].turns_remaining, 30)
 

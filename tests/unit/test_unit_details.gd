@@ -405,17 +405,13 @@ func test_roster_origin_hides_the_assignment_section_for_an_unavailable_unit() -
 ## test_roster_origin_with_no_encamped_party_shows_a_disabled_explained_action).
 func test_roster_origin_excludes_a_full_party_and_shows_a_disabled_explained_action() -> void:
 	GameSession.create_party()
+	# Fill the party to the level-1 cap with four adventurers other than the
+	# seeded Warrior: the three other starting warriors plus one recruit.
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[2].id)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[3].id)
 	GameSession.recruit_adventurer()
-	GameSession.recruit_adventurer()
-	GameSession.recruit_adventurer()
-	GameSession.recruit_adventurer()
-	# recruit_adventurer()'s id-collision avoidance skips warrior_002 (still a
-	# live recruitment candidate on a fresh session — see
-	# GameSession.recruit_adventurer), so four calls mint warrior_003..006.
-	GameSession.assign_adventurer_to_selected_party("warrior_003")
-	GameSession.assign_adventurer_to_selected_party("warrior_004")
-	GameSession.assign_adventurer_to_selected_party("warrior_005")
-	GameSession.assign_adventurer_to_selected_party("warrior_006")
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers.back().id)
 	var screen := _open_unit_details_from_roster(GameSession.WARRIOR_ID)
 
 	var picker: OptionButton = screen.get_node("Body/Center/VBox/PartyPicker")

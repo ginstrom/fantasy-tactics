@@ -296,12 +296,16 @@ const WORLD_GRID_WIDTH := 7
 const WORLD_GRID_HEIGHT := 7
 
 const WARRIOR_ID := "warrior_001"
+## The roster a fresh campaign starts with (see reset()): four Warriors.
+## Kept as a named constant so rules phrased against "more than the starting
+## roster" (see _campaign_guide_first_improvement_made) do not hardcode 4.
+const STARTING_ROSTER_SIZE := 4
 
 
-func get_default_warrior() -> Dictionary:
+func get_default_warrior(adventurer_id: String = WARRIOR_ID, adventurer_name: String = "Warrior") -> Dictionary:
 	return {
-		"id": WARRIOR_ID,
-		"name": "Warrior",
+		"id": adventurer_id,
+		"name": adventurer_name,
 		"class": "warrior",
 		"equipment": {
 			"weapon": DEFAULT_WEAPON_ID, "weapon_inventory": [DEFAULT_WEAPON_ID],
@@ -348,14 +352,15 @@ func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictio
 
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
-# A pool of recruitment templates that vacancy-timed refills draw from (see
-# _spawn_next_recruitment_offer): the initial offer and every later refill
-# claims an unclaimed template matching the rolled class before falling back
-# to minting an overflow candidate of that class. Templates intentionally omit
-# stats/progression; purchase_recruit() and _spawn_next_recruitment_offer()
-# seed them from the matching class baseline (see
-# _seed_adventurer_baseline_stats) rather than storing (and risking stale)
-# copies here.
+# The pool of recruitment templates a fresh campaign seeds as live offers
+# (see reset()) and that vacancy-timed refills draw from (see
+# _spawn_next_recruitment_offer): a refill claims an unclaimed template
+# matching the rolled class before falling back to minting an overflow
+# candidate of that class. Since the fresh start seeds every template,
+# refills are overflow offers in practice. Templates intentionally omit
+# stats/progression; _make_recruitment_offer() seeds them from the matching
+# class baseline (see _seed_adventurer_baseline_stats) rather than storing
+# (and risking stale) copies here.
 const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 	{
 		"id": "warrior_002",
@@ -409,9 +414,11 @@ const RECRUITMENT_CANDIDATE_TEMPLATES: Array[Dictionary] = [
 
 var adventurers: Array[Dictionary] = []
 # Active recruitment OFFERS (not the template pool — see
-# RECRUITMENT_CANDIDATE_TEMPLATES). A fresh campaign seeds exactly one
-# (warrior_002); purchasing one starts a RECRUITMENT_VACANCY_TURNS clock that
-# may add another later, capped at RECRUITMENT_OFFER_CAP.
+# RECRUITMENT_CANDIDATE_TEMPLATES). A fresh campaign seeds all four
+# templates (3 warriors, 1 scout), each as a fresh record with a generated
+# id plus the claimed template_id; purchasing one starts a
+# RECRUITMENT_VACANCY_TURNS clock that may add another later, capped at
+# RECRUITMENT_OFFER_CAP.
 var recruitment_candidates: Array[Dictionary] = []
 # One pending clock per open recruitment vacancy: {"turns_remaining": int}.
 var recruitment_vacancies: Array[Dictionary] = []
@@ -444,6 +451,20 @@ var vacancy_delay_roll: Callable = func(minimum: int, maximum: int) -> int: retu
 ## or Scout with equal probability; tests may force either outcome without
 ## waiting through unrelated offers.
 var recruitment_class_roll: Callable = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+## Injectable entropy source for generated instance ids (see
+## _new_instance_id()). Production composes a GUID-style id from randi()
+## blocks mixed with a unix-time fragment; tests may pin it to make every
+## minted id deterministic. Same convention as vacancy_delay_roll /
+## recruitment_class_roll: never touched by reset().
+var instance_id_roll: Callable = func() -> String:
+	var time_fragment := int(Time.get_unix_time_from_system())
+	return "%08x-%04x-%08x-%04x%08x" % [
+		randi(),
+		time_fragment & 0xFFFF,
+		randi(),
+		(time_fragment >> 16) & 0xFFFF,
+		randi(),
+	]
 
 
 ## Restores injectable rolls to their real-random default implementations.
@@ -458,6 +479,15 @@ func reset_injectable_rolls() -> void:
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
 	recruitment_class_roll = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+	instance_id_roll = func() -> String:
+		var time_fragment := int(Time.get_unix_time_from_system())
+		return "%08x-%04x-%08x-%04x%08x" % [
+			randi(),
+			time_fragment & 0xFFFF,
+			randi(),
+			(time_fragment >> 16) & 0xFFFF,
+			randi(),
+		]
 
 
 # Injectable so tests can force deterministic loot instead of depending on
@@ -483,9 +513,10 @@ var encounter_vacancies: Array[Dictionary] = []
 # refill the exact tile a template's earlier instance was just cleared
 # from (see that function's docstring) -- it no longer influences which
 # template a refill chooses; see _choose_encounter_template() for that.
-# Recruitment offers do not need an equivalent: a purchased offer's id lives
-# on in the roster forever, so _is_recruitment_id_taken already answers "has this
-# template been used" for that category.
+# Recruitment offers do not need an equivalent: a claimed template's
+# template_id lives on in the roster (or a live offer) forever, so
+# _is_recruitment_template_claimed already answers "has this template been
+# used" for that category.
 var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
@@ -563,9 +594,18 @@ func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
 
 
 func reset() -> void:
-	# The roster owns a copy so a session cannot mutate the shared default data.
+	# The roster owns copies so a session cannot mutate the shared default
+	# data. The onboarding decision (2026-08-13): the campaign opens with a
+	# four-warrior roster — warrior_001 keeps its legacy id, the other three
+	# get generated ids, exactly like every later mint (see _new_instance_id).
 	adventurers = [get_default_warrior()]
-	recruitment_candidates = [RECRUITMENT_CANDIDATE_TEMPLATES[0].duplicate(true)]
+	for warrior_number in range(2, STARTING_ROSTER_SIZE + 1):
+		adventurers.append(get_default_warrior(_new_instance_id(), "Warrior %d" % warrior_number))
+	# Every template starts as a live offer (the decided 3 warriors + 1 scout
+	# composition), each claimed through its own generated-id record.
+	recruitment_candidates = []
+	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
+		recruitment_candidates.append(_make_recruitment_offer(template))
 	recruitment_vacancies = []
 	parties = []
 	selected_party_id = ""
@@ -604,8 +644,16 @@ func reset() -> void:
 	tutorial_progress = {}
 
 
+## Maximum number of parties a campaign may have at once. The Guild Hall
+## level 2 -> 3 upgrade raising this from 1 to 2 is a recorded progression
+## rule, but its implementation is deferred to roadmap part 4 (multi-party
+## play) — see the onboarding decision recorded in docs/gap-analysis.md.
+func get_max_party_count() -> int:
+	return 1
+
+
 func create_party(party_name: String = "Party 1") -> bool:
-	if not parties.is_empty():
+	if parties.size() >= get_max_party_count():
 		return false
 
 	parties.append({
@@ -727,26 +775,11 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 
 
 ## Debug-only convenience for populating the roster (see the debug menu).
-## Mints a warrior_NNN id/name pair, scanning upward from adventurers.size() +
-## 1 until it finds a number that collides with neither an existing
-## adventurer nor a still-live recruitment candidate. RECRUITMENT_CANDIDATE_
-## TEMPLATES fixes warrior_002/warrior_003/warrior_004 as separately tracked
-## candidates, so a naive adventurers.size()-based count can otherwise mint
-## an id one of them is still offering (or one an earlier debug recruit
-## already used), silently corrupting the roster with duplicate ids.
-## purchase_recruit() carries the matching guard for the other direction
-## (buying a candidate whose id a debug recruit already claimed).
+## Mints a generated id (see _new_instance_id) and a cosmetic per-class
+## counter name — identity never depends on sequential numbering, so no
+## collision machinery is needed.
 func recruit_adventurer() -> void:
-	var recruit_number := adventurers.size() + 1
-	var candidate_id := "warrior_%03d" % recruit_number
-	while _is_recruitment_id_taken(candidate_id):
-		recruit_number += 1
-		candidate_id = "warrior_%03d" % recruit_number
-
-	var adventurer: Dictionary = get_default_warrior()
-	adventurer.id = candidate_id
-	adventurer.name = "Warrior %d" % recruit_number
-	adventurers.append(adventurer)
+	adventurers.append(get_default_warrior(_new_instance_id(), _next_cosmetic_adventurer_name("warrior")))
 
 
 ## Seeds a template-derived record's stats/progression with the authored
@@ -765,11 +798,43 @@ func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
 	return record
 
 
-## Shared id-collision predicate for debug and recruitment-offer mint paths.
-## A candidate id is taken if it already names either a roster adventurer or
-## a still-live recruitment offer.
-func _is_recruitment_id_taken(candidate_id: String) -> bool:
-	return _has_adventurer(candidate_id) or _get_recruitment_candidate_index(candidate_id) != -1
+## A recruitment template is claimed once any roster adventurer or live
+## offer carries its template_id — the explicit replacement for the old
+## id-collision inference (generated ids can never collide, so identity and
+## claiming are now separate concerns).
+func _is_recruitment_template_claimed(template_id: String) -> bool:
+	for adventurer in adventurers:
+		if adventurer.get("template_id", "") == template_id:
+			return true
+	for candidate in recruitment_candidates:
+		if candidate.get("template_id", "") == template_id:
+			return true
+	return false
+
+
+## The one shared mint for every newly created unit or item instance: a
+## hidden, generated, collision-free GUID-style id from instance_id_roll.
+## Identity never depends on the display name or on class-derived sequential
+## numbering; ids are opaque and never shown in the UI.
+func _new_instance_id() -> String:
+	return instance_id_roll.call()
+
+
+## Cosmetic per-class display name for a freshly minted unit: a plain class
+## name for a class's first ever unit, "<Class> N" afterwards, where N
+## counts every roster adventurer and live offer of that class. Names are
+## purely cosmetic — a duplicated name carries no correctness risk.
+func _next_cosmetic_adventurer_name(class_id: String) -> String:
+	var display_class := "Warrior" if class_id == "warrior" else "Scout"
+	var count := 0
+	for adventurer in adventurers:
+		if adventurer.get("class", "") == class_id:
+			count += 1
+	for candidate in recruitment_candidates:
+		if candidate.get("class", "") == class_id:
+			count += 1
+	var number := count + 1
+	return display_class if number == 1 else "%s %d" % [display_class, number]
 
 
 func get_recruitment_candidates() -> Array[Dictionary]:
@@ -780,18 +845,14 @@ func get_recruitment_candidates() -> Array[Dictionary]:
 
 
 ## The only normal (non-debug) path onto the roster: validates the candidate
-## is still on offer, affordable, and not already claimed by an id-colliding
-## adventurer (e.g. an earlier debug recruit — see recruit_adventurer()'s
-## matching guard), deducts its cost exactly once, removes it from the
-## catalog, and appends the purchased adventurer (its "cost" field dropped,
-## since that is a recruitment-only concern).
+## is still on offer and affordable, deducts its cost exactly once, removes
+## it from the catalog, and appends the purchased adventurer (its "cost"
+## field dropped, since that is a recruitment-only concern). Purchasing is
+## by candidate id; ids are generated and opaque, so no collision guard is
+## needed.
 func purchase_recruit(candidate_id: String) -> bool:
 	var candidate_index := _get_recruitment_candidate_index(candidate_id)
-	if (
-		candidate_index == -1
-		or gold < recruitment_candidates[candidate_index].cost
-		or _has_adventurer(candidate_id)
-	):
+	if candidate_index == -1 or gold < recruitment_candidates[candidate_index].cost:
 		return false
 
 	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
@@ -812,7 +873,6 @@ func purchase_recruit_for_party(candidate_id: String, party_id: String) -> bool:
 		candidate_index == -1
 		or party_index == -1
 		or gold < recruitment_candidates[candidate_index].cost
-		or _has_adventurer(candidate_id)
 		or not _is_party_encamped(parties[party_index])
 		or parties[party_index].member_ids.size() >= get_max_party_size()
 	):
@@ -1229,7 +1289,7 @@ func _advance_blacksmith_jobs() -> void:
 		blacksmith_craft_job = {}
 	if not blacksmith_sharpening_job.is_empty() and get_blacksmith_job_turns_remaining(blacksmith_sharpening_job) == 0:
 		var base_item_id := str(blacksmith_sharpening_job.item_id)
-		var instance_id := _new_blacksmith_item_instance_id()
+		var instance_id := _new_instance_id()
 		# The input was consumed at job start, so this completion needs no
 		# second bank transfer. Materialize the unique record directly.
 		owned_item_instances[instance_id] = {
@@ -1376,13 +1436,6 @@ func _is_owned_armor_instance(instance_id: String) -> bool:
 	return str(item.get("slot", "")) == "armor"
 
 
-func _new_blacksmith_item_instance_id() -> String:
-	var number := 1
-	while owned_item_instances.has("blacksmith_item_%03d" % number):
-		number += 1
-	return "blacksmith_item_%03d" % number
-
-
 func can_purchase_trading_post() -> bool:
 	return false
 
@@ -1451,17 +1504,18 @@ func get_item_definition(item_id: String) -> Dictionary:
 	return {}
 
 
-## Converts exactly one normal banked item into a unique owned instance.  The
-## later crafting slices supply the modifier and recipe calls; this boundary
-## establishes the ownership transfer they will rely on.  Every validation is
-## intentionally before the first mutation so a failed conversion is atomic.
-func materialize_banked_item_instance(base_item_id: String, instance_id: String) -> bool:
-	if instance_id.is_empty() or owned_item_instances.has(instance_id):
-		return false
+## Converts exactly one normal banked item into a unique owned instance,
+## minting the instance id itself (see _new_instance_id) and returning it
+## ("" on rejection). The later crafting slices supply the modifier and
+## recipe calls; this boundary establishes the ownership transfer they will
+## rely on. Every validation is intentionally before the first mutation so a
+## failed conversion is atomic.
+func materialize_banked_item_instance(base_item_id: String) -> String:
 	if banked_gear.get(base_item_id, 0) <= 0:
-		return false
+		return ""
 	if get_item_definition(base_item_id).is_empty():
-		return false
+		return ""
+	var instance_id := _new_instance_id()
 	banked_gear[base_item_id] -= 1
 	owned_item_instances[instance_id] = {
 		"id": instance_id,
@@ -1472,7 +1526,7 @@ func materialize_banked_item_instance(base_item_id: String, instance_id: String)
 		"modifier_tiers": {},
 	}
 	banked_item_instance_ids.append(instance_id)
-	return true
+	return instance_id
 
 
 ## Assigns one permanent modifier category.  Categories deliberately map to
@@ -2026,26 +2080,35 @@ func _advance_recruitment_vacancies() -> void:
 
 
 ## Selects a Warrior or Scout through recruitment_class_roll, then claims the
-## first unclaimed matching template. Once that class's templates are claimed,
-## mints a matching-class overflow candidate, so refills stay class-diverse
-## rather than silently becoming Warrior-only.
+## first unclaimed matching template. Once that class's templates are claimed
+## (a fresh campaign seeds all four), mints a matching-class overflow
+## candidate with a generated id and no template_id, so refills stay
+## class-diverse rather than silently becoming Warrior-only.
 func _spawn_next_recruitment_offer() -> Dictionary:
 	var class_id: String = recruitment_class_roll.call()
 	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
-		if template["class"] == class_id and not _is_recruitment_id_taken(template.id):
-			return _seed_adventurer_baseline_stats(template.duplicate(true))
+		if template["class"] == class_id and not _is_recruitment_template_claimed(template.id):
+			return _make_recruitment_offer(template)
 
-	var overflow_number := adventurers.size() + recruitment_candidates.size() + 1
-	var overflow_id := "%s_%03d" % [class_id, overflow_number]
-	while _is_recruitment_id_taken(overflow_id):
-		overflow_number += 1
-		overflow_id = "%s_%03d" % [class_id, overflow_number]
-
-	var offer := get_default_scout(overflow_id, "Scout %d" % overflow_number) if class_id == "scout" else get_default_warrior()
-	offer.id = overflow_id
-	offer.name = "%s %d" % ["Scout" if class_id == "scout" else "Warrior", overflow_number]
+	var offer := (
+		get_default_scout(_new_instance_id(), _next_cosmetic_adventurer_name("scout"))
+		if class_id == "scout"
+		else get_default_warrior(_new_instance_id(), _next_cosmetic_adventurer_name("warrior"))
+	)
 	offer["cost"] = 10
 	return offer
+
+
+## Builds one live offer record from a fixed-pool template: a fresh record
+## with a generated id plus the template_id it claims (a candidate's
+## identity is no longer the template's identity), a cosmetic per-class
+## counter name, and the class baseline stats/progression.
+func _make_recruitment_offer(template: Dictionary) -> Dictionary:
+	var offer := template.duplicate(true)
+	offer["id"] = _new_instance_id()
+	offer["template_id"] = template.id
+	offer["name"] = _next_cosmetic_adventurer_name(str(template["class"]))
+	return _seed_adventurer_baseline_stats(offer)
 
 
 ## Divides amount evenly across party_id's members and adds each member's
@@ -2614,9 +2677,12 @@ func _campaign_guide_party_on_active_encounter() -> bool:
 ## equipment, Guild Hall)". Equipment purchases (buy_item()) require
 ## has_trading_post already being true, so that flag alone also covers the
 ## equipment case without needing to inspect banked_gear, which loot pickups
-## populate too and would otherwise be a false positive.
+## populate too and would otherwise be a false positive. The recruit case
+## compares against the four-warrior starting roster (see
+## STARTING_ROSTER_SIZE): a roster of exactly that size is still the
+## un-improved opening state.
 func _campaign_guide_first_improvement_made() -> bool:
-	return guild_hall_level > 1 or shop_level > 1 or adventurers.size() > 1
+	return guild_hall_level > 1 or shop_level > 1 or adventurers.size() > STARTING_ROSTER_SIZE
 
 
 func _campaign_guide_has_affordable_improvement() -> bool:

@@ -58,11 +58,11 @@ func test_an_unassigned_warrior_shows_unassigned_in_the_party_column() -> void:
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["Healthy"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior", "Warrior 2", "Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Warrior", "Warrior", "Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "1", "1", "1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["Healthy", "Healthy", "Healthy", "Healthy"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned", "Unassigned", "Unassigned", "Unassigned"])
 
 
 func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> void:
@@ -72,7 +72,7 @@ func test_an_assigned_warrior_shows_its_partys_name_in_the_party_column() -> voi
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1", "Unassigned", "Unassigned", "Unassigned"])
 
 
 func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> void:
@@ -152,13 +152,13 @@ func test_refresh_reflects_a_new_assignment_made_elsewhere() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Unassigned", "Unassigned", "Unassigned", "Unassigned"])
 
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	screen.refresh()
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 4), ["Party 1", "Unassigned", "Unassigned", "Unassigned"])
 
 
 func test_back_button_returns_to_units() -> void:

@@ -13,6 +13,16 @@ func _make_panel() -> Control:
 	return panel
 
 
+## Recruitment offers carry generated opaque ids (see GameSession
+## _new_instance_id); tests discover the offer claiming a fixed template
+## rather than hardcoding an id.
+func _template_candidate(template_id: String) -> Dictionary:
+	for candidate in GameSession.get_recruitment_candidates():
+		if candidate.get("template_id", "") == template_id:
+			return candidate
+	return {}
+
+
 func test_refresh_always_shows_player_name_and_banked_gold() -> void:
 	GameSession.player_name = "Aria"
 	GameSession.gold = 25
@@ -193,9 +203,10 @@ func test_the_adventurer_view_button_emits_adventurer_selected_with_the_adventur
 
 func test_refresh_recruitment_candidate_shows_name_class_level_cost_and_the_recruit_action() -> void:
 	GameSession.gold = 25
+	var candidate := _template_candidate("warrior_002")
 	var panel := _make_panel()
 
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(candidate.id)
 
 	assert_eq(
 		panel.get_node("Content/PlayerName").text,
@@ -204,7 +215,7 @@ func test_refresh_recruitment_candidate_shows_name_class_level_cost_and_the_recr
 	)
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 	assert_true(panel.get_node("Content/RecruitmentName").visible)
-	assert_eq(panel.get_node("Content/RecruitmentName").text, "Warrior 2")
+	assert_eq(panel.get_node("Content/RecruitmentName").text, candidate.name)
 	assert_true(panel.get_node("Content/RecruitmentClass").visible)
 	assert_eq(panel.get_node("Content/RecruitmentClass").text, tr("information.class") % "warrior")
 	assert_true(panel.get_node("Content/RecruitmentLevel").visible)
@@ -221,7 +232,7 @@ func test_refresh_recruitment_candidate_disables_the_recruit_action_when_gold_is
 	GameSession.gold = 0
 	var panel := _make_panel()
 
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(_template_candidate("warrior_002").id)
 
 	assert_true(panel.get_node("Content/RecruitButton").disabled)
 
@@ -230,7 +241,7 @@ func test_refresh_recruitment_candidate_enables_the_recruit_action_when_affordab
 	GameSession.gold = 10
 	var panel := _make_panel()
 
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(_template_candidate("warrior_002").id)
 
 	assert_false(panel.get_node("Content/RecruitButton").disabled)
 
@@ -240,12 +251,13 @@ func test_refresh_recruitment_candidate_enables_the_recruit_action_when_affordab
 ## from an earlier, richer refresh.
 func test_refresh_recruitment_candidate_re_disables_the_recruit_action_when_gold_drops() -> void:
 	GameSession.gold = 10
+	var candidate_id: String = _template_candidate("warrior_002").id
 	var panel := _make_panel()
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(candidate_id)
 	assert_false(panel.get_node("Content/RecruitButton").disabled)
 
 	GameSession.gold = 0
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(candidate_id)
 
 	assert_true(panel.get_node("Content/RecruitButton").disabled)
 
@@ -273,7 +285,7 @@ func test_refresh_party_hides_the_stale_recruitment_section() -> void:
 	GameSession.create_party()
 	GameSession.gold = 25
 	var panel := _make_panel()
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(_template_candidate("warrior_002").id)
 
 	panel.refresh_party(GameSession.FIRST_PARTY_ID)
 
@@ -284,7 +296,7 @@ func test_refresh_party_hides_the_stale_recruitment_section() -> void:
 func test_refresh_adventurer_hides_the_stale_recruitment_section() -> void:
 	GameSession.gold = 25
 	var panel := _make_panel()
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(_template_candidate("warrior_002").id)
 
 	panel.refresh_adventurer(GameSession.WARRIOR_ID)
 
@@ -294,16 +306,17 @@ func test_refresh_adventurer_hides_the_stale_recruitment_section() -> void:
 
 func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instead_of_purchasing() -> void:
 	GameSession.gold = 25
+	var candidate_id: String = _template_candidate("warrior_002").id
 	var panel := _make_panel()
-	panel.refresh_recruitment_candidate("warrior_002")
+	panel.refresh_recruitment_candidate(candidate_id)
 	watch_signals(panel)
 
 	panel.get_node("Content/RecruitButton").emit_signal("pressed")
 
-	assert_signal_emitted_with_parameters(panel, "recruit_selected", ["warrior_002"])
+	assert_signal_emitted_with_parameters(panel, "recruit_selected", [candidate_id])
 	assert_eq(GameSession.gold, 25, "The panel must never purchase by itself")
 	assert_eq(
 		GameSession.get_recruitment_candidates().size(),
-		1,
+		4,
 		"The panel must never remove the candidate by itself"
 	)

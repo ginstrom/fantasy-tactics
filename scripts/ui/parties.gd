@@ -11,6 +11,7 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_table: TableView = $Body/Center/VBox/PartyTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
+@onready var caps_label: Label = $Body/Center/VBox/CapsLabel
 @onready var create_party_button: Button = $Body/Center/VBox/CreatePartyButton
 @onready var party_name_entry: VBoxContainer = $Body/Center/VBox/PartyNameEntry
 @onready var party_name_input: LineEdit = $Body/Center/VBox/PartyNameEntry/NameRow/NameInput
@@ -41,7 +42,12 @@ func refresh() -> void:
 	var rows := _build_rows()
 	party_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
-	create_party_button.disabled = not rows.is_empty()
+	caps_label.text = tr("parties.caps") % [
+		GameSession.get_max_party_size(),
+		rows.size(),
+		GameSession.get_max_party_count(),
+	]
+	create_party_button.disabled = rows.size() >= GameSession.get_max_party_count()
 	_refresh_selection()
 
 

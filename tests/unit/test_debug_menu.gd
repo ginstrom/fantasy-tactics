@@ -170,5 +170,5 @@ func test_recruit_button_adds_an_adventurer_and_closes_the_menu() -> void:
 
 	menu._on_recruit_pressed()
 
-	assert_eq(GameSession.adventurers.size(), 2)
+	assert_eq(GameSession.adventurers.size(), GameSession.STARTING_ROSTER_SIZE + 1)
 	assert_false(menu.visible, "A successful recruit should close the menu, like Super Power")

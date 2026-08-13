@@ -19,6 +19,16 @@ func after_each() -> void:
 	GameManager.recruitment_target_party_id = ""
 
 
+## Recruitment offers carry generated opaque ids (see GameSession
+## _new_instance_id); tests discover the live offer claiming a fixed
+## template rather than hardcoding an id.
+func _candidate_id_for_template(template_id: String) -> String:
+	for candidate in GameSession.get_recruitment_candidates():
+		if candidate.get("template_id", "") == template_id:
+			return candidate.id
+	return ""
+
+
 func test_recruitment_shows_the_title_and_the_back_action() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
@@ -71,35 +81,37 @@ func test_recruitment_table_uses_the_documented_columns() -> void:
 	assert_eq(tree.get_column_title(3), "Cost")
 
 
-## Task 4: a fresh campaign seeds exactly one active recruitment offer
-## (warrior_002); the other fixed templates (warrior_003/004) only appear
-## once their own variable 30 +/- 5 turn vacancy clock refills the offer list.
+## The onboarding decision: a fresh campaign seeds all four fixed templates
+## as live offers — 3 warriors and 1 scout, in template order — each under
+## its generated id with a cosmetic per-class counter name.
 func test_recruitment_lists_exactly_the_current_candidates() -> void:
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 5", "Scout", "Warrior 6", "Warrior 7"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Scout", "Warrior", "Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "1", "1", "1"])
+	var cost_cell := "%d %s" % [10, tr(&"recruitment.column.cost_unit")]
 	assert_eq(
 		UiTestHelpers.tree_row_values(tree, 3),
-		["%d %s" % [10, tr(&"recruitment.column.cost_unit")]]
+		[cost_cell, cost_cell, cost_cell, cost_cell]
 	)
 
 
 func test_recruitment_does_not_list_a_candidate_already_purchased_elsewhere() -> void:
 	GameSession.gold = 10
-	GameSession.purchase_recruit("warrior_002")
+	GameSession.purchase_recruit(_candidate_id_for_template("warrior_002"))
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
 
 
 func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel() -> void:
 	GameSession.gold = 25
+	var first_candidate := GameSession.get_recruitment_candidates()[0]
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("%InformationPanel")
@@ -109,9 +121,9 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_cost_in_the_panel(
 	item.select(0)
 	tree.emit_signal("item_selected")
 
-	assert_eq(screen.selected_candidate_id, "warrior_002")
+	assert_eq(screen.selected_candidate_id, first_candidate.id)
 	assert_true(panel.get_node("Content/RecruitmentName").visible)
-	assert_eq(panel.get_node("Content/RecruitmentName").text, "Warrior 2")
+	assert_eq(panel.get_node("Content/RecruitmentName").text, first_candidate.name)
 	assert_true(panel.get_node("Content/RecruitButton").visible)
 
 
@@ -128,8 +140,8 @@ func test_selecting_a_row_does_not_purchase_it() -> void:
 	tree.emit_signal("item_selected")
 
 	assert_eq(GameSession.gold, 25)
-	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
-	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 4)
+	assert_eq(GameSession.adventurers.size(), 4)
 
 
 func test_the_recruit_action_is_disabled_with_zero_gold() -> void:
@@ -158,6 +170,7 @@ func test_the_recruit_action_is_enabled_with_ten_gold() -> void:
 
 func test_pressing_recruit_purchases_the_selected_candidate_and_refreshes_in_place() -> void:
 	GameSession.gold = 10
+	var first_candidate := GameSession.get_recruitment_candidates()[0]
 	if get_tree().current_scene != null:
 		get_tree().unload_current_scene()
 		await get_tree().process_frame
@@ -180,11 +193,16 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_refreshes_in_pla
 	panel.get_node("Content/RecruitButton").emit_signal("pressed")
 
 	assert_eq(GameSession.gold, 0, "The one-time purchase must deduct the candidate's cost")
-	assert_eq(GameSession.get_recruitment_candidates().size(), 0)
-	assert_eq(GameSession.adventurers.size(), 2)
-	assert_eq(GameSession.adventurers[1].id, "warrior_002")
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3, "Only the purchased offer leaves the list")
+	assert_eq(GameSession.adventurers.size(), 5)
+	assert_eq(GameSession.adventurers[4].id, first_candidate.id)
+	assert_eq(
+		GameSession.adventurers[4].get("template_id", ""),
+		"warrior_002",
+		"The purchased adventurer keeps the template its offer claimed"
+	)
 	assert_eq(screen.selected_candidate_id, "", "A purchased candidate must not remain selected")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
 	await get_tree().process_frame
 	assert_eq(get_tree().current_scene, screen, "Ordinary recruitment must remain on the live Recruitment scene")
 
@@ -193,6 +211,7 @@ func test_targeted_recruitment_assigns_only_the_requested_encamped_party() -> vo
 	GameSession.create_party()
 	GameSession.recruit_adventurer()
 	GameSession.gold = 10
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
 	if get_tree().current_scene != null:
 		get_tree().unload_current_scene()
 		await get_tree().process_frame
@@ -210,10 +229,10 @@ func test_targeted_recruitment_assigns_only_the_requested_encamped_party() -> vo
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
 	screen.get_node("%InformationPanel/Content/RecruitButton").emit_signal("pressed")
-	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, ["warrior_002"])
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
 	assert_eq(GameManager.recruitment_target_party_id, GameSession.FIRST_PARTY_ID)
 	assert_eq(screen.selected_candidate_id, "")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
 	await get_tree().process_frame
 	assert_eq(get_tree().current_scene, screen, "Targeted recruitment must remain on the live Recruitment scene")
 
@@ -256,9 +275,9 @@ func test_stale_targeted_recruitment_falls_back_without_assigning_elsewhere() ->
 	GameManager.recruitment_target_party_id = "missing_party"
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	screen._on_information_panel_recruit_selected("warrior_002")
-	assert_eq(GameSession.adventurers.size(), 1)
-	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
+	screen._on_information_panel_recruit_selected(_candidate_id_for_template("warrior_002"))
+	assert_eq(GameSession.adventurers.size(), 4)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 4)
 	assert_eq(GameManager.recruitment_target_party_id, "")
 
 
@@ -268,7 +287,7 @@ func _assert_stale_target_purchase_is_inert() -> void:
 	var roster_before: Array = GameSession.adventurers.duplicate(true)
 	var members_before: Array = GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids.duplicate()
 	var vacancies_before: Array = GameSession.recruitment_vacancies.duplicate(true)
-	assert_eq(GameManager.purchase_recruit_for_target_party("warrior_002"), ERR_INVALID_DATA)
+	assert_eq(GameManager.purchase_recruit_for_target_party(_candidate_id_for_template("warrior_002")), ERR_INVALID_DATA)
 	assert_eq(GameSession.gold, gold_before)
 	assert_eq(GameSession.get_recruitment_candidates(), candidates_before)
 	assert_eq(GameSession.adventurers, roster_before)
@@ -293,12 +312,13 @@ func test_targeted_recruitment_becomes_ordinary_when_the_target_fills() -> void:
 	assert_eq(GameManager.go_to_recruitment_for_party(GameSession.FIRST_PARTY_ID), OK)
 	for index in 3:
 		GameSession.recruit_adventurer()
-		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+		GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[GameSession.adventurers.size() - 1].id)
 	_assert_stale_target_purchase_is_inert()
 
 
 func test_a_second_purchase_attempt_of_the_same_now_gone_candidate_does_not_purchase_again() -> void:
 	GameSession.gold = 20
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("%InformationPanel")
@@ -310,45 +330,47 @@ func test_a_second_purchase_attempt_of_the_same_now_gone_candidate_does_not_purc
 
 	# A second attempt at the same, now-purchased id, as if the action fired
 	# again before the scene finished routing away.
-	screen._on_information_panel_recruit_selected("warrior_002")
+	screen._on_information_panel_recruit_selected(first_candidate_id)
 
 	assert_eq(GameSession.gold, 10, "A stale candidate id must never be purchased twice")
 
 
 func test_pressing_recruit_for_a_candidate_purchased_elsewhere_refreshes_in_place() -> void:
 	GameSession.gold = 10
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
-	assert_eq(screen.selected_candidate_id, "warrior_002")
+	assert_eq(screen.selected_candidate_id, first_candidate_id)
 	# The candidate is purchased through another path while this screen is open.
-	GameSession.purchase_recruit("warrior_002")
+	GameSession.purchase_recruit(first_candidate_id)
 
-	screen._on_information_panel_recruit_selected("warrior_002")
+	screen._on_information_panel_recruit_selected(first_candidate_id)
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_eq(GameSession.gold, 0, "The stale purchase attempt must not deduct gold again")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
 
 
 func test_a_candidate_that_goes_stale_after_being_purchased_elsewhere_refreshes_safely() -> void:
 	GameSession.gold = 25
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("%InformationPanel")
 	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
 	tree.get_root().get_first_child().select(0)
 	tree.emit_signal("item_selected")
-	assert_eq(screen.selected_candidate_id, "warrior_002")
-	GameSession.purchase_recruit("warrior_002")
+	assert_eq(screen.selected_candidate_id, first_candidate_id)
+	GameSession.purchase_recruit(first_candidate_id)
 
 	screen.refresh()
 
 	assert_eq(screen.selected_candidate_id, "")
 	assert_false(panel.get_node("Content/RecruitmentName").visible)
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Scout", "Warrior 6", "Warrior 7"])
 
 
 func test_an_empty_recruitment_shows_the_empty_state_without_errors() -> void:
@@ -361,10 +383,11 @@ func test_an_empty_recruitment_shows_the_empty_state_without_errors() -> void:
 
 
 func test_purchasing_the_last_candidate_leaves_the_empty_state_after_a_refresh() -> void:
-	GameSession.gold = 30
+	GameSession.gold = 40
 	var screen: Control = RecruitmentScene.instantiate()
 	add_child_autofree(screen)
-	GameSession.purchase_recruit("warrior_002")
+	for index in 4:
+		assert_true(GameSession.purchase_recruit(GameSession.get_recruitment_candidates()[0].id))
 
 	screen.refresh()
 

@@ -101,6 +101,7 @@ messages = {
 "parties.enter_name": "Name this party:",
 "parties.confirm_name": "OK",
 "parties.empty": "No parties yet.",
+"parties.caps": "Party size: %d · Parties: %d/%d",
 "parties.column.party": "Party",
 "parties.column.members": "Members",
 "parties.column.status": "Status",

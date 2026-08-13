@@ -48,7 +48,7 @@ func test_table_lists_the_default_warrior() -> void:
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior", "Warrior 2", "Warrior 3", "Warrior 4"])
 	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
 
 

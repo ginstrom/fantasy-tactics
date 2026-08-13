@@ -42,10 +42,11 @@ this roadmap.
 
 ## Current implementation notes that constrain the roadmap
 
-- A fresh campaign begins with one Warrior and no party; the player creates the
-  first party (with 4 members baseline). This differs from the vision's stated starting party of four already formed.
-  Treat the difference as an explicit onboarding/product decision before changing
-  onboarding or balance.
+- **Decided (2026-08-13):** start with a roster of 4 warriors plus 4
+  recruitable units (3 warriors, 1 scout); maximum party size 4 and maximum
+  party count 1, both enforced and displayed. The Guild Hall level 2
+  party-size unlock (4 → 5) is shipped; the level 3 party-count unlock
+  (1 → 2) is deferred to roadmap part 4 (§2.1) with multi-party play.
 - Encounters are live instances, not permanently static map nodes. Clearing an
   instance opens a vacancy clock; a later refill can choose a template and a
   different position. The current system is a useful population foundation,
@@ -147,8 +148,8 @@ Monsters adopt the shared tactical unit attributes (might, melee, missile, guard
 
 `GameSession` currently permits one active party (`party_001`), rendered on the World Map. Remaining work:
 
-1. Resolve initial-party onboarding (1 Warrior vs 4-hero vision starting party) as a product decision while preserving a clean first-playable onboarding path.
-2. Add party-slot and party-size unlocking rules.
+1. ~~Resolve initial-party onboarding (1 Warrior vs 4-hero vision starting party) as a product decision while preserving a clean first-playable onboarding path.~~ Decided and implemented 2026-08-13 (foundations-and-recovery step 1): 4-warrior starting roster plus 4 recruitment offers, party size 4 / party count 1 caps enforced and displayed.
+2. Add party-slot and party-size unlocking rules. (Partially shipped: the party-size cap and its Guild Hall level 2 unlock (4 → 5) are enforced and regression-tested; the party-count cap is explicit (`get_max_party_count()` = 1), with its Guild Hall level 3 unlock (1 → 2) deferred to roadmap part 4.)
 3. Define selected-party and multi-party World Map ownership, movement, and encounter collision behavior.
 4. Add party formation data and UI for pre-battle deployment and local-dungeon group movement.
 

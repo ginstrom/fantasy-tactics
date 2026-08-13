@@ -23,6 +23,16 @@ func _next_scout_offer() -> Dictionary:
 	return GameSession._spawn_next_recruitment_offer()
 
 
+func _candidate_id_for_template(template_id: String) -> String:
+	for candidate in GameSession.get_recruitment_candidates():
+		if candidate.get("template_id", "") == template_id:
+			return candidate.id
+	return ""
+
+
+## A fresh campaign seeds all four fixed templates as live offers, so every
+## refill mints an OVERFLOW offer: a generated id, no template_id, and the
+## rolled class's baseline.
 func test_recruitment_candidates_can_include_scouts() -> void:
 	var scout_offer := _next_scout_offer()
 
@@ -30,6 +40,7 @@ func test_recruitment_candidates_can_include_scouts() -> void:
 	assert_eq(scout_offer.equipment.weapon, "shortbow_iron")
 	assert_eq(scout_offer.equipment.armor, "leather_armor")
 	assert_eq(scout_offer.stats, {"max_health": 12, "attack": 65, "move_range": 3})
+	assert_false(scout_offer.has("template_id"), "Overflow offers carry no template_id")
 
 
 func test_recruitment_vacancies_follow_the_injected_scout_then_warrior_class_policy() -> void:
@@ -38,31 +49,38 @@ func test_recruitment_vacancies_follow_the_injected_scout_then_warrior_class_pol
 	GameSession.vacancy_delay_roll = func(_minimum: int, _maximum: int) -> int: return 1
 	GameSession.gold = 20
 
-	assert_true(GameSession.purchase_recruit("warrior_002"))
+	assert_true(GameSession.purchase_recruit(_candidate_id_for_template("warrior_002")))
 	GameSession.end_world_turn()
 
 	var candidates := GameSession.get_recruitment_candidates()
-	assert_eq(candidates.size(), 1)
-	assert_eq(candidates[0].id, "scout_002")
-	assert_eq(candidates[0]["class"], "scout")
-	assert_true(GameSession.purchase_recruit("scout_002"))
+	assert_eq(candidates.size(), 4, "The fired vacancy refills the offer the purchase removed")
+	var scout_refill := candidates[candidates.size() - 1]
+	assert_eq(scout_refill["class"], "scout")
+	assert_false(scout_refill.has("template_id"), "All fixed templates are claimed at start, so refills mint overflow offers")
+	assert_true(GameSession.purchase_recruit(scout_refill.id))
 	GameSession.end_world_turn()
 
 	candidates = GameSession.get_recruitment_candidates()
-	assert_eq(candidates.size(), 1)
-	assert_eq(candidates[0]["class"], "warrior")
+	assert_eq(candidates.size(), 4)
+	var warrior_refill := candidates[candidates.size() - 1]
+	assert_eq(warrior_refill["class"], "warrior")
+	assert_false(warrior_refill.has("template_id"))
 
 
 func test_scout_policy_mints_a_scout_overflow_offer_after_the_fixed_scout_is_claimed() -> void:
 	GameSession.recruitment_class_roll = func() -> String: return "scout"
-	GameSession.adventurers.append(GameSession.get_default_scout("scout_002", "Scout 2"))
+	var claimed_scout := GameSession.get_default_scout("scout-claimed-id", "Scout")
+	claimed_scout["template_id"] = "scout_002"
+	GameSession.adventurers.append(claimed_scout)
 	GameSession.recruitment_candidates.clear()
 
 	var offer := GameSession._spawn_next_recruitment_offer()
 
 	assert_eq(offer["class"], "scout")
 	assert_eq(offer.equipment.weapon, "shortbow_iron")
-	assert_true(offer.id.begins_with("scout_"))
+	assert_ne(offer.id, "")
+	assert_false(offer.id.begins_with("scout_"), "Overflow ids are generated, not class-derived sequential names")
+	assert_false(offer.has("template_id"))
 
 
 func test_scout_recruitment_purchases_valid_scout_adventurer() -> void:

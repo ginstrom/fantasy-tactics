@@ -41,6 +41,11 @@ layout_mode = 2
 text = "parties.title"
 horizontal_alignment = 1
 
+[node name="CapsLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "parties.caps"
+horizontal_alignment = 1
+
 [node name="PartyTable" type="VBoxContainer" parent="Body/Center/VBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(520, 280)

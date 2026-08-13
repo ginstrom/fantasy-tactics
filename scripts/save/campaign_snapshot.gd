@@ -132,12 +132,12 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	var adventurers_result := _normalize_id_list(data.get("adventurers"), "adventurers")
 	if not adventurers_result.ok:
 		return _invalid(adventurers_result.error)
-	normalized["adventurers"] = adventurers_result.list
+	normalized["adventurers"] = _normalize_roster_records(adventurers_result.list)
 
 	var candidates_result := _normalize_id_list(data.get("recruitment_candidates"), "recruitment_candidates")
 	if not candidates_result.ok:
 		return _invalid(candidates_result.error)
-	normalized["recruitment_candidates"] = candidates_result.list
+	normalized["recruitment_candidates"] = _normalize_roster_records(candidates_result.list)
 
 	var recruitment_vacancies_result := _normalize_vacancy_list(data.get("recruitment_vacancies"), "recruitment_vacancies")
 	if not recruitment_vacancies_result.ok:
@@ -306,6 +306,33 @@ static func _normalize_id_list(raw: Variant, field_name: String) -> Dictionary:
 		seen_ids[entry.id] = true
 		normalized.append((entry as Dictionary).duplicate(true))
 	return _valid_list(normalized)
+
+
+## The nested per-record normalization pass for roster-shaped lists
+## (introduced by the onboarding step; later steps extend it). Today: a
+## record without a template_id field infers it when the record's id matches
+## a RECRUITMENT_CANDIDATE_TEMPLATES id — legacy saves used the template's
+## id as the purchased recruit's / live offer's own id, and template
+## claiming now keys on the explicit field. Records whose id matches no
+## template keep the field absent; existing records keep their ids verbatim
+## (no re-minting).
+static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dictionary]:
+	var normalized: Array[Dictionary] = []
+	for record in records:
+		var copy := record.duplicate(true)
+		if not copy.has("template_id"):
+			var record_id := str(copy.id)
+			if _is_recruitment_template_id(record_id):
+				copy["template_id"] = record_id
+		normalized.append(copy)
+	return normalized
+
+
+static func _is_recruitment_template_id(id: String) -> bool:
+	for template in _GameSessionScript.RECRUITMENT_CANDIDATE_TEMPLATES:
+		if template.id == id:
+			return true
+	return false
 
 
 ## Array[String] fields (completed_encounters, used_encounter_template_ids).

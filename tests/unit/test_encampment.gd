@@ -40,9 +40,9 @@ func test_encampment_shows_population_parties_and_units_counts() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 4)
 	assert_eq(screen.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
-	assert_eq(screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 4)
 
 
 func test_units_count_excludes_members_of_a_deployed_party() -> void:
@@ -52,10 +52,10 @@ func test_units_count_excludes_members_of_a_deployed_party() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 4)
 	assert_eq(
-		screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 0,
-		"The only adventurer is out with a deployed party"
+		screen.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 3,
+		"One of the four adventurers is out with a deployed party"
 	)
 
 

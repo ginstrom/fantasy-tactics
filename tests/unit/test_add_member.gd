@@ -56,7 +56,8 @@ func test_add_member_uses_the_sessions_availability_query_not_a_private_predicat
 
 func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void:
 	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	for adventurer in GameSession.adventurers:
+		adventurer.availability_status = "unavailable"
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 
 	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
@@ -84,9 +85,9 @@ func test_lists_exactly_the_available_adventurers() -> void:
 	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 
 	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior"])
-	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior", "Warrior 2", "Warrior 3", "Warrior 4"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Warrior", "Warrior", "Warrior"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 2), ["1", "1", "1", "1"])
 
 
 func test_add_member_localizes_a_scout_class() -> void:
@@ -95,7 +96,7 @@ func test_add_member_localizes_a_scout_class() -> void:
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
 
-	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Scout"])
+	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Warrior", "Warrior", "Warrior", "Scout"])
 
 
 ## Selection alone must never assign — only activating a row (see
@@ -172,8 +173,8 @@ func test_a_stale_row_fails_safely_and_refreshes_the_list_in_place() -> void:
 
 	tree.emit_signal("item_activated")
 
-	assert_true(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
+	assert_false(screen.get_node("Body/Center/VBox/EmptyLabel").visible)
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Warrior 2", "Warrior 3", "Warrior 4"])
 
 
 func test_back_button_returns_to_party_details_without_mutating_the_party() -> void:

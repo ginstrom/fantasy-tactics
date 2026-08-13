@@ -12,9 +12,12 @@ func _full_snapshot() -> CampaignSnapshot:
 	var snapshot := CampaignSnapshot.new()
 	snapshot.adventurers = [
 		{"id": "warrior_001", "name": "Warrior", "level": 1, "stats": {"attack": 60}},
+		# A purchased recruit in the current format: a generated instance id
+		# plus the explicit template_id it claimed at purchase time.
+		{"id": "3f2a9c1e-7b4d-4e8a-9c6f-1d2e3f4a5b6c", "name": "Warrior 5", "level": 1, "template_id": "warrior_002"},
 	]
 	snapshot.recruitment_candidates = [
-		{"id": "warrior_002", "name": "Warrior 2", "cost": 10},
+		{"id": "offer-abc-123", "name": "Warrior 6", "cost": 10, "template_id": "warrior_003"},
 	]
 	snapshot.recruitment_vacancies = [{"turns_remaining": 12}]
 	snapshot.parties = [
@@ -307,3 +310,47 @@ func test_legacy_trading_post_false_migrates_to_a_locked_shop() -> void:
 	assert_true(result.ok, result.error)
 	assert_eq(result.snapshot.shop_level, 0)
 	assert_eq(result.snapshot.shop_gold, 0)
+
+
+## Legacy saves predate generated instance identity: a purchased recruit's
+## record carried the claimed template's id as its own id. Loading such a
+## record infers the explicit template_id the live claiming rules now key on.
+func test_legacy_adventurer_whose_id_matches_a_template_infers_its_template_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [{"id": "warrior_002", "name": "Warrior 2", "level": 1}]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].id, "warrior_002", "Legacy ids are kept verbatim, never re-minted")
+	assert_eq(result.snapshot.adventurers[0].get("template_id"), "warrior_002")
+
+
+func test_legacy_adventurer_whose_id_matches_no_template_loads_without_a_template_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [{"id": "warrior_001", "name": "Warrior", "level": 1}]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_false(result.snapshot.adventurers[0].has("template_id"))
+
+
+func test_legacy_recruitment_offer_whose_id_matches_a_template_infers_its_template_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.recruitment_candidates = [{"id": "scout_002", "name": "Scout 2", "cost": 10}]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.recruitment_candidates[0].get("template_id"), "scout_002")
+
+
+func test_current_format_records_keep_generated_ids_and_template_ids_exactly() -> void:
+	var data := _full_snapshot().to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers, data.adventurers)
+	assert_eq(result.snapshot.recruitment_candidates, data.recruitment_candidates)

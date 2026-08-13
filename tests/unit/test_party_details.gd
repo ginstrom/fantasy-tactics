@@ -50,10 +50,9 @@ func test_add_from_roster_and_recruit_are_available_for_an_eligible_encamped_par
 
 func test_add_from_roster_and_recruit_disable_at_cap_and_hide_when_deployed() -> void:
 	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	for index in 3:
-		GameSession.recruit_adventurer()
-		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	# The four-warrior starting roster fills the level-1 party cap exactly.
+	for adventurer in GameSession.adventurers:
+		GameSession.assign_adventurer_to_selected_party(adventurer.id)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	assert_true(screen.get_node("Body/Center/VBox/AddFromRosterButton").disabled)
 	assert_true(screen.get_node("Body/Center/VBox/RecruitButton").disabled)
@@ -67,12 +66,13 @@ func test_add_from_roster_and_recruit_disable_at_cap_and_hide_when_deployed() ->
 
 func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
 	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	for adventurer in GameSession.adventurers:
+		adventurer.availability_status = "unavailable"
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	var add_button: Button = screen.get_node("Body/Center/VBox/AddFromRosterButton")
 	assert_true(add_button.visible)
-	assert_true(add_button.disabled, "The only adventurer is already a member of this party")
+	assert_true(add_button.disabled, "No adventurer is available to add")
 
 
 ## Mirrors test_add_member_is_disabled_when_no_adventurer_is_available's
@@ -83,15 +83,12 @@ func test_add_member_is_disabled_when_no_adventurer_is_available() -> void:
 func test_add_member_is_disabled_when_party_is_at_the_level_one_cap() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.recruit_adventurer()
-	GameSession.recruit_adventurer()
-	GameSession.recruit_adventurer()
-	# recruit_adventurer()'s id-collision avoidance skips warrior_002 (still a
-	# live recruitment candidate on a fresh session — see
-	# GameSession.recruit_adventurer), so three calls mint warrior_003/004/005.
-	GameSession.assign_adventurer_to_selected_party("warrior_003")
-	GameSession.assign_adventurer_to_selected_party("warrior_004")
-	GameSession.assign_adventurer_to_selected_party("warrior_005")
+	# Three recruits fill the party to the level-1 cap of 4 while the
+	# remaining starting warriors stay available, isolating the "party full"
+	# branch from the "no adventurer left" one.
+	for index in 3:
+		GameSession.recruit_adventurer()
+		GameSession.assign_adventurer_to_selected_party(GameSession.adventurers.back().id)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	var add_button: Button = screen.get_node("Body/Center/VBox/AddFromRosterButton")

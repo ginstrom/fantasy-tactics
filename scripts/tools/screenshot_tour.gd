@@ -77,10 +77,9 @@ func _build_steps() -> Array[Dictionary]:
 			GameManager.go_to_recruitment()
 			call_deferred("_queue_recruitment_candidate_selection")},
 		{"name": "unit_details_from_roster", "action": func() -> void:
-			# add_member's recruit_adventurer() above just added the only
-			# currently available (unassigned) adventurer; the warrior from
-			# "parties" is already assigned to party_001, which is still
-			# encamped, so the assignment section renders with a real,
+			# Only WARRIOR_ID has been assigned to party_001 (in "parties"),
+			# so the rest of the starting roster stays available; the party is
+			# still encamped, so the assignment section renders with a real,
 			# selectable eligible party rather than the disabled explanation.
 			var available := GameSession.get_available_adventurers()
 			GameManager.go_to_unit_details_from_roster(available[0].id)},
