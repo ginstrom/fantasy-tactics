@@ -31,11 +31,13 @@ For rough review, use expected damage per attack (hit chance multiplied by post-
 
 ## Shared monster profile
 
+Monsters possess all the same tactical attributes as adventurer units, though attributes non-applicable to a specific monster type are set to `0` (e.g., `spellcasting: 0` for Goblin Warriors). The exact same battle mechanics apply to units and enemies alike, and certain enemy types (such as Brigands) use standard unit class profiles.
+
 | Field | Meaning |
 |---|---|
 | `id`, `name_key` | Stable data and localization identity. |
 | `tier` | Encounter danger grouping; it is not a level. |
-| `max_health`, `might`, `accuracy`, `guard`, `resistance`, `mobility` | Shared tactical attributes. |
+| `max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `mobility` | Shared tactical attributes matching adventurer unit profiles. |
 | `attacks` | One or more natural/weapon attacks with name, range/tags, and damage range. |
 | `abilities` | Explicit, data-defined behaviours; empty until a slice implements them. |
 | `kill_xp`, `loot_id` | Campaign reward contract. |
@@ -43,14 +45,14 @@ For rough review, use expected damage per attack (hit chance multiplied by post-
 
 ## Initial roster — preserve shipped values
 
-The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0`, and `mobility: 3`. Its attack damage stays exactly as the current game: the new model documents it as a fixed natural/weapon range. This prevents a schema migration from being a stealth rebalance.
+The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0`, `spellcasting: 0`, `magic_resistance: 0`, and `mobility: 3`. Attack hit chances map to `melee` (or `missile` for ranged monsters). Its attack damage stays exactly as the current game: documented as a fixed natural/weapon range. This prevents a schema migration from being a stealth rebalance.
 
-| Monster | Tier / role | HP | Accuracy | Might | Guard | Resistance | Mobility | Attack | Kill XP |
-|---|---|---:|---:|---:|---:|---:|---:|---|---:|
-| Kobold | 3 / swarm | 6 | 25 | 0 | 0 | 0% | 3 | Rusty Dagger, 1–1 | 3 |
-| Goblin | 1 / skirmisher | 13 | 30 | 0 | 0 | 0% | 3 | Short Sword, 2–2 | 5 |
-| Orc | 2 / bruiser | 22 | 50 | 0 | 0 | 0% | 3 | War Axe, 3–3 | 10 |
-| Hobgoblin | 3 / elite | 30 | 60 | 0 | 0 | 0% | 3 | Two-Handed Sword, 4–4 | 20 |
+| Monster | Tier / role | HP | Melee | Missile | Might | Guard | Resistance | Mobility | Attack | Kill XP |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| Kobold | 3 / swarm | 6 | 25 | 0 | 0 | 0 | 0% | 3 | Rusty Dagger, 1–1 | 3 |
+| Goblin | 1 / skirmisher | 13 | 30 | 0 | 0 | 0 | 0% | 3 | Short Sword, 2–2 | 5 |
+| Orc | 2 / bruiser | 22 | 50 | 0 | 0 | 0 | 0% | 3 | War Axe, 3–3 | 10 |
+| Hobgoblin | 3 / elite | 30 | 60 | 0 | 0 | 0 | 0% | 3 | Two-Handed Sword, 4–4 | 20 |
 
 ### What the numbers mean against the baseline
 

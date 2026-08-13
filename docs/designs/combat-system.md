@@ -1,82 +1,82 @@
 # Combat System
 
-## Attacking and damage
+## Time Units & Environment
 
-To-hit chance is based on the attack skill minus the target's defense skill,
-plus/minus buffs, clamped between 5% and 95%. 
+* **Combat Round:** In combat, the unit of time is **Round**. Every eligible unit acts during a Round.
+* **World Map Turn:** On the world map, time advances in **Turns**. World map turn time is frozen while a party is in an encounter; players can manage inventory, encampment, and shop, but world map turns do not advance until the battle resolves.
 
-### Melee
+## Attacking and Damage
 
-To-hit is goverend by the melee attack skill.
+Physical to-hit chance is based on the attacker's hit attribute (`melee` or `missile`) minus the target's `guard`, plus/minus modifiers, clamped between 5% and 95%:
+```text
+final hit chance = clamp(attacker melee_or_missile - defender guard, 5%, 95%)
+```
 
-### Missile
+### Melee Attacks
+To-hit chance is governed by the `melee` attribute versus defender `guard`.
 
-To-hit is goverend by the missile attack skill.
+### Missile Attacks
+To-hit chance is governed by the `missile` attribute versus defender `guard`.
+
+### Spells and Magic Resistance
+Guard applies exclusively to physical attacks and does not affect spells. Spells initially succeed automatically (future design will use `spellcasting` to determine success for high-level spells relative to unit level). Defenders roll `magic_resistance` (`(magic_resistance - spellcasting) / 100`). A successful roll negates or reduces the spell effect (e.g., Fire Bolt damage reduced by half). Future immunities (e.g., Fire Immunity) cannot be overcome by spellcasting level.
 
 ## Defending
 
-To-hit chance is based on the attack skill minus the target's defense skill,
-plus/minus buffs, clamped between 5% and 95%. 
+### Guard
+Unit `guard` subtracts percentage points directly from an attacker's hit chance. Effective Guard is calculated as `base_guard + armor_guard_bonus` (e.g., base Guard 30 + armor Guard 15 = 45% hit subtraction, capped at 95% total Guard). (Note: Future armor bulk will add movement and dodge penalties, but is deferred for initial implementation).
 
-### Defense
-
-Defense skill is subtracted from the enemy's attack score.
-
-### Damage resistance
-
-The damage resistance score of the unit is the reduction in incoming damage,
-with a ceiling of 95%. It is mainly gained from armor, but various spells,
-perks, and items can contribute.
+### Damage Resistance
+Damage resistance reduces incoming physical damage after a hit lands, capped at 95%:
+```text
+final damage = max(1, round(raw damage × (1 - defender damage resistance / 100)))
+```
+It is mainly provided by armor, but can be modified by spells, perks, and items.
 
 ### Dodge
-
-A small chance of evading an incoming attack. For a melee attack, on successful
-dodge there is a small chance of off-balancing the enemy's next round.
+A small chance of evading an incoming attack. On a successful dodge, the attacker becomes off-balanced during their next round (-10% Guard).
 
 ### Parry
+A small chance of evading an incoming melee attack. On a successful parry, the attacker is off-balanced (-10% Guard), and the defender gains a counter-bonus (+10% `melee` to-hit against that same attacker on their next turn).
 
-A small chance of evading an incoming melee attack. On successful
-parry there is a small chance of off-balancing the enemy's next round, and
-likewise a small chance of adding a bonus to the unit's next to-hit against the
-same enemy.
-
-## Cover and flanking
+## Cover, Flanking, and Opportunity Attacks
 
 ### Cover
-
-Cover has a value that is added to the unit's defense score. 
+Cover provides a direct bonus to `guard` against missile attacks:
+* **Low Cover:** +25% Guard against missile attacks.
+* **High Cover:** +50% Guard against missile attacks.
 
 ### Flanking
+Attack angles provide tactical modifiers:
+* **Side / Oblique Flank:** -20% defender Guard.
+* **Rear Flank:** -50% defender Guard and +50% raw damage multiplier for the attacker.
 
-If a unit is attacked obliquely, the attacker gets a bonus to hit. Attacks from
-behind give an even better to-hit bonus and a damage multiplier.
+### Attacks of Opportunity
+If a unit moves out of a tile adjacent to an enemy, that enemy immediately gets a free melee attack against the moving unit at a -10% `melee` hit penalty.
 
-### Attacks of opportunity
+## Action Points & Item Costs
 
-If a unit is adjacent to an enemy and moves away from it, then the enemy gets a
-bonus melee attack against the unit.
+Action points are a generic budget (fixed base of 6 AP per unit per Round) used for tactical actions:
+* **Movement:** 1 AP per tile.
+* **Basic Attack:** 3 AP.
+* **Consume Potion:** 2 AP.
+* **Use Tactical Item:** 2 AP.
+* **Transfer Item to Adjacent Unit:** 2 AP.
 
-## Action points
+## Enemy Info & Line of Sight
 
-Action points are generic and used for all battle actions: movement, attacks,
-and using/sharing items.
+### Line of Sight
+Players do not have omniscient vision of the battlefield. Visibility is limited to the units' line of sight (assuming 360-degree view). Out-of-sight areas grow "stale."
 
-## Enemy info
+### Enemy Info
+The accuracy and detail of enemy status depend on proximity and the party's best scouting score.
 
-The player does not get to see all information about an enemy. The
-quality/accuracy of the information depends on how close the enemy is, and the
-party's best scouting score.
+## Conditions, Wounds, and Status Effects
 
-### Line of sight
+Conditions and debuffs alter combat attributes.
+* **Spells & Perks:** Apply temporary combat bonuses or penalties.
+* **Wounds:** Physical degradation based on current health:
+  * **50% or less Max HP:** -10% to all combat stats, available AP, and world map movement speed.
+  * **Under 20% Max HP:** -25% to all combat stats, available AP, and world map movement speed.
 
-The player does not have an omnicent view of the battlefield. They can only see
-what is in their units' line of site (assuming 360 degrees).
-
-## Conditions and buffs/debufs
-
-Various conditions, buffs, and debugs can affect combat. Some examples:
-
-* Spells (attack and defense bonuses/penalties)
-* Perks (e.g. lock on)
-* Wounds (heavier wounds decrease combat skills)
 

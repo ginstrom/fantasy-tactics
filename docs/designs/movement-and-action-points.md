@@ -10,12 +10,13 @@ action rules; their own documents own their specific effects.
 **Shipped** describes the current generic AP foundation. Later sections are
 constraints for future features, not permissions to add them early.
 
-## Terms
+## Terms & Contexts
 
 | Term | Meaning |
 |---|---|
-| Round | One combat cycle in which every eligible unit takes a turn. Do not call a World Map Turn a Round. |
-| AP | A unit's generic action budget for its current Round. |
+| Round | In combat, the unit of time is **Round**. One combat cycle in which every eligible unit takes a turn. |
+| Turn | On the world map, the unit of time is **Turn**. Governs encounter repopulation, recruitable units, crafting, etc. World map turns are frozen during tactical encounters. |
+| AP | A unit's generic action budget for its current Round. Base 6 AP for all units. |
 | Legal action | An action that satisfies normal targeting, range, occupancy, status, and available-resource rules in addition to its AP cost. |
 | Action cost | The AP deducted only after an action passes its legality checks and resolves successfully. |
 
@@ -23,29 +24,25 @@ Selecting a unit or inspecting a target is not an action and never spends AP.
 Selection-before-activation remains intact: a click that only selects a unit,
 enemy, or destination cannot move, attack, or consume an item.
 
-## Shipped movement baseline
+## Out-of-Combat Dungeon Exploration
 
-Every living unit begins its active Battle Round with 6 AP. Movement costs 1 AP
-per tile and an adjacent basic attack costs 3 AP. Normal occupancy, target,
-range, side, and input-lock validation completes before AP is spent; failed
-actions leave AP and battle state unchanged. AP resets only for the side that
-becomes active, never carries across Rounds, and End Turn forfeits the rest.
+In dungeons, party movement out of combat is **free** (units move in unison and maintain formation). Tactical AP accounting and round turn-sequencing initiate when a battle is triggered (usually upon establishing line of sight with an enemy or crossing a trigger distance).
 
-## Generic AP model — Shipped foundation
+## Shipped movement baseline & Action Costs
 
-At the start of each eligible unit's Round, set its available AP to its
-effective `action_points`. The initial effective value is **6 AP** for every
-unit. Do not carry unused AP across Rounds. When a player chooses End Turn,
-remaining AP is forfeited and the normal turn sequence continues.
+Every living unit begins its active Battle Round with a fixed base budget of **6 AP**. Action costs are deducted from this budget:
 
 | Action | AP cost |
 |---|---:|
 | Move one tile | 1 |
 | Basic attack | 3 |
+| Consume Potion | 2 |
+| Use Tactical Item | 2 |
+| Transfer Item to Adjacent Unit | 2 |
 
 AP is generic: it replaces the old distinction between movement and a
 once-per-turn attack allowance. A unit may take any sequence of legal actions while
-it can pay every cost. It may make as many basic attacks as its AP permits;
+it can pay every cost. It may make as many basic attacks or item uses as its AP permits;
 there is no separate once-per-turn attack limit.
 
 ## Movement and action legality

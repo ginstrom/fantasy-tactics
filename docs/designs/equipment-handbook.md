@@ -35,38 +35,48 @@ Normal gear is a base item only. Improved gear adds a treatment. Magical gear ad
 | Longsword | 1–8 | 2–9 |
 | Two-handed sword | 1–10 | 2–11 |
 
-| Armor | Defense/Guard | Resistance |
+| Armor | Guard Bonus | Damage Resistance |
 |---|---:|---:|
-| Leather | 10 | 10% |
-| Chainmail | 15 | 20% |
-| Split armor | 15 | 25% |
-| Platemail | 15 | 30% |
-| Full plate | 15 | 35% |
+| Leather | +10 | 10% |
+| Chainmail | +15 | 20% |
+| Split armor | +15 | 25% |
+| Platemail | +15 | 30% |
+| Full plate | +15 | 35% |
+
+Armor Guard adds directly as a percentage to unit Base Guard (e.g., base Guard 30 + armor Guard 15 = 45% hit subtraction, capped at 95% total Guard). (Note: Future armor bulk will apply movement, AP, and dodge penalties, but is deferred for initial implementation).
 
 Class equipment permissions are future class data. The current Warrior-compatible catalogue remains valid unchanged.
 
-## Item instances — Next slice
+## Item instances & Representation
 
-Unmodified items remain stackable base ids in Stores. The first permanent improvement materializes one owned, unique item instance; the base definition never changes.
+All items share the exact same representation; base weapons simply have their improvement slots empty and can stack in Stores/Shops. In Shops and inventories, items stack like-with-like:
 
-```gdscript
-{
-    "id": "gear_00042",
-    "base_item_id": "longsword_iron",
-    "treatment_id": "sharpened",
-    "enhancement_id": "accuracy_advanced",
-    "rune_id": "thorn",
-}
+```text
+Item                         Type     Qty   Sale Price
+Iron Longsword               Weapon   3     10
+Sharpened Iron Longsword     Weapon   1     10
+```
+
+An item instance has one slot per enhancement family (one smithing treatment, one alchemical enchantment family, and socketed runes):
+
+```yaml
+id: "gear_00042"
+base_item_id: "longsword_iron"
+enhancements:
+  smithing: "sharpened"
+  enchantment: "accuracy_1"
+  runes: ["thorn"]
 ```
 
 `GameSession` owns catalogues, instances, banked normal-item stacks, unit-held item ids, recipes, and materials. The active weapon/armor pointer becomes an owned item id. Craft, equip, upgrade, rune replacement, sale, and snapshot import preserve ownership exactly once. Invalid inputs, missing requirements, duplicate ids, incompatible slots, or unavailable sockets leave all state unchanged.
 
-## Generic Action Points — prerequisite
+## Generic Action Points & Item Action Costs
 
 The [Movement and Action Points](movement-and-action-points.md) guide owns the
-AP foundation that precedes potions, spells, active perks, and rune triggers.
-Future equipment effects use that shared 6-AP Round budget and must state any cost or
-AP change explicitly; they do not create a separate item-action allowance.
+AP foundation. In-combat item interactions consume AP from the fixed 6-AP Round budget:
+* **Consume Potion:** 2 AP
+* **Use Tactical Item:** 2 AP
+* **Transfer Item to Adjacent Unit:** 2 AP
 
 ## Crafting buildings
 
@@ -74,15 +84,15 @@ Recipes are data: stable id, building requirement, inputs, and result. Exact gol
 
 | Building | First capability | Inputs | Result |
 |---|---|---|---|
-| Blacksmith | Craft normal Iron/Steel gear; Sharpened | gold, base gear | normal item or `treatment_id: sharpened` instance |
-| Alchemy Workshop | Potions; Basic Accuracy | gold, mana crystals | consumable or `enhancement_id: accuracy_basic` instance |
-| Runic Workshop | Socket found Thorn Rune | instance, rune, mana crystals | instance with `rune_id: thorn` |
+| Blacksmith | Craft normal Iron/Steel gear; Sharpened | gold, base gear | normal item or `smithing: sharpened` instance |
+| Alchemy Workshop | Potions; Basic Accuracy | gold, mana crystals | consumable or `enchantment: accuracy_basic` instance |
+| Runic Workshop | Socket found Thorn Rune | instance, rune, mana crystals | instance with `runes: [thorn]` |
 
-Sharpened adds +1 raw weapon damage after the weapon roll and before Might/Resistance. Basic Accuracy adds +10 Accuracy permanently; Advanced Accuracy replaces it rather than stacking. Later enhancement families use their own category key, so compatible Accuracy and Guard enhancements may coexist. The first recipes use existing gold, gear, and mana crystals; do not invent generic reagents until a recipe needs a distinct decision.
+Sharpened adds +1 raw weapon damage after the weapon roll and before Might/Resistance. Basic Accuracy adds +10 Accuracy permanently; Advanced Accuracy replaces it rather than stacking. Compatible Accuracy and Guard enhancements may coexist in separate enchantment family slots. The first recipes use existing gold, gear, and mana crystals; do not invent generic reagents until a recipe needs a distinct decision.
 
 ## Potions — Alchemy Workshop slice
 
-Potions are future stackable Store items assigned to a unit before battle. Their AP cost and consumption boundary remain unshipped.
+Potions are stackable Store items assigned to a unit before battle. Consuming a potion during combat costs 2 AP.
 
 | Potion | First effect | Constraint |
 |---|---|---|
@@ -94,7 +104,7 @@ Potions use the generic timed-effect system, not bespoke `Unit` flags or free UI
 
 ## Runes — Runic Workshop slice
 
-An item begins with one rune socket. Replacing a rune is a recipe with an explicit result for the displaced rune (return, consume, or salvage). More sockets wait for a proven need.
+An item begins with a fixed number of rune sockets (initially 1 socket). When socketing a new rune over an existing one, **the displaced rune is returned to the Stores**. (A future scrapping mechanic will allow breaking down items for base materials).
 
 The first reference rune is **Thorn Rune** for armor: when a wearer is hit by a melee attack, it has a stated chance to apply Paralyze to the attacker. It requires common trigger timing, attack tags, chance resolution, duration, immunity, stacking/refresh rules, UI feedback, and AI treatment. A special-case paralyze callback is out of scope.
 

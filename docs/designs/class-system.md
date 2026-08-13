@@ -19,23 +19,31 @@ Specializations build on a proven root role: Warrior becomes Knight or Archer, M
 
 Every combatant—adventurer or monster—uses one compact tactical profile. An adventurer persists base values in `GameSession`; equipment, perks, effects, and class features produce effective values when a battle unit is created. Monster templates are immutable data and are likewise copied into runtime `Unit` instances.
 
+### Primary Attributes & Initial Character Creation
+Character creation rolls primary attributes on a 1–10 scale based on class-specific ranges:
+* **Warrior:** Strength 6–8, Intelligence 1–4 (higher Strength & Agility)
+* **Scout:** Strength 4–6, Intelligence 3–5 (higher Agility)
+* **Mage:** Strength 1–3, Intelligence 6–8 (higher Intelligence)
+* **Priest:** Strength 4–5, Intelligence 4–6 (higher Piety)
+
+Initial combat skills are calculated directly from primary attributes and class multipliers:
+* **Base hit chance (`melee` and `missile`):** `(agility × 10 × class_multiplier)%`
+  * Class multipliers: Warrior: 1.5, Paladin: 1.25, Scout: 1.0, Priest: 0.8, Mage: 0.5.
+* **Max Health:** `vitality × level × perk_modifiers` (e.g., `Robust` and `Tank` perks grant percentage HP bonuses; `Glass Cannon` grants spell damage at the expense of a percentage HP penalty).
+
 | Attribute | Type | Meaning |
 |---|---:|---|
-| `max_health` | integer | Damage capacity; a unit at zero is defeated. calculated as vitality * level |
+| `max_health` | integer | Damage capacity; a unit at zero is defeated (`vitality × level × modifiers`). |
 | `might` | integer | Adds to melee or natural-attack raw damage. |
 | `melee` | integer | Base chance to hit with melee weapons, expressed in percentage points. |
 | `missile` | integer | Base chance to hit with missile weapons, expressed in percentage points. |
-| `guard` | integer | Percentage points subtracted from an attacker's Accuracy. |
-| `spellcasting` | integer | Percentage points for spell success. Overcomes magic resistance |
-| `magic_resistance` | integer | Percentage points for negating or reducing effects of magic (if applicable) |
-| `resistance` | integer percent | Reduces damage after a hit. |
-| `action_points` | integer | Generic budget for movement, attacks, items, and future abilities during a Round. |
+| `guard` | integer | Percentage points subtracted from an attacker's hit chance (`base_guard + armor_guard`, capped at 95%). |
+| `spellcasting` | integer | Percentage points for spell capability and future high-level spell success. |
+| `magic_resistance` | integer | Percentage points for negating or reducing effects of magic. |
+| `resistance` | integer percent | Reduces damage after a hit (capped at 95%). |
+| `action_points` | integer | Fixed base budget of 6 AP for movement, attacks, items, and abilities per Round. |
 
 `attack_damage`/weapon damage remains an attack property, not a seventh unit attribute. This keeps a sword, a bow, a spell, and a monster bite able to use the same attributes while retaining their own range, damage, and tags.
-
-Depending on spell type, magic resistance will negate the effect, reduce the
-effect, or have no effect. Chance of magic resistance is
-`(magic_resistance - spellcasting) / 100`
 
 ### Skills leveled up by class
 
@@ -52,46 +60,47 @@ priest            low      low     low       low     med
 healer            low      low     low       low     hi
 paladin           med      med     low       med     med      
 ```
-low = 1-2 points
-med = 3-4 points
-hi  = 4-5 points
+Upon leveling up, skill point gains within specified tiers are determined by a **random roll** in the tier range:
+* `low` = 1–2 points (random roll)
+* `med` = 3–4 points (random roll)
+* `hi`  = 4–5 points (random roll)
+
+On level up, a dedicated **Level Up Screen** displays the increased skills. If the adventurer earns a perk point, a button is presented allowing the player to select a perk immediately (or defer selection to choose from the Unit Details screen at any time).
 
 ### Combat resolution
 
 All accuracy, guard, and resistance values are percentage points.
 
 ```text
-final hit chance = clamp((attacker accuracy - defender guard) / 100, 5%, 95%)
+final hit chance = clamp(attacker melee_or_missile - defender guard, 5%, 95%)
 raw damage       = rolled attack damage + attacker might
 final damage     = max(1, round(raw damage × (1 - defender resistance / 100)))
 ```
 
-maximum defender resistance is 95%.
-
-**Shipped compatibility:** the live game calls `accuracy` `attack` and `guard` `defense`; player Might is effectively zero; and weapon/natural damage is already rolled before Resistance. The current 95% Resistance cap remains the temporary balance rule; make it a configurable combat rule before effects can modify it.
+* **Guard Stacking:** Armor Guard adds directly to unit Base Guard as a percentage (e.g., base Guard 30 + armor Guard 15 = 45% hit subtraction, capped at 95% total Guard).
+* **Spell Resolution:** Guard applies exclusively to physical attacks. Basic spells always land (future high-level spells will check `spellcasting` vs unit level), but the defender rolls `magic_resistance` (`(magic_resistance - spellcasting) / 100`). A successful roll negates or reduces the spell effect (e.g., Fire Bolt damage halved). Future design includes total spell immunities (e.g., Fire Immunity) that cannot be overcome.
+* **Maximum Resistance Cap:** Defender physical damage resistance and Guard subtraction are capped at 95%.
 
 ### Generic Action Points (Shipped foundation)
 
 The shared [Movement and Action Points](movement-and-action-points.md) guide
-defines the Round lifecycle, initial 6-AP budget, action costs, legality,
+defines the Round lifecycle, initial fixed 6-AP budget, action costs, legality,
 player feedback, and extension constraints. Classes may change effective AP
 only through an explicit, tested feature; they do not introduce a separate
 class-specific action economy.
 
-### Long-term concepts that are not yet attributes
+### Long-term concepts and Primary Attributes
 
-The earlier Strength, Agility, Vitality, Intelligence, Piety, and Luck list described useful class fantasy, but it mixed immediate combat data with systems that do not exist. These concepts are retained as future design vocabulary, not persisted attributes:
+Primary stats (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck`) act as starting attribute generation rolls (1–10) and scaling foundations:
 
-| Concept | First supported expression | Deferred until |
+| Concept | Primary Attribute Role | Combat / Game Expression |
 |---|---|---|
-| Strength | Might and melee equipment | carrying capacity |
-| Agility | Action Points and Guard | dodge |
-| Vitality | max_health and Resistance | no additional system required |
-| Intelligence | Mage spell access | magic points and spellcasting |
-| Piety | Cleric spell access | healing/buff system and Temple gate |
-| Luck | none | critical hits and loot-roll modifiers |
-
-No magic points, carry weight, dodge, critical hits, or luck rolls are added merely to complete this table.
+| Strength | Rolled 1–10 (Warrior 6–8, Mage 1–3) | Determines raw Might growth and future carrying capacity. |
+| Agility | Rolled 1–10 (high for Warrior & Scout) | Determines base `melee` and `missile` hit % (`agility × 10 × class_multiplier`) and Dodge. |
+| Vitality | Rolled 1–10 (high for Warrior) | Determines `max_health` (`vitality × level × modifiers`). |
+| Intelligence | Rolled 1–10 (Mage 6–8) | Unlocks Mage spells and scales `spellcasting`. |
+| Piety | Rolled 1–10 (Priest 4–6, Paladin high) | Unlocks Cleric/Paladin spells and healing potency. |
+| Luck | Rolled 1–10 | Governs critical hits and loot-roll modifiers. |
 
 ## Advancement and perks
 
@@ -109,7 +118,7 @@ The first implementation slice must define, in class data, each applicable skill
 
 - **Might:** Rage increases raw melee damage; Strong Back waits for inventory weight.
 - **Action Points/Guard:** Speed grants Action Points; Dodge waits for an avoidance system.
-- **Health/Resistance:** Toughness increases Resistance; Survivability increases max health.
+- **Health/Resistance:** Toughness increases Resistance; `Robust` (+% max HP) and `Tank` (+% max HP) increase health; `Glass Cannon` increases spell damage at the expense of a percentage penalty to `max_health`.
 - **Knowledge:** Fast Learner may modify XP; perception waits for scouting.
 - **Faith and luck:** Prayer and luck perks wait for their owning systems.
 

@@ -18,6 +18,16 @@ side.
 
 ## Data model
 
+### Data Representation and Stacking
+
+All items share a uniform data representation. Unimproved base weapons and armor simply have empty enhancement slots and can be stacked in Stores and Shops. Improved gear populates its enhancement slots (`smithing`, `enchantment`, `runes`). In Shops and Stores, items stack like-with-like:
+
+```text
+Item                         Type     Qty   Sale Price
+Iron Longsword               Weapon   3     10
+Sharpened Iron Longsword     Weapon   1     10
+```
+
 `adventurer.equipment` has two array fields alongside the existing
 scalar pointers, which keep their exact current meaning:
 

@@ -25,14 +25,14 @@ Turn based. Very deep both strategically and tactically, with many possible deci
 
 ## RPG elements
 
-Class system combined with attributes/skills/perks in line with Fallout 1/2.
+Class system combined with primary attributes (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck`) rolled at creation (1-10 within class-specific ranges) to determine initial combat stats (e.g. base `melee`/`missile` hit % = `agility * 10 * class_multiplier %`), alongside a standardized combat attribute profile (`max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `action_points`), skills, and perks.
 
 ## Tactical D&D style battles
 
 Turn-based tactical combat in a fantasy setting. Think mix between XCOM and D&D.
 Character development is heavily inspired by XCOM/Xenonauts and Fallout 1/2. In short:
 * XP to level up
-* On level up, class-appropriate skills advance automatically. A unit only
+* On level up, class-appropriate skills advance automatically (random roll within tier ranges). A unit only
   advances skills its class uses—for example, only Scouts develop Scouting.
 * Every 3 levels, character can choose a perk (including a chance to increase
   an attribute score)
@@ -45,11 +45,11 @@ On the battlefield, the player's view is limited to the line of sight of the uni
 
 ### Dungeon crawling
 
-In dungeons, players can move on the local map in a turn-based manner until entering a battle. Users can drag-select or CTL-select groups of units to move in unison--these will try to maintain the formation you have set for them, like in Baldur's Gate 1/2. Moving in and out of combat is like Fallout 1/2, but unlike Fallout 2, movement is still turn based out of combat.
+In dungeons, players have free party movement out of combat (moving in formation, like Baldur's Gate 1/2) until a battle is triggered (usually upon establishing line of sight with an enemy or entering a trigger distance), at which point tactical turn-based combat begins.
 
 ### Action points
 
-Unstead of set movement/attack phases, units get generic action points like XCOM or Fallout 1/2. Like XCOM, the player can choose a "move and attack" movement radius, which will show the moves the unit can make and still attack. Action points are a function of the Agility attribute.
+Instead of set movement/attack phases, units get a generic action point budget (fixed base of 6 AP for all units). Like XCOM, the player can choose a "move and attack" movement radius, which will show the moves the unit can make and still attack.
 
 ### Healing
 
@@ -76,7 +76,9 @@ Town management needs its own rich UI, although a true town-building experience 
 
 ## World map
 
-The world should play somewhat like Civ, although instead of warring against other nations, the player wars against the monster threat.
+The world should play somewhat like Civ, although instead of warring against other nations, the player wars against the monster threat. 
+
+On the world map, time advances in **Turns** (the unit of time governing encounter repopulation, recruit availability, crafting, etc.). In tactical combat, time advances in **Rounds**. World map turn time is frozen while a party is engaged in an encounter; players can view the map, encampment, and trade, but world turns cannot advance until the battle resolves.
 
 ### Fog of war
 
