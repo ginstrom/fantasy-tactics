@@ -78,7 +78,12 @@ messages = {
 "units.parties": "Parties",
 "units.roster": "Roster",
 "units.recruitment": "Recruitment",
+"units.parties_count": "Parties: %d",
+"units.roster_count": "Units in roster: %d",
+"units.recruitment_count": "Recruitable units: %d",
+"units.view": "View",
 "roster.title": "Roster",
+
 "roster.empty": "No adventurers yet.",
 "roster.column.name": "Name",
 "roster.column.class": "Class",

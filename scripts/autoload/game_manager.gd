@@ -187,8 +187,8 @@ func go_to_units() -> Error:
 
 
 func go_to_parties(create_immediately: bool = false) -> Error:
-	create_party_on_open = create_immediately
 	_clear_detail_context()
+	create_party_on_open = create_immediately
 	return _change_scene(PARTIES_SCENE)
 
 
@@ -196,6 +196,17 @@ func consume_create_party_on_open() -> bool:
 	var value := create_party_on_open
 	create_party_on_open = false
 	return value
+
+
+func _clear_detail_context() -> void:
+	route_context_id = ""
+	unit_details_origin = ""
+	add_member_return_party_id = ""
+	assign_equipment_party_id = ""
+	assign_equipment_origin = AssignEquipmentOrigin.STORES
+	recruitment_target_party_id = ""
+	create_party_on_open = false
+
 
 
 
@@ -565,15 +576,7 @@ func _change_scene(path: String) -> Error:
 	return err
 
 
-func _clear_detail_context() -> void:
-	route_context_id = ""
-	unit_details_origin = ""
-	add_member_return_party_id = ""
-	assign_equipment_party_id = ""
-	assign_equipment_origin = AssignEquipmentOrigin.STORES
-	recruitment_target_party_id = ""
-
-
 func _is_recruitment_target_eligible(party_id: String) -> bool:
+
 	var party := GameSession.get_party(party_id)
 	return party_id != "" and not party.is_empty() and not party.get("deployed", false) and party.get("location_id", "") == GameSession.STARTING_SETTLEMENT_ID and party.get("member_ids", []).size() < GameSession.get_max_party_size()

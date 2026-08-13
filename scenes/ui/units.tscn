@@ -40,17 +40,41 @@ layout_mode = 2
 text = "units.title"
 horizontal_alignment = 1
 
-[node name="RosterButton" type="Button" parent="Body/Center/VBox"]
+[node name="PartiesRow" type="HBoxContainer" parent="Body/Center/VBox"]
 layout_mode = 2
-text = "units.roster"
+theme_override_constants/separation = 16
 
-[node name="PartiesButton" type="Button" parent="Body/Center/VBox"]
+[node name="PartiesLabel" type="Label" parent="Body/Center/VBox/PartiesRow"]
 layout_mode = 2
-text = "units.parties"
+size_flags_horizontal = 3
 
-[node name="RecruitmentButton" type="Button" parent="Body/Center/VBox"]
+[node name="PartiesViewButton" type="Button" parent="Body/Center/VBox/PartiesRow"]
 layout_mode = 2
-text = "units.recruitment"
+text = "units.view"
+
+[node name="RosterRow" type="HBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="RosterLabel" type="Label" parent="Body/Center/VBox/RosterRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RosterViewButton" type="Button" parent="Body/Center/VBox/RosterRow"]
+layout_mode = 2
+text = "units.view"
+
+[node name="RecruitmentRow" type="HBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="RecruitmentLabel" type="Label" parent="Body/Center/VBox/RecruitmentRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RecruitmentViewButton" type="Button" parent="Body/Center/VBox/RecruitmentRow"]
+layout_mode = 2
+text = "units.view"
 
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
@@ -67,7 +91,8 @@ theme_override_constants/margin_bottom = 16
 unique_name_in_owner = true
 layout_mode = 2
 
-[connection signal="pressed" from="Body/Center/VBox/RosterButton" to="." method="_on_roster_pressed"]
-[connection signal="pressed" from="Body/Center/VBox/PartiesButton" to="." method="_on_parties_pressed"]
-[connection signal="pressed" from="Body/Center/VBox/RecruitmentButton" to="." method="_on_recruitment_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/PartiesRow/PartiesViewButton" to="." method="_on_parties_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RosterRow/RosterViewButton" to="." method="_on_roster_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RecruitmentRow/RecruitmentViewButton" to="." method="_on_recruitment_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
+

@@ -44,22 +44,18 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
-func test_parties_and_roster_are_active_branches() -> void:
+func test_shows_parties_roster_and_recruitment_counts_with_view_buttons() -> void:
+	GameSession.create_party()
 	var screen: Control = UnitsScene.instantiate()
 	add_child_autofree(screen)
 
-	assert_false(screen.get_node("Body/Center/VBox/PartiesButton").disabled)
-	assert_eq(screen.get_node("Body/Center/VBox/PartiesButton").text, "units.parties")
-	assert_false(screen.get_node("Body/Center/VBox/RosterButton").disabled)
-	assert_eq(screen.get_node("Body/Center/VBox/RosterButton").text, "units.roster")
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesRow/PartiesLabel").text, tr("units.parties_count") % 1)
+	assert_eq(screen.get_node("Body/Center/VBox/RosterRow/RosterLabel").text, tr("units.roster_count") % 4)
+	assert_eq(screen.get_node("Body/Center/VBox/RecruitmentRow/RecruitmentLabel").text, tr("units.recruitment_count") % 4)
+	assert_eq(screen.get_node("Body/Center/VBox/PartiesRow/PartiesViewButton").text, tr("units.view"))
+	assert_eq(screen.get_node("Body/Center/VBox/RosterRow/RosterViewButton").text, tr("units.view"))
+	assert_eq(screen.get_node("Body/Center/VBox/RecruitmentRow/RecruitmentViewButton").text, tr("units.view"))
 
-
-func test_recruitment_is_an_active_branch() -> void:
-	var screen: Control = UnitsScene.instantiate()
-	add_child_autofree(screen)
-
-	assert_false(screen.get_node("Body/Center/VBox/RecruitmentButton").disabled)
-	assert_eq(screen.get_node("Body/Center/VBox/RecruitmentButton").text, "units.recruitment")
 
 
 func test_recruitment_button_routes_to_the_recruitment_screen() -> void:

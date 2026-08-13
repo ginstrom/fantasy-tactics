@@ -108,7 +108,12 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("units.parties"), "Parties")
 	assert_eq(tr("units.roster"), "Roster")
 	assert_eq(tr("units.recruitment"), "Recruitment")
+	assert_eq(tr("units.parties_count") % 2, "Parties: 2")
+	assert_eq(tr("units.roster_count") % 13, "Units in roster: 13")
+	assert_eq(tr("units.recruitment_count") % 2, "Recruitable units: 2")
+	assert_eq(tr("units.view"), "View")
 	assert_eq(tr("parties.title"), "Parties")
+
 	assert_eq(tr("parties.create"), "Create Party")
 	assert_eq(tr("parties.enter_name"), "Name this party:")
 	assert_eq(tr("parties.confirm_name"), "OK")
@@ -297,11 +302,12 @@ func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:
 	add_child_autofree(parties)
 
 	assert_eq(units.get_node("Body/Center/VBox/Title").text, "units.title")
-	assert_eq(units.get_node("Body/Center/VBox/PartiesButton").text, "units.parties")
-	assert_eq(units.get_node("Body/Center/VBox/RosterButton").text, "units.roster")
-	assert_eq(units.get_node("Body/Center/VBox/RecruitmentButton").text, "units.recruitment")
+	assert_eq(units.get_node("Body/Center/VBox/PartiesRow/PartiesViewButton").text, tr("units.view"))
+	assert_eq(units.get_node("Body/Center/VBox/RosterRow/RosterViewButton").text, tr("units.view"))
+	assert_eq(units.get_node("Body/Center/VBox/RecruitmentRow/RecruitmentViewButton").text, tr("units.view"))
 	assert_eq(parties.get_node("Body/Center/VBox/Title").text, "parties.title")
 	assert_eq(parties.get_node("Body/Center/VBox/EmptyLabel").text, "parties.empty")
+
 
 
 func test_information_panel_uses_translation_keys_not_literal_copy() -> void:
