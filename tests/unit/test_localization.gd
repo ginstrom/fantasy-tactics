@@ -191,12 +191,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("level_up.xp") % 20, "XP: 20")
 	assert_eq(tr("level_up.level") % 2, "Level: 2")
 	assert_eq(tr("level_up.health_gain") % [4, 1], "Max Health: 4 (+1)")
-	assert_eq(tr("level_up.attack") % [61, 61], "Attack: 61 raw / 61% hit chance")
-	assert_eq(tr("level_up.skill_points") % 9, "Unspent skill points: 9")
 	assert_eq(tr("level_up.perk_pending"), "Choose a perk to continue.")
 	assert_eq(tr("level_up.choose_bonus_move"), "Choose Bonus Move")
-	assert_eq(tr("level_up.attack_minus"), "-")
-	assert_eq(tr("level_up.attack_plus"), "+")
 	assert_eq(tr("level_up.continue"), "Continue")
 	assert_eq(tr("guild_hall.title"), "Guild Hall")
 	assert_eq(tr("guild_hall.level") % 1, "Guild Hall — Level 1")
@@ -320,8 +316,6 @@ func test_level_up_uses_translation_keys_not_literal_copy() -> void:
 	add_child_autofree(level_up)
 
 	assert_eq(level_up.continue_button.text, "level_up.continue")
-	assert_eq(level_up.attack_plus_button.text, "level_up.attack_plus")
-	assert_eq(level_up.attack_minus_button.text, "level_up.attack_minus")
 	assert_eq(level_up.choose_bonus_move_button.text, "level_up.choose_bonus_move")
 
 

@@ -187,11 +187,27 @@ const WEAPONS: Dictionary = {
 const CLASS_DEFINITIONS: Dictionary = {
 	"warrior": {
 		"allowed_weapon_categories": ["sword", "dagger", "axe"],
-		"base_stats": {"max_health": 10, "attack": 60, "move_range": 3},
+		"base_stats": {"max_health": 10, "vitality": 10, "melee": 60, "missile": 60, "guard": 0, "might": 0, "move_range": 3},
+		"primary_attribute_ranges": {"strength": Vector2i(6, 8), "agility": Vector2i(6, 8), "vitality": Vector2i(6, 8), "intelligence": Vector2i(1, 4), "piety": Vector2i(1, 4), "luck": Vector2i(1, 10)},
+		"class_multiplier": 1.5,
+		"skills": {
+			"melee": {"tier": "med", "min_gain": 3, "max_gain": 4},
+			"missile": {"tier": "med", "min_gain": 3, "max_gain": 4},
+			"guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"might": {"tier": "med", "min_gain": 3, "max_gain": 4},
+		},
 	},
 	"scout": {
 		"allowed_weapon_categories": ["dagger", "bow"],
-		"base_stats": {"max_health": 12, "attack": 65, "move_range": 3},
+		"base_stats": {"max_health": 12, "vitality": 12, "melee": 65, "missile": 65, "guard": 0, "might": 0, "move_range": 3},
+		"primary_attribute_ranges": {"strength": Vector2i(4, 6), "agility": Vector2i(6, 8), "vitality": Vector2i(4, 6), "intelligence": Vector2i(3, 5), "piety": Vector2i(1, 4), "luck": Vector2i(1, 10)},
+		"class_multiplier": 1.0,
+		"skills": {
+			"melee": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"missile": {"tier": "hi", "min_gain": 4, "max_gain": 5},
+			"guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"might": {"tier": "low", "min_gain": 1, "max_gain": 2},
+		},
 	},
 }
 const BLACKSMITH_BUILD_COST := 50
@@ -251,11 +267,7 @@ const DEFAULT_ARMOR_ID := "leather_armor"
 # vars, not real consts, specifically so every existing
 # GameSession.SOME_CONSTANT call site keeps working unchanged — GDScript
 # exposes both consts and vars the same way through a singleton instance.
-var BASE_ATTACK: int = 60
-var BASE_MAX_HEALTH: int = 10
 var BASE_MOVE_RANGE: int = 3
-var LEVEL_UP_MAX_HEALTH_BONUS: int = 10
-var LEVEL_UP_SKILL_POINTS: int = 10
 var PERK_LEVEL_INTERVAL: int = 3
 const BONUS_MOVE_PERK_ID := "bonus_move"
 var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 4
@@ -313,18 +325,9 @@ func get_default_warrior(adventurer_id: String = WARRIOR_ID, adventurer_name: St
 		},
 		"level": 1,
 		"availability_status": "available",
-		# Authored base combat values; effective values (hit chance, max health,
-		# move range) are derived from these plus progression by GameSession.
-		"stats": {
-			"max_health": BASE_MAX_HEALTH,
-			"attack": BASE_ATTACK,
-			"move_range": BASE_MOVE_RANGE,
-		},
-		# Durable leveling state. xp is a float so fractional party XP awards are
-		# never truncated; display-facing rounding is a UI concern.
+		"stats": CLASS_DEFINITIONS.warrior.base_stats.duplicate(true),
 		"progression": {
 			"xp": 0.0,
-			"skill_points": 0,
 			"perks": [],
 		},
 	}
@@ -344,7 +347,6 @@ func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictio
 		"stats": CLASS_DEFINITIONS.scout.base_stats.duplicate(true),
 		"progression": {
 			"xp": 0.0,
-			"skill_points": 0,
 			"perks": [],
 		},
 	}
@@ -456,6 +458,7 @@ var recruitment_class_roll: Callable = func() -> String: return "scout" if randi
 ## blocks mixed with a unix-time fragment; tests may pin it to make every
 ## minted id deterministic. Same convention as vacancy_delay_roll /
 ## recruitment_class_roll: never touched by reset().
+var skill_gain_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var instance_id_roll: Callable = func() -> String:
 	var time_fragment := int(Time.get_unix_time_from_system())
 	return "%08x-%04x-%08x-%04x%08x" % [
@@ -479,6 +482,7 @@ func reset_injectable_rolls() -> void:
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
 	recruitment_class_roll = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+	skill_gain_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	instance_id_roll = func() -> String:
 		var time_fragment := int(Time.get_unix_time_from_system())
 		return "%08x-%04x-%08x-%04x%08x" % [
@@ -565,13 +569,9 @@ func _ready() -> void:
 
 
 func _load_balance_config() -> void:
-	BASE_ATTACK = GameConfig.get_int("combat", "base_attack", BASE_ATTACK)
-	BASE_MAX_HEALTH = GameConfig.get_int("combat", "base_max_health", BASE_MAX_HEALTH)
 	BASE_MOVE_RANGE = GameConfig.get_int("combat", "base_move_range", BASE_MOVE_RANGE)
 	EFFECTIVE_HIT_CHANCE_CAP = GameConfig.get_float("combat", "effective_hit_chance_cap", EFFECTIVE_HIT_CHANCE_CAP)
 	ATTACK_TO_HIT_CHANCE_DIVISOR = GameConfig.get_float("combat", "attack_to_hit_chance_divisor", ATTACK_TO_HIT_CHANCE_DIVISOR)
-	LEVEL_UP_MAX_HEALTH_BONUS = GameConfig.get_int("progression", "level_up_max_health_bonus", LEVEL_UP_MAX_HEALTH_BONUS)
-	LEVEL_UP_SKILL_POINTS = GameConfig.get_int("progression", "level_up_skill_points", LEVEL_UP_SKILL_POINTS)
 	PERK_LEVEL_INTERVAL = GameConfig.get_int("progression", "perk_level_interval", PERK_LEVEL_INTERVAL)
 	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
@@ -2144,8 +2144,18 @@ func _award_adventurer_xp(adventurer_id: String, amount: float) -> bool:
 	var leveled_up := false
 	while adventurer.progression.xp >= get_level_xp_threshold(adventurer.level + 1):
 		adventurer.level += 1
-		adventurer.stats.max_health += LEVEL_UP_MAX_HEALTH_BONUS
-		adventurer.progression.skill_points += LEVEL_UP_SKILL_POINTS
+		var class_id: String = adventurer.get("class", "warrior")
+		var class_def: Dictionary = CLASS_DEFINITIONS.get(class_id, CLASS_DEFINITIONS.warrior)
+		var vitality: int = int(adventurer.stats.get("vitality", class_def.base_stats.get("vitality", 10)))
+		adventurer.stats.max_health = vitality * adventurer.level
+		var skills: Dictionary = class_def.get("skills", {})
+		for skill_name in skills:
+			var skill_info: Dictionary = skills[skill_name]
+			var min_gain: int = int(skill_info.get("min_gain", 1))
+			var max_gain: int = int(skill_info.get("max_gain", 2))
+			var gain: int = skill_gain_roll.call(min_gain, max_gain)
+			var current_val: int = int(adventurer.stats.get(skill_name, 0))
+			adventurer.stats[skill_name] = current_val + gain
 		leveled_up = true
 	return leveled_up
 
@@ -2172,27 +2182,6 @@ func _pending_perk_slot_count(adventurer: Dictionary) -> int:
 	return earned_slots - adventurer.progression.perks.size()
 
 
-## Rejects a non-positive amount, an amount greater than the adventurer's
-## unspent skill points, or an unknown adventurer id, without mutating
-## anything. Otherwise decrements skill_points by amount and adds amount to
-## the adventurer's raw (uncapped) Attack.
-func spend_attack_points(adventurer_id: String, amount: int) -> bool:
-	if amount <= 0:
-		return false
-
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-
-	var adventurer: Dictionary = adventurers[adventurer_index]
-	if amount > adventurer.progression.skill_points:
-		return false
-
-	adventurer.progression.skill_points -= amount
-	adventurer.stats.attack += amount
-	return true
-
-
 ## Only accepts BONUS_MOVE_PERK_ID, only while is_perk_choice_pending() is
 ## true for adventurer_id, and only once per adventurer (a perk already in
 ## progression.perks cannot be re-chosen).
@@ -2214,14 +2203,22 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 	return true
 
 
-## Centralized effective-hit-chance formula: min(raw Attack / 100.0, 0.95).
-## Raw Attack itself is never capped (it feeds future defence/debuff math);
-## only the chance derived from it is. Returns 0.0 for an unknown adventurer.
+## Centralized effective-hit-chance formula: min(raw skill / 100.0, 0.95).
+## Skill used depends on weapon category: "bow" -> missile, others -> melee.
+## Returns 0.0 for an unknown adventurer.
 func get_effective_hit_chance(adventurer_id: String) -> float:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0.0
-	return minf(adventurer.stats.attack / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
+	var weapon_id := str(adventurer.equipment.weapon)
+	var weapon: Dictionary = get_item_definition(weapon_id)
+	var category := str(weapon.get("category", ""))
+	var raw_stat: float = 0.0
+	if category == "bow":
+		raw_stat = float(adventurer.stats.get("missile", adventurer.stats.get("attack", 60)))
+	else:
+		raw_stat = float(adventurer.stats.get("melee", adventurer.stats.get("attack", 60)))
+	return minf(raw_stat / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
 
 
 ## Centralized effective max health: the adventurer's stored max_health,
@@ -2302,7 +2299,16 @@ func get_effective_defense(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return 0
 	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
-	return 0 if armor.is_empty() else int(armor.defense)
+	var armor_def: int = 0 if armor.is_empty() else int(armor.defense)
+	var guard_stat: int = int(adventurer.stats.get("guard", 0))
+	return armor_def + guard_stat
+
+
+func get_effective_might(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	return int(adventurer.stats.get("might", 0))
 
 
 func get_effective_resistance(adventurer_id: String) -> int:

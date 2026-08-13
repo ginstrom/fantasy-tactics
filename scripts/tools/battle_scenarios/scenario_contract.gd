@@ -55,7 +55,7 @@ const DEFAULT_ENEMY_POLICY := "current_enemy_policy"
 # GameSession.get_default_warrior()/WARRIOR_ID). Enemy templates mirror
 # GameSession's named *_ENEMY_STATS consts (see battle_state_factory.gd's
 # read-only helpers, which resolve these same names to live stat data).
-const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior"]
+const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout"]
 const KNOWN_ENEMY_TEMPLATES: Array[String] = ["goblin", "orc", "kobold", "hobgoblin"]
 
 

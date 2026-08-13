@@ -17,10 +17,7 @@ signal resolved
 @onready var xp_label: Label = $Content/XPLabel
 @onready var level_label: Label = $Content/LevelLabel
 @onready var health_gain_label: Label = $Content/HealthGainLabel
-@onready var attack_label: Label = $Content/AttackLabel
-@onready var skill_points_label: Label = $Content/SkillPointsLabel
-@onready var attack_minus_button: Button = $Content/AttackRow/AttackMinusButton
-@onready var attack_plus_button: Button = $Content/AttackRow/AttackPlusButton
+@onready var skill_gains_label: Label = $Content/SkillGainsLabel
 @onready var perk_label: Label = $Content/PerkLabel
 @onready var choose_bonus_move_button: Button = $Content/ChooseBonusMoveButton
 @onready var continue_button: Button = $Content/ContinueButton
@@ -30,8 +27,6 @@ var _health_before: int = 0
 
 
 func _ready() -> void:
-	attack_plus_button.pressed.connect(_on_attack_plus_pressed)
-	attack_minus_button.pressed.connect(_on_attack_minus_pressed)
 	choose_bonus_move_button.pressed.connect(_on_choose_bonus_move_pressed)
 	continue_button.pressed.connect(_on_continue_pressed)
 
@@ -64,13 +59,19 @@ func refresh() -> void:
 	var max_health: int = GameSession.get_effective_max_health(adventurer_id)
 	health_gain_label.text = tr("level_up.health_gain") % [max_health, max_health - _health_before]
 
-	var raw_attack: int = adventurer.stats.attack
-	var hit_chance_percent := int(round(GameSession.get_effective_hit_chance(adventurer_id) * 100.0))
-	attack_label.text = tr("level_up.attack") % [raw_attack, hit_chance_percent]
-
-	var unspent_points: int = adventurer.progression.skill_points
-	skill_points_label.text = tr("level_up.skill_points") % unspent_points
-	attack_plus_button.disabled = unspent_points <= 0
+	var class_id: String = adventurer.get("class", "warrior")
+	var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, GameSession.CLASS_DEFINITIONS.warrior)
+	var skills_def: Dictionary = class_def.get("skills", {})
+	var gains_text: Array[String] = []
+	for skill_name in ["melee", "missile", "guard", "might"]:
+		if skills_def.has(skill_name):
+			var val: int = adventurer.stats.get(skill_name, 0)
+			var skill_info: Dictionary = skills_def[skill_name]
+			var min_gain: int = skill_info.get("min_gain", 1)
+			var max_gain: int = skill_info.get("max_gain", 2)
+			var gain_str := "+%d" % min_gain if min_gain == max_gain else "+%d–%d" % [min_gain, max_gain]
+			gains_text.append("%s: %d (%s)" % [skill_name.capitalize(), val, gain_str])
+	skill_gains_label.text = "Gained Skills: " + " · ".join(gains_text)
 
 	var pending := GameSession.is_perk_choice_pending(adventurer_id)
 	perk_label.visible = pending
@@ -78,21 +79,6 @@ func refresh() -> void:
 		perk_label.text = tr("level_up.perk_pending")
 	choose_bonus_move_button.visible = pending
 	continue_button.disabled = pending
-
-
-func _on_attack_plus_pressed() -> void:
-	GameSession.spend_attack_points(adventurer_id, 1)
-	refresh()
-
-
-## GameSession's spend_attack_points() only ever adds to Attack — there is no
-## unspend/refund API to call here (and this task must not invent one; see
-## the campaign progression design doc's ownership rules). This control stays
-## present but permanently disabled, matching this codebase's existing
-## "show a disabled action rather than hide it" convention (e.g.
-## unit_details.gd's AddToPartyButton).
-func _on_attack_minus_pressed() -> void:
-	pass
 
 
 func _on_choose_bonus_move_pressed() -> void:

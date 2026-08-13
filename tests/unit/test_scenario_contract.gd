@@ -339,13 +339,13 @@ func test_normalize_and_validate_never_touch_gamesession_campaign_state() -> voi
 		"modifiers": {"attack": 999, "max_health": 999, "defense": 999},
 	}
 	var adventurers_before: Array = GameSession.adventurers.duplicate(true)
-	var base_attack_before: int = GameSession.BASE_ATTACK
+	var base_melee_before: int = GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee
 
 	var scenario := ScenarioContract.normalize(raw)
 	ScenarioContract.validate(scenario)
 
 	assert_eq(GameSession.adventurers, adventurers_before, "Modifiers must never touch GameSession.adventurers")
-	assert_eq(GameSession.BASE_ATTACK, base_attack_before, "Modifiers must never touch GameSession's balance constants")
+	assert_eq(GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee, base_melee_before, "Modifiers must never touch GameSession's balance constants")
 	assert_eq(GameSession.selected_encounter, "", "The contract must never touch GameSession.selected_encounter")
 
 

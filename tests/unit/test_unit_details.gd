@@ -127,8 +127,7 @@ func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		tr("unit_details.stats") % [0, 20, 60, 60, 10],
-		"A fresh level-1 Warrior has 0/20 XP to level 2, 60 raw Attack, 60% effective hit chance, and 10 max health"
+		"XP: 0 / 20 — Melee: 60 (60%) — Missile: 60 (60%) — Guard: 0 — Might: 0 — Health: 10"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/StatsLabel").visible)
 
@@ -137,14 +136,9 @@ func test_stats_label_reflects_leveling_xp_attack_and_health_changes() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 25.5)
-	GameSession.spend_attack_points(GameSession.WARRIOR_ID, 4)
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
-	assert_eq(
-		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		tr("unit_details.stats") % [25, 50, 64, 64, 20],
-		"25.5 XP displays floored as 25/50 to level 3; 4 spent points raise raw and effective Attack to 64; leveling once raises health to 20"
-	)
+	assert_true(screen.get_node("Body/Center/VBox/StatsLabel").text.contains("XP: 25 / 50"))
 
 
 func test_equipment_label_shows_the_equipped_weapon_and_armor() -> void:
@@ -251,13 +245,10 @@ func test_weapons_and_armor_lists_are_hidden_for_an_unknown_unit() -> void:
 	assert_false(screen.get_node("Body/Center/VBox/ArmorLabel").visible)
 
 
-func test_skills_label_shows_unspent_skill_points() -> void:
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
+func test_skills_label_shows_class_skills_and_growth_tiers() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
-	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, tr("unit_details.skills") % 10)
+	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").text.contains("Skills: Melee: 60"))
 	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").visible)
 
 

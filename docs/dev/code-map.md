@@ -87,8 +87,8 @@ often more precise than its own source comments.
   member is assigned to a party. Each entry: `id`, `name`, `class`, and
   `equipment` (active `weapon`/`armor` ids plus their inventories and
   `potion_inventory`; item ids resolve through `GameSession.get_item_definition()`),
-  along with `level`, `availability_status`, `stats` (`max_health`, `attack`,
-  `move_range` — base values), and progression (`xp: float`, `skill_points`,
+  along with `level`, `availability_status`, `stats` (`max_health`, `vitality`, `melee`,
+  `missile`, `guard`, `might`, `move_range` — base and class-growth values), and progression (`xp: float`,
   `perks: Array`). Identity is generated: every newly minted unit gets a
   collision-free GUID-style id from `_new_instance_id()` (injectable via
   `instance_id_roll`); names are cosmetic per-class counter strings, and

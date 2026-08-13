@@ -9,15 +9,11 @@ const CONFIG_PATH := "res://config/game_config.json"
 
 const DEFAULTS: Dictionary = {
 	"combat": {
-		"base_attack": 60,
-		"base_max_health": 10,
 		"base_move_range": 3,
 		"effective_hit_chance_cap": 0.95,
 		"attack_to_hit_chance_divisor": 100.0,
 	},
 	"progression": {
-		"level_up_max_health_bonus": 10,
-		"level_up_skill_points": 10,
 		"perk_level_interval": 3,
 	},
 	"guild_hall": {

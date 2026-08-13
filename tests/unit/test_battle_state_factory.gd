@@ -137,7 +137,7 @@ func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_de
 	var weapon: Dictionary = GameSession.WEAPONS[GameSession.DEFAULT_WEAPON_ID]
 	var armor: Dictionary = GameSession.ARMORS[GameSession.DEFAULT_ARMOR_ID]
 
-	assert_eq(hero.max_health, GameSession.BASE_MAX_HEALTH)
+	assert_eq(hero.max_health, GameSession.CLASS_DEFINITIONS.warrior.base_stats.max_health)
 	assert_eq(hero.max_action_points, BattleControllerScript.BASE_ACTION_POINTS)
 	assert_eq(hero.damage_min, weapon.damage_min)
 	assert_eq(hero.damage_max, weapon.damage_max)
@@ -145,7 +145,7 @@ func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_de
 	assert_eq(hero.resistance, armor.resistance)
 	assert_eq(
 		hero.hit_chance,
-		minf(GameSession.BASE_ATTACK / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP),
+		minf(GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP),
 	)
 
 
@@ -173,7 +173,7 @@ func test_build_applies_a_higher_level_players_max_health_bonus() -> void:
 	autofree(controller)
 
 	var hero = controller.get_unit_at(Vector2i(0, 0))
-	assert_eq(hero.max_health, GameSession.BASE_MAX_HEALTH + GameSession.LEVEL_UP_MAX_HEALTH_BONUS * 2)
+	assert_eq(hero.max_health, 30)
 
 
 ## --- Explicit modifiers affect only the constructed unit ---------------------
@@ -198,7 +198,7 @@ func test_build_applies_explicit_player_modifiers_on_top_of_the_baseline() -> vo
 	autofree(controller)
 	var hero = controller.get_unit_at(Vector2i(0, 0))
 
-	assert_eq(hero.max_health, GameSession.BASE_MAX_HEALTH + 5)
+	assert_eq(hero.max_health, GameSession.CLASS_DEFINITIONS.warrior.base_stats.max_health + 5)
 	assert_eq(hero.damage_min, weapon.damage_min + 2)
 	assert_eq(hero.damage_max, weapon.damage_max + 3)
 	assert_eq(hero.defense, armor.defense + 4)
@@ -242,14 +242,14 @@ func test_build_never_mutates_gamesession_or_gameconfig_state() -> void:
 		"enemy": {"template_id": "goblin", "count": 1},
 	})
 	var adventurers_before: Array = GameSession.adventurers.duplicate(true)
-	var base_max_health_before: int = GameSession.BASE_MAX_HEALTH
+	var base_max_health_before: int = GameSession.CLASS_DEFINITIONS.warrior.base_stats.max_health
 	var weapons_before: Dictionary = GameSession.WEAPONS.duplicate(true)
 
 	var controller: Node2D = BattleStateFactory.build(scenario, 1)
 	autofree(controller)
 
 	assert_eq(GameSession.adventurers, adventurers_before)
-	assert_eq(GameSession.BASE_MAX_HEALTH, base_max_health_before)
+	assert_eq(GameSession.CLASS_DEFINITIONS.warrior.base_stats.max_health, base_max_health_before)
 	assert_eq(GameSession.WEAPONS, weapons_before)
 	assert_eq(GameSession.selected_encounter, "")
 	assert_false(controller.is_inside_tree(), "BattleStateFactory must never add the controller to the scene tree")

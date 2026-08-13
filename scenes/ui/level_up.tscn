@@ -41,23 +41,8 @@ layout_mode = 2
 [node name="HealthGainLabel" type="Label" parent="Content"]
 layout_mode = 2
 
-[node name="AttackLabel" type="Label" parent="Content"]
+[node name="SkillGainsLabel" type="Label" parent="Content"]
 layout_mode = 2
-
-[node name="SkillPointsLabel" type="Label" parent="Content"]
-layout_mode = 2
-
-[node name="AttackRow" type="HBoxContainer" parent="Content"]
-layout_mode = 2
-
-[node name="AttackMinusButton" type="Button" parent="Content/AttackRow"]
-layout_mode = 2
-disabled = true
-text = "level_up.attack_minus"
-
-[node name="AttackPlusButton" type="Button" parent="Content/AttackRow"]
-layout_mode = 2
-text = "level_up.attack_plus"
 
 [node name="PerkLabel" type="Label" parent="Content"]
 layout_mode = 2

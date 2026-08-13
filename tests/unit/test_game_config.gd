@@ -34,9 +34,9 @@ func test_valid_json_text_is_parsed_as_is() -> void:
 	var config = GameConfigScript.new()
 	autofree(config)
 
-	var parsed: Dictionary = config._parse_or_default('{"combat": {"base_attack": 99}}')
+	var parsed: Dictionary = config._parse_or_default('{"combat": {"base_move_range": 5}}')
 
-	assert_eq(parsed, {"combat": {"base_attack": 99.0}})
+	assert_eq(parsed, {"combat": {"base_move_range": 5.0}})
 
 
 ## DEFAULTS is documented as mirroring config/game_config.json exactly, and it

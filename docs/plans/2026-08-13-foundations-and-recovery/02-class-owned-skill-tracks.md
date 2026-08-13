@@ -1,7 +1,7 @@
 # Step 2 — Automatic class-owned skill tracks (retire manual Attack points)
 
 **Branch:** `class-owned-skill-tracks`
-**Status:** pending
+**Status:** complete
 **Implements:** gap analysis §4 step 1 ("define automatic class-owned skill
 tracks and their migration from manual Attack points"), §1.3,
 `docs/design-resolutions.md` §1.1, §1.4, §1.5, and

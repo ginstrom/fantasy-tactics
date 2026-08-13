@@ -75,12 +75,16 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	# write the floored value back (see GameSession.DEFAULT_WARRIOR).
 	var xp_display: int = int(floor(adventurer.progression.xp))
 	var xp_to_next_level: int = int(GameSession.get_level_xp_threshold(adventurer["level"] + 1))
-	var raw_attack: int = adventurer.stats.attack
-	var hit_chance_percent := int(round(GameSession.get_effective_hit_chance(adventurer_id) * 100.0))
+	var melee_stat: int = adventurer.stats.get("melee", 60)
+	var missile_stat: int = adventurer.stats.get("missile", 60)
+	var guard_stat: int = adventurer.stats.get("guard", 0)
+	var might_stat: int = adventurer.stats.get("might", 0)
+	var melee_hit := int(round(minf(melee_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP) * 100.0))
+	var missile_hit := int(round(minf(missile_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP) * 100.0))
 	var effective_max_health: int = GameSession.get_effective_max_health(adventurer_id)
 	stats_label.text = (
-		tr("unit_details.stats")
-		% [xp_display, xp_to_next_level, raw_attack, hit_chance_percent, effective_max_health]
+		"XP: %d / %d — Melee: %d (%d%%) — Missile: %d (%d%%) — Guard: %d — Might: %d — Health: %d"
+		% [xp_display, xp_to_next_level, melee_stat, melee_hit, missile_stat, missile_hit, guard_stat, might_stat, effective_max_health]
 	)
 
 	var weapon_damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
@@ -100,7 +104,19 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 		]
 	)
 
-	skills_label.text = tr("unit_details.skills") % adventurer.progression.skill_points
+	var class_id: String = adventurer.get("class", "warrior")
+	var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, GameSession.CLASS_DEFINITIONS.warrior)
+	var skills_def: Dictionary = class_def.get("skills", {})
+	var skills_list: Array[String] = []
+	for skill_name in ["melee", "missile", "guard", "might"]:
+		if skills_def.has(skill_name):
+			var val: int = adventurer.stats.get(skill_name, 0)
+			var skill_info: Dictionary = skills_def[skill_name]
+			var min_gain: int = skill_info.get("min_gain", 1)
+			var max_gain: int = skill_info.get("max_gain", 2)
+			var gain_str := "+%d" % min_gain if min_gain == max_gain else "+%d–%d" % [min_gain, max_gain]
+			skills_list.append("%s: %d (%s per level)" % [skill_name.capitalize(), val, gain_str])
+	skills_label.text = "Skills: " + " · ".join(skills_list)
 
 	var has_bonus_move: bool = adventurer.progression.perks.has(GameSession.BONUS_MOVE_PERK_ID)
 	var perk_status_key := (

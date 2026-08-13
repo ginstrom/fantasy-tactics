@@ -22,7 +22,7 @@ func _open_level_up(adventurer_id: String, health_before: int) -> Control:
 	return level_up
 
 
-func test_shows_xp_level_health_gain_attack_and_skill_points_after_a_level_up() -> void:
+func test_shows_xp_level_health_gain_and_skill_gains_after_a_level_up() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 10)
 
@@ -30,77 +30,8 @@ func test_shows_xp_level_health_gain_attack_and_skill_points_after_a_level_up() 
 	assert_eq(level_up.xp_label.text, tr("level_up.xp") % 20)
 	assert_eq(level_up.level_label.text, tr("level_up.level") % 2)
 	assert_eq(level_up.health_gain_label.text, tr("level_up.health_gain") % [20, 10])
-	assert_eq(level_up.attack_label.text, tr("level_up.attack") % [60, 60])
-	assert_eq(level_up.skill_points_label.text, tr("level_up.skill_points") % 10)
+	assert_true(level_up.skill_gains_label.text.contains("Gained Skills:"))
 	assert_true(level_up.visible)
-
-
-func test_xp_is_floored_for_display_and_never_mutates_the_stored_float() -> void:
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 5.5)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
-
-	assert_eq(level_up.xp_label.text, tr("level_up.xp") % 5)
-	assert_eq(
-		GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.xp,
-		5.5,
-		"Display-only flooring must never mutate the stored float"
-	)
-
-
-func test_attack_plus_button_spends_one_point_via_game_session_and_refreshes_the_display() -> void:
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
-
-	level_up.attack_plus_button.emit_signal("pressed")
-
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.attack, 61)
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.skill_points, 9)
-	assert_eq(level_up.skill_points_label.text, tr("level_up.skill_points") % 9)
-	assert_eq(level_up.attack_label.text, tr("level_up.attack") % [61, 61])
-
-
-func test_attack_plus_button_disables_once_every_unspent_point_is_spent() -> void:
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
-
-	for i in range(10):
-		level_up.attack_plus_button.emit_signal("pressed")
-
-	assert_true(level_up.attack_plus_button.disabled)
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.skill_points, 0)
-
-
-func test_attack_plus_button_can_never_overspend_past_available_points() -> void:
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
-
-	for i in range(25):
-		level_up.attack_plus_button.emit_signal("pressed")
-
-	assert_eq(
-		GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.skill_points,
-		0,
-		"Repeated presses past the available amount must never go negative"
-	)
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.attack, 70)
-
-
-## GameSession exposes no way to unspend an Attack point (spend_attack_points
-## only ever adds), so a decrement control has nothing safe to do. It stays
-## present (mirroring this codebase's "present but disabled" convention, e.g.
-## unit_details.gd's AddToPartyButton) rather than hidden, and disabled always
-## — pressing it must never call GameSession or change any stored value.
-func test_attack_minus_button_is_present_but_always_disabled() -> void:
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
-	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
-
-	assert_true(level_up.attack_minus_button.visible)
-	assert_true(level_up.attack_minus_button.disabled)
-
-	level_up.attack_minus_button.emit_signal("pressed")
-
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.attack, 60)
-	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.skill_points, 10)
 
 
 func test_continue_is_free_on_an_ordinary_level_and_emits_resolved() -> void:

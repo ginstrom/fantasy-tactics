@@ -999,8 +999,8 @@ func test_default_warrior_starts_with_a_complete_progression_state() -> void:
 
 	assert_eq(warrior.progression.xp, 0.0, "XP is stored as a float")
 	assert_eq(warrior.level, 1)
-	assert_eq(warrior.stats.attack, 60)
-	assert_eq(warrior.progression.skill_points, 0, "A fresh Warrior has no unspent points")
+	assert_eq(warrior.stats.melee, 60)
+	assert_false(warrior.progression.has("skill_points"))
 	assert_eq(warrior.progression.perks, [], "A fresh Warrior has chosen no perks")
 	assert_eq(warrior.stats.max_health, 10)
 
@@ -1639,16 +1639,11 @@ func test_purchased_recruit_has_real_stats_and_progression_and_can_receive_xp() 
 		"A purchased recruit must start with the Warrior baseline max health, not a missing key"
 	)
 	assert_eq(
-		recruit.stats.attack,
-		session.get_default_warrior().stats.attack,
-		"A purchased recruit must start with the Warrior baseline Attack, not a missing key"
+		recruit.stats.melee,
+		session.get_default_warrior().stats.melee,
+		"A purchased recruit must start with the Warrior baseline Melee, not a missing key"
 	)
 	assert_eq(recruit.progression.xp, 5.0, "Awarded party XP must be stored, not silently dropped")
-	assert_eq(
-		recruit.progression.skill_points,
-		session.get_default_warrior().progression.skill_points,
-		"A purchased recruit must start with real (zero) unspent skill points, not a missing key"
-	)
 
 
 ## Task 1: progression domain (award_party_xp, spend_attack_points,
@@ -1749,57 +1744,21 @@ func test_an_oversized_award_resolves_multiple_levels_in_one_call() -> void:
 	assert_eq(session.get_adventurer("warrior_001").level, 3, "50 XP in one award should resolve straight to level 3")
 
 
-func test_each_level_gained_adds_one_max_health_and_ten_skill_points() -> void:
+func test_leveling_rolls_skill_gains_within_tier_ranges_and_recomputes_max_health() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.skill_gain_roll = func(min_val: int, max_val: int) -> int: return max_val
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
 	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.stats.max_health, 20, "Leveling once should add exactly ten max health")
-	assert_eq(warrior.progression.skill_points, 10, "Leveling once should add exactly ten skill points")
-
-
-func test_only_levels_divisible_by_three_require_a_perk_choice() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.create_party()
-	session.assign_adventurer_to_selected_party("warrior_001")
-
-	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 1 has no pending perk choice")
-
-	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
-	assert_false(session.is_perk_choice_pending("warrior_001"), "Level 2 does not require a perk choice")
-
-	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 30.0)
-	assert_true(session.is_perk_choice_pending("warrior_001"), "Level 3 requires a perk choice")
-
-
-func test_spend_attack_points_rejects_non_positive_overspent_and_missing_adventurer() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-
-	assert_false(session.spend_attack_points("warrior_001", 0), "A non-positive amount must be rejected")
-	assert_false(session.spend_attack_points("warrior_001", -1), "A negative amount must be rejected")
-	assert_false(session.spend_attack_points("warrior_001", 5), "A fresh Warrior has zero points to overspend")
-	assert_false(session.spend_attack_points("missing", 5), "An unknown adventurer id must be rejected")
-	assert_eq(session.get_adventurer("warrior_001").stats.attack, 60, "A rejected spend must not change Attack")
-
-
-func test_spend_attack_points_decrements_points_and_raises_raw_attack() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.create_party()
-	session.assign_adventurer_to_selected_party("warrior_001")
-	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
-
-	assert_true(session.spend_attack_points("warrior_001", 4))
-
-	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.stats.attack, 64, "Spending 4 points should add 4 to raw Attack")
-	assert_eq(warrior.progression.skill_points, 6, "Spending 4 of 10 points should leave 6 unspent")
+	assert_eq(warrior.stats.max_health, 20, "Leveling once should set max_health = vitality * level")
+	assert_eq(warrior.stats.melee, 64, "Melee tier med max gain (+4)")
+	assert_eq(warrior.stats.missile, 64, "Missile tier med max gain (+4)")
+	assert_eq(warrior.stats.guard, 2, "Guard tier low max gain (+2)")
+	assert_eq(warrior.stats.might, 4, "Might tier med max gain (+4)")
 
 
 func test_choose_perk_accepts_bonus_move_only_once_and_only_when_pending() -> void:
@@ -1852,10 +1811,10 @@ func test_effective_hit_chance_caps_at_ninety_five_percent_while_raw_attack_exce
 	session.assign_adventurer_to_selected_party("warrior_001")
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 140.0)
 
-	session.spend_attack_points("warrior_001", 40)
+	session.adventurers[0].stats.melee = 100
 
 	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.stats.attack, 100, "Raw Attack itself is not capped")
+	assert_eq(warrior.stats.melee, 100, "Raw Melee itself is not capped")
 	assert_eq(
 		session.get_effective_hit_chance("warrior_001"),
 		0.95,

@@ -30,6 +30,7 @@ var resistance: int
 # Flat damage added immediately after rolling the equipped weapon and before
 # target resistance. It is battle-local derived state, never campaign state.
 var raw_damage_bonus: int = 0
+var might: int = 0
 # XP awarded to the party when this unit is the one defeated (see
 # GameSession.*_ENEMY_STATS.kill_xp). 0 and unused for player-side units.
 var kill_xp: int = 0
@@ -68,7 +69,8 @@ func _init(
 	p_adventurer_id: String = "",
 	p_defense: int = 0,
 	p_resistance: int = 0,
-	p_kill_xp: int = 0
+	p_kill_xp: int = 0,
+	p_might: int = 0
 ) -> void:
 	grid_position = p_grid_position
 	color = p_color
@@ -85,6 +87,7 @@ func _init(
 	defense = p_defense
 	resistance = p_resistance
 	kill_xp = p_kill_xp
+	might = p_might
 
 
 func is_alive() -> bool:

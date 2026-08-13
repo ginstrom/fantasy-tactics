@@ -324,6 +324,64 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 			var record_id := str(copy.id)
 			if _is_recruitment_template_id(record_id):
 				copy["template_id"] = record_id
+
+		if copy.has("progression") and copy.progression is Dictionary:
+			copy.progression.erase("skill_points")
+
+		var class_id := str(copy.get("class", "warrior"))
+		var class_def: Dictionary = _GameSessionScript.CLASS_DEFINITIONS.get(class_id, _GameSessionScript.CLASS_DEFINITIONS.warrior)
+		var base_stats: Dictionary = class_def.get("base_stats", {})
+		var skills_def: Dictionary = class_def.get("skills", {})
+		var level := int(copy.get("level", 1))
+
+		if not copy.has("stats") or not copy.stats is Dictionary:
+			copy["stats"] = base_stats.duplicate(true)
+
+		var stats: Dictionary = copy.stats
+		var stored_attack: int = int(stats.get("attack", -1))
+
+		# Melee
+		var melee_base: int = int(base_stats.get("melee", 60))
+		var melee_min_gain: int = int(skills_def.get("melee", {}).get("min_gain", 1))
+		var melee_min_track := melee_base + (level - 1) * melee_min_gain
+		if stats.has("melee"):
+			stats["melee"] = max(int(stats.melee), melee_min_track)
+		elif stored_attack != -1:
+			stats["melee"] = max(stored_attack, melee_min_track)
+		else:
+			stats["melee"] = melee_min_track
+
+		# Missile
+		var missile_base: int = int(base_stats.get("missile", 60))
+		var missile_min_gain: int = int(skills_def.get("missile", {}).get("min_gain", 1))
+		var missile_min_track := missile_base + (level - 1) * missile_min_gain
+		if stats.has("missile"):
+			stats["missile"] = max(int(stats.missile), missile_min_track)
+		elif stored_attack != -1:
+			stats["missile"] = max(stored_attack, missile_min_track)
+		else:
+			stats["missile"] = missile_min_track
+
+		stats.erase("attack")
+
+		# Guard
+		var guard_base: int = int(base_stats.get("guard", 0))
+		var guard_min_gain: int = int(skills_def.get("guard", {}).get("min_gain", 1))
+		var guard_min_track := guard_base + (level - 1) * guard_min_gain
+		stats["guard"] = max(int(stats.get("guard", 0)), guard_min_track)
+
+		# Might
+		var might_base: int = int(base_stats.get("might", 0))
+		var might_min_gain: int = int(skills_def.get("might", {}).get("min_gain", 1))
+		var might_min_track := might_base + (level - 1) * might_min_gain
+		stats["might"] = max(int(stats.get("might", 0)), might_min_track)
+
+		# Vitality and Max Health
+		var vitality: int = int(stats.get("vitality", base_stats.get("vitality", 10)))
+		stats["vitality"] = vitality
+		var calc_max_health := vitality * level
+		stats["max_health"] = max(int(stats.get("max_health", 0)), calc_max_health)
+
 		normalized.append(copy)
 	return normalized
 

@@ -39,7 +39,7 @@ func test_recruitment_candidates_can_include_scouts() -> void:
 	assert_eq(scout_offer["class"], "scout")
 	assert_eq(scout_offer.equipment.weapon, "shortbow_iron")
 	assert_eq(scout_offer.equipment.armor, "leather_armor")
-	assert_eq(scout_offer.stats, {"max_health": 12, "attack": 65, "move_range": 3})
+	assert_eq(scout_offer.stats, GameSession.CLASS_DEFINITIONS.scout.base_stats)
 	assert_false(scout_offer.has("template_id"), "Overflow offers carry no template_id")
 
 

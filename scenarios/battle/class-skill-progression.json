@@ -1,0 +1,16 @@
+{
+  "scenario_id": "class_skill_progression",
+  "player": {"template_id": "warrior", "count": 1},
+  "enemy": {"template_id": "goblin", "count": 1},
+  "matrix": {
+    "level": [
+      {"value": 1, "overrides": {"player": {"template_id": "warrior", "count": 1, "level": 1}}},
+      {"value": 3, "overrides": {"player": {"template_id": "warrior", "count": 1, "level": 3}}},
+      {"value": 5, "overrides": {"player": {"template_id": "warrior", "count": 1, "level": 5}}}
+    ],
+    "enemy": [
+      {"value": "goblin", "overrides": {"enemy": {"template_id": "goblin", "count": 1}}},
+      {"value": "orc", "overrides": {"enemy": {"template_id": "orc", "count": 1}}}
+    ]
+  }
+}

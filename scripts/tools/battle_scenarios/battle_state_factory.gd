@@ -93,15 +93,8 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 ## so a scenario always builds on GameConfig's current tuning, per the
 ## design's "the normal game configuration remains the default baseline."
 static func _read_player_template_base_stats(template_id: String) -> Dictionary:
-	match template_id:
-		"warrior":
-			return {
-				"max_health": GameSession.BASE_MAX_HEALTH,
-				"attack": GameSession.BASE_ATTACK,
-				"move_range": GameSession.BASE_MOVE_RANGE,
-			}
-		_:
-			return {}
+	var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(template_id, {})
+	return class_def.get("base_stats", {})
 
 
 ## Resolves a named enemy template to GameSession's own *_ENEMY_STATS const
@@ -123,42 +116,49 @@ static func _read_enemy_template_stats(template_id: String) -> Dictionary:
 			return {}
 
 
-## Level-derived state is intentionally narrow: only max_health grows with
-## level (mirroring the unconditional part of GameSession.award_party_xp()'s
-## own level-up effect -- see LEVEL_UP_MAX_HEALTH_BONUS). Attack growth in
-## the real game comes from skill points the player explicitly spends
-## (spend_attack_points()), which is a player choice, not a level-derived
-## constant; a scenario expresses that instead via an explicit `attack`
-## modifier, keeping "explicit test inputs, never hidden mutations" honest
-## for stats as well as for GameConfig.
 static func _build_player_unit(spec: Dictionary, index: int):
-	var base := _read_player_template_base_stats(spec.template_id)
+	var template_id: String = String(spec.get("template_id", "warrior"))
+	var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(template_id, GameSession.CLASS_DEFINITIONS.warrior)
+	var base: Dictionary = class_def.get("base_stats", {})
+	var skills_def: Dictionary = class_def.get("skills", {})
 	var weapon: Dictionary = GameSession.WEAPONS.get(spec.weapon_id, {})
 	var armor: Dictionary = GameSession.ARMORS.get(spec.armor_id, {})
 	var modifiers: Dictionary = spec.get("modifiers", {})
 	var level: int = int(spec.get("level", 1))
 
-	var max_health: int = (
-		int(base.get("max_health", 0))
-		+ GameSession.LEVEL_UP_MAX_HEALTH_BONUS * (level - 1)
-		+ int(modifiers.get("max_health", 0))
+	var vitality: int = int(base.get("vitality", 10))
+	var max_health: int = vitality * level + int(modifiers.get("max_health", 0))
+
+	var melee_min_gain: int = int(skills_def.get("melee", {}).get("min_gain", 1))
+	var melee: int = int(base.get("melee", 60)) + (level - 1) * melee_min_gain + int(modifiers.get("melee", modifiers.get("attack", 0)))
+
+	var missile_min_gain: int = int(skills_def.get("missile", {}).get("min_gain", 1))
+	var missile: int = int(base.get("missile", 60)) + (level - 1) * missile_min_gain + int(modifiers.get("missile", modifiers.get("attack", 0)))
+
+	var guard_min_gain: int = int(skills_def.get("guard", {}).get("min_gain", 1))
+	var guard: int = int(base.get("guard", 0)) + (level - 1) * guard_min_gain + int(modifiers.get("guard", 0))
+
+	var might_min_gain: int = int(skills_def.get("might", {}).get("min_gain", 1))
+	var might: int = int(base.get("might", 0)) + (level - 1) * might_min_gain + int(modifiers.get("might", 0))
+
+	var category := str(weapon.get("category", ""))
+	var raw_hit_stat: float = float(missile) if category == "bow" else float(melee)
+	var hit_chance: float = clampf(
+		raw_hit_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, 0.0, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
-	var attack: int = int(base.get("attack", 0)) + int(modifiers.get("attack", 0))
+
 	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
 	var damage_min: int = int(weapon.get("damage_min", 0)) + int(modifiers.get("damage_min", 0))
 	var damage_max: int = int(weapon.get("damage_max", 0)) + int(modifiers.get("damage_max", 0))
-	var defense: int = int(armor.get("defense", 0)) + int(modifiers.get("defense", 0))
+	var defense: int = int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0))
 	var resistance: int = int(armor.get("resistance", 0)) + int(modifiers.get("resistance", 0))
-	var hit_chance: float = clampf(
-		attack / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, 0.0, GameSession.EFFECTIVE_HIT_CHANCE_CAP
-	)
 
 	var position := ScenarioContractScript.position_from_dict(spec.position)
 	var color: Color = BattleControllerScript.PLAYER_COLORS[index % BattleControllerScript.PLAYER_COLORS.size()]
 	var unit := UnitScript.new(
 		position, color, BattleControllerScript.Side.PLAYER,
 		action_points, max_health, damage_min, damage_max, hit_chance,
-		TranslationServer.translate(weapon.get("name_key", "")), String(spec.id), defense, resistance
+		TranslationServer.translate(weapon.get("name_key", "")), String(spec.id), defense, resistance, 0, might
 	)
 	unit.display_name = String(spec.id)
 	return unit

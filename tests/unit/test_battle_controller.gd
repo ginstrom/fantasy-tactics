@@ -626,15 +626,15 @@ func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_whe
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 140.0)
-	GameSession.spend_attack_points(GameSession.WARRIOR_ID, 40)
+	GameSession.adventurers[0].stats.melee = 100
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
 	assert_eq(
-		GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.attack,
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).stats.melee,
 		100,
-		"Raw Attack itself must not be capped"
+		"Raw Melee itself must not be capped"
 	)
 	assert_eq(warrior.hit_chance, 0.95, "Raw Attack 100 should cap the unit's hit chance at 0.95")
 

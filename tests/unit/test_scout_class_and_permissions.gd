@@ -13,7 +13,7 @@ func test_get_default_scout_returns_a_valid_equipped_adventurer() -> void:
 	assert_eq(scout.class, "scout")
 	assert_eq(scout.equipment.weapon, "shortbow_iron")
 	assert_eq(scout.equipment.armor, "leather_armor")
-	assert_eq(scout.stats, {"max_health": 12, "attack": 65, "move_range": 3})
+	assert_eq(scout.stats, GameSession.CLASS_DEFINITIONS.scout.base_stats)
 	GameSession.adventurers.append(scout)
 	assert_eq(GameSession.get_effective_defense("scout_001"), 10)
 	assert_eq(GameSession.get_effective_resistance("scout_001"), 10)
