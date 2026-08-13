@@ -34,12 +34,26 @@ func test_goblin_camp_creates_a_staffed_deployed_party_at_the_camp() -> void:
 func test_orc_outpost_creates_a_staffed_deployed_party_at_the_outpost() -> void:
 	assert_true(DebugScenarios.apply("orc_outpost"))
 	assert_true(GameSession.has_deployed_party())
-	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
+	assert_eq(GameSession.get_selected_party().member_ids.size(), 4, "Orc Outpost scenario deploys 4 warriors")
 	assert_eq(
 		GameSession.get_deployed_party_position(),
 		GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
 	)
 	assert_eq(GameSession.selected_encounter, "")
+
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var encounter: Dictionary = {}
+	for enc in GameSession.get_active_encounters():
+		if enc.template_id == GameSession.ORC_OUTPOST_ID:
+			encounter = enc
+			break
+	assert_eq(encounter.enemy.count, 2, "Orc Outpost scenario fields 2 orcs")
+	assert_eq(encounter.enemy.name_key, "battle.enemy.orc")
+
+
+
+
+
 
 
 func test_unknown_scenario_fails_after_reset_without_creating_a_party() -> void:

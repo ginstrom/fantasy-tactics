@@ -36,7 +36,8 @@ static func apply(scenario_id: String) -> bool:
 		"goblin_camp":
 			return _deploy_at(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 		"orc_outpost":
-			return _deploy_at(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position)
+			return _deploy_at_orc_outpost()
+
 		"ruined_fortress":
 			return _deploy_at_ruined_fortress()
 		"stocked_stores":
@@ -116,3 +117,29 @@ static func _deploy_at_ruined_fortress() -> bool:
 		GameSession.depart_selected_party()
 		and GameSession.set_deployed_party_position(position)
 	)
+
+
+static func _create_four_warrior_party() -> bool:
+	if not GameSession.create_party():
+		return false
+	if not GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID):
+		return false
+	for _extra_warrior in 3:
+		GameSession.recruit_adventurer()
+		var recruit_id: String = GameSession.adventurers[-1].id
+		if not GameSession.assign_adventurer_to_selected_party(recruit_id):
+			return false
+	return true
+
+
+static func _deploy_at_orc_outpost() -> bool:
+	if not _create_four_warrior_party():
+		return false
+	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 1
+	GameSession.enemy_count_roll = func(_min_value: int, _max_value: int) -> int: return 2
+	var position: Vector2i = GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
+	return (
+		GameSession.depart_selected_party()
+		and GameSession.set_deployed_party_position(position)
+	)
+
