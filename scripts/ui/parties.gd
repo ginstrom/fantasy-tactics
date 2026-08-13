@@ -30,6 +30,9 @@ func _ready() -> void:
 	party_table.set_columns(_build_columns())
 	information_panel.refresh()
 	refresh()
+	if GameManager.consume_create_party_on_open():
+		_on_create_party_pressed()
+
 
 
 func _unhandled_input(event: InputEvent) -> void:

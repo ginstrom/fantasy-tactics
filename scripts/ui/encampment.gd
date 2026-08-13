@@ -38,7 +38,8 @@ func refresh() -> void:
 
 
 func _on_first_party_create_pressed() -> void:
-	GameManager.go_to_parties()
+	GameManager.go_to_parties(true)
+
 
 
 func _on_first_party_dismiss_pressed() -> void:

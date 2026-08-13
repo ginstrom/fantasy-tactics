@@ -69,6 +69,7 @@ var last_created_party_id: String = ""
 ## and World Map Party Details' [Equip] — see Steps 6/7 of
 ## docs/plans/2026-08-09-minor-fixes-and-encounter-loot/) instead of the
 ## full roster (Stores' [Equip]). Empty means unscoped.
+var create_party_on_open: bool = false
 var assign_equipment_party_id: String = ""
 
 ## Which screen opened Assign Equipment, so its Back action (and a
@@ -185,9 +186,17 @@ func go_to_units() -> Error:
 	return _change_scene(UNITS_SCENE)
 
 
-func go_to_parties() -> Error:
+func go_to_parties(create_immediately: bool = false) -> Error:
+	create_party_on_open = create_immediately
 	_clear_detail_context()
 	return _change_scene(PARTIES_SCENE)
+
+
+func consume_create_party_on_open() -> bool:
+	var value := create_party_on_open
+	create_party_on_open = false
+	return value
+
 
 
 func go_to_roster() -> Error:

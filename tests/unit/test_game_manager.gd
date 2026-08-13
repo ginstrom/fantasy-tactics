@@ -270,7 +270,8 @@ func test_parties_route_points_to_the_parties_scene() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
 
 	assert_string_contains(source, "res://scenes/ui/parties.tscn")
-	assert_string_contains(source, "func go_to_parties()")
+	assert_string_contains(source, "func go_to_parties(")
+
 
 
 func test_party_details_route_points_to_the_party_details_scene() -> void:
@@ -1071,3 +1072,14 @@ func test_go_to_loaded_campaign_leaves_game_session_and_routing_untouched_on_a_f
 	assert_eq(GameSession.gold, 55, "A failed load must never touch GameSession")
 	assert_eq(GameManager.route_context_id, "stale", "A failed load must never route anywhere")
 	GameManager.route_context_id = ""
+
+
+func test_go_to_parties_with_create_immediately_flag_sets_and_consumes_flag() -> void:
+	GameManager.create_party_on_open = false
+
+	GameManager.go_to_parties(true)
+
+	assert_true(GameManager.create_party_on_open)
+	assert_true(GameManager.consume_create_party_on_open())
+	assert_false(GameManager.create_party_on_open)
+

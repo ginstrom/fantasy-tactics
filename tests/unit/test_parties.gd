@@ -286,3 +286,15 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_parties_auto_opens_create_party_name_entry_when_create_party_on_open_flag_is_set() -> void:
+	GameManager.create_party_on_open = true
+
+	var screen: Control = PartiesScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_true(screen.get_node("Body/Center/VBox/PartyNameEntry").visible)
+	assert_false(screen.get_node("Body/Center/VBox/CreatePartyButton").visible)
+	assert_false(GameManager.create_party_on_open, "Flag must be consumed on ready")
+

@@ -93,6 +93,8 @@ func test_first_party_dialog_uses_the_exact_prompt_and_create_routes_to_parties(
 	assert_eq(screen.get_node("FirstPartyDialog/Content/Buttons/DismissButton").text, tr("encampment.first_party.dismiss"))
 	screen.get_node("FirstPartyDialog/Content/Buttons/CreateButton").emit_signal("pressed")
 	assert_eq(GameManager.route_context_id, "")
+	assert_true(GameManager.create_party_on_open, "First party dialog create button must ask go_to_parties to create immediately")
+
 
 
 func test_encampment_contains_the_information_panel_and_refreshes_its_gold_total() -> void:
