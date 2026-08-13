@@ -289,9 +289,9 @@ func test_encampment_uses_translation_keys_not_literal_copy() -> void:
 	add_child_autofree(encampment)
 
 	assert_eq(encampment.get_node("Body/Center/VBox/Title").text, "encampment.title")
-	assert_eq(encampment.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 1)
+	assert_eq(encampment.get_node("Body/Center/VBox/PopulationLabel").text, tr("encampment.population") % 4)
 	assert_eq(encampment.get_node("Body/Center/VBox/PartiesLabel").text, tr("encampment.parties_count") % 1)
-	assert_eq(encampment.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 1)
+	assert_eq(encampment.get_node("Body/Center/VBox/UnitsLabel").text, tr("encampment.units_count") % 4)
 
 
 func test_units_and_parties_use_translation_keys_not_literal_copy() -> void:

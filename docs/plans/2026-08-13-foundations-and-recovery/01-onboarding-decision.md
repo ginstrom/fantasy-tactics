@@ -1,7 +1,7 @@
 # Step 1 — Initial-party / onboarding decision and its implementation
 
 **Branch:** `onboarding-decision`
-**Status:** pending
+**Status:** complete
 **Implements:** gap analysis §4 step 1 ("Decide the initial party/onboarding
 target"), the cap-plumbing part of §2.1 item 2 ("Add party-slot and
 party-size unlocking rules"), index constraint 6 (generated instance

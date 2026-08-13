@@ -433,11 +433,8 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 	var err: Error = manager.recruit_adventurer()
 
 	assert_eq(err, OK)
-	assert_eq(GameSession.adventurers.size(), 2)
-	# warrior_002 is the sole live, unpurchased recruitment candidate on a
-	# fresh session (see GameSession.reset()), so the debug recruit's
-	# id-collision avoidance (see GameSession.recruit_adventurer) skips it.
-	assert_eq(GameSession.adventurers[1].id, "warrior_003")
+	assert_eq(GameSession.adventurers.size(), 5)
+	assert_false(GameSession.adventurers[4].id.is_empty())
 
 
 func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
@@ -621,62 +618,65 @@ func test_purchase_recruit_reports_invalid_data_for_an_unknown_candidate() -> vo
 	var err: Error = manager.purchase_recruit("no_such_candidate")
 
 	assert_ne(err, OK, "An unknown candidate id must not be treated as a valid purchase")
-	assert_eq(GameSession.adventurers.size(), 1)
+	assert_eq(GameSession.adventurers.size(), 4)
 
 
 func test_purchase_recruit_reports_invalid_data_when_funds_are_insufficient() -> void:
 	GameSession.reset()
 	GameSession.gold = 0
+	var cand_id := str(GameSession.recruitment_candidates[0].id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
-	var err: Error = manager.purchase_recruit("warrior_002")
+	var err: Error = manager.purchase_recruit(cand_id)
 
 	assert_ne(err, OK)
-	assert_eq(GameSession.adventurers.size(), 1)
-	assert_eq(GameSession.get_recruitment_candidates().size(), 1)
+	assert_eq(GameSession.adventurers.size(), 4)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 4)
 
 
 func test_purchase_recruit_deducts_gold_removes_the_candidate_and_adds_the_adventurer() -> void:
 	GameSession.reset()
 	GameSession.gold = 10
+	var cand_id := str(GameSession.recruitment_candidates[0].id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
-	var err: Error = manager.purchase_recruit("warrior_002")
+	var err: Error = manager.purchase_recruit(cand_id)
 
 	assert_eq(err, OK)
 	assert_eq(GameSession.gold, 0)
-	assert_eq(GameSession.adventurers.size(), 2)
-	assert_eq(GameSession.adventurers[1].id, "warrior_002")
-	assert_eq(GameSession.get_recruitment_candidates().size(), 0)
+	assert_eq(GameSession.adventurers.size(), 5)
+	assert_eq(GameSession.adventurers[4].id, cand_id)
+	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
 
 
 func test_targeted_purchase_keeps_an_eligible_party_as_the_recruitment_target() -> void:
 	GameSession.reset()
 	GameSession.create_party()
-	GameSession.recruit_adventurer()
 	GameSession.gold = 10
+	var cand_id := str(GameSession.recruitment_candidates[0].id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	autofree(manager)
 	manager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
 
-	assert_eq(manager.purchase_recruit_for_target_party("warrior_002"), OK)
+	assert_eq(manager.purchase_recruit_for_target_party(cand_id), OK)
 	assert_eq(manager.recruitment_target_party_id, GameSession.FIRST_PARTY_ID)
 
 
 func test_targeted_purchase_clears_a_party_target_that_becomes_full() -> void:
 	GameSession.reset()
 	GameSession.create_party()
-	for index in 3:
-		GameSession.recruit_adventurer()
-		GameSession.assign_adventurer_to_selected_party("warrior_%03d" % (index + 3))
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[0].id)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[2].id)
 	GameSession.gold = 10
+	var cand_id := str(GameSession.recruitment_candidates[0].id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	autofree(manager)
 	manager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
 
-	assert_eq(manager.purchase_recruit_for_target_party("warrior_002"), OK)
+	assert_eq(manager.purchase_recruit_for_target_party(cand_id), OK)
 	assert_eq(manager.recruitment_target_party_id, "")
 
 
