@@ -20,40 +20,9 @@ for party scale; this step only decides and records.
 
 ## The decision (ask the user — this is a product call)
 
-**Option A — Keep the shipped onboarding (recommended).**
-One Warrior, player forms the first party.
-
-Rationale:
-
-- The guided first-playable loop already works and is covered end-to-end by
-  `tests/unit/test_first_campaign_ui_flow.gd` and the campaign guide.
-- The recruitment economy (vacancy-timed offers, gold costs, Guild Hall
-  party-size cap 4 → 5) is built around *earning* the remaining members;
-  gifting three starters would invalidate the early recruitment loop and the
-  10-gold recruit pricing.
-- The vision's four-member party is reachable in-campaign (Guild Hall level 1
-  cap is 4) — the difference is pacing, not capability.
-- Multi-party scale-up is roadmap part 4 work anyway; changing onboarding now
-  would be re-worked there.
-
-**Option B — Start with a four-member party.**
-Ship the vision's opening literally: seed three additional starting
-adventurers (and optionally a pre-formed party) in `reset()`. This is real
-implementation work — scope sketch only, to be expanded into a step-1b file
-in this directory if chosen:
-
-- Decide the starting roster composition and who pays (e.g. two Warriors +
-  two Scouts seeded free; or one Warrior plus three free hires).
-- `reset()`/`start_new_game()` seeding + `CampaignSnapshot` round-trip tests.
-- Campaign-guide consequence: `form_party` step changes if the party
-  pre-exists; `test_campaign_guide.gd` and `test_first_campaign_ui_flow.gd`
-  updates.
-- Rebalance: Goblin Camp/Orc Outpost vs. a four-member level-1 party via
-  `make scenario` (existing fights may become trivial).
-- Recruitment-offer interaction: a roster of four already fills the level-1
-  Guild Hall cap; decide what early recruitment offers are for.
-
-**Default if the user has no preference: Option A.**
+Start with 4 warriors in the roster and 4 recruitable units -- 3 warriors and 1
+scout. Maximum party size is 4, and maximum party count is 1. Player will
+create and man a party before deploying.
 
 ## Setup
 
@@ -65,28 +34,14 @@ make check   # green baseline
 
 ## Tasks (Option A path)
 
-This path is documentation + verification; there is no behavior change, so
-there is no red/green cycle beyond proving the suite stays green. (If Option
-B is chosen, stop here and write `01b-four-member-starting-party.md` with a
-full TDD task list before implementing.)
+Ensure implementation of maximum party size and maximum party count. Give a
+visual indicator in the UI on the Parties screen.
 
-1. **Record the decision in the gap analysis.** Edit
-   `docs/gap-analysis.md` → "Current implementation notes that constrain the
-   roadmap": replace the first bullet's closing sentence (*"Treat the
-   difference as an explicit product decision before changing onboarding or
-   balance."*) with the recorded decision, e.g.:
+The first upgrade to the Guild Hall (level 1 -> 2) enables party size to be
+increased from 4 to 5.
 
-   > **Decided (2026-08-13):** keep the shipped onboarding — one starting
-   > Warrior, player forms the first party. The vision's four-member starting
-   > party remains the long-term target for party-scale work (roadmap part 4,
-   > §2.1); early balance stays tuned around earning members through
-   > recruitment.
-
-2. **Mirror the decision in this plan's index** (the "Step 1" row status and
-   a one-line Decisions note), so the plan directory alone tells the story.
-
-3. **No code changes.** If any are proposed, they are out of scope for this
-   step.
+The second upgrade to the Guild Hall (level 2 -> 3) increases the maximum
+number of parties from 1 to 2.
 
 ## Verification
 
