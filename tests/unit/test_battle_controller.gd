@@ -1509,3 +1509,61 @@ func test_handle_tile_click_records_targeting_failure_and_emits_board_changed() 
 	assert_eq(controller.last_targeting_failure.get("target"), enemy)
 	assert_signal_emitted(controller, "board_changed")
 
+
+func test_get_attackable_tiles_for_unit_returns_ranged_tiles_within_los() -> void:
+	var controller := _make_controller(6, 6)
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	scout.attack_min_range = 1
+	scout.attack_max_range = 3
+	var obstacle = UnitScript.new(Vector2i(0, 1), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	controller.units = [scout, obstacle]
+
+	var tiles: Array[Vector2i] = controller.get_attackable_tiles_for_unit(scout)
+
+	assert_true(tiles.has(Vector2i(1, 0)))
+	assert_true(tiles.has(Vector2i(2, 0)))
+	assert_true(tiles.has(Vector2i(3, 0)))
+	assert_true(tiles.has(Vector2i(0, 1)), "Target on occupied tile is attackable")
+	assert_false(tiles.has(Vector2i(0, 2)), "Tiles behind obstacle are blocked by LoS")
+	assert_false(tiles.has(Vector2i(4, 0)), "Tiles beyond max range 3 are excluded")
+
+
+func test_update_highlights_renders_attack_and_target_highlights_when_unit_has_sufficient_ap() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	scout.attack_min_range = 1
+	scout.attack_max_range = 3
+	var enemy_in_range = UnitScript.new(Vector2i(0, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, enemy_in_range]
+	controller._select_unit(scout)
+
+	var has_target_highlight := false
+	for child in controller.highlight_container.get_children():
+		if child is ColorRect and child.position == Vector2(0, 2) * BattleControllerScript.TILE_SIZE:
+			if child.color == BattleControllerScript.TARGET_ATTACK_COLOR:
+				has_target_highlight = true
+
+	assert_true(has_target_highlight, "Target enemy tile must be highlighted with TARGET_ATTACK_COLOR")
+
+
+func test_update_highlights_omits_attack_highlights_when_unit_has_insufficient_ap() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 2)
+	scout.attack_min_range = 1
+	scout.attack_max_range = 3
+	var enemy_in_range = UnitScript.new(Vector2i(0, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, enemy_in_range]
+	controller._select_unit(scout)
+
+	var has_target_highlight := false
+	for child in controller.highlight_container.get_children():
+		if child is ColorRect and child.color == BattleControllerScript.TARGET_ATTACK_COLOR:
+			has_target_highlight = true
+
+	assert_false(has_target_highlight, "Target highlight must not be shown when AP < 3")
+
+

@@ -31,6 +31,8 @@ const TILE_COLOR_LIGHT := Color(0.24, 0.24, 0.28)
 const TILE_COLOR_DARK := Color(0.18, 0.18, 0.21)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
+const ATTACK_RANGE_COLOR := Color(0.9, 0.25, 0.25, 0.35)
+const TARGET_ATTACK_COLOR := Color(1.0, 0.2, 0.2, 0.65)
 
 enum Side { PLAYER, ENEMY }
 
@@ -286,6 +288,16 @@ func get_legal_attack_targets(unit) -> Array:
 			if grid.has_line_of_sight(unit.grid_position, target.grid_position, blocking_tiles):
 				legal_targets.append(target)
 	return legal_targets
+
+
+func get_attackable_tiles_for_unit(unit) -> Array[Vector2i]:
+	if unit == null or not unit.is_alive():
+		return []
+	var blocking_tiles: Array[Vector2i] = []
+	for candidate in units:
+		if candidate != unit and candidate.is_alive():
+			blocking_tiles.append(candidate.grid_position)
+	return grid.get_attackable_tiles(unit.grid_position, unit.attack_min_range, unit.attack_max_range, blocking_tiles)
 
 
 func get_targeting_failure_reason(attacker, target) -> String:
@@ -750,10 +762,39 @@ func _update_highlights() -> void:
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	highlight_container.add_child(ring)
 
-	for move in get_legal_moves(selected_unit):
+	var legal_moves := get_legal_moves(selected_unit)
+	for move in legal_moves:
 		var highlight := ColorRect.new()
 		highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
 		highlight.position = Vector2(move) * TILE_SIZE
 		highlight.color = LEGAL_MOVE_COLOR
 		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		highlight_container.add_child(highlight)
+
+	if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not has_status(selected_unit, PARALYZED_STATUS_ID):
+		var attackable_tiles := get_attackable_tiles_for_unit(selected_unit)
+		var legal_targets := get_legal_attack_targets(selected_unit)
+		var target_positions: Array[Vector2i] = []
+		for target in legal_targets:
+			target_positions.append(target.grid_position)
+
+		for tile in attackable_tiles:
+			if tile == selected_unit.grid_position:
+				continue
+			var occupant = get_unit_at(tile)
+			if occupant != null and occupant.side == selected_unit.side:
+				continue
+			if target_positions.has(tile):
+				var target_highlight := ColorRect.new()
+				target_highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
+				target_highlight.position = Vector2(tile) * TILE_SIZE
+				target_highlight.color = TARGET_ATTACK_COLOR
+				target_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				highlight_container.add_child(target_highlight)
+			elif not legal_moves.has(tile):
+				var attack_highlight := ColorRect.new()
+				attack_highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
+				attack_highlight.position = Vector2(tile) * TILE_SIZE
+				attack_highlight.color = ATTACK_RANGE_COLOR
+				attack_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				highlight_container.add_child(attack_highlight)
