@@ -75,6 +75,7 @@ var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return 
 var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var rune_trigger_roll: Callable = func() -> float: return randf()
 var last_attack_result: Dictionary = {}
+var last_targeting_failure: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
 @onready var unit_container: Node2D = $Units
@@ -287,6 +288,25 @@ func get_legal_attack_targets(unit) -> Array:
 	return legal_targets
 
 
+func get_targeting_failure_reason(attacker, target) -> String:
+	if attacker == null or not attacker.is_alive() or target == null or not target.is_alive():
+		return ""
+	if has_status(attacker, PARALYZED_STATUS_ID):
+		return "paralyzed"
+	if attacker.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
+		return "insufficient_ap"
+	var distance: int = grid.get_manhattan_distance(attacker.grid_position, target.grid_position)
+	if distance < attacker.attack_min_range or distance > attacker.attack_max_range:
+		return "out_of_range"
+	var blocking_tiles: Array[Vector2i] = []
+	for candidate in units:
+		if candidate != attacker and candidate.is_alive():
+			blocking_tiles.append(candidate.grid_position)
+	if not grid.has_line_of_sight(attacker.grid_position, target.grid_position, blocking_tiles):
+		return "line_of_sight_blocked"
+	return ""
+
+
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
 		return false
@@ -301,6 +321,7 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	selected_unit.grid_position = target
 	selected_unit.action_points_remaining -= distances[target] * MOVE_ACTION_POINT_COST
 	last_attack_result = {}
+	last_targeting_failure = {}
 	return true
 
 
@@ -409,6 +430,7 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 	selected_unit.grid_position = target
 	selected_unit.action_points_remaining -= MOVE_ACTION_POINT_COST
 	last_attack_result = {}
+	last_targeting_failure = {}
 	return true
 
 
@@ -627,6 +649,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if input_locked:
 		return
 
+	last_targeting_failure = {}
 	var clicked_unit = get_unit_at(tile_pos)
 	if clicked_unit != null:
 		if clicked_unit.side == active_side:
@@ -637,7 +660,16 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_units()
 			_select_unit_after_action()
 			return
+		if selected_unit != null and selected_unit.side == active_side:
+			var failure_reason := get_targeting_failure_reason(selected_unit, clicked_unit)
+			if failure_reason != "":
+				last_targeting_failure = {
+					"reason": failure_reason,
+					"attacker": selected_unit,
+					"target": clicked_unit,
+				}
 		_set_inspected_unit(clicked_unit)
+		board_changed.emit()
 		return
 
 	if try_move_selected_unit(tile_pos):
@@ -657,6 +689,7 @@ func _select_unit_after_action() -> void:
 
 func _select_unit(unit) -> void:
 	selected_unit = unit
+	last_targeting_failure = {}
 	_set_inspected_unit(unit)
 	_update_highlights()
 	board_changed.emit()

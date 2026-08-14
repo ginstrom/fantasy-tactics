@@ -1459,3 +1459,53 @@ func test_attack_hit_chance_is_reduced_by_the_defenders_defense_but_floors_at_th
 		20,
 		"0.3 hit chance minus 50 defense floors at 0.05; a 0.1 roll clears the floor and must still miss"
 	)
+
+
+func test_get_targeting_failure_reason_identifies_all_failure_causes() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 3
+	var enemy_in_range = UnitScript.new(Vector2i(0, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	var enemy_out_of_range = UnitScript.new(Vector2i(0, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	var obstacle = UnitScript.new(Vector2i(0, 1), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	controller.units = [attacker, enemy_in_range, enemy_out_of_range]
+
+	# Valid target in range
+	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "")
+
+	# Out of range
+	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_out_of_range), "out_of_range")
+
+	# Insufficient AP
+	attacker.action_points_remaining = 2
+	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "insufficient_ap")
+	attacker.action_points_remaining = 6
+
+	# Paralyzed
+	controller.apply_status(attacker, BattleControllerScript.PARALYZED_STATUS_ID)
+	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "paralyzed")
+	attacker.statuses.clear()
+
+	# Line of sight blocked
+	controller.units.append(obstacle)
+	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "line_of_sight_blocked")
+
+
+func test_handle_tile_click_records_targeting_failure_and_emits_board_changed() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 1
+	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [attacker, enemy]
+	controller.selected_unit = attacker
+	watch_signals(controller)
+
+	controller._handle_tile_click(enemy.grid_position)
+
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "out_of_range")
+	assert_eq(controller.last_targeting_failure.get("attacker"), attacker)
+	assert_eq(controller.last_targeting_failure.get("target"), enemy)
+	assert_signal_emitted(controller, "board_changed")
+

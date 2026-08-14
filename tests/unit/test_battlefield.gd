@@ -1212,3 +1212,25 @@ func test_multiple_kills_in_one_battle_are_tallied_by_type_not_overwritten() -> 
 		battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_eq(GameManager.battle_result_summary.kills_by_type, {tr("battle.enemy.goblin"): 2})
+
+
+func test_targeting_failure_updates_status_message() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	battlefield.grid.selected_unit = attacker
+
+	# Out of range click
+	battlefield.grid._handle_tile_click(enemy.grid_position)
+	assert_eq(battlefield.status.text, tr("battle.feedback.out_of_range"))
+
+	# Insufficient AP click
+	enemy.grid_position = attacker.grid_position + Vector2i(1, 0)
+	attacker.action_points_remaining = 2
+	battlefield.grid._handle_tile_click(enemy.grid_position)
+	assert_eq(
+		battlefield.status.text,
+		tr("battle.feedback.not_enough_ap") % BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+	)
+

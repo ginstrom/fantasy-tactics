@@ -146,7 +146,9 @@ func _on_board_changed() -> void:
 	_update_health_labels()
 	portrait_panel.refresh()
 	_refresh_item_actions()
-	if not grid.last_attack_result.is_empty():
+	if not grid.last_targeting_failure.is_empty():
+		status.text = _describe_targeting_failure(grid.last_targeting_failure)
+	elif not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
 		if grid.last_attack_result.type == "attack":
 			_log_attack(grid.last_attack_result)
@@ -412,6 +414,22 @@ func _describe_step(step: Dictionary) -> String:
 		return tr("battle.status.item_transfer") % [step.from.display_name, tr(GameSession.get_item_definition(step.item_id).name_key), step.to.display_name]
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
+
+
+func _describe_targeting_failure(failure: Dictionary) -> String:
+	var reason: String = failure.get("reason", "")
+	match reason:
+		"out_of_range":
+			return tr("battle.feedback.out_of_range")
+		"insufficient_ap":
+			return tr("battle.feedback.not_enough_ap") % BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+		"line_of_sight_blocked":
+			return tr("battle.feedback.line_of_sight_blocked")
+		"paralyzed":
+			var attacker_name: String = failure.attacker.display_name if failure.has("attacker") and failure.attacker != null else tr(SIDE_NAME_KEYS[BattleControllerScript.Side.PLAYER])
+			return tr("battle.feedback.paralyzed") % attacker_name
+		_:
+			return tr("battle.feedback.out_of_range")
 
 
 func _log_attack(step: Dictionary) -> void:
