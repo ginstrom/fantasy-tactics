@@ -181,8 +181,11 @@ const WEAPONS: Dictionary = {
 	"longsword_steel": {"name_key": "item.longsword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 1, "price": 90},
 	"two_handed_sword_iron": {"name_key": "item.two_handed_sword_iron", "slot": "weapon", "category": "sword", "damage_min": 1, "damage_max": 10, "min_range": 1, "max_range": 1, "price": 35},
 	"two_handed_sword_steel": {"name_key": "item.two_handed_sword_steel", "slot": "weapon", "category": "sword", "damage_min": 2, "damage_max": 11, "min_range": 1, "max_range": 1, "price": 105},
-	"shortbow_iron": {"name_key": "item.shortbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 3, "price": 30},
-	"hunting_bow_steel": {"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 4, "price": 75},
+	"shortbow_iron": {"name_key": "item.shortbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 8, "price": 30},
+	"shortbow_steel": {"name_key": "item.shortbow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 10, "price": 90},
+	"hunting_bow_steel": {"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 10, "price": 75},
+	"longbow_iron": {"name_key": "item.longbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 12, "price": 45},
+	"longbow_steel": {"name_key": "item.longbow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 15, "price": 135},
 }
 const CLASS_DEFINITIONS: Dictionary = {
 	"warrior": {

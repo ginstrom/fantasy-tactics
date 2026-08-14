@@ -103,7 +103,7 @@ func test_unit_details_displays_scout_class_and_weapon_range() -> void:
 	add_child_autofree(screen)
 
 	assert_eq(screen.get_node("Body/Center/VBox/ClassLabel").text, "Class: Scout")
-	assert_string_contains(screen.get_node("Body/Center/VBox/EquipmentLabel").text, "Range: 1–3")
+	assert_string_contains(screen.get_node("Body/Center/VBox/EquipmentLabel").text, "Range: 1–8")
 
 
 func test_assigning_scout_to_party_succeeds() -> void:

@@ -22,11 +22,23 @@ func test_get_default_scout_returns_a_valid_equipped_adventurer() -> void:
 func test_weapon_catalog_includes_bows_with_their_range_and_category() -> void:
 	assert_eq(
 		GameSession.WEAPONS.shortbow_iron,
-		{"name_key": "item.shortbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 3, "price": 30}
+		{"name_key": "item.shortbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 8, "price": 30}
+	)
+	assert_eq(
+		GameSession.WEAPONS.shortbow_steel,
+		{"name_key": "item.shortbow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 10, "price": 90}
 	)
 	assert_eq(
 		GameSession.WEAPONS.hunting_bow_steel,
-		{"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 4, "price": 75}
+		{"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 10, "price": 75}
+	)
+	assert_eq(
+		GameSession.WEAPONS.longbow_iron,
+		{"name_key": "item.longbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 12, "price": 45}
+	)
+	assert_eq(
+		GameSession.WEAPONS.longbow_steel,
+		{"name_key": "item.longbow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 15, "price": 135}
 	)
 
 
@@ -110,5 +122,8 @@ func test_import_rejects_class_incompatible_base_and_owned_weapons_without_mutat
 
 func test_localization_keys_resolve_in_english() -> void:
 	assert_eq(tr("item.shortbow_iron"), "Iron Shortbow")
+	assert_eq(tr("item.shortbow_steel"), "Steel Shortbow")
 	assert_eq(tr("item.hunting_bow_steel"), "Steel Hunting Bow")
+	assert_eq(tr("item.longbow_iron"), "Iron Longbow")
+	assert_eq(tr("item.longbow_steel"), "Steel Longbow")
 	assert_eq(tr("class.scout"), "Scout")
