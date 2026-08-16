@@ -9,9 +9,11 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	# The Ruined Fortress scenario pins these rolls to force its maximum
-	# Kobold count; restore real randomness so later tests/files aren't
-	# affected by this singleton's leftover state.
+	# Defensive: nothing in this file pins GameSession.enemy_composition_roll/
+	# enemy_count_roll today (see test_ruined_fortress_scenario_does_not_leak_
+	# state_into_a_later_scenario()'s own comment), but restore real
+	# randomness anyway so a later test/file can never inherit a pin left
+	# behind by a failed assertion here.
 	GameSession.reset_injectable_rolls()
 
 
@@ -48,41 +50,43 @@ func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
 	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
 
 
-func test_ruined_fortress_scenario_deploys_a_staffed_party_and_fields_eight_kobolds() -> void:
+## The old field-by-field DebugScenarios.apply() pinned GameSession.
+## enemy_composition_roll/enemy_count_roll to guarantee the maximum eight
+## Kobolds here. The manifest/snapshot-based apply() (see debug_scenarios.gd
+## and docs/plans/2026-08-16-debug-menu-json-config/index.md's "Architecture
+## and scope") deliberately excludes that kind of direct GameSession battle
+## override -- Callables have no JSON representation, and enemy composition
+## is re-rolled live by GameSession.enter_encounter() regardless. So this
+## scenario's party composition is still guaranteed by its fixture, but the
+## battle's enemy composition/count is real-random on entry, same as normal
+## gameplay.
+func test_ruined_fortress_scenario_deploys_a_staffed_party_of_three_warriors() -> void:
 	assert_eq(GameManager.run_debug_scenario("ruined_fortress"), OK)
 
 	var battlefield: Node2D = preload("res://scenes/battle/battlefield.tscn").instantiate()
 	add_child_autofree(battlefield)
 	var controller: Node2D = battlefield.grid
 
-	var enemy_units: Array = []
 	var player_units: Array = []
 	for unit in controller.units:
-		if unit.side == BattleControllerScript.Side.ENEMY:
-			enemy_units.append(unit)
-		else:
+		if unit.side != BattleControllerScript.Side.ENEMY:
 			player_units.append(unit)
-	assert_eq(enemy_units.size(), 8, "The forced Kobold roll should field the maximum count")
-	for unit in enemy_units:
-		assert_eq(unit.max_health, 6, "Every fielded unit should be a Kobold")
 
-	# A lone Warrior is not a representative test of an 8-enemy fight -- this
+	# A lone Warrior is not a representative test of a large fight -- this
 	# scenario stages three level-1 Warriors instead of the single-Warrior
-	# party every other debug scenario uses (see _create_staffed_party()).
+	# party every other debug scenario uses.
 	assert_eq(player_units.size(), 3, "The Ruined Fortress debug scenario should field three Warriors, not one")
 	for unit in player_units:
 		assert_eq(unit.max_health, 10, "Every fielded Warrior should be a fresh level-1 Warrior")
 
 
-## Regression test for a real leak: the Ruined Fortress scenario used to pin
-## enemy_composition_roll/enemy_count_roll on the GameSession singleton and
-## never restore them, so a later scenario in the same running game (e.g.
-## Goblin Camp) would inherit those pins and also field 8 Kobolds/Goblins
-## instead of its own real-random composition. DebugScenarios.apply() now
-## calls GameSession.reset_injectable_rolls() before every scenario's own
-## setup (see debug_scenarios.gd), so the pins from an earlier scenario must
-## not survive into this one.
-func test_ruined_fortress_scenario_does_not_leak_its_pinned_rolls_into_a_later_scenario() -> void:
+## Goblin Camp's difficulty has a single composition option with a fixed
+## count of 1, so it fields its own Goblin regardless of what a preceding
+## scenario did -- unlike the old field-by-field apply(), nothing in the
+## manifest/snapshot-based apply() pins enemy_composition_roll/
+## enemy_count_roll for any scenario anymore, so there is no pinned state
+## left for a later scenario to inherit in the first place.
+func test_ruined_fortress_scenario_does_not_leak_state_into_a_later_scenario() -> void:
 	assert_eq(GameManager.run_debug_scenario("ruined_fortress"), OK)
 	assert_eq(GameManager.run_debug_scenario("goblin_camp"), OK)
 

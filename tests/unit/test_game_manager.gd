@@ -170,6 +170,11 @@ func test_go_to_world_map_merges_the_battle_store_into_the_party_store() -> void
 
 func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	GameSession.reset()
+	# Pinned explicitly (not just left at the real-random default) so this
+	# test's expected gold total does not depend on some earlier test in this
+	# file leaving GameSession.enemy_count_roll pinned to a different value --
+	# GameSession.reset() deliberately never touches injectable rolls.
+	GameSession.reset_injectable_rolls()
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
@@ -180,12 +185,15 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 20, "Entering the encampment must bank the queued reward")
+	# 1 Goblin (Goblin Camp's only composition option is a fixed count of 1)
+	# at loot_gold_roll's pinned minimum of 1, plus the flat completion bonus
+	# loot_gold_roll(18, 22) * difficulty(1) = 18.
+	assert_eq(GameSession.gold, 19, "Entering the encampment must bank the queued reward")
 	assert_eq(GameSession.pending_reward, 0)
 
 	manager.go_to_encampment()
 
-	assert_eq(GameSession.gold, 20, "A second visit must not pay the reward again")
+	assert_eq(GameSession.gold, 19, "A second visit must not pay the reward again")
 	assert_eq(GameSession.pending_reward, 0)
 
 

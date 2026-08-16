@@ -98,6 +98,7 @@ func _ready() -> void:
 	_game_menu = preload(GAME_MENU_SCENE).instantiate()
 	add_child(_game_menu)
 	if OS.is_debug_build():
+		DebugScenarios.load_scenarios()
 		_debug_menu = preload(DEBUG_MENU_SCENE).instantiate()
 		add_child(_debug_menu)
 
@@ -447,7 +448,7 @@ static func debug_scenario_target(scenario_id: String) -> DebugTarget:
 func run_debug_scenario(scenario_id: String) -> Error:
 	if not OS.is_debug_build():
 		return ERR_UNAVAILABLE
-	if not DebugScenarios.apply(scenario_id):
+	if not DebugScenarios.apply(scenario_id).ok:
 		return ERR_INVALID_DATA
 
 	match debug_scenario_target(scenario_id):

@@ -2,84 +2,3802 @@
   "manifest_version": 1,
   "scenarios": [
     {
-      "id": "new_campaign",
-      "name_key": "debug.new_campaign",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "62393fdd-5f67-a1b881d8-6a81b67a91a2",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "6f3dc8de-5f67-59c6fbd8-6a8149eb2ed2",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "e028166d-5f67-def2cba3-6a8191ae4e77",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "38581b56-5f67-4959807e-6a81152d2a3d",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "73ac0d15-5f67-2ee4effa-6a81f61f8c64",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "554e7e1b-5f67-90c0032d-6a819402bb75",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "06bfcbc2-5f67-888c5691-6a81f79a08e6",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Campaign",
       "description": "A brand-new campaign at the starting settlement.",
-      "launch": { "scene": "settlement" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "new_campaign",
+      "launch": {
+        "scene": "settlement"
+      },
+      "name_key": "debug.new_campaign"
     },
     {
-      "id": "encampment",
-      "name_key": "debug.encampment",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "281bc8b2-5f67-49d25311-6a810b202dd4",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "f5f51543-5f67-11006960-6a8198a5bc09",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "a34d9e50-5f67-e190ce53-6a818adbe1dc",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "5711ef0e-5f67-a4a17985-6a810b812405",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "3d091346-5f67-0d00bfbe-6a81e0c24ded",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "a9f13b7c-5f67-e1e26ea4-6a81db096b19",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "e8cfacdc-5f67-cbfc0dfa-6a8159199353",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Campaign",
       "description": "A fresh campaign viewed from the Encampment.",
-      "launch": { "scene": "encampment" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "encampment",
+      "launch": {
+        "scene": "encampment"
+      },
+      "name_key": "debug.encampment"
     },
     {
-      "id": "party_manager",
-      "name_key": "debug.party_manager",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "486ee6e4-5f67-71128a87-6a816a31c8b8",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "87a7a039-5f67-e8cb3f0f-6a81fa20f1f5",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "cf896b5f-5f67-c4ddfdab-6a81c79453ea",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "33c46bd0-5f67-2357e7a5-6a81e0c781f7",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "48f68000-5f67-b7dd4a1f-6a81269b0f9c",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "38d12cb8-5f67-cf195ae9-6a816d0309e5",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "6a3e0b8b-5f67-613eaa21-6a81c72c654a",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Campaign",
       "description": "A fresh campaign opened directly to the Party Manager.",
-      "launch": { "scene": "party_manager" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "party_manager",
+      "launch": {
+        "scene": "party_manager"
+      },
+      "name_key": "debug.party_manager"
     },
     {
-      "id": "party_ready",
-      "name_key": "debug.party_ready",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "7028aeaa-5f67-1a917acc-6a81eace8152",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "e5843ec9-5f67-004a4540-6a81ba1c2cd7",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "d73df1b8-5f67-8f0ed81f-6a81efe4aead",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": false,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 3,
+              "y": 3
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "d16168ff-5f67-0f4130f2-6a81a10a0efc",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "5cfa8f52-5f67-154559d6-6a814f948675",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "8baf10cc-5f67-09035e6d-6a8125857d8d",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "16e2f718-5f67-82671472-6a816bd0b7f4",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Campaign",
       "description": "One staffed party at the Encampment, ready to depart.",
-      "launch": { "scene": "encampment" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "party_ready",
+      "launch": {
+        "scene": "encampment"
+      },
+      "name_key": "debug.party_ready"
     },
     {
-      "id": "party_empty",
-      "name_key": "debug.party_empty",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "753c0721-5f67-6bd014e9-6a817e995e9f",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "38347b06-5f67-5ba2ef42-6a8183c8b958",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "66811903-5f67-6bb952f7-6a81fae86470",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": false,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 3,
+              "y": 3
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "9487cf8a-5f67-e72d53f8-6a8134204202",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "6e4545a4-5f67-c042541c-6a81ecd38287",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "c94c6cef-5f67-81d5a3ed-6a81e7ba1950",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "2f8ef001-5f67-f4a009b7-6a816f297e42",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Campaign",
       "description": "An encamped party with no members yet assigned.",
-      "launch": { "scene": "encampment" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "party_empty",
+      "launch": {
+        "scene": "encampment"
+      },
+      "name_key": "debug.party_empty"
     },
     {
-      "id": "world_map",
-      "name_key": "debug.world_map",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "dd4a6063-5f67-0b42b187-6a8178ed51ab",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "85a3b7f6-5f67-0b744944-6a810de866e0",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "3de7a5f8-5f67-807a9222-6a811bc992d3",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": true,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 1,
+              "y": 0
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "e3e6dbb9-5f67-303c90e9-6a818795c6f8",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "1379f7ed-5f67-aac94cd3-6a81867a588a",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "dbda7fb1-5f67-0aa6b0ab-6a81398ebc5f",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "a6de6b9b-5f67-c9d21a4f-6a81733bac28",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "World",
       "description": "A staffed party deployed on the World Map, away from the settlement.",
-      "launch": { "scene": "world_map" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "world_map",
+      "launch": {
+        "scene": "world_map"
+      },
+      "name_key": "debug.world_map"
     },
     {
-      "id": "goblin_camp",
-      "name_key": "debug.goblin_camp",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "699490b4-5f67-95aa1742-6a81054e5bb1",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "f5e330b6-5f67-d13dc2d4-6a81b8999095",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "b2c82224-5f67-14f210f2-6a81d13b5342",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": true,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 4,
+              "y": 4
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "4fdac7a4-5f67-9d75aaed-6a816771d6a6",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "c74b232c-5f67-101b92f8-6a81c557e767",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "df7a574d-5f67-85d30e62-6a81a36f142d",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "bed41c99-5f67-983becf2-6a81505ed459",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Battle",
       "description": "A staffed party deployed at the Goblin Camp encounter.",
-      "launch": { "scene": "battlefield" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "goblin_camp",
+      "launch": {
+        "scene": "battlefield"
+      },
+      "name_key": "debug.goblin_camp"
     },
     {
-      "id": "orc_outpost",
-      "name_key": "debug.orc_outpost",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "0ff951ca-5f67-d66b8d56-6a8196bc7e3e",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "7ab59841-5f67-011e907d-6a812c9c646f",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "c456df17-5f67-f9af0f6d-6a81717f397a",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "0f76f4ab-5f67-5f0f450b-6a81f5db7aa7",
+            "level": 1,
+            "name": "Warrior 8",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "bcbb5c59-5f67-fa051750-6a81fb98a9d4",
+            "level": 1,
+            "name": "Warrior 9",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "3c19ccda-5f67-ccf8855d-6a8101e53591",
+            "level": 1,
+            "name": "Warrior 10",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": true,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001",
+              "0f76f4ab-5f67-5f0f450b-6a81f5db7aa7",
+              "bcbb5c59-5f67-fa051750-6a81fb98a9d4",
+              "3c19ccda-5f67-ccf8855d-6a8101e53591"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 4,
+              "y": 0
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "04e3c095-5f67-0b001a0a-6a81f3b64e0e",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "2d7196cc-5f67-961ffac6-6a816ecafe5a",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "a94c3df8-5f67-05121fff-6a819ade5176",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "00365765-5f67-047d6ae2-6a8165b1209e",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Battle",
       "description": "Four Warriors deployed against two Orcs at the Orc Outpost.",
-      "launch": { "scene": "battlefield" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "orc_outpost",
+      "launch": {
+        "scene": "battlefield"
+      },
+      "name_key": "debug.orc_outpost"
     },
     {
-      "id": "ruined_fortress",
-      "name_key": "debug.ruined_fortress",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          },
+          {
+            "clear_xp": 30,
+            "danger_key": "expedition.danger.extreme",
+            "difficulty": 3,
+            "enemy": {
+              "attack_damage": 1,
+              "attack_name_key": "battle.enemy.kobold.attack",
+              "count": 4,
+              "hit_chance": 0.25,
+              "max_health": 6,
+              "name_key": "battle.enemy.kobold"
+            },
+            "id": "ruined_fortress",
+            "name_key": "expedition.ruined_fortress.name",
+            "position": {
+              "x": 0,
+              "y": 4
+            },
+            "template_id": "ruined_fortress"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "3c71ff24-5f67-f0646394-6a81619c9e4b",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "554a7663-5f67-e862b3d2-6a813d8e85a9",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "54548277-5f67-5fd88c5b-6a815eb09ea3",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "8d6c3e54-5f67-baa21f3e-6a81e77be037",
+            "level": 1,
+            "name": "Warrior 8",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "51b9ec12-5f67-c590a46a-6a81c00c13a0",
+            "level": 1,
+            "name": "Warrior 9",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 200,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {},
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": true,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001",
+              "8d6c3e54-5f67-baa21f3e-6a81e77be037",
+              "51b9ec12-5f67-c590a46a-6a81c00c13a0"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 0,
+              "y": 4
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "0eefbff5-5f67-fa821ca4-6a8107426a51",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "bd73b702-5f67-bbea8195-6a81c6605d37",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "67e89512-5f67-26cd1380-6a815f2c672c",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "1baf251e-5f67-9b35a7f5-6a811cea0c7a",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Battle",
       "description": "Three Warriors deployed against the maximum eight Kobolds at the Ruined Fortress.",
-      "launch": { "scene": "battlefield" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "ruined_fortress",
+      "launch": {
+        "scene": "battlefield"
+      },
+      "name_key": "debug.ruined_fortress"
     },
     {
-      "id": "stocked_stores",
-      "name_key": "debug.stocked_stores",
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "clear_xp": 10,
+            "danger_key": "expedition.danger.low",
+            "difficulty": 1,
+            "enemy": {
+              "attack_damage": 2,
+              "attack_name_key": "battle.enemy.goblin.attack",
+              "count": 1,
+              "hit_chance": 0.3,
+              "max_health": 13,
+              "name_key": "battle.enemy.goblin"
+            },
+            "id": "goblin_camp",
+            "name_key": "expedition.goblin_camp.name",
+            "position": {
+              "x": 4,
+              "y": 4
+            },
+            "template_id": "goblin_camp"
+          },
+          {
+            "clear_xp": 20,
+            "danger_key": "expedition.danger.high",
+            "difficulty": 2,
+            "enemy": {
+              "attack_damage": 3,
+              "attack_name_key": "battle.enemy.orc.attack",
+              "count": 1,
+              "hit_chance": 0.5,
+              "max_health": 22,
+              "name_key": "battle.enemy.orc"
+            },
+            "id": "orc_outpost",
+            "name_key": "expedition.orc_outpost.name",
+            "position": {
+              "x": 4,
+              "y": 0
+            },
+            "template_id": "orc_outpost"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "warrior_001",
+            "level": 1,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "172410ac-5f67-fe28b871-6a8136cc50e4",
+            "level": 1,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "5e27ae2f-5f67-b126ed70-6a81459fa4c4",
+            "level": 1,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "32909260-5f67-6a690374-6a8140b5f218",
+            "level": 1,
+            "name": "Warrior 4",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 0,
+        "banked_gear": {
+          "shortsword_iron": 1
+        },
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 0,
+        "blacksmith_sharpening_job": {},
+        "completed_encounters": [],
+        "encounter_vacancies": [],
+        "gold": 500,
+        "guild_hall_level": 1,
+        "has_trading_post": true,
+        "mana_crystals": {
+          "1": 2
+        },
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": false,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "warrior_001"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 3,
+              "y": 3
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "b43d78ec-5f67-61205915-6a815964aa45",
+            "level": 1,
+            "name": "Warrior 5",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "shortbow_iron",
+              "weapon_inventory": [
+                "shortbow_iron"
+              ]
+            },
+            "health": 12,
+            "id": "30f27c1b-5f67-9ade378d-6a81bcc11b0b",
+            "level": 1,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 12,
+              "melee": 65,
+              "might": 0,
+              "missile": 65,
+              "move_range": 3,
+              "vitality": 12
+            },
+            "template_id": "scout_002"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "5f3c90c9-5f67-bacc38a5-6a8163ba8006",
+            "level": 1,
+            "name": "Warrior 6",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_003"
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "cost": 10,
+            "equipment": {
+              "armor": "leather_armor",
+              "armor_inventory": [
+                "leather_armor"
+              ],
+              "weapon": "longsword_iron",
+              "weapon_inventory": [
+                "longsword_iron"
+              ]
+            },
+            "health": 10,
+            "id": "ea9270cc-5f67-44a95357-6a815c2d3e45",
+            "level": 1,
+            "name": "Warrior 7",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 0,
+              "max_health": 10,
+              "melee": 60,
+              "might": 0,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            },
+            "template_id": "warrior_004"
+          }
+        ],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 0,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 100,
+        "shop_level": 1,
+        "tutorial_progress": {},
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 1,
+        "world_turn": 1
+      },
       "category": "Shop",
       "description": "A staffed party with a Shop, banked items, and enough gold to trade.",
-      "launch": { "scene": "stores" },
-      "campaign_snapshot": { "version": 1 }
+      "id": "stocked_stores",
+      "launch": {
+        "scene": "stores"
+      },
+      "name_key": "debug.stocked_stores"
     }
   ]
 }

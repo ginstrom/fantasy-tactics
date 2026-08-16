@@ -5,34 +5,88 @@ const DebugScenarios := preload("res://scripts/debug/debug_scenarios.gd")
 
 func before_each() -> void:
 	GameSession.reset()
+	DebugScenarios.load_scenarios()
 
 
-func test_party_ready_creates_a_staffed_undeployed_party() -> void:
-	assert_true(DebugScenarios.apply("party_ready"))
+## --- Canonical campaign snapshot fixtures (Step 2) -------------------------
+##
+## Each baseline scenario's campaign_snapshot in config/debug_scenarios.json
+## is the literal GameSession.export_campaign_snapshot() output captured
+## once from that scenario's established baseline state (see docs/plans/
+## 2026-08-16-debug-menu-json-config/index.md's "Manifest contract"). apply()
+## must import that fixture through GameSession.import_campaign_snapshot()
+## unchanged, so a fresh export right after apply() must match the shipped
+## fixture exactly -- proving apply() neither mutates the fixture on the way
+## in nor leaves any stale field from a prior GameSession state behind.
+
+
+func _assert_fixture_round_trips(scenario_id: String) -> void:
+	var scenario := DebugScenarios.get_scenario(scenario_id)
+	assert_false(scenario.is_empty(), "scenario %s must be in the shipped manifest" % scenario_id)
+
+	var result := DebugScenarios.apply(scenario_id)
+
+	assert_true(result.ok, "scenario %s should apply cleanly: %s" % [scenario_id, result.errors])
+	assert_eq(
+		GameSession.export_campaign_snapshot(), scenario.campaign_snapshot,
+		"scenario %s's live state should match its manifest fixture exactly" % scenario_id
+	)
+
+
+func test_new_campaign_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("new_campaign")
+
+
+func test_encampment_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("encampment")
+
+
+func test_party_manager_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("party_manager")
+
+
+func test_party_ready_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("party_ready")
 	assert_false(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
 
 
-func test_world_map_creates_a_deployed_party_away_from_settlement() -> void:
-	assert_true(DebugScenarios.apply("world_map"))
+func test_party_empty_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("party_empty")
+	assert_false(GameSession.has_deployed_party())
+	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
+
+
+func test_world_map_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("world_map")
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_deployed_party_position(), Vector2i(1, 0))
 
 
-func test_goblin_camp_creates_a_staffed_deployed_party_at_the_camp() -> void:
-	assert_true(DebugScenarios.apply("goblin_camp"))
+func test_goblin_camp_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("goblin_camp")
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
 	assert_eq(
 		GameSession.get_deployed_party_position(),
 		GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position,
-		"The scenario must deploy to the catalog's position, not a second hardcoded source of truth"
+		"The fixture must deploy to the catalog's position, not a second hardcoded source of truth"
 	)
 	assert_eq(GameSession.selected_encounter, "")
 
 
-func test_orc_outpost_creates_a_staffed_deployed_party_at_the_outpost() -> void:
-	assert_true(DebugScenarios.apply("orc_outpost"))
+## Unlike the old field-by-field DebugScenarios.apply(), this scenario's
+## fixture cannot pin GameSession.enemy_composition_roll/enemy_count_roll --
+## Callables have no JSON representation, and the manifest contract
+## deliberately excludes direct GameSession battle overrides (see docs/
+## plans/2026-08-16-debug-menu-json-config/index.md's "Architecture and
+## scope"). So the fixture's active_encounters preview reflects whatever
+## composition/count real randomness rolled when it was captured -- assert
+## the encounter instance exists at the outpost's position and let
+## _assert_fixture_round_trips cover its exact captured composition; do not
+## call GameSession.enter_encounter() here, which would re-roll it live.
+func test_orc_outpost_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("orc_outpost")
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_selected_party().member_ids.size(), 4, "Orc Outpost scenario deploys 4 warriors")
 	assert_eq(
@@ -41,28 +95,33 @@ func test_orc_outpost_creates_a_staffed_deployed_party_at_the_outpost() -> void:
 	)
 	assert_eq(GameSession.selected_encounter, "")
 
-	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var encounter: Dictionary = {}
+	var has_outpost_encounter := false
 	for enc in GameSession.get_active_encounters():
 		if enc.template_id == GameSession.ORC_OUTPOST_ID:
-			encounter = enc
+			has_outpost_encounter = true
 			break
-	assert_eq(encounter.enemy.count, 2, "Orc Outpost scenario fields 2 orcs")
-	assert_eq(encounter.enemy.name_key, "battle.enemy.orc")
+	assert_true(has_outpost_encounter, "the Orc Outpost encounter should be active at import")
 
 
+## See test_orc_outpost_fixture_round_trips_through_apply_and_export()'s own
+## comment: the fixture's captured Kobold count is whatever real randomness
+## rolled at generation time, not a guaranteed maximum -- that guarantee
+## required pinning GameSession's roll Callables, which the manifest
+## contract deliberately excludes.
+func test_ruined_fortress_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("ruined_fortress")
+	assert_eq(GameSession.get_selected_party().member_ids.size(), 3, "Ruined Fortress fixture fields three Warriors")
+
+	var has_fortress_encounter := false
+	for enc in GameSession.get_active_encounters():
+		if enc.template_id == GameSession.RUINED_FORTRESS_ID:
+			has_fortress_encounter = true
+			break
+	assert_true(has_fortress_encounter, "the Ruined Fortress encounter should be active at import")
 
 
-
-
-
-func test_unknown_scenario_fails_after_reset_without_creating_a_party() -> void:
-	assert_false(DebugScenarios.apply("unknown"))
-	assert_eq(GameSession.parties, [])
-
-
-func test_stocked_stores_creates_a_staffed_party_with_a_trading_post_and_banked_items() -> void:
-	assert_true(DebugScenarios.apply("stocked_stores"))
+func test_stocked_stores_fixture_round_trips_through_apply_and_export() -> void:
+	_assert_fixture_round_trips("stocked_stores")
 	assert_eq(GameSession.get_selected_party().member_ids, [GameSession.WARRIOR_ID])
 	assert_true(GameSession.has_trading_post)
 	assert_eq(GameSession.mana_crystals, {1: 2})
@@ -70,8 +129,15 @@ func test_stocked_stores_creates_a_staffed_party_with_a_trading_post_and_banked_
 	assert_eq(GameSession.gold, 500, "Enough gold to actually buy something from the Shop")
 
 
-func test_scenario_ids_are_in_display_order() -> void:
-	assert_eq(DebugScenarios.scenario_ids(), [
+## Display order is a manifest/loader concern (see Step 1's
+## test_load_scenarios_preserves_source_order); this test only pins the
+## established real-manifest order so a reordering in config/
+## debug_scenarios.json is a deliberate, visible change.
+func test_scenarios_are_in_the_established_display_order() -> void:
+	var ids: Array = []
+	for scenario in DebugScenarios.get_all_scenarios():
+		ids.append(scenario.id)
+	assert_eq(ids, [
 		"new_campaign",
 		"encampment",
 		"party_manager",
@@ -85,18 +151,55 @@ func test_scenario_ids_are_in_display_order() -> void:
 	])
 
 
-func test_party_empty_creates_an_encamped_party_with_no_members() -> void:
-	assert_true(DebugScenarios.apply("party_empty"))
-	assert_false(GameSession.has_deployed_party())
-	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
+## --- apply() failure paths leave GameSession untouched (Step 2) -----------
+
+
+func test_apply_with_an_unknown_scenario_id_leaves_gamesession_untouched() -> void:
+	assert_true(DebugScenarios.apply("party_ready").ok)
+	var before := GameSession.export_campaign_snapshot()
+
+	var result := DebugScenarios.apply("unknown")
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(GameSession.export_campaign_snapshot(), before)
+
+
+func test_apply_with_an_invalid_embedded_snapshot_leaves_gamesession_untouched() -> void:
+	assert_true(DebugScenarios.apply("party_ready").ok)
+	var before := GameSession.export_campaign_snapshot()
+
+	_write_manifest({
+		"manifest_version": 1,
+		"scenarios": [
+			{
+				"id": "broken",
+				"name_key": "debug.broken",
+				"category": "Campaign",
+				"description": "A scenario with an invalid embedded snapshot.",
+				"launch": {"scene": "encampment"},
+				"campaign_snapshot": {"version": 1},
+			},
+		],
+	})
+	assert_true(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+	var result := DebugScenarios.apply("broken")
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(GameSession.export_campaign_snapshot(), before)
 
 
 ## --- Versioned debug manifest loader (Step 1) -----------------------------
 ##
-## These scenarios never touch config/debug_scenarios.json -- every test
-## writes its own manifest to TEST_MANIFEST_PATH under user:// (the same
-## test-injectable-path convention test_save_repository.gd establishes) so a
-## bad manifest here can never corrupt another test's shared cache.
+## Every test here writes its own manifest to TEST_MANIFEST_PATH under
+## user:// (the same test-injectable-path convention test_save_repository.gd
+## establishes) rather than editing config/debug_scenarios.json directly. A
+## couple of Step 2's apply()-failure tests load that throwaway manifest,
+## which replaces DebugScenarios' shared static cache for the rest of the
+## suite -- after_each() always reloads the real manifest afterward so no
+## test here can leak a synthetic scenario list into another test file.
 
 const TEST_MANIFEST_PATH := "user://test_debug_scenarios_manifest.json"
 
@@ -104,6 +207,7 @@ const TEST_MANIFEST_PATH := "user://test_debug_scenarios_manifest.json"
 func after_each() -> void:
 	if FileAccess.file_exists(TEST_MANIFEST_PATH):
 		DirAccess.remove_absolute(TEST_MANIFEST_PATH)
+	DebugScenarios.load_scenarios()
 
 
 func _write_manifest(data: Dictionary) -> void:
