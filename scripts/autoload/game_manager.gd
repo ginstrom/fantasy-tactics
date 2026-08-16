@@ -88,8 +88,6 @@ var battle_result_summary: Dictionary = {}
 var _game_menu: CanvasLayer
 var _debug_menu: CanvasLayer
 
-enum DebugTarget { NONE, SETTLEMENT, ENCAMPMENT, PARTY_MANAGER, WORLD_MAP, BATTLEFIELD, STORES }
-
 
 func _ready() -> void:
 	TranslationServer.add_translation(EN_TRANSLATION)
@@ -428,43 +426,62 @@ func is_game_menu_open() -> bool:
 	return _game_menu.visible
 
 
-static func debug_scenario_target(scenario_id: String) -> DebugTarget:
-	match scenario_id:
-		"new_campaign":
-			return DebugTarget.SETTLEMENT
-		"encampment", "party_ready", "party_empty":
-			return DebugTarget.ENCAMPMENT
-		"party_manager":
-			return DebugTarget.PARTY_MANAGER
-		"world_map":
-			return DebugTarget.WORLD_MAP
-		"goblin_camp", "orc_outpost", "ruined_fortress":
-			return DebugTarget.BATTLEFIELD
-		"stocked_stores":
-			return DebugTarget.STORES
-	return DebugTarget.NONE
+## Explicit, narrow map from a manifest launch.scene identifier to its scene
+## path -- intentionally not the full scene catalog above, and intentionally
+## its own list rather than trusting DebugScenarios.ALLOWED_LAUNCH_SCENES to
+## stay in lockstep forever. A future manifest version could validate a new
+## scene (e.g. "assign_equipment", which needs a stable item id the manifest
+## does not yet supply/validate) as syntactically known before this
+## dispatcher is taught to route there.
+const _DEBUG_LAUNCH_SCENE_PATHS := {
+	"settlement": STARTING_SETTLEMENT_SCENE,
+	"encampment": ENCAMPMENT_SCENE,
+	"party_manager": PARTY_MANAGER_SCENE,
+	"world_map": WORLD_MAP_SCENE,
+	"battlefield": BATTLEFIELD_SCENE,
+	"stores": STORES_SCENE,
+}
 
 
+func _debug_launch_scene_path(launch_scene: String) -> String:
+	return _DEBUG_LAUNCH_SCENE_PATHS.get(launch_scene, "")
+
+
+## Debug-only dispatcher (see docs/plans/2026-08-16-debug-menu-json-config):
+## validates the requested scenario and its declared launch.scene entirely
+## from manifest data, then applies the scenario's campaign_snapshot fixture
+## and changes directly to that scene. Never calls go_to_encampment(),
+## go_to_world_map(), or enter_battle() -- those carry real reward-banking/
+## encounter-entry side effects (deposit_pending_reward(), merge_battle_
+## loot_into_party(), GameSession.enter_encounter()) a debug launch must not
+## trigger. A battlefield launch's enemy composition therefore comes
+## entirely from its fixture's own active_encounters entry, never a fresh
+## roll. Every validation happens before DebugScenarios.apply() runs, so
+## every failure path -- an unknown scenario id, an unrecognized launch
+## scene, or a battlefield fixture with no selected_encounter -- leaves
+## GameSession's current state completely untouched.
 func run_debug_scenario(scenario_id: String) -> Error:
 	if not OS.is_debug_build():
 		return ERR_UNAVAILABLE
-	if not DebugScenarios.apply(scenario_id).ok:
+
+	var scenario := DebugScenarios.get_scenario(scenario_id)
+	if scenario.is_empty():
 		return ERR_INVALID_DATA
 
-	match debug_scenario_target(scenario_id):
-		DebugTarget.SETTLEMENT:
-			return go_to_starting_settlement()
-		DebugTarget.ENCAMPMENT:
-			return go_to_encampment()
-		DebugTarget.PARTY_MANAGER:
-			return open_party_manager()
-		DebugTarget.WORLD_MAP:
-			return go_to_world_map()
-		DebugTarget.BATTLEFIELD:
-			return enter_battle(scenario_id)
-		DebugTarget.STORES:
-			return go_to_stores()
-	return ERR_INVALID_DATA
+	var launch_scene: String = (scenario.get("launch", {}) as Dictionary).get("scene", "")
+	var scene_path := _debug_launch_scene_path(launch_scene)
+	if scene_path.is_empty():
+		return ERR_INVALID_DATA
+
+	var snapshot: Dictionary = scenario.get("campaign_snapshot", {})
+	if launch_scene == "battlefield" and String(snapshot.get("selected_encounter", "")).is_empty():
+		return ERR_INVALID_DATA
+
+	var apply_result: Dictionary = DebugScenarios.apply(scenario_id)
+	if not apply_result.ok:
+		return ERR_INVALID_DATA
+
+	return _change_scene(scene_path)
 
 
 func apply_super_power() -> Error:

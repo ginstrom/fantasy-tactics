@@ -72,7 +72,10 @@ func test_goblin_camp_fixture_round_trips_through_apply_and_export() -> void:
 		GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position,
 		"The fixture must deploy to the catalog's position, not a second hardcoded source of truth"
 	)
-	assert_eq(GameSession.selected_encounter, "")
+	# Set by the fixture itself (see Step 3's side-effect-free debug launch:
+	# the dispatcher never calls GameSession.enter_encounter(), so a
+	# battlefield scenario's selected_encounter must already be baked in).
+	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
 
 
 ## Unlike the old field-by-field DebugScenarios.apply(), this scenario's
@@ -93,7 +96,9 @@ func test_orc_outpost_fixture_round_trips_through_apply_and_export() -> void:
 		GameSession.get_deployed_party_position(),
 		GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position
 	)
-	assert_eq(GameSession.selected_encounter, "")
+	# Set by the fixture itself -- see the sibling assertion in
+	# test_goblin_camp_fixture_round_trips_through_apply_and_export().
+	assert_eq(GameSession.selected_encounter, GameSession.ORC_OUTPOST_ID)
 
 	var has_outpost_encounter := false
 	for enc in GameSession.get_active_encounters():

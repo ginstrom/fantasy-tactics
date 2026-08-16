@@ -44,6 +44,15 @@ func after_each() -> void:
 	if FileAccess.file_exists(TEST_SAVE_PATH):
 		DirAccess.remove_absolute(TEST_SAVE_PATH)
 
+	# The Step 3 debug-launch tests below load a synthetic manifest at
+	# TEST_MANIFEST_PATH, replacing DebugScenarios' shared static cache --
+	# always reload the real one afterward so no test here can leak a
+	# synthetic scenario list into another test file (see test_debug_
+	# scenarios.gd's after_each for the same rationale).
+	if FileAccess.file_exists(TEST_MANIFEST_PATH):
+		DirAccess.remove_absolute(TEST_MANIFEST_PATH)
+	DebugScenariosScript.load_scenarios()
+
 
 func test_battle_route_uses_battlefield_scene() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
@@ -76,31 +85,201 @@ func test_new_game_routes_to_starting_settlement() -> void:
 	assert_string_contains(source, "res://scenes/local/starting_settlement.tscn")
 
 
-func test_debug_scenario_target_maps_known_ids() -> void:
-	assert_eq(GameManager.debug_scenario_target("encampment"), GameManager.DebugTarget.ENCAMPMENT)
-	assert_eq(GameManager.debug_scenario_target("party_manager"), GameManager.DebugTarget.PARTY_MANAGER)
-	assert_eq(GameManager.debug_scenario_target("world_map"), GameManager.DebugTarget.WORLD_MAP)
-	assert_eq(GameManager.debug_scenario_target("goblin_camp"), GameManager.DebugTarget.BATTLEFIELD)
-	assert_eq(GameManager.debug_scenario_target("orc_outpost"), GameManager.DebugTarget.BATTLEFIELD)
-	assert_eq(GameManager.debug_scenario_target("unknown"), GameManager.DebugTarget.NONE)
+## --- Side-effect-free debug launch (Step 3) --------------------------------
+##
+## run_debug_scenario() must reach its manifest-declared launch.scene without
+## going through go_to_encampment()/go_to_world_map()/enter_battle() -- those
+## carry real reward-banking/encounter-entry side effects a debug launch must
+## not trigger (see docs/plans/2026-08-16-debug-menu-json-config/index.md's
+## acceptance criteria). Every test below writes its own scenario(s) to
+## TEST_MANIFEST_PATH (the same test-injectable-path convention test_debug_
+## scenarios.gd establishes) rather than editing config/debug_scenarios.json,
+## and after_each() always reloads the real manifest afterward.
+
+const DebugScenariosScript := preload("res://scripts/debug/debug_scenarios.gd")
+const TEST_MANIFEST_PATH := "user://test_game_manager_debug_manifest.json"
 
 
-func test_running_goblin_camp_scenario_selects_the_encounter_before_battle_route() -> void:
+func _write_debug_manifest(scenarios: Array) -> void:
+	var file := FileAccess.open(TEST_MANIFEST_PATH, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"manifest_version": 1, "scenarios": scenarios}))
+	file.close()
+
+
+## Builds a manifest scenario entry from a REAL shipped scenario's own
+## fixture (so the embedded campaign_snapshot always passes CampaignSnapshot
+## validation) with campaign_snapshot field overrides layered on top -- e.g.
+## a non-zero pending_reward a real "encampment"-launch fixture never has.
+func _scenario_with_snapshot_overrides(id: String, base_id: String, launch_scene: String, snapshot_overrides: Dictionary) -> Dictionary:
+	var base := DebugScenariosScript.get_scenario(base_id)
+	var snapshot: Dictionary = (base.campaign_snapshot as Dictionary).duplicate(true)
+	for key in snapshot_overrides:
+		snapshot[key] = snapshot_overrides[key]
+	return {
+		"id": id,
+		"name_key": "debug.test_scenario",
+		"category": "Test",
+		"description": "Synthetic scenario for a test-injected manifest.",
+		"launch": {"scene": launch_scene},
+		"campaign_snapshot": snapshot,
+	}
+
+
+func _run(scenario_id: String) -> Error:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	return manager.run_debug_scenario(scenario_id)
+
+
+## OS.is_debug_build() can't be stubbed in a real Godot process (test runs
+## are themselves debug builds, so this guard can't be exercised at
+## runtime) -- verified by source inspection instead, matching this file's
+## established convention for scene-routing guards it can't drive directly
+## (see e.g. test_battle_route_uses_battlefield_scene()).
+func test_run_debug_scenario_reports_unavailable_outside_debug_builds() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "func run_debug_scenario(")
+	assert_string_contains(source, "if not OS.is_debug_build():\n\t\treturn ERR_UNAVAILABLE")
+
+
+func test_run_debug_scenario_launches_the_starting_settlement() -> void:
+	GameSession.reset()
+	assert_eq(_run("new_campaign"), OK)
+
+
+func test_run_debug_scenario_launches_the_encampment() -> void:
+	GameSession.reset()
+	assert_eq(_run("encampment"), OK)
+
+
+func test_run_debug_scenario_launches_the_party_manager() -> void:
+	GameSession.reset()
+	assert_eq(_run("party_manager"), OK)
+
+
+func test_run_debug_scenario_launches_the_world_map() -> void:
+	GameSession.reset()
+	assert_eq(_run("world_map"), OK)
+
+
+func test_run_debug_scenario_launches_stores() -> void:
+	GameSession.reset()
+	assert_eq(_run("stocked_stores"), OK)
+
+
+func test_run_debug_scenario_launches_the_battlefield_with_its_fixtures_selected_encounter() -> void:
+	GameSession.reset()
+
+	assert_eq(_run("goblin_camp"), OK)
+
+	assert_eq(
+		GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID,
+		"The fixture's own selected_encounter should reach GameSession untouched -- this dispatcher never calls GameSession.enter_encounter() itself"
+	)
+
+
+## Every permitted launch.scene reaches its screen without banking a pending
+## reward, merging battle loot, or otherwise touching any field the fixture
+## itself declared -- in particular Encampment (which normally deposits a
+## pending reward) and World Map (which normally merges battle loot).
+## Reuses one manager for the whole test, rather than this file's usual
+## _run() helper (which builds a fresh manager per call): a manager's own
+## _ready() reloads the REAL default manifest (see GameManager._ready()),
+## which would silently replace the synthetic scenarios this test loads
+## below if a fresh manager were created after that load.
+func test_run_debug_scenario_leaves_every_fixtures_snapshot_unchanged_after_routing() -> void:
 	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
-	assert_eq(manager.run_debug_scenario("goblin_camp"), OK)
-	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
+	var cases := [
+		["settlement", "new_campaign"],
+		["encampment", "encampment"],
+		["party_manager", "party_manager"],
+		["world_map", "world_map"],
+		["stores", "stocked_stores"],
+		["battlefield", "goblin_camp"],
+	]
+	var scenarios: Array = []
+	for case in cases:
+		var launch_scene: String = case[0]
+		var base_id: String = case[1]
+		scenarios.append(_scenario_with_snapshot_overrides(
+			"test_%s" % launch_scene, base_id, launch_scene,
+			{
+				"pending_reward": 42,
+				"battle_reward": 17,
+				"battle_mana_crystals": {1: 2},
+				"battle_gear": {"dagger_iron": 1},
+				# GOBLIN_CAMP_ID is always a valid EXPEDITIONS template id
+				# (CampaignSnapshot's selected_encounter check falls back to
+				# EXPEDITIONS when the id names no active instance), so it's
+				# a safe "some encounter is selected" value for every launch
+				# scene, not just battlefield.
+				"selected_encounter": GameSession.GOBLIN_CAMP_ID,
+			}
+		))
+	_write_debug_manifest(scenarios)
+	assert_true(DebugScenariosScript.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+	for case in cases:
+		var launch_scene: String = case[0]
+		var scenario_id := "test_%s" % launch_scene
+		var expected_snapshot: Dictionary = DebugScenariosScript.get_scenario(scenario_id).campaign_snapshot
+
+		assert_eq(manager.run_debug_scenario(scenario_id), OK, "launching %s should succeed" % launch_scene)
+		assert_eq(
+			GameSession.export_campaign_snapshot(), expected_snapshot,
+			"launching %s must not mutate any fixture field, including pending_reward/battle_reward" % launch_scene
+		)
 
 
-func test_running_orc_outpost_scenario_selects_the_outpost_before_battle_route() -> void:
+func test_run_debug_scenario_with_an_unknown_id_changes_neither_scene_nor_session() -> void:
+	GameSession.reset()
+	assert_true(_run("party_ready") == OK)
+	var before := GameSession.export_campaign_snapshot()
+
+	assert_eq(_run("unknown"), ERR_INVALID_DATA)
+
+	assert_eq(GameSession.export_campaign_snapshot(), before)
+
+
+## GameManager keeps its own explicit, narrow launch-scene allow-list (see
+## _debug_launch_scene_path()) rather than trusting DebugScenarios.
+## ALLOWED_LAUNCH_SCENES to stay in lockstep forever -- e.g. a future
+## manifest version might validate "assign_equipment" as a syntactically
+## known scene before GameManager is taught to route a stable item id there
+## (see Step 3's own plan notes). Tested directly rather than through a real
+## scenario: DebugScenarios.load_scenarios() already rejects any manifest
+## entry whose launch.scene isn't in its own allow-list, so there is no way
+## to get an "unrecognized" scene into a loaded scenario end-to-end today.
+func test_debug_launch_scene_path_is_empty_for_an_unrecognized_scene() -> void:
+	assert_eq(GameManager._debug_launch_scene_path("assign_equipment"), "")
+	assert_eq(GameManager._debug_launch_scene_path(""), "")
+
+
+## See test_run_debug_scenario_leaves_every_fixtures_snapshot_unchanged_
+## after_routing()'s own comment on why this reuses one manager instead of
+## this file's usual _run() helper.
+func test_run_debug_scenario_for_a_battlefield_fixture_without_a_selected_encounter_changes_neither_scene_nor_session() -> void:
 	GameSession.reset()
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
-	assert_eq(manager.run_debug_scenario("orc_outpost"), OK)
-	assert_eq(GameSession.selected_encounter, GameSession.ORC_OUTPOST_ID)
+	assert_true(manager.run_debug_scenario("party_ready") == OK)
+	var before := GameSession.export_campaign_snapshot()
+
+	# "encampment"'s own fixture has selected_encounter == "" -- reused here
+	# under a "battlefield" launch to exercise the missing-encounter guard.
+	_write_debug_manifest([
+		_scenario_with_snapshot_overrides("test_no_encounter", "encampment", "battlefield", {}),
+	])
+	assert_true(DebugScenariosScript.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+	assert_eq(manager.run_debug_scenario("test_no_encounter"), ERR_INVALID_DATA)
+
+	assert_eq(GameSession.export_campaign_snapshot(), before)
 
 
 func test_depart_selected_party_deploys_before_changing_scene() -> void:
@@ -448,10 +627,6 @@ func test_recruit_adventurer_appends_a_new_adventurer_to_the_roster() -> void:
 	assert_eq(err, OK)
 	assert_eq(GameSession.adventurers.size(), 5)
 	assert_false(GameSession.adventurers[4].id.is_empty())
-
-
-func test_debug_scenario_target_maps_party_empty_to_the_encampment() -> void:
-	assert_eq(GameManager.debug_scenario_target("party_empty"), GameManager.DebugTarget.ENCAMPMENT)
 
 
 func test_roster_route_points_to_the_roster_scene() -> void:
