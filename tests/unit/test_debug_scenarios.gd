@@ -89,3 +89,218 @@ func test_party_empty_creates_an_encamped_party_with_no_members() -> void:
 	assert_true(DebugScenarios.apply("party_empty"))
 	assert_false(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
+
+
+## --- Versioned debug manifest loader (Step 1) -----------------------------
+##
+## These scenarios never touch config/debug_scenarios.json -- every test
+## writes its own manifest to TEST_MANIFEST_PATH under user:// (the same
+## test-injectable-path convention test_save_repository.gd establishes) so a
+## bad manifest here can never corrupt another test's shared cache.
+
+const TEST_MANIFEST_PATH := "user://test_debug_scenarios_manifest.json"
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(TEST_MANIFEST_PATH):
+		DirAccess.remove_absolute(TEST_MANIFEST_PATH)
+
+
+func _write_manifest(data: Dictionary) -> void:
+	var file := FileAccess.open(TEST_MANIFEST_PATH, FileAccess.WRITE)
+	file.store_string(JSON.stringify(data))
+	file.close()
+
+
+func _valid_manifest(scenarios: Array = []) -> Dictionary:
+	if scenarios.is_empty():
+		scenarios = [
+			{
+				"id": "alpha",
+				"name_key": "debug.alpha",
+				"category": "Campaign",
+				"description": "First scenario.",
+				"launch": {"scene": "encampment"},
+				"campaign_snapshot": {"version": 1},
+			},
+			{
+				"id": "beta",
+				"name_key": "debug.beta",
+				"category": "Battle",
+				"description": "Second scenario.",
+				"launch": {"scene": "battlefield"},
+				"campaign_snapshot": {"version": 1},
+			},
+		]
+	return {"manifest_version": 1, "scenarios": scenarios}
+
+
+func test_load_scenarios_preserves_source_order() -> void:
+	_write_manifest(_valid_manifest())
+
+	var result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_true(result.ok)
+	assert_eq(result.errors, [])
+	var ids: Array = []
+	for scenario in DebugScenarios.get_all_scenarios():
+		ids.append(scenario.id)
+	assert_eq(ids, ["alpha", "beta"])
+
+
+func test_load_scenarios_rejects_unsupported_manifest_version() -> void:
+	var manifest := _valid_manifest()
+	manifest.manifest_version = 2
+	_write_manifest(manifest)
+
+	var result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+
+
+func test_load_scenarios_rejects_duplicate_ids() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[1].id = "alpha"
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_empty_id() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].id = ""
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_non_string_name_key() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].name_key = 5
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_non_string_category() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].category = 5
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_an_invalid_launch_scene() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].launch = {"scene": "not_a_real_scene"}
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_a_missing_campaign_snapshot() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].erase("campaign_snapshot")
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_rejects_a_non_dictionary_campaign_snapshot() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].campaign_snapshot = "not a dictionary"
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	assert_false(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+
+
+func test_load_scenarios_reports_every_validation_error_in_one_pass() -> void:
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[0].name_key = 5
+	scenarios[1].category = 7
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+
+	var result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_false(result.ok)
+	assert_eq(result.errors.size(), 2, "Both invalid entries should be reported, not just the first")
+
+
+func test_reload_with_invalid_json_preserves_the_previous_cache_and_reports_diagnostics() -> void:
+	_write_manifest(_valid_manifest())
+	assert_true(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+	var before := DebugScenarios.get_all_scenarios()
+
+	var file := FileAccess.open(TEST_MANIFEST_PATH, FileAccess.WRITE)
+	file.store_string("{not valid json")
+	file.close()
+	var result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(DebugScenarios.get_all_scenarios(), before)
+
+
+func test_reload_with_a_missing_file_preserves_the_previous_cache_and_reports_diagnostics() -> void:
+	_write_manifest(_valid_manifest())
+	assert_true(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+	var before := DebugScenarios.get_all_scenarios()
+
+	var result := DebugScenarios.load_scenarios("user://test_debug_scenarios_missing_manifest.json")
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(DebugScenarios.get_all_scenarios(), before)
+
+
+func test_reload_with_one_invalid_entry_preserves_the_previous_cache_and_reports_diagnostics() -> void:
+	_write_manifest(_valid_manifest())
+	assert_true(DebugScenarios.load_scenarios(TEST_MANIFEST_PATH).ok)
+	var before := DebugScenarios.get_all_scenarios()
+
+	var scenarios: Array = _valid_manifest().scenarios
+	scenarios[1].launch = {"scene": "not_a_real_scene"}
+	_write_manifest({"manifest_version": 1, "scenarios": scenarios})
+	var result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(DebugScenarios.get_all_scenarios(), before)
+
+
+func test_get_scenario_returns_a_copy_callers_cannot_use_to_mutate_the_cache() -> void:
+	_write_manifest(_valid_manifest())
+	DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	var scenario := DebugScenarios.get_scenario("alpha")
+	scenario.category = "Mutated"
+	scenario.campaign_snapshot["version"] = 999
+
+	var fresh := DebugScenarios.get_scenario("alpha")
+	assert_eq(fresh.category, "Campaign")
+	assert_eq(fresh.campaign_snapshot.version, 1)
+
+
+func test_get_scenario_returns_empty_dictionary_for_an_unknown_id() -> void:
+	_write_manifest(_valid_manifest())
+	DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+
+	assert_eq(DebugScenarios.get_scenario("unknown"), {})
+
+
+func test_get_scenarios_by_category_groups_in_source_order() -> void:
+	_write_manifest(_valid_manifest([
+		{"id": "a", "name_key": "debug.a", "category": "Battle", "description": "", "launch": {"scene": "battlefield"}, "campaign_snapshot": {}},
+		{"id": "b", "name_key": "debug.b", "category": "Campaign", "description": "", "launch": {"scene": "encampment"}, "campaign_snapshot": {}},
+		{"id": "c", "name_key": "debug.c", "category": "Battle", "description": "", "launch": {"scene": "battlefield"}, "campaign_snapshot": {}},
+	]))
+
+	DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+	var grouped := DebugScenarios.get_scenarios_by_category()
+
+	assert_eq(grouped.size(), 2)
+	assert_eq(grouped[0].category, "Battle")
+	assert_eq(grouped[0].scenarios.size(), 2)
+	assert_eq(grouped[1].category, "Campaign")
+	assert_eq(grouped[1].scenarios.size(), 1)

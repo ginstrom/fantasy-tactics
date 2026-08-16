@@ -1,0 +1,85 @@
+{
+  "manifest_version": 1,
+  "scenarios": [
+    {
+      "id": "new_campaign",
+      "name_key": "debug.new_campaign",
+      "category": "Campaign",
+      "description": "A brand-new campaign at the starting settlement.",
+      "launch": { "scene": "settlement" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "encampment",
+      "name_key": "debug.encampment",
+      "category": "Campaign",
+      "description": "A fresh campaign viewed from the Encampment.",
+      "launch": { "scene": "encampment" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "party_manager",
+      "name_key": "debug.party_manager",
+      "category": "Campaign",
+      "description": "A fresh campaign opened directly to the Party Manager.",
+      "launch": { "scene": "party_manager" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "party_ready",
+      "name_key": "debug.party_ready",
+      "category": "Campaign",
+      "description": "One staffed party at the Encampment, ready to depart.",
+      "launch": { "scene": "encampment" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "party_empty",
+      "name_key": "debug.party_empty",
+      "category": "Campaign",
+      "description": "An encamped party with no members yet assigned.",
+      "launch": { "scene": "encampment" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "world_map",
+      "name_key": "debug.world_map",
+      "category": "World",
+      "description": "A staffed party deployed on the World Map, away from the settlement.",
+      "launch": { "scene": "world_map" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "goblin_camp",
+      "name_key": "debug.goblin_camp",
+      "category": "Battle",
+      "description": "A staffed party deployed at the Goblin Camp encounter.",
+      "launch": { "scene": "battlefield" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "orc_outpost",
+      "name_key": "debug.orc_outpost",
+      "category": "Battle",
+      "description": "Four Warriors deployed against two Orcs at the Orc Outpost.",
+      "launch": { "scene": "battlefield" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "ruined_fortress",
+      "name_key": "debug.ruined_fortress",
+      "category": "Battle",
+      "description": "Three Warriors deployed against the maximum eight Kobolds at the Ruined Fortress.",
+      "launch": { "scene": "battlefield" },
+      "campaign_snapshot": { "version": 1 }
+    },
+    {
+      "id": "stocked_stores",
+      "name_key": "debug.stocked_stores",
+      "category": "Shop",
+      "description": "A staffed party with a Shop, banked items, and enough gold to trade.",
+      "launch": { "scene": "stores" },
+      "campaign_snapshot": { "version": 1 }
+    }
+  ]
+}
