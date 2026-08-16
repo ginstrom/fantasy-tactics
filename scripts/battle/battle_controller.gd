@@ -30,9 +30,19 @@ const TILE_SIZE := 64
 const TILE_COLOR_LIGHT := Color(0.24, 0.24, 0.28)
 const TILE_COLOR_DARK := Color(0.18, 0.18, 0.21)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
-const LEGAL_MOVE_COLOR := Color(0.4, 0.9, 0.4, 0.5)
+## Move-and-attack (green) tier: reachable tiles that still leave enough AP
+## for a basic attack after moving there. Supersedes the old single-tier
+## LEGAL_MOVE_COLOR fill (see get_move_and_attack_tiles()).
+const LEGAL_MOVE_AND_ATTACK_COLOR := Color(0.3, 0.85, 0.35, 0.45)
+## Dash (yellow) tier: reachable tiles that spend too much AP moving to
+## leave enough for a basic attack (see get_dash_tiles()).
+const DASH_MOVE_COLOR := Color(0.9, 0.85, 0.25, 0.45)
 const ATTACK_RANGE_COLOR := Color(0.9, 0.25, 0.25, 0.35)
 const TARGET_ATTACK_COLOR := Color(1.0, 0.2, 0.2, 0.65)
+## Orange indirect-target overlay: an enemy not directly attackable from the
+## selected unit's current position, but attackable after moving to a green
+## move-and-attack tile first (see _update_highlights()).
+const MOVE_AND_ATTACK_TARGET_COLOR := Color(1.0, 0.65, 0.1, 0.65)
 
 enum Side { PLAYER, ENEMY }
 
@@ -268,6 +278,39 @@ func get_legal_moves(unit) -> Array[Vector2i]:
 	var moves: Array[Vector2i] = []
 	moves.assign(_move_distances(unit).keys())
 	return moves
+
+
+## Green range: destinations reachable where enough AP remains afterward to
+## still execute a basic attack (`remaining_ap - distance * MOVE_ACTION_POINT_COST
+## >= BASIC_ATTACK_ACTION_POINT_COST`). The origin is never included -- it is
+## represented by the selection ring, not a movement fill (see
+## _move_distances(), which erases the start tile).
+func get_move_and_attack_tiles(unit) -> Array[Vector2i]:
+	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+		return []
+	var tiles: Array[Vector2i] = []
+	var distances := _move_distances(unit)
+	for tile in distances:
+		var move_cost: int = int(distances[tile]) * MOVE_ACTION_POINT_COST
+		if unit.action_points_remaining - move_cost >= BASIC_ATTACK_ACTION_POINT_COST:
+			tiles.append(tile)
+	return tiles
+
+
+## Yellow range: destinations reachable with remaining AP, but that leave too
+## little AP afterward to execute a basic attack. Complements
+## get_move_and_attack_tiles() -- together they exactly partition
+## get_legal_moves()'s reachable set, and neither includes the origin.
+func get_dash_tiles(unit) -> Array[Vector2i]:
+	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+		return []
+	var tiles: Array[Vector2i] = []
+	var distances := _move_distances(unit)
+	for tile in distances:
+		var move_cost: int = int(distances[tile]) * MOVE_ACTION_POINT_COST
+		if unit.action_points_remaining - move_cost < BASIC_ATTACK_ACTION_POINT_COST:
+			tiles.append(tile)
+	return tiles
 
 
 ## Combat legality is centralized here so player input, keyboard attacks,
@@ -744,6 +787,18 @@ func _draw_units() -> void:
 		unit_container.add_child(body)
 
 
+## Full-tile overlay used for every highlight_container fill (movement tiers,
+## attack range, and direct/indirect targets). Children are added in the
+## order _update_highlights() calls this, so later calls render on top.
+func _add_highlight(tile: Vector2i, color: Color) -> void:
+	var highlight := ColorRect.new()
+	highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
+	highlight.position = Vector2(tile) * TILE_SIZE
+	highlight.color = color
+	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	highlight_container.add_child(highlight)
+
+
 func _update_highlights() -> void:
 	if not is_inside_tree():
 		return
@@ -762,14 +817,18 @@ func _update_highlights() -> void:
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	highlight_container.add_child(ring)
 
+	# Two-tier movement fill: green (move-and-attack) and yellow (dash) partition
+	# get_legal_moves() exactly, and neither ever contains the origin (see
+	# get_move_and_attack_tiles()/get_dash_tiles()).
+	var move_and_attack_tiles := get_move_and_attack_tiles(selected_unit)
+	for move in move_and_attack_tiles:
+		_add_highlight(move, LEGAL_MOVE_AND_ATTACK_COLOR)
+
+	var dash_tiles := get_dash_tiles(selected_unit)
+	for move in dash_tiles:
+		_add_highlight(move, DASH_MOVE_COLOR)
+
 	var legal_moves := get_legal_moves(selected_unit)
-	for move in legal_moves:
-		var highlight := ColorRect.new()
-		highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
-		highlight.position = Vector2(move) * TILE_SIZE
-		highlight.color = LEGAL_MOVE_COLOR
-		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		highlight_container.add_child(highlight)
 
 	if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not has_status(selected_unit, PARALYZED_STATUS_ID):
 		var attackable_tiles := get_attackable_tiles_for_unit(selected_unit)
@@ -778,6 +837,8 @@ func _update_highlights() -> void:
 		for target in legal_targets:
 			target_positions.append(target.grid_position)
 
+		# Red direct targets and the attack-range fill render after the
+		# movement fills so they stay visible on top of them.
 		for tile in attackable_tiles:
 			if tile == selected_unit.grid_position:
 				continue
@@ -785,16 +846,20 @@ func _update_highlights() -> void:
 			if occupant != null and occupant.side == selected_unit.side:
 				continue
 			if target_positions.has(tile):
-				var target_highlight := ColorRect.new()
-				target_highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
-				target_highlight.position = Vector2(tile) * TILE_SIZE
-				target_highlight.color = TARGET_ATTACK_COLOR
-				target_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				highlight_container.add_child(target_highlight)
+				_add_highlight(tile, TARGET_ATTACK_COLOR)
 			elif not legal_moves.has(tile):
-				var attack_highlight := ColorRect.new()
-				attack_highlight.size = Vector2(TILE_SIZE, TILE_SIZE)
-				attack_highlight.position = Vector2(tile) * TILE_SIZE
-				attack_highlight.color = ATTACK_RANGE_COLOR
-				attack_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				highlight_container.add_child(attack_highlight)
+				_add_highlight(tile, ATTACK_RANGE_COLOR)
+
+		# Orange indirect targets: enemies not directly attackable from the
+		# current position, but attackable after moving to a green
+		# move-and-attack tile first. Rendered last so it stays visible on
+		# top of the movement fills and the plain attack-range fill.
+		for target in units:
+			if target.side == selected_unit.side or not target.is_alive():
+				continue
+			if target_positions.has(target.grid_position):
+				continue
+			for candidate in move_and_attack_tiles:
+				if _can_attack_target_from(selected_unit, candidate, target):
+					_add_highlight(target.grid_position, MOVE_AND_ATTACK_TARGET_COLOR)
+					break

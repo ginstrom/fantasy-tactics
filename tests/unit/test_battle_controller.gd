@@ -1567,3 +1567,123 @@ func test_update_highlights_omits_attack_highlights_when_unit_has_insufficient_a
 	assert_false(has_target_highlight, "Target highlight must not be shown when AP < 3")
 
 
+## Step 1 of the battle-screen redesign (docs/plans/2026-08-16-battle-screen-redesign):
+## two-tier green/yellow movement range highlights.
+func test_get_move_and_attack_and_dash_tiles_partition_by_distance_for_six_action_points() -> void:
+	var controller := _make_controller(10, 10)
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	controller.units = [mover]
+
+	var move_and_attack_tiles: Array[Vector2i] = controller.get_move_and_attack_tiles(mover)
+	var dash_tiles: Array[Vector2i] = controller.get_dash_tiles(mover)
+
+	for tile in move_and_attack_tiles:
+		var distance: int = controller.grid.get_manhattan_distance(mover.grid_position, tile)
+		assert_true(distance <= 3, "Move-and-attack tiles must leave at least 3 AP (the attack cost) after moving")
+	for tile in dash_tiles:
+		var distance: int = controller.grid.get_manhattan_distance(mover.grid_position, tile)
+		assert_true(distance >= 4 and distance <= 6, "Dash tiles must be reachable but leave too little AP to attack")
+	assert_true(move_and_attack_tiles.has(Vector2i(3, 0)), "A distance-3 move (3 AP) leaves exactly 3 AP, enough to attack")
+	assert_false(move_and_attack_tiles.has(Vector2i(4, 0)), "A distance-4 move leaves only 2 AP, not enough to attack")
+	assert_true(dash_tiles.has(Vector2i(4, 0)), "A distance-4 tile is reachable but leaves too little AP to attack")
+	assert_true(dash_tiles.has(Vector2i(6, 0)), "A distance-6 move spends the entire 6 AP budget on movement alone")
+	assert_false(dash_tiles.has(Vector2i(7, 0)), "A distance-7 tile exceeds the unit's total AP budget")
+	assert_false(move_and_attack_tiles.has(mover.grid_position), "The origin is represented by the selection ring, not a movement tile")
+	assert_false(dash_tiles.has(mover.grid_position), "The origin is represented by the selection ring, not a movement tile")
+
+
+func test_get_move_and_attack_tiles_is_empty_and_dash_tiles_cover_every_reachable_tile_for_three_action_points() -> void:
+	var controller := _make_controller(10, 10)
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+
+	var move_and_attack_tiles: Array[Vector2i] = controller.get_move_and_attack_tiles(mover)
+	var dash_tiles: Array[Vector2i] = controller.get_dash_tiles(mover)
+
+	assert_eq(move_and_attack_tiles, [] as Array[Vector2i], "3 AP exactly covers the attack cost, leaving nothing for movement first")
+	assert_true(dash_tiles.has(Vector2i(1, 0)))
+	assert_true(dash_tiles.has(Vector2i(2, 0)))
+	assert_true(dash_tiles.has(Vector2i(3, 0)))
+	assert_false(dash_tiles.has(mover.grid_position), "The origin is represented by the selection ring, not a movement tile")
+
+
+func test_get_move_and_attack_tiles_is_empty_and_all_reachable_tiles_are_dash_for_two_action_points() -> void:
+	var controller := _make_controller(10, 10)
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 2)
+	controller.units = [mover]
+
+	var move_and_attack_tiles: Array[Vector2i] = controller.get_move_and_attack_tiles(mover)
+	var dash_tiles: Array[Vector2i] = controller.get_dash_tiles(mover)
+	var legal_moves: Array[Vector2i] = controller.get_legal_moves(mover)
+
+	assert_eq(move_and_attack_tiles, [] as Array[Vector2i], "2 AP cannot leave 3 AP remaining for an attack no matter the distance")
+	assert_eq(dash_tiles.size(), legal_moves.size(), "Every reachable tile must fall into the dash tier")
+	for tile in legal_moves:
+		assert_true(dash_tiles.has(tile))
+
+
+func test_update_highlights_renders_two_tier_movement_and_direct_and_indirect_attack_targets_in_precedence_order() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	# Battlefield._ready() auto-selects a default unit and already populated
+	# highlight_container once; those children were queue_free()'d (deferred,
+	# not synchronous), so they would still show up in get_children() below
+	# alongside our own scenario's highlights unless removed immediately here.
+	for stale_child in controller.highlight_container.get_children():
+		stale_child.free()
+
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	scout.attack_min_range = 1
+	scout.attack_max_range = 1
+	# Directly attackable now: adjacent to the scout's current position. Placed
+	# off the (0, y) column so it does not block the path to the green tile
+	# the indirect target below is reached through.
+	var direct_target = UnitScript.new(Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	# Only attackable after moving: too far to hit from the origin (distance 4 > max
+	# range 1), but adjacent to (0, 3), which is a green move-and-attack tile
+	# (distance 3, leaving exactly 3 AP to attack).
+	var indirect_target = UnitScript.new(Vector2i(0, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, direct_target, indirect_target]
+
+	controller._select_unit(scout)
+
+	var green_tile := Vector2(0, 3) * BattleControllerScript.TILE_SIZE
+	var yellow_tile := Vector2(2, 0) * BattleControllerScript.TILE_SIZE
+	var origin_tile := Vector2(0, 0) * BattleControllerScript.TILE_SIZE
+	var red_target_tile := Vector2(1, 0) * BattleControllerScript.TILE_SIZE
+	var orange_target_tile := Vector2(0, 4) * BattleControllerScript.TILE_SIZE
+
+	var children: Array = controller.highlight_container.get_children()
+	var green_index := -1
+	var yellow_index := -1
+	var red_index := -1
+	var orange_index := -1
+	for index in children.size():
+		var child = children[index]
+		if not (child is ColorRect):
+			continue
+		if child.color == BattleControllerScript.LEGAL_MOVE_AND_ATTACK_COLOR and child.position == green_tile:
+			green_index = index
+		elif child.color == BattleControllerScript.DASH_MOVE_COLOR and child.position == yellow_tile:
+			yellow_index = index
+		elif child.color == BattleControllerScript.TARGET_ATTACK_COLOR and child.position == red_target_tile:
+			red_index = index
+		elif child.color == BattleControllerScript.MOVE_AND_ATTACK_TARGET_COLOR and child.position == orange_target_tile:
+			orange_index = index
+		assert_false(
+			(
+				child.color == BattleControllerScript.LEGAL_MOVE_AND_ATTACK_COLOR
+				or child.color == BattleControllerScript.DASH_MOVE_COLOR
+			) and child.position == origin_tile,
+			"The origin tile must never receive a movement fill; the selection ring already represents it"
+		)
+
+	assert_true(green_index >= 0, "Distance-3 tiles must render as move-and-attack (green) highlights")
+	assert_true(yellow_index >= 0, "Distance-4 tiles must render as dash (yellow) highlights")
+	assert_true(red_index >= 0, "An enemy directly attackable now must render a red target highlight")
+	assert_true(orange_index >= 0, "An enemy attackable only after moving into green range must render an orange target highlight")
+	assert_true(red_index > green_index, "Target overlays must render after movement fills so they remain visible on top")
+	assert_true(orange_index > green_index, "Target overlays must render after movement fills so they remain visible on top")
+
+
