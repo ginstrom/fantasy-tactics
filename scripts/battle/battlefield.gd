@@ -107,12 +107,22 @@ func _on_end_turn_pressed() -> void:
 	_play_enemy_turn()
 
 
+## set_action_mode() no-ops (and so never re-emits action_mode_changed) when
+## the requested mode is already active. But MoveButton/AttackButton use
+## Godot's native toggle_mode, which unconditionally flips button_pressed on
+## every click regardless of app state -- so a repeat click on the already-
+## active button flips its visual state to unpressed with nothing left to
+## correct it. Resyncing unconditionally after every press (not just when
+## the mode actually changed) keeps the highlight tied to the true
+## action_mode instead of Godot's independent toggle bookkeeping.
 func _on_move_button_pressed() -> void:
 	grid.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+	_on_action_mode_changed(grid.action_mode)
 
 
 func _on_attack_button_pressed() -> void:
 	grid.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	_on_action_mode_changed(grid.action_mode)
 
 
 ## Only the active-mode highlight lives here -- disabled state is driven

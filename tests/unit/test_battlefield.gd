@@ -1277,6 +1277,63 @@ func test_clicking_attack_button_activates_attack_mode_and_highlights_it() -> vo
 	assert_false(battlefield.move_button.button_pressed)
 
 
+## Mirrors what Godot's BaseButton actually does for a toggle_mode button on
+## a real click: flip button_pressed unconditionally, then fire "pressed" --
+## unlike the tests above, which call emit_signal("pressed") alone and so
+## never exercise the native flip. That distinction matters here: repeat-
+## clicking an already-active toggle button flips button_pressed back to
+## false even though the app's own state (action_mode) does not change, and
+## a naive handler that only resyncs on an actual mode change would leave
+## that flip uncorrected. See _on_move_button_pressed()/_on_attack_button_
+## pressed() in battlefield.gd.
+func _native_toggle_click(button: Button) -> void:
+	button.button_pressed = not button.button_pressed
+	button.emit_signal("pressed")
+
+
+func test_repeat_clicking_the_active_move_button_stays_highlighted() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	_native_toggle_click(battlefield.move_button)
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.MOVE)
+	assert_true(battlefield.move_button.button_pressed)
+
+	# Godot's native toggle flips button_pressed back to false on this second
+	# click. The action mode is already MOVE, so set_action_mode() itself
+	# would no-op -- the button must still resync to highlighted regardless.
+	_native_toggle_click(battlefield.move_button)
+
+	assert_eq(
+		battlefield.grid.action_mode, BattleControllerScript.ActionMode.MOVE,
+		"A repeat click on the already-active Move button must not change the mode"
+	)
+	assert_true(
+		battlefield.move_button.button_pressed,
+		"The Move button must resync to highlighted even when set_action_mode() was a no-op"
+	)
+
+
+func test_repeat_clicking_the_active_attack_button_stays_highlighted() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	_native_toggle_click(battlefield.attack_button)
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.ATTACK)
+	assert_true(battlefield.attack_button.button_pressed)
+
+	_native_toggle_click(battlefield.attack_button)
+
+	assert_eq(
+		battlefield.grid.action_mode, BattleControllerScript.ActionMode.ATTACK,
+		"A repeat click on the already-active Attack button must not change the mode"
+	)
+	assert_true(
+		battlefield.attack_button.button_pressed,
+		"The Attack button must resync to highlighted even when set_action_mode() was a no-op"
+	)
+
+
 func test_selecting_a_unit_resets_the_action_bar_to_contextual() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
