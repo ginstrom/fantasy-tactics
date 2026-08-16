@@ -362,6 +362,88 @@ func get_targeting_failure_reason(attacker, target) -> String:
 	return ""
 
 
+## Automated move-and-attack targeting: the cheapest green-range tile (see
+## get_move_and_attack_tiles()) from which attacker can legally hit target,
+## tie-broken by reading order (mirrors _best_enemy_move()'s own tie-break).
+## Returns null when no such tile exists. The origin is never a candidate
+## here -- try_attack_selected_unit() checks a direct attack from the current
+## position separately (via get_legal_attack_targets()) before falling back
+## to this helper.
+func find_best_move_and_attack_tile(attacker, target):
+	if attacker == null or not attacker.is_alive() or target == null or not target.is_alive():
+		return null
+	var distances := _move_distances(attacker)
+	var best = null
+	var best_cost := -1
+	for candidate in distances:
+		var move_cost: int = int(distances[candidate]) * MOVE_ACTION_POINT_COST
+		if attacker.action_points_remaining - move_cost < BASIC_ATTACK_ACTION_POINT_COST:
+			continue
+		if not _can_attack_target_from(attacker, candidate, target):
+			continue
+		if best_cost == -1 or move_cost < best_cost or (move_cost == best_cost and _reading_order_is_earlier(candidate, best)):
+			best = candidate
+			best_cost = move_cost
+	return best
+
+
+## Enemies attackable either immediately from attacker's current position, or
+## by first moving to a reachable green-range tile (see
+## find_best_move_and_attack_tile()). Mirrors get_legal_attack_targets() but
+## also counts move-and-attack reachability, matching what
+## try_attack_selected_unit() will actually execute for each target.
+func get_reachable_attack_targets(attacker) -> Array:
+	var reachable: Array = []
+	if attacker == null or not attacker.is_alive() or has_status(attacker, PARALYZED_STATUS_ID):
+		return reachable
+	var direct: Array = []
+	if attacker.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST:
+		direct = get_legal_attack_targets(attacker)
+	for target in units:
+		if target.side == attacker.side or not target.is_alive():
+			continue
+		if direct.has(target) or find_best_move_and_attack_tile(attacker, target) != null:
+			reachable.append(target)
+	return reachable
+
+
+## Deterministic reason for a rejected move-and-attack, per the design
+## contract's precedence (docs/plans/2026-08-16-battle-screen-redesign/
+## index.md, "Auto Move-and-Attack Mechanics"): insufficient_ap when a legal
+## tile exists (in weapon range AND clear line-of-sight) whose move-plus-
+## attack cost exceeds the attacker's remaining AP -- this wins even when a
+## different, affordable tile also exists whose line is blocked, since a
+## cheaper LOS fix (repositioning further) does not help a unit that simply
+## cannot afford to reach any legal tile at all; line_of_sight_blocked only
+## when no such legal-but-unaffordable tile exists anywhere on the board but
+## an affordable in-range tile does (which must be LOS-blocked, since an
+## affordable *and* legal tile would already have been returned by
+## find_best_move_and_attack_tile()); out_of_range otherwise. Only called
+## after both the direct attack and find_best_move_and_attack_tile() have
+## already failed, so the origin is folded back in here (unlike
+## find_best_move_and_attack_tile()) purely to classify the already-failed
+## direct attack correctly.
+func _classify_move_and_attack_failure(attacker, target) -> String:
+	var reachable := _move_distances(attacker)
+	reachable[attacker.grid_position] = 0
+	var legal_unaffordable_found := false
+	var affordable_in_range_found := false
+	for tile in reachable:
+		var distance: int = grid.get_manhattan_distance(tile, target.grid_position)
+		if distance < attacker.attack_min_range or distance > attacker.attack_max_range:
+			continue
+		var move_cost: int = int(reachable[tile]) * MOVE_ACTION_POINT_COST
+		if move_cost + BASIC_ATTACK_ACTION_POINT_COST <= attacker.action_points_remaining:
+			affordable_in_range_found = true
+		elif _can_attack_target_from(attacker, tile, target):
+			legal_unaffordable_found = true
+	if legal_unaffordable_found:
+		return "insufficient_ap"
+	if affordable_in_range_found:
+		return "line_of_sight_blocked"
+	return "out_of_range"
+
+
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
 		return false
@@ -380,20 +462,42 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	return true
 
 
+## Direct attacks execute immediately. A target out of immediate range/LoS is
+## instead resolved via find_best_move_and_attack_tile(): all candidate and
+## failure classification happens before any mutation below, so a rejected
+## attack (any return false past the early guards) leaves the attacker's
+## position, AP, last_attack_result, and the target's health untouched.
 func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
-		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
-		return false
-	if selected_unit.side != active_side:
-		return false
-	if selected_unit.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
 		return false
 	var target = get_unit_at(target_pos)
 	if target == null or target.side == selected_unit.side or not target.is_alive():
 		return false
-	if not get_legal_attack_targets(selected_unit).has(target):
+	if selected_unit.side != active_side:
 		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
+		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit, "target": target}
+		return false
+	if selected_unit.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
+		last_targeting_failure = {"reason": "insufficient_ap", "attacker": selected_unit, "target": target}
+		return false
+
+	var move_tile = null
+	if not get_legal_attack_targets(selected_unit).has(target):
+		move_tile = find_best_move_and_attack_tile(selected_unit, target)
+		if move_tile == null:
+			last_targeting_failure = {
+				"reason": _classify_move_and_attack_failure(selected_unit, target),
+				"attacker": selected_unit,
+				"target": target,
+			}
+			return false
+
+	last_targeting_failure = {}
+	if move_tile != null:
+		var distances := _move_distances(selected_unit)
+		selected_unit.grid_position = move_tile
+		selected_unit.action_points_remaining -= int(distances[move_tile]) * MOVE_ACTION_POINT_COST
 
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
 	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
@@ -715,14 +819,9 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_units()
 			_select_unit_after_action()
 			return
-		if selected_unit != null and selected_unit.side == active_side:
-			var failure_reason := get_targeting_failure_reason(selected_unit, clicked_unit)
-			if failure_reason != "":
-				last_targeting_failure = {
-					"reason": failure_reason,
-					"attacker": selected_unit,
-					"target": clicked_unit,
-				}
+		# try_attack_selected_unit() already populated last_targeting_failure
+		# with the deterministic reason (including move-and-attack rejections)
+		# when a legitimate attempt was rejected; nothing further to compute here.
 		_set_inspected_unit(clicked_unit)
 		board_changed.emit()
 		return

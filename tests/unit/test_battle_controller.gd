@@ -837,6 +837,191 @@ func test_unit_can_attack_then_move_in_the_same_turn() -> void:
 	assert_true(moved, "Moving after attacking must still be legal - order does not matter")
 
 
+## --- Step 2: automated pathfinding move-and-attack targeting -------------
+
+
+func test_find_best_move_and_attack_tile_returns_the_cheapest_los_valid_candidate() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var target = UnitScript.new(Vector2i(4, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, target]
+
+	var best_tile = controller.find_best_move_and_attack_tile(attacker, target)
+
+	assert_eq(best_tile, Vector2i(3, 0), "The only green-range tile adjacent to the target should win")
+
+
+func test_get_reachable_attack_targets_includes_direct_and_move_and_attack_enemies() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var adjacent_enemy = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	var reachable_enemy = UnitScript.new(Vector2i(4, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	var unreachable_enemy = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [attacker, adjacent_enemy, reachable_enemy, unreachable_enemy]
+
+	var targets: Array = controller.get_reachable_attack_targets(attacker)
+
+	assert_true(targets.has(adjacent_enemy), "An already-in-range enemy is reachable")
+	assert_true(targets.has(reachable_enemy), "An enemy reachable via move-and-attack is reachable")
+	assert_false(targets.has(unreachable_enemy), "An enemy beyond both direct and move-and-attack range is excluded")
+
+
+func test_move_and_attack_two_tiles_away_spends_one_move_and_three_attack_ap() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(attacker.grid_position, Vector2i(1, 0), "The unit steps into melee range before attacking")
+	assert_eq(attacker.action_points_remaining, 2, "6 AP - 1 move - 3 attack = 2 remaining")
+	assert_true(controller.last_attack_result.get("hit", false))
+
+
+func test_move_and_attack_four_tiles_away_spends_the_full_action_point_budget() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(4, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(attacker.grid_position, Vector2i(3, 0), "The unit moves 3 tiles to the adjacent square")
+	assert_eq(attacker.action_points_remaining, 0, "6 AP - 3 move - 3 attack = 0 remaining")
+
+
+func test_move_and_attack_five_tiles_away_is_rejected_as_insufficient_ap() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(5, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	var health_before: int = defender.health
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked, "4 move + 3 attack = 7 AP exceeds the 6 AP budget")
+	assert_eq(attacker.grid_position, Vector2i(0, 0))
+	assert_eq(attacker.action_points_remaining, 6)
+	assert_eq(controller.last_attack_result, {})
+	assert_eq(defender.health, health_before)
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "insufficient_ap")
+
+
+func test_ranged_unit_steps_around_a_blocked_line_of_sight_to_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 3
+	var blocker = UnitScript.new(Vector2i(0, 1), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, blocker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_eq(
+		controller.get_targeting_failure_reason(attacker, defender),
+		"line_of_sight_blocked",
+		"Sanity check: the direct line from the origin is blocked"
+	)
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked, "The unit should reposition to a tile with clear line-of-sight and attack")
+	assert_ne(attacker.grid_position, Vector2i(0, 0), "The unit must have moved off its blocked origin")
+	var new_distance: int = controller.grid.get_manhattan_distance(attacker.grid_position, defender.grid_position)
+	assert_true(new_distance >= 1 and new_distance <= 3, "The new position must be within weapon range")
+	assert_true(defender.health < 10, "The attack must have landed")
+
+
+func test_move_and_attack_out_of_range_target_is_rejected_without_movement() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked)
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "out_of_range")
+	assert_eq(attacker.grid_position, Vector2i(0, 0))
+	assert_eq(attacker.action_points_remaining, 6)
+
+
+func test_move_and_attack_prioritizes_insufficient_ap_over_a_closer_blocked_but_affordable_tile() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 3
+	var blocker = UnitScript.new(Vector2i(0, 4), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(0, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, blocker, defender]
+	controller.selected_unit = attacker
+	var health_before: int = defender.health
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	# (0,2) and (0,3) are affordable in-range tiles, both LOS-blocked by the
+	# unit at (0,4). But (1,5) is also in range (distance 1, clear line to
+	# the target) -- it just costs 6 move + 3 attack = 9 AP, more than the
+	# 6 AP available. A legal-but-unaffordable tile like that one takes
+	# precedence over affordable-but-blocked ones: no amount of clever
+	# repositioning helps a unit that cannot afford to reach any legal tile.
+	assert_false(attacked, "The only fully legal (range + clear LOS) tile is unaffordable")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "insufficient_ap")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
+	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
+	assert_eq(defender.health, health_before)
+
+
+func test_move_and_attack_rejects_a_target_whose_only_in_range_tiles_are_all_los_blocked() -> void:
+	# A single-column board removes every diagonal escape route, so the only
+	# two tiles in weapon range of the target are the two directly blocked by
+	# the unit at (0,4) -- there is no legal-but-unaffordable tile anywhere
+	# else on the board to trigger insufficient_ap instead (see the
+	# precedence test above), so line_of_sight_blocked is the correct reason.
+	var controller := _make_controller(1, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 2
+	attacker.attack_max_range = 3
+	var blocker = UnitScript.new(Vector2i(0, 4), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(0, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, blocker, defender]
+	controller.selected_unit = attacker
+	var health_before: int = defender.health
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked, "Every in-range tile's line to the target is blocked")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "line_of_sight_blocked")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
+	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
+	assert_eq(defender.health, health_before)
+
+
+func test_attack_on_an_already_in_range_target_does_not_move_the_unit() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_true(attacked)
+	assert_eq(attacker.grid_position, Vector2i(1, 1), "An in-range target is attacked without moving")
+	assert_eq(attacker.action_points_remaining, 3, "Only the attack AP cost is spent, no movement cost")
+
+
 func test_end_turn_resets_action_points_for_the_newly_active_side() -> void:
 	var controller := _make_controller(6, 6)
 	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
@@ -1497,7 +1682,11 @@ func test_handle_tile_click_records_targeting_failure_and_emits_board_changed() 
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	attacker.attack_min_range = 1
 	attacker.attack_max_range = 1
-	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	# Far enough that even automated move-and-attack (see
+	# find_best_move_and_attack_tile()) cannot reach it within the unit's
+	# full 6 AP budget -- this test now exercises a genuine out_of_range
+	# rejection rather than a distance move-and-attack would resolve.
+	var enemy = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
 	controller.units = [attacker, enemy]
 	controller.selected_unit = attacker
 	watch_signals(controller)
