@@ -2544,7 +2544,7 @@
             "enemy": {
               "attack_damage": 3,
               "attack_name_key": "battle.enemy.orc.attack",
-              "count": 1,
+              "count": 2,
               "hit_chance": 0.5,
               "max_health": 22,
               "name_key": "battle.enemy.orc"
@@ -3027,7 +3027,7 @@
             "enemy": {
               "attack_damage": 1,
               "attack_name_key": "battle.enemy.kobold.attack",
-              "count": 4,
+              "count": 8,
               "hit_chance": 0.25,
               "max_health": 6,
               "name_key": "battle.enemy.kobold"

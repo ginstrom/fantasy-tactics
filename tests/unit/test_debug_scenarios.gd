@@ -413,3 +413,33 @@ func test_get_scenarios_by_category_groups_in_source_order() -> void:
 	assert_eq(grouped[0].scenarios.size(), 2)
 	assert_eq(grouped[1].category, "Campaign")
 	assert_eq(grouped[1].scenarios.size(), 1)
+
+
+## --- Shipped manifest regression evidence (Step 5) -------------------------
+##
+## Unlike every test above (which exercises the loader/importer against
+## synthetic, test-injected manifests), these prove the real, checked-in
+## config/debug_scenarios.json is authored correctly end-to-end -- the
+## "documentation-oriented tests" docs/plans/2026-08-16-debug-menu-json-
+## config/step-5-documentation-and-verification.md asks for.
+
+
+func test_the_shipped_manifest_parses() -> void:
+	var result := DebugScenarios.load_scenarios()
+
+	assert_true(result.ok, "config/debug_scenarios.json should parse and validate: %s" % [result.errors])
+
+
+func test_every_shipped_scenario_name_key_resolves_to_translated_text() -> void:
+	for scenario in DebugScenarios.get_all_scenarios():
+		var name_key: String = scenario.name_key
+		assert_ne(
+			tr(name_key), name_key,
+			"scenario %s's name_key '%s' has no translations/en.tres entry" % [scenario.id, name_key]
+		)
+
+
+func test_every_shipped_fixture_passes_canonical_snapshot_import_validation() -> void:
+	for scenario in DebugScenarios.get_all_scenarios():
+		var result := DebugScenarios.apply(scenario.id)
+		assert_true(result.ok, "scenario %s's fixture should import cleanly: %s" % [scenario.id, result.errors])
