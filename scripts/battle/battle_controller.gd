@@ -409,33 +409,39 @@ func get_reachable_attack_targets(attacker) -> Array:
 
 ## Deterministic reason for a rejected move-and-attack, per the design
 ## contract's precedence (docs/plans/2026-08-16-battle-screen-redesign/
-## index.md, "Auto Move-and-Attack Mechanics"): insufficient_ap when some
-## tile reachable within the attacker's full AP-as-move-steps budget is in
-## weapon range but its move-plus-attack cost exceeds the attacker's
-## remaining AP; line_of_sight_blocked when an affordable in-range tile
-## exists but every such tile's line to target is blocked; out_of_range
-## otherwise. Only called after both the direct attack and
-## find_best_move_and_attack_tile() have already failed, so the origin is
-## folded back in here (unlike find_best_move_and_attack_tile()) purely to
-## classify the already-failed direct attack correctly.
+## index.md, "Auto Move-and-Attack Mechanics"): insufficient_ap when a legal
+## tile exists (in weapon range AND clear line-of-sight) whose move-plus-
+## attack cost exceeds the attacker's remaining AP -- this wins even when a
+## different, affordable tile also exists whose line is blocked, since a
+## cheaper LOS fix (repositioning further) does not help a unit that simply
+## cannot afford to reach any legal tile at all; line_of_sight_blocked only
+## when no such legal-but-unaffordable tile exists anywhere on the board but
+## an affordable in-range tile does (which must be LOS-blocked, since an
+## affordable *and* legal tile would already have been returned by
+## find_best_move_and_attack_tile()); out_of_range otherwise. Only called
+## after both the direct attack and find_best_move_and_attack_tile() have
+## already failed, so the origin is folded back in here (unlike
+## find_best_move_and_attack_tile()) purely to classify the already-failed
+## direct attack correctly.
 func _classify_move_and_attack_failure(attacker, target) -> String:
 	var reachable := _move_distances(attacker)
 	reachable[attacker.grid_position] = 0
-	var in_range_found := false
-	var affordable_found := false
+	var legal_unaffordable_found := false
+	var affordable_in_range_found := false
 	for tile in reachable:
 		var distance: int = grid.get_manhattan_distance(tile, target.grid_position)
 		if distance < attacker.attack_min_range or distance > attacker.attack_max_range:
 			continue
-		in_range_found = true
 		var move_cost: int = int(reachable[tile]) * MOVE_ACTION_POINT_COST
 		if move_cost + BASIC_ATTACK_ACTION_POINT_COST <= attacker.action_points_remaining:
-			affordable_found = true
-	if not in_range_found:
-		return "out_of_range"
-	if not affordable_found:
+			affordable_in_range_found = true
+		elif _can_attack_target_from(attacker, tile, target):
+			legal_unaffordable_found = true
+	if legal_unaffordable_found:
 		return "insufficient_ap"
-	return "line_of_sight_blocked"
+	if affordable_in_range_found:
+		return "line_of_sight_blocked"
+	return "out_of_range"
 
 
 func try_move_selected_unit(target: Vector2i) -> bool:

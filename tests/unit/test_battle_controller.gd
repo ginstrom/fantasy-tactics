@@ -956,7 +956,7 @@ func test_move_and_attack_out_of_range_target_is_rejected_without_movement() -> 
 	assert_eq(attacker.action_points_remaining, 6)
 
 
-func test_move_and_attack_rejects_an_affordable_target_whose_every_line_is_blocked() -> void:
+func test_move_and_attack_prioritizes_insufficient_ap_over_a_closer_blocked_but_affordable_tile() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	attacker.attack_min_range = 1
@@ -969,7 +969,38 @@ func test_move_and_attack_rejects_an_affordable_target_whose_every_line_is_block
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
-	assert_false(attacked, "Every affordable in-range tile's line to the target is blocked")
+	# (0,2) and (0,3) are affordable in-range tiles, both LOS-blocked by the
+	# unit at (0,4). But (1,5) is also in range (distance 1, clear line to
+	# the target) -- it just costs 6 move + 3 attack = 9 AP, more than the
+	# 6 AP available. A legal-but-unaffordable tile like that one takes
+	# precedence over affordable-but-blocked ones: no amount of clever
+	# repositioning helps a unit that cannot afford to reach any legal tile.
+	assert_false(attacked, "The only fully legal (range + clear LOS) tile is unaffordable")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "insufficient_ap")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
+	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
+	assert_eq(defender.health, health_before)
+
+
+func test_move_and_attack_rejects_a_target_whose_only_in_range_tiles_are_all_los_blocked() -> void:
+	# A single-column board removes every diagonal escape route, so the only
+	# two tiles in weapon range of the target are the two directly blocked by
+	# the unit at (0,4) -- there is no legal-but-unaffordable tile anywhere
+	# else on the board to trigger insufficient_ap instead (see the
+	# precedence test above), so line_of_sight_blocked is the correct reason.
+	var controller := _make_controller(1, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 2
+	attacker.attack_max_range = 3
+	var blocker = UnitScript.new(Vector2i(0, 4), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(0, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, blocker, defender]
+	controller.selected_unit = attacker
+	var health_before: int = defender.health
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked, "Every in-range tile's line to the target is blocked")
 	assert_eq(controller.last_targeting_failure.get("reason", ""), "line_of_sight_blocked")
 	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
 	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
