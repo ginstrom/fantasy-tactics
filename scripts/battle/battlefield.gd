@@ -12,6 +12,8 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var round_label: Label = %RoundLabel
 @onready var action_points_label: Label = %ActionPointsLabel
 @onready var end_turn_button: Button = %EndTurnButton
+@onready var move_button: Button = %MoveButton
+@onready var attack_button: Button = %AttackButton
 @onready var potion_option: OptionButton = %PotionOption
 @onready var use_potion_button: Button = %UsePotionButton
 @onready var transfer_item_option: OptionButton = %TransferItemOption
@@ -76,6 +78,7 @@ var _last_logged_attack_result: Dictionary = {}
 func _ready() -> void:
 	grid.enemy_defeated.connect(_award_kill_xp)
 	grid.unit_focus_changed.connect(_on_unit_focus_changed)
+	grid.action_mode_changed.connect(_on_action_mode_changed)
 	level_up.resolved.connect(_on_level_up_resolved)
 	portrait_panel.grid = grid
 	_on_board_changed()
@@ -85,6 +88,10 @@ func _ready() -> void:
 	# yet to pick it up. Sync the panel explicitly now, the same way
 	# _on_board_changed() is called explicitly above.
 	_on_unit_focus_changed(grid.get_focused_unit())
+	# Same reasoning as above: _select_unit() already reset action_mode to
+	# CONTEXTUAL before this node's own _ready() ran, so the action_mode_
+	# changed connection above didn't exist yet to pick it up.
+	_on_action_mode_changed(grid.action_mode)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -98,6 +105,39 @@ func _on_end_turn_pressed() -> void:
 		return
 	grid.end_turn()
 	_play_enemy_turn()
+
+
+func _on_move_button_pressed() -> void:
+	grid.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+
+func _on_attack_button_pressed() -> void:
+	grid.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+
+
+## Only the active-mode highlight lives here -- disabled state is driven
+## separately by _update_action_bar(), since it depends on the selected
+## unit's AP and the input lock, neither of which action_mode_changed alone
+## reflects.
+func _on_action_mode_changed(mode: int) -> void:
+	move_button.button_pressed = mode == BattleControllerScript.ActionMode.MOVE
+	attack_button.button_pressed = mode == BattleControllerScript.ActionMode.ATTACK
+
+
+## Move requires at least one AP (its own cost); Attack requires enough AP
+## for a basic attack -- so on low AP, Move can stay enabled while Attack
+## disables first (Attack's cost is strictly higher). Both disable while
+## input is locked (enemy turn / a queued level-up), matching End Turn.
+func _update_action_bar() -> void:
+	var selected_unit = grid.selected_unit
+	var can_act: bool = (
+		selected_unit != null
+		and selected_unit.side == BattleControllerScript.Side.PLAYER
+		and selected_unit.is_alive()
+		and not grid.input_locked
+	)
+	move_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.MOVE_ACTION_POINT_COST
+	attack_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
 
 
 func _play_enemy_turn() -> void:
@@ -146,6 +186,7 @@ func _on_board_changed() -> void:
 	_update_health_labels()
 	portrait_panel.refresh()
 	_refresh_item_actions()
+	_update_action_bar()
 	if not grid.last_targeting_failure.is_empty():
 		status.text = _describe_targeting_failure(grid.last_targeting_failure)
 	elif not grid.last_attack_result.is_empty():
@@ -397,6 +438,7 @@ func _update_input_lock() -> void:
 	var locked := _enemy_turn_in_progress or _level_up_active
 	end_turn_button.disabled = locked
 	grid.input_locked = locked
+	_update_action_bar()
 
 
 func _describe_step(step: Dictionary) -> String:
@@ -428,6 +470,10 @@ func _describe_targeting_failure(failure: Dictionary) -> String:
 		"paralyzed":
 			var attacker_name: String = failure.attacker.display_name if failure.has("attacker") and failure.attacker != null else tr(SIDE_NAME_KEYS[BattleControllerScript.Side.PLAYER])
 			return tr("battle.feedback.paralyzed") % attacker_name
+		"move_mode_no_attack":
+			return tr("battle.feedback.move_mode")
+		"attack_mode_no_target":
+			return tr("battle.feedback.attack_mode")
 		_:
 			return tr("battle.feedback.out_of_range")
 
