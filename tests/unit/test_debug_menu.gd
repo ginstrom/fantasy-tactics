@@ -2,6 +2,8 @@ extends GutTest
 
 const DebugMenuScene := preload("res://scenes/debug/debug_menu.tscn")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const DebugScenariosScript := preload("res://scripts/debug/debug_scenarios.gd")
+const TEST_MANIFEST_PATH := "user://test_debug_menu_manifest.json"
 
 
 func before_each() -> void:
@@ -16,50 +18,135 @@ func after_each() -> void:
 	# behind by a failed assertion here.
 	GameSession.reset_injectable_rolls()
 
+	# Several tests below reload TEST_MANIFEST_PATH, replacing DebugScenarios'
+	# shared static cache -- always reload the real one afterward so no test
+	# here can leak a synthetic scenario list into another test file (see
+	# test_debug_scenarios.gd's after_each for the same rationale).
+	if FileAccess.file_exists(TEST_MANIFEST_PATH):
+		DirAccess.remove_absolute(TEST_MANIFEST_PATH)
+	DebugScenariosScript.load_scenarios()
 
-func test_debug_menu_starts_hidden_with_eleven_stable_scenario_buttons() -> void:
+
+func _write_debug_menu_manifest(scenarios: Array) -> void:
+	var file := FileAccess.open(TEST_MANIFEST_PATH, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"manifest_version": 1, "scenarios": scenarios}))
+	file.close()
+
+
+func _scenario_dict(id: String, category: String, campaign_snapshot: Dictionary = {"version": 1}) -> Dictionary:
+	return {
+		"id": id,
+		"name_key": "debug.%s_test_scenario" % id,
+		"category": category,
+		"description": "Synthetic scenario for a test-injected manifest.",
+		"launch": {"scene": "encampment"},
+		"campaign_snapshot": campaign_snapshot,
+	}
+
+
+## --- Dynamic scenario rendering (Step 4) -----------------------------------
+
+
+func test_debug_menu_renders_one_button_per_manifest_scenario_grouped_by_category_in_source_order() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 
 	assert_false(menu.visible)
-	assert_eq(menu.get_node("Panel/Rows/NewCampaignButton").text, "debug.new_campaign")
-	assert_eq(menu.get_node("Panel/Rows/EncampmentButton").text, "debug.encampment")
-	assert_eq(menu.get_node("Panel/Rows/PartyManagerButton").text, "debug.party_manager")
-	assert_eq(menu.get_node("Panel/Rows/PartyReadyButton").text, "debug.party_ready")
-	assert_eq(menu.get_node("Panel/Rows/PartyEmptyButton").text, "debug.party_empty")
-	assert_eq(menu.get_node("Panel/Rows/WorldMapButton").text, "debug.world_map")
-	assert_eq(menu.get_node("Panel/Rows/GoblinCampButton").text, "debug.goblin_camp")
-	assert_eq(menu.get_node("Panel/Rows/OrcOutpostButton").text, "debug.orc_outpost")
-	assert_eq(menu.get_node("Panel/Rows/StockedStoresButton").text, "debug.stocked_stores")
-	assert_eq(menu.get_node("Panel/Rows/SuperPowerButton").text, "debug.super_power")
-	assert_eq(menu.get_node("Panel/Rows/RecruitButton").text, "debug.recruit")
+
+	var expected_categories := DebugScenariosScript.get_scenarios_by_category()
+	var expected_scenario_count := 0
+	var expected_headers: Array = []
+	for category in expected_categories:
+		expected_headers.append(category.category)
+		for scenario in category.scenarios:
+			expected_scenario_count += 1
+			var button: Button = menu._scenario_buttons.get(scenario.id)
+			assert_false(button == null, "expected a button for scenario %s" % scenario.id)
+			if button != null:
+				assert_eq(button.text, scenario.name_key, "scenario %s's button should show its localized name_key" % scenario.id)
+
+	assert_eq(menu._scenario_buttons.size(), expected_scenario_count)
+
+	var header_texts: Array = []
+	for child in menu._scenario_container.get_children():
+		if child is Label:
+			header_texts.append(child.text)
+	assert_eq(header_texts, expected_headers, "category headers must appear in the manifest's source order")
 
 
-func test_orc_outpost_button_runs_the_orc_outpost_debug_scenario() -> void:
+func test_debug_menu_preserves_the_super_power_and_recruit_utility_actions() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_eq(menu.get_node("Panel/Rows/UtilitiesFooter/SuperPowerButton").text, "debug.super_power")
+	assert_eq(menu.get_node("Panel/Rows/UtilitiesFooter/RecruitButton").text, "debug.recruit")
+
+
+## --- Safe reload (Step 4) ---------------------------------------------------
+
+
+func test_reload_with_a_valid_edited_manifest_rebuilds_the_buttons() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	_write_debug_menu_manifest([_scenario_dict("alpha", "Test")])
+	var result: Dictionary = menu._reload(TEST_MANIFEST_PATH)
+
+	assert_true(result.ok)
+	assert_eq(menu._scenario_buttons.keys(), ["alpha"])
+	assert_eq(menu._scenario_buttons["alpha"].text, "debug.alpha_test_scenario")
+
+
+func test_reload_with_an_invalid_manifest_preserves_the_current_buttons_and_shows_an_error() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	var original_ids: Array = menu._scenario_buttons.keys()
+
+	var file := FileAccess.open(TEST_MANIFEST_PATH, FileAccess.WRITE)
+	file.store_string("{ not valid json")
+	file.close()
+	var result: Dictionary = menu._reload(TEST_MANIFEST_PATH)
+
+	assert_false(result.ok)
+	assert_true(result.errors.size() > 0)
+	assert_eq(menu._scenario_buttons.keys(), original_ids, "an invalid reload must not clear the menu")
+	assert_string_contains(menu._status_label.text, result.errors[0], "the concise error text should be visible")
+
+
+## --- Pressing a scenario button (Step 4) ------------------------------------
+
+
+func test_pressing_a_scenario_button_invokes_run_debug_scenario_and_closes_the_menu_on_ok() -> void:
 	var menu: CanvasLayer = DebugMenuScene.instantiate()
 	add_child_autofree(menu)
 	menu.visible = true
 
-	menu._on_orc_outpost_pressed()
+	menu._scenario_buttons["orc_outpost"].pressed.emit()
 
 	assert_eq(
 		GameSession.selected_encounter,
 		GameSession.ORC_OUTPOST_ID,
-		"The button must drive the same run_debug_scenario('orc_outpost') path as the scenario menu"
+		"the button must drive the same run_debug_scenario('orc_outpost') path as before"
 	)
-	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
+	assert_false(menu.visible, "a successful scenario run should close the menu")
 
 
-## The old field-by-field DebugScenarios.apply() pinned GameSession.
-## enemy_composition_roll/enemy_count_roll to guarantee the maximum eight
-## Kobolds here. The manifest/snapshot-based apply() (see debug_scenarios.gd
-## and docs/plans/2026-08-16-debug-menu-json-config/index.md's "Architecture
-## and scope") deliberately excludes that kind of direct GameSession battle
-## override -- Callables have no JSON representation, and enemy composition
-## is re-rolled live by GameSession.enter_encounter() regardless. So this
-## scenario's party composition is still guaranteed by its fixture, but the
-## battle's enemy composition/count is real-random on entry, same as normal
-## gameplay.
+func test_pressing_a_scenario_button_keeps_the_menu_open_when_the_launch_fails() -> void:
+	var menu: CanvasLayer = DebugMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.visible = true
+
+	# Force a failure without touching the real manifest: reload a scenario
+	# whose campaign_snapshot fails CampaignSnapshot validation (a bare
+	# {"version": 1} is missing every required durable field).
+	_write_debug_menu_manifest([_scenario_dict("broken", "Test")])
+	assert_true(menu._reload(TEST_MANIFEST_PATH).ok, "the manifest itself is well-formed; only the snapshot is invalid")
+
+	menu._scenario_buttons["broken"].pressed.emit()
+
+	assert_true(menu.visible, "a failed scenario run should not close the menu")
+
+
 func test_ruined_fortress_scenario_deploys_a_staffed_party_of_three_warriors() -> void:
 	assert_eq(GameManager.run_debug_scenario("ruined_fortress"), OK)
 
@@ -108,7 +195,7 @@ func test_ruined_fortress_button_runs_the_ruined_fortress_debug_scenario() -> vo
 	add_child_autofree(menu)
 	menu.visible = true
 
-	menu._on_ruined_fortress_pressed()
+	menu._scenario_buttons["ruined_fortress"].pressed.emit()
 
 	assert_false(menu.visible, "A successful scenario run should close the menu, like the other buttons")
 
@@ -118,7 +205,7 @@ func test_stocked_stores_button_populates_the_trading_post_and_routes_to_stores(
 	add_child_autofree(menu)
 	menu.visible = true
 
-	menu._on_stocked_stores_pressed()
+	menu._scenario_buttons["stocked_stores"].pressed.emit()
 
 	assert_true(GameSession.has_trading_post)
 	assert_eq(GameSession.mana_crystals, {1: 2})
@@ -159,7 +246,7 @@ func test_party_empty_button_runs_the_party_empty_debug_scenario() -> void:
 	add_child_autofree(menu)
 	menu.visible = true
 
-	menu._on_party_empty_pressed()
+	menu._scenario_buttons["party_empty"].pressed.emit()
 
 	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
 	assert_false(GameSession.has_deployed_party())

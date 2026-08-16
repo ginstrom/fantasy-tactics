@@ -15,7 +15,7 @@ anchor_bottom = 0.0
 offset_left = 24.0
 offset_top = 24.0
 offset_right = 324.0
-offset_bottom = 540.0
+offset_bottom = 620.0
 
 [node name="Rows" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
@@ -31,63 +31,38 @@ layout_mode = 2
 text = "debug.close_hint"
 horizontal_alignment = 1
 
-[node name="NewCampaignButton" type="Button" parent="Panel/Rows"]
+[node name="StatusLabel" type="Label" parent="Panel/Rows"]
 layout_mode = 2
-text = "debug.new_campaign"
+autowrap_mode = 3
+text = ""
 
-[node name="EncampmentButton" type="Button" parent="Panel/Rows"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/Rows"]
+custom_minimum_size = Vector2(0, 320)
 layout_mode = 2
-text = "debug.encampment"
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="PartyManagerButton" type="Button" parent="Panel/Rows"]
+[node name="ScenarioContainer" type="VBoxContainer" parent="Panel/Rows/ScrollContainer"]
 layout_mode = 2
-text = "debug.party_manager"
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
 
-[node name="PartyReadyButton" type="Button" parent="Panel/Rows"]
+[node name="ReloadButton" type="Button" parent="Panel/Rows"]
 layout_mode = 2
-text = "debug.party_ready"
+text = "debug.reload"
 
-[node name="PartyEmptyButton" type="Button" parent="Panel/Rows"]
+[node name="UtilitiesFooter" type="VBoxContainer" parent="Panel/Rows"]
 layout_mode = 2
-text = "debug.party_empty"
+theme_override_constants/separation = 8
 
-[node name="WorldMapButton" type="Button" parent="Panel/Rows"]
-layout_mode = 2
-text = "debug.world_map"
-
-[node name="GoblinCampButton" type="Button" parent="Panel/Rows"]
-layout_mode = 2
-text = "debug.goblin_camp"
-
-[node name="OrcOutpostButton" type="Button" parent="Panel/Rows"]
-layout_mode = 2
-text = "debug.orc_outpost"
-
-[node name="RuinedFortressButton" type="Button" parent="Panel/Rows"]
-layout_mode = 2
-text = "debug.ruined_fortress"
-
-[node name="StockedStoresButton" type="Button" parent="Panel/Rows"]
-layout_mode = 2
-text = "debug.stocked_stores"
-
-[node name="SuperPowerButton" type="Button" parent="Panel/Rows"]
+[node name="SuperPowerButton" type="Button" parent="Panel/Rows/UtilitiesFooter"]
 layout_mode = 2
 text = "debug.super_power"
 
-[node name="RecruitButton" type="Button" parent="Panel/Rows"]
+[node name="RecruitButton" type="Button" parent="Panel/Rows/UtilitiesFooter"]
 layout_mode = 2
 text = "debug.recruit"
 
-[connection signal="pressed" from="Panel/Rows/NewCampaignButton" to="." method="_on_new_campaign_pressed"]
-[connection signal="pressed" from="Panel/Rows/EncampmentButton" to="." method="_on_encampment_pressed"]
-[connection signal="pressed" from="Panel/Rows/PartyManagerButton" to="." method="_on_party_manager_pressed"]
-[connection signal="pressed" from="Panel/Rows/PartyReadyButton" to="." method="_on_party_ready_pressed"]
-[connection signal="pressed" from="Panel/Rows/PartyEmptyButton" to="." method="_on_party_empty_pressed"]
-[connection signal="pressed" from="Panel/Rows/WorldMapButton" to="." method="_on_world_map_pressed"]
-[connection signal="pressed" from="Panel/Rows/GoblinCampButton" to="." method="_on_goblin_camp_pressed"]
-[connection signal="pressed" from="Panel/Rows/OrcOutpostButton" to="." method="_on_orc_outpost_pressed"]
-[connection signal="pressed" from="Panel/Rows/RuinedFortressButton" to="." method="_on_ruined_fortress_pressed"]
-[connection signal="pressed" from="Panel/Rows/StockedStoresButton" to="." method="_on_stocked_stores_pressed"]
-[connection signal="pressed" from="Panel/Rows/SuperPowerButton" to="." method="_on_super_power_pressed"]
-[connection signal="pressed" from="Panel/Rows/RecruitButton" to="." method="_on_recruit_pressed"]
+[connection signal="pressed" from="Panel/Rows/ReloadButton" to="." method="_on_reload_pressed"]
+[connection signal="pressed" from="Panel/Rows/UtilitiesFooter/SuperPowerButton" to="." method="_on_super_power_pressed"]
+[connection signal="pressed" from="Panel/Rows/UtilitiesFooter/RecruitButton" to="." method="_on_recruit_pressed"]
