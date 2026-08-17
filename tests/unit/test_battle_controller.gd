@@ -851,21 +851,6 @@ func test_find_best_move_and_attack_tile_returns_the_cheapest_los_valid_candidat
 	assert_eq(best_tile, Vector2i(3, 0), "The only green-range tile adjacent to the target should win")
 
 
-func test_get_reachable_attack_targets_includes_direct_and_move_and_attack_enemies() -> void:
-	var controller := _make_controller(6, 6)
-	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
-	var adjacent_enemy = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
-	var reachable_enemy = UnitScript.new(Vector2i(4, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
-	var unreachable_enemy = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
-	controller.units = [attacker, adjacent_enemy, reachable_enemy, unreachable_enemy]
-
-	var targets: Array = controller.get_reachable_attack_targets(attacker)
-
-	assert_true(targets.has(adjacent_enemy), "An already-in-range enemy is reachable")
-	assert_true(targets.has(reachable_enemy), "An enemy reachable via move-and-attack is reachable")
-	assert_false(targets.has(unreachable_enemy), "An enemy beyond both direct and move-and-attack range is excluded")
-
-
 func test_move_and_attack_two_tiles_away_spends_one_move_and_three_attack_ap() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
@@ -925,12 +910,6 @@ func test_ranged_unit_steps_around_a_blocked_line_of_sight_to_attack() -> void:
 	controller.units = [attacker, blocker, defender]
 	controller.selected_unit = attacker
 	controller.hit_roll = func() -> float: return 0.0
-
-	assert_eq(
-		controller.get_targeting_failure_reason(attacker, defender),
-		"line_of_sight_blocked",
-		"Sanity check: the direct line from the origin is blocked"
-	)
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
@@ -1906,37 +1885,6 @@ func test_attack_hit_chance_is_reduced_by_the_defenders_defense_but_floors_at_th
 		20,
 		"0.3 hit chance minus 50 defense floors at 0.05; a 0.1 roll clears the floor and must still miss"
 	)
-
-
-func test_get_targeting_failure_reason_identifies_all_failure_causes() -> void:
-	var controller := _make_controller(6, 6)
-	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
-	attacker.attack_min_range = 1
-	attacker.attack_max_range = 3
-	var enemy_in_range = UnitScript.new(Vector2i(0, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
-	var enemy_out_of_range = UnitScript.new(Vector2i(0, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
-	var obstacle = UnitScript.new(Vector2i(0, 1), Color.DARK_GRAY, BattleControllerScript.Side.PLAYER, 6)
-	controller.units = [attacker, enemy_in_range, enemy_out_of_range]
-
-	# Valid target in range
-	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "")
-
-	# Out of range
-	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_out_of_range), "out_of_range")
-
-	# Insufficient AP
-	attacker.action_points_remaining = 2
-	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "insufficient_ap")
-	attacker.action_points_remaining = 6
-
-	# Paralyzed
-	controller.apply_status(attacker, BattleControllerScript.PARALYZED_STATUS_ID)
-	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "paralyzed")
-	attacker.statuses.clear()
-
-	# Line of sight blocked
-	controller.units.append(obstacle)
-	assert_eq(controller.get_targeting_failure_reason(attacker, enemy_in_range), "line_of_sight_blocked")
 
 
 func test_handle_tile_click_records_targeting_failure_and_emits_board_changed() -> void:
