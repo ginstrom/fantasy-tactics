@@ -166,6 +166,7 @@ messages = {
 "settlement.description": "Prepare your party before setting out.",
 "settlement.encampment": "Enter Encampment",
 "battle.end_turn": "End Turn",
+"battle.title": "%s Battle",
 "battle.round": "Round %d",
 "battle.action_points": "AP: %d / %d",
 "battle.end_turn.reminder": "End Turn forfeits remaining AP.",
