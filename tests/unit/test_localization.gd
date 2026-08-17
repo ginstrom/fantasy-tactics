@@ -29,6 +29,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.random"), "🎲 Random")
 	assert_eq(tr("menu.begin"), "Begin")
 	assert_eq(tr("battle.end_turn"), "End Turn")
+	assert_eq(tr("battle.end_turn.reminder"), "End Turn forfeits remaining AP.")
+	assert_eq(tr("battle.action_points") % [3, 9], "AP: 3 / 9")
 	assert_eq(tr("battle.title") % "Goblin Camp", "Goblin Camp Battle")
 	assert_eq(tr("battle.title") % "Orc Outpost", "Orc Outpost Battle")
 	assert_eq(tr("battle.round") % 1, "Round 1")
@@ -56,6 +58,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.status.hit") % ["Warrior", 2], "Warrior hits for 2 damage.")
 	assert_eq(tr("battle.status.miss") % "Goblin", "Goblin misses.")
 	assert_eq(tr("battle.status.enemy_move") % "Goblin", "Goblin moves closer.")
+	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
 	assert_eq(
 		tr("battle.log.hit") % ["Warrior 2", "Kobold 2", 3],
 		"Warrior 2 attacks Kobold 2 — hits for 3 damage!"
@@ -104,6 +107,18 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		tr("battle.feedback.attack_mode"),
 		"Attack mode: click an enemy to attack."
 	)
+	assert_eq(tr("battle.status.thorn_trigger") % "Warrior", "Warrior is Paralyzed!")
+	assert_eq(tr("battle.item.use_potion"), "Use Potion — 2 AP")
+	assert_eq(tr("battle.item.transfer"), "Give Item — 2 AP")
+	assert_eq(tr("battle.item.recipient"), "Give to")
+	assert_eq(
+		tr("battle.status.potion") % ["Warrior", "Healing Potion", 5],
+		"Warrior uses Healing Potion and recovers 5 HP"
+	)
+	assert_eq(
+		tr("battle.status.item_transfer") % ["Warrior", "Healing Potion", "Warrior 2"],
+		"Warrior gives Healing Potion to Warrior 2"
+	)
 	assert_eq(
 		tr("world_map.hint"),
 		(
@@ -119,6 +134,12 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("expedition.orc_outpost.name"), "Orc Outpost")
 	assert_eq(tr("battle.enemy.goblin"), "Goblin")
 	assert_eq(tr("battle.enemy.orc"), "Orc")
+	assert_eq(tr("battle.enemy.goblin.attack"), "Short Sword")
+	assert_eq(tr("battle.enemy.orc.attack"), "War Axe")
+	assert_eq(tr("battle.enemy.kobold"), "Kobold")
+	assert_eq(tr("battle.enemy.kobold.attack"), "Rusty Dagger")
+	assert_eq(tr("battle.enemy.hobgoblin"), "Hobgoblin")
+	assert_eq(tr("battle.enemy.hobgoblin.attack"), "Two-Handed Sword")
 	assert_eq(tr("party.title"), "Party Manager")
 	assert_eq(tr("party.warrior.summary"), "Warrior — warrior, sword")
 	assert_eq(tr("party.status.empty"), "Your party has no adventurers.")
