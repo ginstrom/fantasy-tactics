@@ -1660,3 +1660,74 @@ func test_header_and_bottom_panel_never_overlap_the_battle_grid() -> void:
 		"The bottom HUD panel must never grow tall enough to cover the battle grid"
 	)
 
+
+## Regression test: BottomContent is a VBoxContainer, where child file/tree
+## order is rendering (top-to-bottom) order. The design contract (index.md's
+## ASCII layout and its "Combat log spans full width above the action bar"
+## acceptance criterion, plus this step's own plan) requires the log row
+## above the action bar row, not below it.
+func test_combat_log_row_sits_above_the_action_bar_row() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var log_row: Node = battlefield.log_scroll.get_parent()
+	var action_bar_row: Node = battlefield.move_button.get_parent().get_parent()
+
+	assert_eq(
+		log_row.get_parent(), action_bar_row.get_parent(),
+		"LogScroll's row and the action bar row must be siblings within BottomContent"
+	)
+	assert_lt(
+		log_row.get_index(), action_bar_row.get_index(),
+		"The combat log row must sit above (render before) the action bar row in BottomContent"
+	)
+
+
+## Regression test: EnemyHealthScroll (a BodyRow column with no plan-specified
+## slot -- see test_enemy_health_list_lives_in_the_body_row_not_the_bottom_
+## panel above) must have a real width ceiling rather than growing with its
+## content, since BodyRow's only flexible member is Spacer (Grid itself sits
+## outside the HUD tree at a fixed position, so it never moves on its own).
+## An unbounded EnemyHealthScroll steals width from Spacer; measured directly
+## (see the debug instrumentation this test's assertions replace), that first
+## shows up as UnitInfoPanel's left edge sliding into the grid's footprint --
+## EnemyHealthScroll itself, being the rightmost column, only follows once
+## the squeeze is severe enough. Checking that Spacer's rect still fully
+## contains Grid's rect is the general invariant that actually guards against
+## any BodyRow column (EnemyHealthScroll included) overrunning its budget, so
+## that -- plus EnemyHealthScroll's own edge -- is what's asserted here.
+## Forces content on the extreme end of what this column's fixed
+## "%s: %d/%d HP" template can produce (very wide HP figures), deliberately
+## far past any realistic in-game value, so the assertion exercises the
+## column's actual configured ceiling rather than just today's real content.
+func test_enemy_health_column_never_overlaps_the_battle_grid_even_with_wide_content() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	for unit in battlefield.grid.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			unit.max_health = 999999999
+			unit.health = 999999999
+	battlefield._update_health_labels()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var enemy_health_scroll: Control = battlefield.enemy_health.get_parent()
+	var spacer: Control = battlefield.portrait_panel.get_parent().get_node("Spacer")
+	var grid_left_edge: float = battlefield.grid.position.x
+	var grid_right_edge: float = (
+		battlefield.grid.position.x
+		+ BattleControllerScript.GRID_WIDTH * BattleControllerScript.TILE_SIZE
+	)
+
+	assert_true(
+		spacer.get_global_rect().position.x <= grid_left_edge
+		and spacer.get_global_rect().position.x + spacer.get_global_rect().size.x >= grid_right_edge,
+		"BodyRow's flexible Spacer must still fully cover the grid's footprint -- if a fixed-width " +
+		"column like EnemyHealthScroll grows unbounded, Spacer shrinks below the grid's width and " +
+		"the columns after it (UnitInfoPanel, EnemyHealthScroll) slide left into the grid"
+	)
+	assert_true(
+		enemy_health_scroll.get_global_rect().position.x >= grid_right_edge,
+		"The enemy health column must never grow wide enough to encroach on the battle grid"
+	)
+

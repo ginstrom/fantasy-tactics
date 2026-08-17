@@ -158,8 +158,8 @@ visible = false
 
 [node name="EnemyHealthScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BodyRow"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 40)
-horizontal_scroll_mode = 0
+custom_minimum_size = Vector2(160, 40)
+horizontal_scroll_mode = 1
 
 [node name="EnemyHealth" type="VBoxContainer" parent="HUD/Margin/VBox/BodyRow/EnemyHealthScroll"]
 unique_name_in_owner = true
@@ -183,6 +183,20 @@ unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 3
 text = "battle.status.awaiting_action"
+
+[node name="ScrollRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
+layout_mode = 2
+
+[node name="LogScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 40)
+horizontal_scroll_mode = 0
+
+[node name="Log" type="VBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="BottomActionsRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
 layout_mode = 2
@@ -240,20 +254,6 @@ mouse_filter = 2
 unique_name_in_owner = true
 layout_mode = 2
 text = "battle.end_turn"
-
-[node name="ScrollRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
-layout_mode = 2
-
-[node name="LogScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 40)
-horizontal_scroll_mode = 0
-
-[node name="Log" type="VBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
 
 [node name="LevelUp" parent="HUD" instance=ExtResource("3_level_up")]
 layout_mode = 1
