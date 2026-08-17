@@ -100,24 +100,59 @@ layout_mode = 2
 autowrap_mode = 3
 text = "battle.unit_info.empty"
 
-[node name="NameLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+[node name="HoveredSection" type="VBoxContainer" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
 layout_mode = 2
 visible = false
 
-[node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+[node name="NameLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+
+[node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
 
-[node name="LevelLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+[node name="HpLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
 
-[node name="HpLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+[node name="WoundLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
 
-[node name="WoundLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+[node name="Separator" type="HSeparator" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
 layout_mode = 2
+
+[node name="SelectedSection" type="VBoxContainer" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
+layout_mode = 2
+visible = false
+
+[node name="NameLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+
+[node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
+
+[node name="LevelLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
+
+[node name="HpLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+
+[node name="ApLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+
+[node name="WeaponLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+
+[node name="WoundLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
+
+[node name="StatusLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+autowrap_mode = 3
 visible = false
 
 [node name="BottomPanel" type="PanelContainer" parent="HUD/Margin/VBox"]

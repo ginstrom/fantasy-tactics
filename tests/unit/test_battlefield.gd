@@ -506,43 +506,84 @@ func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> voi
 	assert_eq(battlefield.round_label.get_parent(), battlefield.end_turn_button.get_parent())
 
 
-## Task 3: the right-side unit hover/click detail panel, which lives inside
-## BodyRow next to PortraitPanel (see unit_info_panel.gd and battlefield.tscn).
+## Step 4: the right-side unit hover/click detail panel, which lives inside
+## BodyRow next to PortraitPanel (see unit_info_panel.gd and battlefield.tscn),
+## and now shows the hovered unit and the selected unit simultaneously in
+## distinct sub-containers (HoveredSection / SelectedSection) rather than
+## collapsing them into one shared set of labels.
 
 ## BattleController._ready() auto-selects the first living party member
-## (selection ring shown on the board from turn one), so the unit-info panel
-## must reflect that same opening selection instead of showing its empty
-## prompt despite a unit already being visibly selected.
+## (selection ring shown on the board from turn one), so the unit-info
+## panel's SelectedSection must reflect that same opening selection instead
+## of showing its empty prompt despite a unit already being visibly selected.
 func test_unit_info_panel_shows_the_auto_selected_unit_at_battle_start() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
-	assert_false(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
-	assert_true(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
-	assert_eq(battlefield.unit_info_panel.get_node("Content/NameLabel").text, warrior.display_name)
+	var panel: Control = battlefield.unit_info_panel
+	assert_false(panel.get_node("Content/EmptyLabel").visible)
+	assert_true(panel.get_node("Content/SelectedSection").visible)
+	assert_eq(panel.get_node("Content/SelectedSection/NameLabel").text, warrior.display_name)
 
 
-func test_unit_info_panel_shows_exact_hp_name_class_and_level_for_a_player_unit() -> void:
+func test_unit_info_panel_selected_section_shows_exact_hp_ap_name_class_level_and_weapon_for_a_player_unit() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
-	battlefield.grid._set_hovered_unit(warrior)
-
 	var panel: Control = battlefield.unit_info_panel
 	assert_false(panel.get_node("Content/EmptyLabel").visible)
-	assert_true(panel.get_node("Content/NameLabel").visible)
-	assert_eq(panel.get_node("Content/NameLabel").text, "Warrior")
-	assert_eq(panel.get_node("Content/ClassLabel").text, tr("information.class") % "warrior")
-	assert_eq(panel.get_node("Content/LevelLabel").text, tr("information.level") % 1)
-	assert_eq(panel.get_node("Content/HpLabel").text, tr("battle.unit_info.hp") % [10, 10])
-	assert_false(panel.get_node("Content/WoundLabel").visible, "Enemies-only row must stay hidden for a player unit")
+	assert_true(panel.get_node("Content/SelectedSection").visible)
+	assert_eq(panel.get_node("Content/SelectedSection/NameLabel").text, "Warrior")
+	assert_eq(panel.get_node("Content/SelectedSection/ClassLabel").text, tr("information.class") % "warrior")
+	assert_eq(panel.get_node("Content/SelectedSection/LevelLabel").text, tr("information.level") % 1)
+	assert_eq(panel.get_node("Content/SelectedSection/HpLabel").text, tr("battle.unit_info.hp") % [10, 10])
+	assert_eq(
+		panel.get_node("Content/SelectedSection/ApLabel").text,
+		tr("battle.unit_info.ap") % [warrior.action_points_remaining, warrior.max_action_points]
+	)
+	assert_eq(panel.get_node("Content/SelectedSection/WeaponLabel").text, tr("battle.unit_info.weapon") % warrior.attack_name)
+	assert_false(
+		panel.get_node("Content/SelectedSection/WoundLabel").visible,
+		"Enemies-only row must stay hidden for a player unit"
+	)
 
 
-func test_unit_info_panel_shows_only_a_wound_tier_for_an_enemy_never_exact_hp() -> void:
+## Hovering an enemy while a player unit is selected is the panel's core new
+## scenario: both halves must render at once, from two different units.
+func test_unit_info_panel_shows_hovered_enemy_and_selected_player_simultaneously() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.health = int(goblin.max_health * 0.5)  # inside the "Wounded" band
+
+	battlefield.grid._select_unit(warrior)
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_true(panel.get_node("Content/HoveredSection").visible)
+	assert_eq(panel.get_node("Content/HoveredSection/NameLabel").text, goblin.display_name)
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.wounded"))
+	assert_true(panel.get_node("Content/SelectedSection").visible)
+	assert_eq(panel.get_node("Content/SelectedSection/NameLabel").text, "Warrior")
+	assert_eq(
+		panel.get_node("Content/SelectedSection/HpLabel").text,
+		tr("battle.unit_info.hp") % [warrior.health, warrior.max_health]
+	)
+	assert_eq(
+		panel.get_node("Content/SelectedSection/ApLabel").text,
+		tr("battle.unit_info.ap") % [warrior.action_points_remaining, warrior.max_action_points]
+	)
+	assert_eq(panel.get_node("Content/SelectedSection/WeaponLabel").text, tr("battle.unit_info.weapon") % warrior.attack_name)
+
+
+func test_unit_info_panel_hovered_section_shows_only_a_wound_tier_for_an_enemy_never_exact_hp() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -550,15 +591,41 @@ func test_unit_info_panel_shows_only_a_wound_tier_for_an_enemy_never_exact_hp() 
 	battlefield.grid._set_hovered_unit(goblin)
 
 	var panel: Control = battlefield.unit_info_panel
-	assert_eq(panel.get_node("Content/NameLabel").text, goblin.display_name)
-	assert_true(panel.get_node("Content/WoundLabel").visible)
-	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.healthy"))
-	assert_false(panel.get_node("Content/HpLabel").visible, "Player-only row must stay hidden for an enemy")
-	assert_false(panel.get_node("Content/ClassLabel").visible)
-	assert_false(panel.get_node("Content/LevelLabel").visible)
+	assert_true(panel.get_node("Content/HoveredSection").visible)
+	assert_eq(panel.get_node("Content/HoveredSection/NameLabel").text, goblin.display_name)
+	assert_true(panel.get_node("Content/HoveredSection/WoundLabel").visible)
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.healthy"))
+	assert_false(panel.get_node("Content/HoveredSection/HpLabel").visible, "Player-only row must stay hidden for an enemy")
 
 
-func test_unit_info_panel_wound_tiers_match_the_health_percentage_thresholds() -> void:
+## Design Contract (index.md, "4. Dual Right-Hand Inspection Panel"): the
+## hovered section shows "wound tier for enemies, HP/class for allies" -- so
+## a hovered ally (not the selected unit) must show class alongside name/HP,
+## unlike a hovered enemy which only ever shows a wound tier.
+func test_unit_info_panel_hovered_section_shows_class_for_a_hovered_ally() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var first_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var second_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[1])
+
+	battlefield.grid._select_unit(first_member)
+	battlefield.grid._set_hovered_unit(second_member)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_true(panel.get_node("Content/HoveredSection").visible)
+	assert_eq(panel.get_node("Content/HoveredSection/NameLabel").text, second_member.display_name)
+	assert_true(panel.get_node("Content/HoveredSection/HpLabel").visible)
+	assert_eq(
+		panel.get_node("Content/HoveredSection/HpLabel").text,
+		tr("battle.unit_info.hp") % [second_member.health, second_member.max_health]
+	)
+	assert_true(panel.get_node("Content/HoveredSection/ClassLabel").visible)
+	var adventurer := GameSession.get_adventurer(second_member.adventurer_id)
+	assert_eq(panel.get_node("Content/HoveredSection/ClassLabel").text, tr("information.class") % adventurer.get("class", ""))
+
+
+func test_unit_info_panel_hovered_wound_tiers_match_the_health_percentage_thresholds() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -566,24 +633,23 @@ func test_unit_info_panel_wound_tiers_match_the_health_percentage_thresholds() -
 
 	goblin.health = goblin.max_health  # 100%
 	battlefield.grid._set_hovered_unit(goblin)
-	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.healthy"))
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.healthy"))
 
 	goblin.health = int(goblin.max_health * 0.5)  # 50%, inside the 34-66% band
 	battlefield.grid._set_hovered_unit(null)
 	battlefield.grid._set_hovered_unit(goblin)
-	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.wounded"))
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.wounded"))
 
 	goblin.health = 1  # well under 33%
 	battlefield.grid._set_hovered_unit(null)
 	battlefield.grid._set_hovered_unit(goblin)
-	assert_eq(panel.get_node("Content/WoundLabel").text, tr("battle.unit_info.badly_wounded"))
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.badly_wounded"))
 
 
-## get_focused_unit() falls back from hover to the pinned selection (see
-## BattleController.get_focused_unit()) -- and battle start already pins the
-## first party member as that selection (see BattleController._ready()), so
-## losing hover reverts to showing that pinned unit, not an empty panel.
-func test_unit_info_panel_reverts_to_the_pinned_selection_when_hover_ends() -> void:
+## Hover ending must not disturb the pinned selection -- the SelectedSection
+## keeps showing the actually-selected unit (grid.selected_unit) regardless
+## of hover state; only the HoveredSection reacts to losing hover.
+func test_unit_info_panel_hides_hovered_section_when_hover_ends_but_keeps_selected_section_pinned() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
@@ -592,9 +658,72 @@ func test_unit_info_panel_reverts_to_the_pinned_selection_when_hover_ends() -> v
 
 	battlefield.grid._set_hovered_unit(null)
 
-	assert_false(battlefield.unit_info_panel.get_node("Content/EmptyLabel").visible)
-	assert_true(battlefield.unit_info_panel.get_node("Content/NameLabel").visible)
-	assert_eq(battlefield.unit_info_panel.get_node("Content/NameLabel").text, warrior.display_name)
+	var panel: Control = battlefield.unit_info_panel
+	assert_false(panel.get_node("Content/HoveredSection").visible)
+	assert_true(panel.get_node("Content/SelectedSection").visible)
+	assert_eq(panel.get_node("Content/SelectedSection/NameLabel").text, warrior.display_name)
+
+
+## AP spent on a move doesn't change which unit is focused (the mover stays
+## selected), so this only reaches the panel via _on_board_changed()'s own
+## update_panel() resync -- not via unit_focus_changed.
+func test_unit_info_panel_selected_section_ap_updates_immediately_after_a_move() -> void:
+	# Explicit single-member setup rather than relying on the no-party
+	# fallback: a party left fielded by an earlier test in this file (e.g.
+	# _setup_two_member_party()) would otherwise field a second unit at
+	# PLAYER_START_POSITIONS[1] == (1, 0), the very tile this test moves
+	# into, turning the intended move into a same-side reselect instead.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var starting_ap: int = warrior.action_points_remaining
+	var panel: Control = battlefield.unit_info_panel
+
+	battlefield.grid._handle_tile_click(warrior.grid_position + Vector2i(1, 0))
+
+	assert_lt(warrior.action_points_remaining, starting_ap)
+	assert_eq(
+		panel.get_node("Content/SelectedSection/ApLabel").text,
+		tr("battle.unit_info.ap") % [warrior.action_points_remaining, warrior.max_action_points]
+	)
+
+
+## Damage/healing on the selected unit must refresh its HP text immediately;
+## on a hovered enemy it must refresh the wound tier immediately. Both go
+## through battlefield._on_board_changed(), which every damage/heal path in
+## this game already routes through (see e.g. _on_use_potion_pressed()).
+func test_unit_info_panel_hp_and_wound_tier_update_immediately_on_damage() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var panel: Control = battlefield.unit_info_panel
+
+	warrior.health = maxi(1, warrior.max_health - 3)
+	battlefield.grid._set_hovered_unit(goblin)
+	goblin.health = int(goblin.max_health * 0.5)
+	battlefield._on_board_changed()
+
+	assert_eq(
+		panel.get_node("Content/SelectedSection/HpLabel").text,
+		tr("battle.unit_info.hp") % [warrior.health, warrior.max_health]
+	)
+	assert_eq(panel.get_node("Content/HoveredSection/WoundLabel").text, tr("battle.unit_info.wounded"))
+
+
+func test_unit_info_panel_shows_empty_hint_when_nothing_selected_or_hovered() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.grid._select_unit(null)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_true(panel.get_node("Content/EmptyLabel").visible)
+	assert_false(panel.get_node("Content/HoveredSection").visible)
+	assert_false(panel.get_node("Content/SelectedSection").visible)
 
 
 func test_unit_info_panel_lives_to_the_right_of_the_portrait_panel() -> void:
