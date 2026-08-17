@@ -54,22 +54,24 @@ locks `DEFAULTS` to the shipped file key by key so the two cannot drift.
 
 ```
 scenes/                          scripts/
-├── boot/                        ├── autoload/    GameManager, GameSession (see above)
+├── boot/                        ├── autoload/    GameConfig, GameManager, GameSession (see above)
 ├── ui/                          ├── battle/      BattleController (Grid node), Battlefield,
 │   (encampment, parties,        │                GridScript, Unit, PortraitPanel,
-│                                 │                UnitInfoPanel
-│    party_details, add_member,  ├── boot/        entry point → Start Menu
-│    deploy_party, roster,       ├── debug/       F9 debug menu + scenario definitions
-│    recruitment, units,         ├── local/       starting_settlement.gd (pre-Encampment intro screen)
-│    unit_details, start_menu,   ├── tools/       screenshot_tour (non-test tooling)
-│    game_menu,                  ├── ui/          one script per scenes/ui/ scene, plus shared
-│    information_panel,          │                widgets (table_view.gd, table_column.gd) —
-│    party_manager, level_up,    │                note: portrait_panel.gd lives in scripts/battle/
-│    buildings, guild_hall,      │                above, not here
-│    blacksmith, alchemy_workshop,│
-│    runic_workshop,             │
-│    trade, stores,              └── world/       world_map.gd
-│    trading_post,
+│    party_details, add_member,  │                UnitInfoPanel
+│    deploy_party, roster,       ├── boot/        entry point → Start Menu
+│    recruitment, units,         ├── debug/       F9 debug menu + scenario definitions
+│    unit_details, start_menu,   ├── local/       starting_settlement.gd (pre-Encampment intro screen)
+│    game_menu, battle_result,   ├── save/        campaign_snapshot.gd, save_repository.gd
+│    campaign_guide,             ├── tools/       screenshot_tour, battle_bot.gd, battle_sim.gd,
+│    information_panel,          │                battle_scenarios/ (runner & policy tools)
+│    loot_detail_panel,          ├── ui/          one script per scenes/ui/ scene, plus shared
+│    loot_table, party_manager,  │                widgets (table_view.gd, table_column.gd) —
+│    level_up, buildings,        │                note: portrait_panel.gd lives in scripts/battle/
+│    guild_hall, blacksmith,     │                above, not here
+│    alchemy_workshop,           └── world/       world_map.gd
+│    runic_workshop, trade,
+│    stores, trading_post,
+│    sell_quantity_dialog,
 │    assign_equipment,
 │    camp_nav)
 ├── world/
@@ -97,21 +99,24 @@ often more precise than its own source comments.
   records minted from a recruitment template carry its `template_id`
   (legacy sequential ids like `warrior_001` persist as opaque strings).
   See "Trade, equipment, and loot" in
-  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
-  for the shipped catalog and combat formulas.
+  [`docs/designs/weapon-armor-inventory.md`](../designs/weapon-armor-inventory.md) and
+  [`docs/designs/equipment-handbook.md`](../designs/equipment-handbook.md)
+  for the catalog and combat formulas.
 - **`parties: Array[Dictionary]`** — capped at `get_max_party_count()`
   (currently 1; the first party is `FIRST_PARTY_ID = "party_001"`), with a
   per-party size cap from `get_max_party_size()` (Guild Hall level). Each
   entry: `id`, `member_ids`, `location_id`, `world_position: Vector2i`,
   `deployed: bool`, `travel_route: Array[Vector2i]`, `movement_spent: bool`.
-- **`EXPEDITIONS: Dictionary`** (constant) — the two encounter *templates*
-  (`goblin_camp`, `orc_outpost`): fixed `position`, `kill_xp`,
+- **`EXPEDITIONS: Dictionary`** (constant) — the three encounter *templates*
+  (`goblin_camp`, `orc_outpost`, `ruined_fortress`): fixed `position`,
   `clear_xp`, `difficulty` (star tier), and a documented-default `enemy`.
+  (Per-monster kill XP lives on each enemy's own `*_ENEMY_STATS` const).
   A live *active instance*'s `enemy` is re-resolved from
   `STAR_ENEMY_COMPOSITIONS[difficulty]` every time it's entered (see
   `enter_encounter()`/`_resolve_enemy_composition()`/
-  `enemy_composition_roll`) — 1 star is a fixed single goblin; 2-3 stars
-  randomly pick between two goblins-vs-fewer-orcs options.
+  `enemy_composition_roll`) — 1 star is a fixed single goblin; 2 stars
+  randomly pick between goblins or an orc; 3 stars randomly pick among
+  kobolds, goblins, orcs, or hobgoblins.
 - **`active_encounters: Array[Dictionary]`** — the *live instances* on the
   World Map right now, each an expedition-shaped dict plus `id` and
   `template_id`. A cleared instance is removed here (not marked complete in
@@ -128,10 +133,7 @@ often more precise than its own source comments.
   offer is a fresh record with a generated `id` plus a `template_id` when it
   claims a fixed-pool template (overflow refills carry none), and a template
   is claimed iff any roster member or live offer carries its `template_id`
-  (`_is_recruitment_template_claimed`). See "Vacancy-timed
-  encounter and recruitment population" in
-  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)
-  for the rules this implements.
+  (`_is_recruitment_template_claimed`).
 - **`gold` / `pending_reward` / `battle_reward`** — a battle win adds to
   `battle_reward` (the current battle's own, not-yet-shared loot); it moves
   to `pending_reward` when the player leaves the victory summary for the
@@ -144,9 +146,8 @@ often more precise than its own source comments.
   `pending_gear` fields queued on encounter victory (see
   `_roll_and_queue_loot()`). `shop_level` gates selling
   (`sell_item()`) and buying (`buy_item()`); `WEAPONS`/`ARMORS`/
-  `ENEMY_LOOT_TABLES` are the backing content tables — see "Trade,
-  equipment, and loot" in
-  [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md).
+  `ENEMY_LOOT_TABLES` are the backing content tables — see
+  [`docs/designs/weapon-armor-inventory.md`](../designs/weapon-armor-inventory.md).
 - **`owned_item_instances` / `banked_item_instance_ids`** — unique records
   for modified gear. Each instance identifies an immutable base item and its
   treatment, enhancement, and rune modifiers; instance ids are generated by
@@ -191,7 +192,7 @@ This is the single most common source of confusion reading battle code —
 
 So `battlefield.grid` (the controller) and `battlefield.grid.grid` (the
 tile-geometry helper) are two different objects. `scripts/world/world_map.gd`
-reuses the same `GridScript` for its own 5×5 board, independently of battle.
+reuses the same `GridScript` for its own 7×7 board, independently of battle.
 
 **Battle flow**: a click resolves through `BattleController._handle_tile_click`
 → `try_move_selected_unit`/`try_attack_selected_unit` → `board_changed` signal
@@ -272,14 +273,13 @@ in `tests/unit/test_world_map.gd`).
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
 identically into every Encampment screen — Encampment, Units, Buildings,
 Guild Hall, Blacksmith, Alchemy Workshop, Runic Workshop, Trade, Stores,
-Shop, Deploy Party, Roster, Parties, Recruitment, Party Details,
+Trading Post, Deploy Party, Roster, Parties, Recruitment, Party Details,
 Unit Details, and Add Member — to give a persistent left-hand nav. It is deliberately absent
 from the World Map: that screen isn't part of the Encampment, and a party
 returns home by clicking the settlement tile instead. It renders six
 buttons, all enabled and routing through `GameManager` — Trade opens
 `scenes/ui/trade.tscn`, which lists Stores and (once purchased) Trading
-Post (see "Trade, equipment, and loot" in
-[`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md)).
+Post (see [`docs/designs/weapon-armor-inventory.md`](../designs/weapon-armor-inventory.md)).
 CampNav has no state of its own
 beyond the Deploy Party button's disabled flag (set in `refresh()` from
 `GameSession.get_deployable_encamped_parties().is_empty()`) and never
@@ -298,8 +298,9 @@ getters — never re-derive these:
 - **XP threshold for level N**: `get_level_xp_threshold(level)` =
   `5 * level * (level + 1) - 10` (level 1 costs 0, level 2 costs 20, each
   step 10 XP more than the last).
-- **Hit chance**: `get_effective_hit_chance(id)` = `min(raw_attack / 100.0, 0.95)`.
-  Raw Attack itself is never capped.
+- **Hit chance**: `get_effective_hit_chance(id)` = `min(raw_skill / 100.0, 0.95)`,
+  where raw skill is `missile` for bows and `melee` for other weapon categories
+  (falling back to `attack`). Skill stats themselves are never capped.
 - **Perks**: one pending choice every `PERK_LEVEL_INTERVAL` (3) levels;
   `is_perk_choice_pending()` / `choose_perk()`.
 

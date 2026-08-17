@@ -51,7 +51,7 @@ fantasy-tactics/
 ├── project.godot       # Godot project settings
 ├── icon.svg            # Project icon
 ├── config/             # config/game_config.json — tunable balance constants
-├── docs/                # Design docs (docs/plans/), vision, and developer docs (docs/dev/)
+├── docs/                # Design specs (docs/designs/), implementation plans (docs/plans/), and developer docs (docs/dev/)
 ├── scenes/             # Godot scenes (boot, UI, world, local, battle)
 ├── scripts/            # GDScript (autoload, UI, world, local, battle logic)
 ├── tests/              # GUT unit tests
@@ -103,10 +103,7 @@ conventions this codebase follows.
 - [AGENTS.md](AGENTS.md) — branching and plan-writing workflow for this project.
 - [docs/dev/README.md](docs/dev/README.md) — the entry point for running,
   testing, and getting oriented in the codebase.
-- [docs/plans/first-playable-campaign/game-design.md](docs/plans/first-playable-campaign/game-design.md)
-  — the design doc the current prototype implements.
-- [docs/vision.md](docs/vision.md) — the longer-term game vision beyond the
-  first playable campaign.
+- [docs/designs/](docs/designs/) — design specifications (combat, monsters, classes, equipment, vision).
 
 ## License
 

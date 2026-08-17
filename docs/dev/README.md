@@ -3,8 +3,10 @@
 This folder is the entry point for anyone — human or agent — who needs to
 **run**, **test**, or **modify** this codebase, as opposed to reading about
 what the game is meant to become. Design intent and narrative live in
-[`docs/plans/`](../plans/) and [`docs/vision.md`](../vision.md); this folder
+[`docs/plans/`](../plans/) and [`docs/designs/`](../designs/); this folder
 is operational only.
+
+This documentation is meant to be a roadmap to the code: the general layout and function of the code. It is meant to be a practical guide: where to go in order to maintain or modify the game. It is not meant to be a function-for-function recap of the codebase. Always aim to be **useful** to developers as your first priority.
 
 ## Start here
 
@@ -49,7 +51,7 @@ strings against this page depends on it.
 - **Adventurer** — a unit in the player's roster (`GameSession.adventurers`),
   whether or not it's assigned to a party.
 - **Expedition** — the *template* data for an encounter site (`GameSession.EXPEDITIONS`):
-  fixed stats, XP values. Never mutated at runtime.
+  fixed stats, position, and clear XP values. Never mutated at runtime.
 - **Encounter** (or **encounter instance**) — a *spawned, live* copy of an
   expedition sitting on the World Map (`GameSession.active_encounters`), with
   its own id and position. Clearing one removes it permanently; a new
@@ -73,13 +75,12 @@ See [code-map.md](code-map.md) for how these fit together in code.
 
 ## Further reading
 
-- [`docs/plans/first-playable-campaign/game-design.md`](../plans/first-playable-campaign/game-design.md) — the design doc these systems implement, including the minimal end-to-end loop, XP/leveling and vacancy-timed population rules, and the Trade/equipment/loot system.
+- [`docs/designs/`](../designs/) — design specifications implemented by these systems, including combat, monsters, classes, movement/AP, equipment, and UI layout.
 - [`AGENTS.md`](../../AGENTS.md) (repo root) — branching and plan-writing workflow for this project.
 
 Dated directories under `docs/plans/` (e.g. `docs/plans/2026-08-07-guild-hall-and-full-party-battles/`,
 written per `AGENTS.md`'s "Writing implementation plans" section) are
 per-feature implementation plans; in practice they get deleted once merged
 to `main` rather than kept around, so don't expect a link to one of these to
-stay valid — check git history if you need one. `game-design.md` above is
-the durable exception: it's kept up to date rather than deleted, so it's
-always the current reference for what's shipped and what's next.
+stay valid — check git history if you need one. The documents in `docs/designs/`
+are the durable reference for what's shipped and designed.

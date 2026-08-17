@@ -58,7 +58,7 @@ file's schema and how to add to it.
    | Party Manager | Campaign | Party Manager | Fresh session, no party |
    | Party Ready to Depart | Campaign | Encampment | One party, staffed with the default Warrior, not yet deployed — Deploy Party is enabled |
    | Party Awaiting a Member | Campaign | Encampment | One party created with no members |
-   | Party on World Map | World | World Map | Staffed party deployed at a fixed World Map tile, away from both encounter sites |
+   | Party on World Map | World | World Map | Staffed party deployed at a fixed World Map tile, away from the encounter sites |
    | Goblin Camp Battle | Battle | Battlefield | Staffed party deployed onto the Goblin Camp encounter, fielding its fixture's 1 Goblin |
    | Orc Outpost Battle | Battle | Battlefield | Staffed party (4 Warriors) deployed onto the Orc Outpost encounter, fielding its fixture's 2 Orcs |
    | Ruined Fortress Battle | Battle | Battlefield | Staffed party (3 Warriors) deployed onto the Ruined Fortress encounter, fielding its fixture's maximum 8 Kobolds |
@@ -127,7 +127,7 @@ is rejected the same way a corrupt save would be.
 | `scenarios[].id` | Stable, unique, non-empty. Referenced by `run_debug_scenario(id)` and this file's button-press tests. |
 | `scenarios[].name_key` | A `translations/en.tres` key, shown as the button's label. Add the key there too — see `test_every_shipped_scenario_name_key_resolves_to_translated_text` in `tests/unit/test_debug_scenarios.gd`. |
 | `scenarios[].category` | Plain display string (not a translation key). Scenarios sharing a category are grouped under one header, in the category's first-seen order. |
-| `scenarios[].launch.scene` | One of `settlement`, `encampment`, `party_manager`, `world_map`, `battlefield`, `stores` (`DebugScenarios.ALLOWED_LAUNCH_SCENES`). A `battlefield` launch additionally requires the fixture's own `selected_encounter` to be non-empty — the dispatcher never calls `GameSession.enter_encounter()` itself (see the acceptance criteria in `docs/plans/2026-08-16-debug-menu-json-config/index.md`). |
+| `scenarios[].launch.scene` | One of `settlement`, `encampment`, `party_manager`, `world_map`, `battlefield`, `stores` (`DebugScenarios.ALLOWED_LAUNCH_SCENES`). A `battlefield` launch additionally requires the fixture's own `selected_encounter` to be non-empty — the dispatcher never calls `GameSession.enter_encounter()` itself. |
 | `scenarios[].campaign_snapshot` | A complete `CampaignSnapshot` document — see below for how to produce one. |
 
 ### Generate a fixture
@@ -277,7 +277,7 @@ correctness testing (see [testing.md](testing.md) for that).
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A line's `outcome` is `"stalemate"` | The bot couldn't reach or defeat every enemy within the round cap | Rare for the two shipped encounters under normal balance values; if it happens consistently after a balance change (`config/game_config.json`), the change likely made a fight unwinnable by the greedy bot policy — not necessarily a bug, but worth a second look |
+| `A line's outcome is "stalemate"` | The bot couldn't reach or defeat every enemy within the round cap | Rare for the shipped encounters under normal balance values; if it happens consistently after a balance change (`config/game_config.json`), the change likely made a fight unwinnable by the greedy bot policy — not necessarily a bug, but worth a second look |
 
 ## Run reproducible battle scenarios
 

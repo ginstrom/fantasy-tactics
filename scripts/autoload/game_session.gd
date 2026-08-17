@@ -160,15 +160,12 @@ const STAR_ENEMY_COMPOSITIONS: Dictionary = {
 	],
 }
 ## Star-tier selection weight for a refill candidate at a given player
-## power (see docs/plans/first-playable-campaign/game-design.md's
-## "Vacancy-timed encounter and recruitment population" section for the
-## worked example table). Floors at STAR_WEIGHT_MIN so no tier's odds
+## power. Floors at STAR_WEIGHT_MIN so no tier's odds
 ## ever reach exactly zero.
 const STAR_WEIGHT_BASE: Dictionary = {1: 6, 2: 2, 3: -2}
 const STAR_WEIGHT_PER_POWER: Dictionary = {1: -1, 2: 1, 3: 1}
 const STAR_WEIGHT_MIN: int = 1
-# Equipment catalog (see "Trade, equipment, and loot" in
-# docs/plans/first-playable-campaign/game-design.md). Steel is
+# Equipment catalog (see docs/designs/weapon-armor-inventory.md). Steel is
 # +1 damage over Iron on both ends of the range. Armor's defense reduces an
 # attacker's effective hit chance; resistance reduces incoming damage by that
 # percent, rounded to the nearest integer when applied (see BattleController).
@@ -242,8 +239,7 @@ const POTIONS: Dictionary = {
 	"healing_potion": {"name_key": "item.healing_potion", "slot": "potion", "healing_min": 1, "healing_max": 6, "price": 0, "required_level": 1, "gold_cost": 10, "minimum_crystal_tier": 1},
 	"greater_healing_potion": {"name_key": "item.greater_healing_potion", "slot": "potion", "healing_min": 2, "healing_max": 8, "price": 0, "required_level": 2, "gold_cost": 20, "minimum_crystal_tier": 2},
 }
-# Loot tables (see "Trade, equipment, and loot" in
-# docs/plans/first-playable-campaign/game-design.md). Gold per kill is
+# Loot tables (see docs/designs/weapon-armor-inventory.md). Gold per kill is
 # randi_range(gold_min, gold_max) * gold_multiplier. gear_item_id is always
 # the enemy's documented Iron-tier weapon (see WEAPONS above); it drops with
 # GEAR_DROP_CHANCE probability, independent of the (always-granted) mana
