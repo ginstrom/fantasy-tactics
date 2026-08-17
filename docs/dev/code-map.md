@@ -56,7 +56,8 @@ locks `DEFAULTS` to the shipped file key by key so the two cannot drift.
 scenes/                          scripts/
 ├── boot/                        ├── autoload/    GameManager, GameSession (see above)
 ├── ui/                          ├── battle/      BattleController (Grid node), Battlefield,
-│   (encampment, parties,        │                GridScript, Unit, PortraitPanel
+│   (encampment, parties,        │                GridScript, Unit, PortraitPanel,
+│                                 │                UnitInfoPanel
 │    party_details, add_member,  ├── boot/        entry point → Start Menu
 │    deploy_party, roster,       ├── debug/       F9 debug menu + scenario definitions
 │    recruitment, units,         ├── local/       starting_settlement.gd (pre-Encampment intro screen)
@@ -201,6 +202,35 @@ then `GameManager.complete_battle()` or `GameManager.fail_battle()`. Player
 units can also be moved with WASD and selected with the 1-5 number keys
 (`battle_controller.gd`'s `MOVE_KEY_DIRECTIONS`/`NUMBER_KEYS`), independent
 of the click path described above.
+
+**Battle screen layout** (`scenes/battle/battlefield.tscn`'s
+`HUD/Margin/VBox`): a Baldur's Gate 1/2 inspired arrangement of `TopRow` /
+`BodyRow` / `BottomPanel`, each rendered by `battlefield.gd` reacting to
+`BattleController` signals rather than owning any battle rules itself.
+
+- `TopRow` — `BattleTitleLabel` (`tr("battle.title") % <expedition name>`,
+  e.g. "Goblin Camp Battle") plus round/AP indicators.
+- `BodyRow` — `PortraitPanel` (`scripts/battle/portrait_panel.gd`) on the
+  left, one portrait per party member with HP overlaid, click-to-select; the
+  `Grid` node (`BattleController`) centered; `UnitInfoPanel`
+  (`scripts/battle/unit_info_panel.gd`) on the right, split into a
+  `HoveredSection` (unit under the mouse cursor: name, wound tier) and a
+  `SelectedSection` (the active unit: name, class, level, HP, AP, weapon)
+  that stays pinned even when nothing is hovered — see
+  `UnitInfoPanel.update_panel(hovered_unit, selected_unit)`.
+- `BottomPanel` — a full-width `LogScroll` combat log that auto-scrolls to
+  `max_value` on every new line (`Battlefield._append_log_line()`), sitting
+  directly above the `ActionBar` (`MoveButton`/`AttackButton`, wired to
+  `BattleController.set_action_mode()`), the existing Item actions
+  (`PotionOption`/`TransferItemOption`), and `EndTurnButton`.
+
+`BattleController.action_mode` (`ActionMode { CONTEXTUAL, MOVE, ATTACK }`)
+gates how `_handle_tile_click()` interprets a click — see
+`set_action_mode()`'s own comment for why no keyboard shortcut ever changes
+it: `MOVE_KEY_DIRECTIONS`/`NUMBER_KEYS` cover every bound key, and neither
+table (nor any other key handling) references `ActionMode`. Selecting a
+unit, returning from the enemy turn, or resolving a move/attack all reset
+`action_mode` back to `CONTEXTUAL`.
 
 ## World Map: routing is turn-based, not real-time
 

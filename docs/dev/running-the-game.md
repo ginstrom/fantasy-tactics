@@ -176,6 +176,44 @@ in-progress debug session.
   (`BattleStateFactory`); a dedicated adapter built on `ScenarioContract` is
   the deferred path for fully custom battle setups, not a new field here.
 
+## Battle controls
+
+Once a battle is on screen (via normal play, or the debug menu's "Goblin
+Camp Battle" / "Orc Outpost Battle" / "Ruined Fortress Battle" scenarios
+above), the following controls drive combat. The layout is Baldur's Gate
+1/2 inspired: a top title/round header, a left party-portrait column, the
+tactical grid in the center, a right-hand dual unit-inspection panel, and a
+full-width combat log above the bottom action bar. See
+[code-map.md § The battle scene](code-map.md#the-battle-scene-two-grid-objects-not-one)
+for the underlying `BattleController` logic.
+
+| Control | Effect |
+|---|---|
+| `1`–`5` | Select the party member in that portrait slot. |
+| Click a highlighted tile | Move the selected unit there. |
+| Click a reachable enemy | Auto move-and-attack: if the enemy isn't already in weapon range, the unit first pathfinds to the nearest tile with range and line-of-sight, then attacks — deducting move AP and then attack AP in one action. |
+| `W` / `A` / `S` / `D` | Direct-step the selected unit up/left/down/right by one tile. `A` always moves left; it is never a mode shortcut. |
+| **Move** button | Switches to Move mode: clicking a highlighted tile moves the unit; clicking an enemy only inspects it (no attack). |
+| **Attack** button | Switches to Attack mode: clicking an enemy attacks (with auto move-and-attack); clicking an empty tile does nothing. |
+| `Esc` | Open the game menu. |
+
+- The Move and Attack buttons have **no keyboard shortcuts** — only clicking
+  them changes mode. Selecting a unit, ending a turn, or completing a
+  move/attack resets the mode to Contextual, which is the original
+  click behavior: an empty highlighted tile moves, an enemy attacks, and a
+  friendly unit selects.
+- **Green** range tiles are move-and-attack range — the unit can move there
+  and still afford a basic attack. **Yellow** tiles are dash-only range —
+  movement is affordable but no AP would remain to attack. **Red**
+  highlights mark enemies attackable immediately; **orange** marks enemies
+  only reachable via move-and-attack.
+- The left portrait panel lists each party member with current HP overlaid
+  on the portrait; clicking a portrait selects that unit.
+- The right panel shows two sections at once: the hovered unit (name, wound
+  status) on top, and the selected unit (name, class, level, HP, AP,
+  equipped weapon) pinned below it, so both stay visible while you aim an
+  attack.
+
 ## Capture a screenshot of every known scene/state
 
 ### Steps
