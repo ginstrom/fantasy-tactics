@@ -367,25 +367,6 @@ func get_attackable_tiles_for_unit(unit) -> Array[Vector2i]:
 	return grid.get_attackable_tiles(unit.grid_position, unit.attack_min_range, unit.attack_max_range, blocking_tiles)
 
 
-func get_targeting_failure_reason(attacker, target) -> String:
-	if attacker == null or not attacker.is_alive() or target == null or not target.is_alive():
-		return ""
-	if has_status(attacker, PARALYZED_STATUS_ID):
-		return "paralyzed"
-	if attacker.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
-		return "insufficient_ap"
-	var distance: int = grid.get_manhattan_distance(attacker.grid_position, target.grid_position)
-	if distance < attacker.attack_min_range or distance > attacker.attack_max_range:
-		return "out_of_range"
-	var blocking_tiles: Array[Vector2i] = []
-	for candidate in units:
-		if candidate != attacker and candidate.is_alive():
-			blocking_tiles.append(candidate.grid_position)
-	if not grid.has_line_of_sight(attacker.grid_position, target.grid_position, blocking_tiles):
-		return "line_of_sight_blocked"
-	return ""
-
-
 ## Automated move-and-attack targeting: the cheapest green-range tile (see
 ## get_move_and_attack_tiles()) from which attacker can legally hit target,
 ## tie-broken by reading order (mirrors _best_enemy_move()'s own tie-break).
@@ -409,26 +390,6 @@ func find_best_move_and_attack_tile(attacker, target):
 			best = candidate
 			best_cost = move_cost
 	return best
-
-
-## Enemies attackable either immediately from attacker's current position, or
-## by first moving to a reachable green-range tile (see
-## find_best_move_and_attack_tile()). Mirrors get_legal_attack_targets() but
-## also counts move-and-attack reachability, matching what
-## try_attack_selected_unit() will actually execute for each target.
-func get_reachable_attack_targets(attacker) -> Array:
-	var reachable: Array = []
-	if attacker == null or not attacker.is_alive() or has_status(attacker, PARALYZED_STATUS_ID):
-		return reachable
-	var direct: Array = []
-	if attacker.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST:
-		direct = get_legal_attack_targets(attacker)
-	for target in units:
-		if target.side == attacker.side or not target.is_alive():
-			continue
-		if direct.has(target) or find_best_move_and_attack_tile(attacker, target) != null:
-			reachable.append(target)
-	return reachable
 
 
 ## Deterministic reason for a rejected move-and-attack, per the design
