@@ -258,18 +258,15 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 	assert_eq(battlefield.grid.selected_unit.adventurer_id, second_member_id)
 
 
-## Battle feedback (Hint, Status, the enemy health list) lives in a bottom
-## message panel beneath the battle map, matching the World Map HUD's own
-## BottomPanel (see world_map.tscn/test_world_map.gd's
-## test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel) --
-## not stacked above the left portrait panel, where a tall enemy health list
-## (up to 8 entries, see BattleController.ENEMY_START_POSITIONS) used to
-## crowd it out. EnemyHealth's own parent is a ScrollContainer (see
-## test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container
-## below), not the shared BottomContent stack directly -- Hint and Status
-## still share that stack. The scroll container itself sits in ScrollRow
-## (alongside LogScroll, see test_bottom_panel_clears_the_battle_grids_
-## bottom_edge), which is what's actually parented alongside Hint/Status.
+## Battle feedback (Hint, Status) lives in a bottom message panel beneath the
+## battle map, matching the World Map HUD's own BottomPanel (see
+## world_map.tscn/test_world_map.gd's
+## test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel).
+## As of Step 5, the enemy health list moved out of this bottom panel
+## entirely (see test_enemy_health_list_lives_in_the_body_row_not_the_bottom_
+## panel above) so the combat log can occupy the bottom panel's full width
+## (see test_combat_log_spans_the_full_width_of_its_row below); Hint and
+## Status remain here.
 func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -284,10 +281,17 @@ func test_thorn_trigger_describes_the_visible_paralyzed_state() -> void:
 	attacker.display_name = "Goblin 1"
 
 	assert_eq(battlefield._describe_step({"type": "attack", "attacker": attacker, "thorn_triggered": true}), "Goblin 1 is Paralyzed!")
-	assert_eq(
-		battlefield.enemy_health.get_parent().get_parent().get_parent(),
-		battlefield.hint.get_parent()
-	)
+
+
+## Step 5: the enemy health list now lives in BodyRow (alongside the
+## portrait panel and unit info panel) rather than stacked in the bottom
+## message panel -- freeing BottomPanel's height budget for the full-width
+## combat log (see test_combat_log_spans_the_full_width_of_its_row below).
+func test_enemy_health_list_lives_in_the_body_row_not_the_bottom_panel() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.enemy_health.get_parent().get_parent(), battlefield.portrait_panel.get_parent())
 
 
 ## Regression test for a real bug found via a real screenshot: with a full
@@ -353,12 +357,12 @@ func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
 	assert_gt(scroll_container.custom_minimum_size.y, 0.0)
 
 
-## Regression test for a real layout bug found via a real screenshot: adding
-## LogScroll stacked above EnemyHealthScroll blew the bottom panel's height
-## budget and made it visibly cover the battle grid's bottom rows. LogScroll
-## and EnemyHealthScroll must share one height budget (side by side in a row)
-## rather than stacking two, so the bottom panel's top edge never rises above
-## the grid's bottom edge.
+## Regression test for a real layout bug found via a real screenshot: a
+## bottom panel that grows tall enough visibly covers the battle grid's
+## bottom rows. As of Step 5, EnemyHealthScroll no longer shares this panel
+## with LogScroll (see test_enemy_health_list_lives_in_the_body_row_not_the_
+## bottom_panel above), which keeps this panel's height budget in check even
+## with LogScroll spanning the full row width alone.
 func test_bottom_panel_clears_the_battle_grids_bottom_edge() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -499,11 +503,21 @@ func test_enemy_turn_moves_are_not_logged() -> void:
 	assert_eq(battlefield.log_list.get_child_count(), 0, "A move-only enemy turn must not add any log line")
 
 
-func test_hud_round_label_and_end_turn_button_share_the_top_right_stack() -> void:
+func test_hud_round_label_and_action_points_label_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 
-	assert_eq(battlefield.round_label.get_parent(), battlefield.end_turn_button.get_parent())
+	assert_eq(battlefield.round_label.get_parent(), battlefield.action_points_label.get_parent())
+
+
+## Step 5: End Turn now sits in the bottom ActionBar alongside Move, Attack,
+## and the item actions (per the Baldur's Gate inspired layout's bottom
+## action row), not in the top header stack next to Round/AP.
+func test_end_turn_button_shares_the_bottom_action_bar_row_with_move_and_attack() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.end_turn_button.get_parent(), battlefield.move_button.get_parent().get_parent())
 
 
 ## Step 4: the right-side unit hover/click detail panel, which lives inside
@@ -1549,4 +1563,100 @@ func test_move_mode_and_attack_mode_clicks_update_the_status_message() -> void:
 	battlefield.grid._handle_tile_click(Vector2i(5, 5))
 
 	assert_eq(battlefield.status.text, tr("battle.feedback.attack_mode"))
+
+
+## Step 5: top header title bar, full-width auto-scrolling log, and the
+## Baldur's Gate inspired TopRow/BodyRow/BottomPanel layout integration.
+
+
+func test_battle_title_shows_the_goblin_camp_encounter_name() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.get_node("%BattleTitleLabel").text, "Goblin Camp Battle")
+
+
+func test_battle_title_shows_the_orc_outpost_encounter_name() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.get_node("%BattleTitleLabel").text, "Orc Outpost Battle")
+
+
+func test_battle_title_label_lives_in_the_top_row() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var title_label: Label = battlefield.get_node("%BattleTitleLabel")
+	assert_eq(title_label.get_parent(), battlefield.round_label.get_parent().get_parent())
+
+
+## LogScroll must be the only child of its row so it stretches to the row's
+## full width, matching the design contract's "Combat log spans full width
+## above the action bar" acceptance criterion -- rather than splitting the
+## row with a sibling (see test_enemy_health_list_lives_in_the_body_row_not_
+## the_bottom_panel above for where that sibling went).
+func test_combat_log_spans_the_full_width_of_its_row() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var log_row: Node = battlefield.log_scroll.get_parent()
+	assert_eq(
+		log_row.get_child_count(), 1,
+		"LogScroll must be the only child of its row so it spans the full bottom width"
+	)
+
+
+func test_appending_a_log_line_scrolls_the_log_to_the_bottom() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	for i in range(20):
+		battlefield._append_log_line("Log line %d" % i)
+
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var scroll_bar: ScrollBar = battlefield.log_scroll.get_v_scroll_bar()
+	assert_gt(scroll_bar.max_value, 0.0, "The log must actually overflow for this test to be meaningful")
+	# A Range's scrollable ceiling is max_value minus its visible page (not
+	# max_value itself, which is the full content height) -- Range's own
+	# value setter already clamps to that, so this is the true "scrolled to
+	# the bottom" position.
+	assert_eq(
+		battlefield.log_scroll.scroll_vertical,
+		int(scroll_bar.max_value - scroll_bar.page),
+		"Adding a log entry must auto-scroll LogScroll to the bottom"
+	)
+
+
+## Regression coverage for the full Step 5 layout migration: the header row
+## (containing the new title) and the bottom panel (containing the now
+## full-width log) must both stay clear of the 6x6 battle grid after at
+## least one layout frame, at the project's supported viewport size.
+func test_header_and_bottom_panel_never_overlap_the_battle_grid() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var top_row: Control = battlefield.get_node("%BattleTitleLabel").get_parent()
+	var bottom_panel: Control = battlefield.hint.get_parent().get_parent()
+	var grid_top_edge: float = battlefield.grid.position.y
+	var grid_bottom_edge: float = (
+		battlefield.grid.position.y
+		+ BattleControllerScript.GRID_HEIGHT * BattleControllerScript.TILE_SIZE
+	)
+
+	assert_true(
+		top_row.get_global_rect().position.y + top_row.get_global_rect().size.y <= grid_top_edge,
+		"The top header row must never grow tall enough to cover the battle grid"
+	)
+	assert_true(
+		bottom_panel.get_global_rect().position.y >= grid_bottom_edge,
+		"The bottom HUD panel must never grow tall enough to cover the battle grid"
+	)
 

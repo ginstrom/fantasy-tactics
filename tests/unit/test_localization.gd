@@ -29,6 +29,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("menu.random"), "🎲 Random")
 	assert_eq(tr("menu.begin"), "Begin")
 	assert_eq(tr("battle.end_turn"), "End Turn")
+	assert_eq(tr("battle.title") % "Goblin Camp", "Goblin Camp Battle")
+	assert_eq(tr("battle.title") % "Orc Outpost", "Orc Outpost Battle")
 	assert_eq(tr("battle.round") % 1, "Round 1")
 	assert_eq(tr("battle.side.player"), "Player")
 	assert_eq(tr("battle.side.enemy"), "Enemy")
@@ -271,6 +273,22 @@ func test_battlefield_round_label_uses_translation_key_not_literal_copy() -> voi
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.get_node("%RoundLabel").text, tr("battle.round") % 1)
+
+
+## The header title interpolates the translated encounter name into the
+## translated "%s Battle" template (matching RoundLabel's own pattern above),
+## so -- like RoundLabel -- it can't rely on Godot's auto-translation alone
+## and is set imperatively via tr() in battlefield.gd.
+func test_battlefield_title_label_uses_translated_battle_title_copy() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(
+		battlefield.get_node("%BattleTitleLabel").text,
+		tr("battle.title") % tr("expedition.goblin_camp.name")
+	)
 
 
 func test_world_map_hint_uses_translation_key_not_literal_copy() -> void:

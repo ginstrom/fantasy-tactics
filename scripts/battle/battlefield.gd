@@ -9,6 +9,7 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var enemy_health: VBoxContainer = %EnemyHealth
 @onready var log_list: VBoxContainer = %Log
 @onready var log_scroll: ScrollContainer = $HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/LogScroll
+@onready var battle_title_label: Label = %BattleTitleLabel
 @onready var round_label: Label = %RoundLabel
 @onready var action_points_label: Label = %ActionPointsLabel
 @onready var end_turn_button: Button = %EndTurnButton
@@ -76,6 +77,11 @@ var _last_logged_attack_result: Dictionary = {}
 
 
 func _ready() -> void:
+	# The encounter never changes over a battle's lifetime, so the header
+	# title is computed once here rather than kept in sync every board_
+	# changed event (unlike round_label/action_points_label, which do change
+	# every turn -- see _on_board_changed()).
+	battle_title_label.text = tr("battle.title") % tr(_current_expedition().name_key)
 	grid.enemy_defeated.connect(_award_kill_xp)
 	grid.unit_focus_changed.connect(_on_unit_focus_changed)
 	grid.action_mode_changed.connect(_on_action_mode_changed)

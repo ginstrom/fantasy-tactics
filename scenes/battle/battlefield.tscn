@@ -39,7 +39,13 @@ theme_override_constants/separation = 8
 
 [node name="TopRow" type="HBoxContainer" parent="HUD/Margin/VBox"]
 layout_mode = 2
-alignment = 2
+
+[node name="BattleTitleLabel" type="Label" parent="HUD/Margin/VBox/TopRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 1
+text = "battle.title"
 
 [node name="TopRight" type="VBoxContainer" parent="HUD/Margin/VBox/TopRow"]
 layout_mode = 2
@@ -53,11 +59,6 @@ text = "battle.round"
 unique_name_in_owner = true
 layout_mode = 2
 text = "battle.action_points"
-
-[node name="EndTurnButton" type="Button" parent="HUD/Margin/VBox/TopRow/TopRight"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "battle.end_turn"
 
 [node name="BodyRow" type="HBoxContainer" parent="HUD/Margin/VBox"]
 layout_mode = 2
@@ -155,6 +156,16 @@ layout_mode = 2
 autowrap_mode = 3
 visible = false
 
+[node name="EnemyHealthScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BodyRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+horizontal_scroll_mode = 0
+
+[node name="EnemyHealth" type="VBoxContainer" parent="HUD/Margin/VBox/BodyRow/EnemyHealthScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="BottomPanel" type="PanelContainer" parent="HUD/Margin/VBox"]
 layout_mode = 2
 
@@ -220,6 +231,16 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "battle.item.transfer"
 
+[node name="EndTurnSpacer" type="Control" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="EndTurnButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "battle.end_turn"
+
 [node name="ScrollRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
 layout_mode = 2
 
@@ -234,21 +255,10 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="EnemyHealthScroll" type="ScrollContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 40)
-horizontal_scroll_mode = 0
-
-[node name="EnemyHealth" type="VBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ScrollRow/EnemyHealthScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-
 [node name="LevelUp" parent="HUD" instance=ExtResource("3_level_up")]
 layout_mode = 1
 
-[connection signal="pressed" from="HUD/Margin/VBox/TopRow/TopRight/EndTurnButton" to="." method="_on_end_turn_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/MoveButton" to="." method="_on_move_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/AttackButton" to="." method="_on_attack_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
