@@ -598,6 +598,33 @@ func test_unit_info_panel_hovered_section_shows_only_a_wound_tier_for_an_enemy_n
 	assert_false(panel.get_node("Content/HoveredSection/HpLabel").visible, "Player-only row must stay hidden for an enemy")
 
 
+## Design Contract (index.md, "4. Dual Right-Hand Inspection Panel"): the
+## hovered section shows "wound tier for enemies, HP/class for allies" -- so
+## a hovered ally (not the selected unit) must show class alongside name/HP,
+## unlike a hovered enemy which only ever shows a wound tier.
+func test_unit_info_panel_hovered_section_shows_class_for_a_hovered_ally() -> void:
+	_setup_two_member_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var first_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var second_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[1])
+
+	battlefield.grid._select_unit(first_member)
+	battlefield.grid._set_hovered_unit(second_member)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_true(panel.get_node("Content/HoveredSection").visible)
+	assert_eq(panel.get_node("Content/HoveredSection/NameLabel").text, second_member.display_name)
+	assert_true(panel.get_node("Content/HoveredSection/HpLabel").visible)
+	assert_eq(
+		panel.get_node("Content/HoveredSection/HpLabel").text,
+		tr("battle.unit_info.hp") % [second_member.health, second_member.max_health]
+	)
+	assert_true(panel.get_node("Content/HoveredSection/ClassLabel").visible)
+	var adventurer := GameSession.get_adventurer(second_member.adventurer_id)
+	assert_eq(panel.get_node("Content/HoveredSection/ClassLabel").text, tr("information.class") % adventurer.get("class", ""))
+
+
 func test_unit_info_panel_hovered_wound_tiers_match_the_health_percentage_thresholds() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -641,6 +668,14 @@ func test_unit_info_panel_hides_hovered_section_when_hover_ends_but_keeps_select
 ## selected), so this only reaches the panel via _on_board_changed()'s own
 ## update_panel() resync -- not via unit_focus_changed.
 func test_unit_info_panel_selected_section_ap_updates_immediately_after_a_move() -> void:
+	# Explicit single-member setup rather than relying on the no-party
+	# fallback: a party left fielded by an earlier test in this file (e.g.
+	# _setup_two_member_party()) would otherwise field a second unit at
+	# PLAYER_START_POSITIONS[1] == (1, 0), the very tile this test moves
+	# into, turning the intended move into a same-side reselect instead.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])

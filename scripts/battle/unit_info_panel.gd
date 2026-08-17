@@ -8,6 +8,7 @@ const WOUNDED_THRESHOLD := 0.33
 @onready var empty_label: Label = $Content/EmptyLabel
 @onready var hovered_section: VBoxContainer = $Content/HoveredSection
 @onready var hovered_name_label: Label = $Content/HoveredSection/NameLabel
+@onready var hovered_class_label: Label = $Content/HoveredSection/ClassLabel
 @onready var hovered_hp_label: Label = $Content/HoveredSection/HpLabel
 @onready var hovered_wound_label: Label = $Content/HoveredSection/WoundLabel
 @onready var selected_section: VBoxContainer = $Content/SelectedSection
@@ -48,14 +49,22 @@ func clear() -> void:
 	update_panel(null, null)
 
 
+## Design Contract (index.md, "4. Dual Right-Hand Inspection Panel"): the
+## hovered section shows "wound tier for enemies, HP/class for allies" -- so
+## unlike _populate_selected() (which shows class for every player unit,
+## selected or not), an ally's class only ever shows up here, never an
+## enemy's wound-tier row gaining a class label.
 func _populate_hovered(unit) -> void:
 	hovered_name_label.text = unit.display_name
 
 	var is_player: bool = unit.side == BattleControllerScript.Side.PLAYER
+	hovered_class_label.visible = is_player
 	hovered_hp_label.visible = is_player
 	hovered_wound_label.visible = not is_player
 
 	if is_player:
+		var adventurer := GameSession.get_adventurer(unit.adventurer_id)
+		hovered_class_label.text = tr("information.class") % adventurer.get("class", "")
 		hovered_hp_label.text = tr("battle.unit_info.hp") % [unit.health, unit.max_health]
 	else:
 		hovered_wound_label.text = tr(_wound_tier_key(unit))

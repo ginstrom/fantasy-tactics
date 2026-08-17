@@ -107,6 +107,10 @@ visible = false
 [node name="NameLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 
+[node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+visible = false
+
 [node name="HpLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
