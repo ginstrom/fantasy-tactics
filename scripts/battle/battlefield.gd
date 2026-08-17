@@ -194,6 +194,11 @@ func _on_board_changed() -> void:
 	round_label.text = tr("battle.round") % round_number
 	end_turn_button.tooltip_text = tr("battle.end_turn.reminder")
 	_update_health_labels()
+	# AP spent on a move/attack (and any resulting damage) reaches here via
+	# board_changed even though the focused unit itself hasn't changed, so the
+	# dual hover/selected panel must resync here too, not only from
+	# _on_unit_focus_changed().
+	unit_info_panel.update_panel(grid.hovered_unit, grid.selected_unit)
 	portrait_panel.refresh()
 	_refresh_item_actions()
 	_update_action_bar()
@@ -208,8 +213,12 @@ func _on_board_changed() -> void:
 		_resolve_battle(true)
 
 
-func _on_unit_focus_changed(unit) -> void:
-	unit_info_panel.show_unit(unit)
+## The signal still carries get_focused_unit()'s result (see battle_
+## controller.gd's unit_focus_changed doc comment), but the dual panel needs
+## both grid.hovered_unit and grid.selected_unit directly rather than that
+## single collapsed value -- so the argument itself goes unused here.
+func _on_unit_focus_changed(_unit) -> void:
+	unit_info_panel.update_panel(grid.hovered_unit, grid.selected_unit)
 
 
 func _refresh_item_actions() -> void:

@@ -187,6 +187,8 @@ messages = {
 "battle.log.defeated": "%s is defeated!",
 "battle.unit_info.empty": "Hover or click a unit to see its details.",
 "battle.unit_info.hp": "HP: %d/%d",
+"battle.unit_info.ap": "AP: %d/%d",
+"battle.unit_info.weapon": "Weapon: %s",
 "battle.unit_info.healthy": "Healthy",
 "battle.unit_info.wounded": "Wounded",
 "battle.unit_info.badly_wounded": "Badly Wounded",
