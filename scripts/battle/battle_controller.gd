@@ -19,6 +19,11 @@ signal unit_focus_changed(unit)
 ## effects have resolved. Consumers can present the outcome without owning
 ## combat rules.
 signal completed_hit(result)
+## Emitted whenever action_mode changes -- either via set_action_mode() (the
+## Move/Attack action-bar buttons) or the automatic reset to CONTEXTUAL (see
+## _select_unit()). Battlefield connects this to drive the action bar's
+## toggle/highlight state.
+signal action_mode_changed(mode)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -45,6 +50,13 @@ const TARGET_ATTACK_COLOR := Color(1.0, 0.2, 0.2, 0.65)
 const MOVE_AND_ATTACK_TARGET_COLOR := Color(1.0, 0.65, 0.1, 0.65)
 
 enum Side { PLAYER, ENEMY }
+## CONTEXTUAL is the opening and reset mode (see _select_unit()): an empty
+## legal tile moves, an enemy attempts auto move-and-attack, and a friendly
+## unit selects -- the same click behavior this controller always had before
+## the Move/Attack action-bar buttons existed. MOVE and ATTACK narrow
+## _handle_tile_click() to just that one action; see the Action Mode State
+## Machine section of docs/plans/2026-08-16-battle-screen-redesign/index.md.
+enum ActionMode { CONTEXTUAL, MOVE, ATTACK }
 
 const GROUP := "battle_controller"
 
@@ -81,6 +93,10 @@ var selected_unit = null
 var hovered_unit = null
 var inspected_unit = null
 var active_side: int = Side.PLAYER
+## The Move/Attack action-bar buttons' current mode; see ActionMode and
+## set_action_mode(). Never set directly -- always go through
+## set_action_mode() so action_mode_changed fires.
+var action_mode: int = ActionMode.CONTEXTUAL
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
@@ -249,14 +265,22 @@ func _emit_focus_changed() -> void:
 func _handle_key_input(event: InputEventKey) -> void:
 	if not event.pressed or event.echo:
 		return
+	# get_viewport() requires tree membership; unit tests exercise this
+	# against a bare BattleController built via script (see _make_controller()
+	# in test_battle_controller.gd), which never enters the tree -- mirrors
+	# the same is_inside_tree() guard in _handle_mouse_motion() above, and is
+	# likewise never taken in real play, where the controller is always in
+	# the tree by the time input reaches it.
 	if MOVE_KEY_DIRECTIONS.has(event.keycode):
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 		if try_step_selected_unit(MOVE_KEY_DIRECTIONS[event.keycode]):
 			_draw_units()
 			_select_unit_after_action()
 		return
 	if NUMBER_KEYS.has(event.keycode):
-		get_viewport().set_input_as_handled()
+		if is_inside_tree():
+			get_viewport().set_input_as_handled()
 		select_unit_by_number_key(NUMBER_KEYS[event.keycode])
 
 
@@ -804,6 +828,18 @@ func _reading_order_is_earlier(a: Vector2i, b: Vector2i) -> bool:
 	return a.x < b.x
 
 
+## The Move/Attack action-bar buttons' only effect on gameplay: narrowing
+## which of the two branches below _handle_tile_click() takes. No keyboard
+## shortcut ever calls this -- see _handle_key_input()'s MOVE_KEY_DIRECTIONS/
+## NUMBER_KEYS tables, which cover every bound key and neither table (nor any
+## other key handling) references ActionMode.
+func set_action_mode(mode: int) -> void:
+	if action_mode == mode:
+		return
+	action_mode = mode
+	action_mode_changed.emit(action_mode)
+
+
 func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if input_locked:
 		return
@@ -815,6 +851,16 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_select_unit(clicked_unit)
 			return
 
+		if action_mode == ActionMode.MOVE:
+			# MOVE mode never attacks -- an enemy click only inspects it and
+			# reports move-mode feedback (Action Mode State Machine, index.md).
+			last_targeting_failure = {"reason": "move_mode_no_attack"}
+			_set_inspected_unit(clicked_unit)
+			board_changed.emit()
+			return
+
+		# CONTEXTUAL and ATTACK modes both attempt direct/auto move-and-attack
+		# on an enemy click.
 		if selected_unit != null and try_attack_selected_unit(tile_pos):
 			_draw_units()
 			_select_unit_after_action()
@@ -826,6 +872,14 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		board_changed.emit()
 		return
 
+	if action_mode == ActionMode.ATTACK:
+		# ATTACK mode never moves -- an empty-tile click is a no-op that
+		# reports attack-mode feedback (Action Mode State Machine, index.md).
+		last_targeting_failure = {"reason": "attack_mode_no_target"}
+		board_changed.emit()
+		return
+
+	# CONTEXTUAL and MOVE modes both attempt a move on an empty-tile click.
 	if try_move_selected_unit(tile_pos):
 		_draw_units()
 		_select_unit_after_action()
@@ -841,9 +895,15 @@ func _select_unit_after_action() -> void:
 	_select_unit(selected_unit)
 
 
+## Every call site is one of the three reset triggers in the Action Mode
+## State Machine (index.md): selecting a player unit (_handle_tile_click()),
+## returning control to the player or handing it to the enemy (end_turn()),
+## and resolving a move/attack (_select_unit_after_action()) -- so resetting
+## here covers all three without duplicating the reset at each call site.
 func _select_unit(unit) -> void:
 	selected_unit = unit
 	last_targeting_failure = {}
+	set_action_mode(ActionMode.CONTEXTUAL)
 	_set_inspected_unit(unit)
 	_update_highlights()
 	board_changed.emit()

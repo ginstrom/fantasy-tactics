@@ -138,28 +138,49 @@ layout_mode = 2
 autowrap_mode = 3
 text = "battle.status.awaiting_action"
 
-[node name="ItemActions" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
+[node name="BottomActionsRow" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ActionBar" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PotionOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+[node name="MoveButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "battle.action.move"
+
+[node name="AttackButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "battle.action.attack"
+
+[node name="ItemActions" type="HBoxContainer" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PotionOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="UsePotionButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+[node name="UsePotionButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "battle.item.use_potion"
 
-[node name="TransferItemOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+[node name="TransferItemOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="RecipientOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+[node name="RecipientOption" type="OptionButton" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="TransferButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions"]
+[node name="TransferButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "battle.item.transfer"
@@ -193,6 +214,8 @@ size_flags_horizontal = 3
 layout_mode = 1
 
 [connection signal="pressed" from="HUD/Margin/VBox/TopRow/TopRight/EndTurnButton" to="." method="_on_end_turn_pressed"]
-[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
-[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/ItemActions/TransferButton" to="." method="_on_transfer_button_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/MoveButton" to="." method="_on_move_button_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/AttackButton" to="." method="_on_attack_button_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/TransferButton" to="." method="_on_transfer_button_pressed"]
 [connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

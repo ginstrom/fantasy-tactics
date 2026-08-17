@@ -1234,3 +1234,190 @@ func test_targeting_failure_updates_status_message() -> void:
 		tr("battle.feedback.not_enough_ap") % BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
 	)
 
+
+## --- Step 3: action modes and action bar ------------------------------
+
+
+func test_action_bar_contains_move_and_attack_buttons() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_true(battlefield.has_node("HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"))
+	# The Button.text scene property holds the untranslated key (matching
+	# every other button/label in this scene, e.g. EndTurnButton's
+	# "battle.end_turn") -- Godot's Control auto-translation resolves it to
+	# the display string at render time, not eagerly on this raw property.
+	assert_eq(battlefield.move_button.text, "battle.action.move")
+	assert_eq(battlefield.attack_button.text, "battle.action.attack")
+	assert_eq(
+		battlefield.move_button.get_parent(), battlefield.attack_button.get_parent(),
+		"Move and Attack buttons must share the ActionBar container"
+	)
+
+
+func test_clicking_move_button_activates_move_mode_and_highlights_it() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.move_button.emit_signal("pressed")
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.MOVE)
+	assert_true(battlefield.move_button.button_pressed, "The Move button must visually highlight when active")
+	assert_false(battlefield.attack_button.button_pressed)
+
+
+func test_clicking_attack_button_activates_attack_mode_and_highlights_it() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.attack_button.emit_signal("pressed")
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.ATTACK)
+	assert_true(battlefield.attack_button.button_pressed, "The Attack button must visually highlight when active")
+	assert_false(battlefield.move_button.button_pressed)
+
+
+## Mirrors what Godot's BaseButton actually does for a toggle_mode button on
+## a real click: flip button_pressed unconditionally, then fire "pressed" --
+## unlike the tests above, which call emit_signal("pressed") alone and so
+## never exercise the native flip. That distinction matters here: repeat-
+## clicking an already-active toggle button flips button_pressed back to
+## false even though the app's own state (action_mode) does not change, and
+## a naive handler that only resyncs on an actual mode change would leave
+## that flip uncorrected. See _on_move_button_pressed()/_on_attack_button_
+## pressed() in battlefield.gd.
+func _native_toggle_click(button: Button) -> void:
+	button.button_pressed = not button.button_pressed
+	button.emit_signal("pressed")
+
+
+func test_repeat_clicking_the_active_move_button_stays_highlighted() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	_native_toggle_click(battlefield.move_button)
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.MOVE)
+	assert_true(battlefield.move_button.button_pressed)
+
+	# Godot's native toggle flips button_pressed back to false on this second
+	# click. The action mode is already MOVE, so set_action_mode() itself
+	# would no-op -- the button must still resync to highlighted regardless.
+	_native_toggle_click(battlefield.move_button)
+
+	assert_eq(
+		battlefield.grid.action_mode, BattleControllerScript.ActionMode.MOVE,
+		"A repeat click on the already-active Move button must not change the mode"
+	)
+	assert_true(
+		battlefield.move_button.button_pressed,
+		"The Move button must resync to highlighted even when set_action_mode() was a no-op"
+	)
+
+
+func test_repeat_clicking_the_active_attack_button_stays_highlighted() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	_native_toggle_click(battlefield.attack_button)
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.ATTACK)
+	assert_true(battlefield.attack_button.button_pressed)
+
+	_native_toggle_click(battlefield.attack_button)
+
+	assert_eq(
+		battlefield.grid.action_mode, BattleControllerScript.ActionMode.ATTACK,
+		"A repeat click on the already-active Attack button must not change the mode"
+	)
+	assert_true(
+		battlefield.attack_button.button_pressed,
+		"The Attack button must resync to highlighted even when set_action_mode() was a no-op"
+	)
+
+
+func test_selecting_a_unit_resets_the_action_bar_to_contextual() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	battlefield.attack_button.emit_signal("pressed")
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._select_unit(warrior)
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL)
+	assert_false(battlefield.move_button.button_pressed)
+	assert_false(battlefield.attack_button.button_pressed)
+
+
+func test_starting_a_new_turn_resets_the_action_bar_to_contextual() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	battlefield.grid.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	battlefield._on_end_turn_pressed()
+	while battlefield._enemy_turn_in_progress:
+		await get_tree().process_frame
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL)
+	assert_false(battlefield.move_button.button_pressed)
+
+
+func test_move_and_attack_buttons_are_disabled_when_input_is_locked() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._set_enemy_turn_in_progress(true)
+
+	assert_true(battlefield.move_button.disabled)
+	assert_true(battlefield.attack_button.disabled)
+
+	battlefield._set_enemy_turn_in_progress(false)
+
+	assert_false(battlefield.move_button.disabled)
+	assert_false(battlefield.attack_button.disabled)
+
+
+func test_attack_button_is_disabled_when_the_selected_unit_lacks_enough_ap() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.selected_unit
+	warrior.action_points_remaining = 2
+	battlefield._on_board_changed()
+
+	assert_true(battlefield.attack_button.disabled, "2 AP is below the 3 AP basic-attack cost")
+	assert_false(battlefield.move_button.disabled, "2 AP is still enough to move")
+
+
+func test_move_button_is_disabled_when_the_selected_unit_has_no_action_points_left() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.selected_unit
+	warrior.action_points_remaining = 0
+	battlefield._on_board_changed()
+
+	assert_true(battlefield.move_button.disabled)
+	assert_true(battlefield.attack_button.disabled)
+
+
+func test_move_mode_and_attack_mode_clicks_update_the_status_message() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	enemy.grid_position = attacker.grid_position + Vector2i(1, 0)
+	battlefield.grid.selected_unit = attacker
+	battlefield.grid.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	battlefield.grid._handle_tile_click(enemy.grid_position)
+
+	assert_eq(battlefield.status.text, tr("battle.feedback.move_mode"))
+	assert_eq(
+		attacker.grid_position, BattleControllerScript.PLAYER_START_POSITIONS[0],
+		"Move mode must not attack the enemy"
+	)
+
+	battlefield.grid.selected_unit = attacker
+	battlefield.grid.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	battlefield.grid._handle_tile_click(Vector2i(5, 5))
+
+	assert_eq(battlefield.status.text, tr("battle.feedback.attack_mode"))
+

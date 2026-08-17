@@ -1182,6 +1182,268 @@ func test_apply_super_power_maxes_out_player_units_only() -> void:
 	assert_eq(goblin.hit_chance, 0.3, "Super Power must not affect enemy units")
 
 
+## --- Step 3: action modes and action bar ------------------------------
+
+
+func test_action_mode_defaults_to_contextual() -> void:
+	var controller := _make_controller(4, 4)
+
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL)
+
+
+func test_set_action_mode_switches_to_move() -> void:
+	var controller := _make_controller(4, 4)
+
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.MOVE)
+
+
+func test_set_action_mode_switches_to_attack() -> void:
+	var controller := _make_controller(4, 4)
+
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.ATTACK)
+
+
+func test_set_action_mode_emits_the_action_mode_changed_signal() -> void:
+	var controller := _make_controller(4, 4)
+	watch_signals(controller)
+
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	assert_signal_emitted_with_parameters(controller, "action_mode_changed", [BattleControllerScript.ActionMode.MOVE])
+
+
+func test_key_m_does_not_change_action_mode() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	var event := InputEventKey.new()
+	event.keycode = KEY_M
+	event.pressed = true
+
+	controller._handle_key_input(event)
+
+	assert_eq(
+		controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL,
+		"There is no keyboard shortcut for action modes; KEY_M must be a no-op"
+	)
+
+
+func test_key_a_does_not_toggle_action_mode_when_the_step_is_blocked() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var blocker = UnitScript.new(Vector2i(0, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover, blocker]
+	controller.selected_unit = mover
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	var event := InputEventKey.new()
+	event.keycode = KEY_A
+	event.pressed = true
+
+	controller._handle_key_input(event)
+
+	assert_eq(mover.grid_position, Vector2i(1, 1), "The step onto a friendly unit's tile must still be rejected")
+	assert_eq(
+		controller.action_mode, BattleControllerScript.ActionMode.ATTACK,
+		"KEY_A must never itself act as a mode-toggle shortcut"
+	)
+
+
+func test_wasd_and_number_keys_retain_existing_behavior_regardless_of_action_mode() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.recruit_adventurer()
+	var second_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(second_id)
+	var controller := _make_controller(6, 6)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(3, 3), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", second_id
+	)
+	controller.units = [first, second]
+	controller._player_adventurer_ids = ["warrior_001", second_id] as Array[String]
+	controller.selected_unit = first
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+
+	var down_event := InputEventKey.new()
+	down_event.keycode = KEY_S
+	down_event.pressed = true
+	controller._handle_key_input(down_event)
+
+	assert_eq(first.grid_position, Vector2i(1, 2), "KEY_S must still step the unit down")
+
+	var number_event := InputEventKey.new()
+	number_event.keycode = KEY_2
+	number_event.pressed = true
+	controller._handle_key_input(number_event)
+
+	assert_eq(controller.selected_unit, second, "Number keys must still select by party slot")
+
+
+func test_contextual_mode_click_on_enemy_attacks_automatically() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL, "Sanity check: default mode")
+
+	controller._handle_tile_click(defender.grid_position)
+
+	assert_eq(attacker.grid_position, Vector2i(1, 0), "Contextual mode must still auto move-and-attack")
+	assert_true(controller.last_attack_result.get("hit", false))
+
+
+func test_move_mode_click_on_empty_tile_moves_the_unit() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	controller._handle_tile_click(Vector2i(2, 1))
+
+	assert_eq(mover.grid_position, Vector2i(2, 1))
+
+
+func test_move_mode_click_on_enemy_does_not_attack_and_reports_move_mode_feedback() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [mover, enemy]
+	controller.selected_unit = mover
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+	var health_before: int = enemy.health
+
+	controller._handle_tile_click(enemy.grid_position)
+
+	assert_eq(mover.grid_position, Vector2i(1, 1), "The selected unit must not move")
+	assert_eq(mover.action_points_remaining, 3, "No AP should be spent")
+	assert_eq(enemy.health, health_before, "The enemy must be untouched")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "move_mode_no_attack")
+
+
+func test_move_mode_click_on_a_friendly_unit_selects_it() -> void:
+	var controller := _make_controller(4, 4)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_002"
+	)
+	controller.units = [first, second]
+	controller.selected_unit = first
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	controller._handle_tile_click(second.grid_position)
+
+	assert_eq(controller.selected_unit, second)
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL, "Selecting resets to contextual")
+
+
+func test_attack_mode_click_on_enemy_attacks_with_move_and_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	controller.hit_roll = func() -> float: return 0.0
+
+	controller._handle_tile_click(defender.grid_position)
+
+	assert_eq(attacker.grid_position, Vector2i(1, 0), "Attack mode should move-and-attack automatically")
+	assert_true(controller.last_attack_result.get("hit", false))
+
+
+func test_attack_mode_click_on_empty_tile_does_not_move_and_reports_attack_mode_feedback() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+
+	controller._handle_tile_click(Vector2i(2, 1))
+
+	assert_eq(mover.grid_position, Vector2i(1, 1), "The selected unit must not move")
+	assert_eq(mover.action_points_remaining, 3, "No AP should be spent")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "attack_mode_no_target")
+
+
+func test_selecting_a_player_unit_resets_action_mode_to_contextual() -> void:
+	var controller := _make_controller(4, 4)
+	var first = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_001"
+	)
+	var second = UnitScript.new(
+		Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword", "warrior_002"
+	)
+	controller.units = [first, second]
+	controller._player_adventurer_ids = ["warrior_001", "warrior_002"] as Array[String]
+	controller.selected_unit = first
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+
+	controller.select_unit_by_adventurer_id("warrior_002")
+
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL)
+
+
+func test_end_turn_returning_control_to_the_player_resets_action_mode_to_contextual() -> void:
+	var controller := _make_controller(4, 4)
+	var player_unit = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy_unit = UnitScript.new(Vector2i(3, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [player_unit, enemy_unit]
+	controller.active_side = BattleControllerScript.Side.PLAYER
+	controller.selected_unit = player_unit
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	controller.end_turn()  # Hands control to the enemy.
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	controller.end_turn()  # Returns control to the player.
+
+	assert_eq(controller.active_side, BattleControllerScript.Side.PLAYER)
+	assert_eq(controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL)
+
+
+func test_resolving_a_move_resets_action_mode_to_contextual() -> void:
+	var controller := _make_controller(4, 4)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+	controller.set_action_mode(BattleControllerScript.ActionMode.MOVE)
+
+	controller._handle_tile_click(Vector2i(2, 1))
+
+	assert_eq(
+		controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL,
+		"Resolving a move must reset to contextual"
+	)
+
+
+func test_resolving_an_attack_resets_action_mode_to_contextual() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.set_action_mode(BattleControllerScript.ActionMode.ATTACK)
+	controller.hit_roll = func() -> float: return 0.0
+
+	controller._handle_tile_click(defender.grid_position)
+
+	assert_eq(
+		controller.action_mode, BattleControllerScript.ActionMode.CONTEXTUAL,
+		"Resolving an attack must reset to contextual"
+	)
+
+
 func test_wasd_step_moves_one_tile_and_spends_one_movement_point() -> void:
 	var controller := _make_controller(6, 6)
 	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
