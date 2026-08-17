@@ -67,6 +67,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.log.defeated") % "Kobold 2", "Kobold 2 is defeated!")
 	assert_eq(tr("battle.unit_info.empty"), "Hover or click a unit to see its details.")
 	assert_eq(tr("battle.unit_info.hp") % [3, 8], "HP: 3/8")
+	assert_eq(tr("battle.unit_info.ap") % [3, 9], "AP: 3/9")
+	assert_eq(tr("battle.unit_info.weapon") % "Longsword", "Weapon: Longsword")
 	assert_eq(tr("battle.unit_info.healthy"), "Healthy")
 	assert_eq(tr("battle.unit_info.wounded"), "Wounded")
 	assert_eq(tr("battle.unit_info.badly_wounded"), "Badly Wounded")
@@ -91,6 +93,16 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(
 		tr("battle.feedback.paralyzed") % "Warrior",
 		"Warrior is paralyzed and cannot act."
+	)
+	assert_eq(tr("battle.action.move"), "Move")
+	assert_eq(tr("battle.action.attack"), "Attack")
+	assert_eq(
+		tr("battle.feedback.move_mode"),
+		"Move mode: click a highlighted tile to move."
+	)
+	assert_eq(
+		tr("battle.feedback.attack_mode"),
+		"Attack mode: click an enemy to attack."
 	)
 	assert_eq(
 		tr("world_map.hint"),
