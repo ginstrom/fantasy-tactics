@@ -367,6 +367,54 @@ func test_rejects_a_selected_encounter_that_does_not_reference_any_known_encount
 	assert_false(result.ok)
 
 
+## Task-review finding: campaign progress fields must be cross-checked
+## against GameSession.CAMPAIGN_OBJECTIVES, the same way selected_encounter
+## is cross-checked against EXPEDITIONS/active_encounters above -- a
+## corrupted or hand-edited save naming a node that was never in the
+## catalog (e.g. a typo, or a node renamed/removed since the save was
+## written) must fail import rather than silently being accepted.
+func test_rejects_a_version_2_payload_with_an_unknown_campaign_objective_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.campaign_objective_id = "obj_no_such_objective"
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_version_2_payload_with_an_unknown_completed_objectives_entry() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.completed_objectives = ["obj_no_such_objective"]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_version_2_payload_with_an_unknown_unlocked_authored_encounters_entry() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.unlocked_authored_encounters = ["obj_no_such_objective"]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+## A campaign_objective_id of "" is the legitimate victory-state value (see
+## GameSession.complete_campaign_objective()'s final-node case) and must not
+## be rejected just because it names no catalog node.
+func test_an_empty_campaign_objective_id_is_valid_for_a_completed_campaign() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.campaign_objective_id = ""
+	snapshot.is_campaign_completed = true
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.campaign_objective_id, "")
+
+
 func test_legacy_trading_post_true_migrates_to_a_level_one_shop() -> void:
 	var data := _full_snapshot().to_dictionary()
 	data.erase("shop_level")

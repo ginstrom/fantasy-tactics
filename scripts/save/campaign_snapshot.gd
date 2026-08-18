@@ -210,6 +210,24 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	normalized["is_campaign_completed"] = campaign_progress.is_campaign_completed
 	normalized["is_free_play_active"] = campaign_progress.is_free_play_active
 
+	# Mirrors the selected_encounter cross-reference check below: an empty
+	# campaign_objective_id is valid (it means the campaign is complete, see
+	# GameSession.complete_campaign_objective()'s final-node case), but a
+	# non-empty one must name a real CAMPAIGN_OBJECTIVES node, and every
+	# completed_objectives/unlocked_authored_encounters entry always must --
+	# neither list is ever legitimately empty-string-valued.
+	if (
+		normalized.campaign_objective_id != ""
+		and not _GameSessionScript.CAMPAIGN_OBJECTIVES.has(normalized.campaign_objective_id)
+	):
+		return _invalid("campaign_objective_id does not reference a known campaign objective")
+	for objective_id in normalized.completed_objectives:
+		if not _GameSessionScript.CAMPAIGN_OBJECTIVES.has(objective_id):
+			return _invalid("completed_objectives contains an unknown campaign objective id: %s" % objective_id)
+	for objective_id in normalized.unlocked_authored_encounters:
+		if not _GameSessionScript.CAMPAIGN_OBJECTIVES.has(objective_id):
+			return _invalid("unlocked_authored_encounters contains an unknown campaign objective id: %s" % objective_id)
+
 	for scalar_key in ["world_turn", "gold", "guild_hall_level", "pending_reward", "battle_reward"]:
 		if not data.get(scalar_key) is int:
 			return _invalid("%s is not an int" % scalar_key)
