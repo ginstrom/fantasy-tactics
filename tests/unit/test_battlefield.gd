@@ -449,6 +449,146 @@ func test_a_critical_hit_appends_a_critical_log_line_with_amplified_damage() -> 
 	)
 
 
+## --- Flanking combat log presentation (docs/plans/2026-08-18-critical-hits-
+## and-flanking/03-flanking-tactics-and-combat-resolution.md) ---
+##
+## _stage_an_adjacent_pair() always places the goblin directly east of the
+## warrior; the default goblin facing (LEFT, toward the warrior) is the
+## front-attack case the tests above already cover. Re-facing the goblin
+## while keeping that same layout produces a side or rear flank without
+## needing a new rig: UP/DOWN put the attack on the goblin's flank, RIGHT
+## turns the goblin's back to the attacker.
+
+func test_a_side_flank_hit_appends_the_side_flank_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.UP
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 3
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.flank.side") % [units.warrior.display_name, units.goblin.display_name, 3]
+	)
+
+
+func test_a_side_flank_critical_hit_appends_the_side_flank_critical_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.UP
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 0.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 4
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		# round(4 * 1.5) = 6 damage on a critical hit (see battle_controller.gd's
+		# critical_damage_multiplier).
+		tr("battle.log.flank.side_crit") % [units.warrior.display_name, units.goblin.display_name, 6]
+	)
+
+
+func test_a_rear_flank_hit_appends_the_rear_flank_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.RIGHT
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 3
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.flank.rear") % [units.warrior.display_name, units.goblin.display_name, 3]
+	)
+
+
+func test_a_rear_flank_critical_hit_appends_the_rear_flank_critical_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.RIGHT
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 0.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 4
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.flank.rear_crit") % [units.warrior.display_name, units.goblin.display_name, 6]
+	)
+
+
+## A killing blow on a flanked attack must still append the shared
+## "is defeated!" suffix regardless of which log key rendered the base line
+## -- _describe_log_entry() appends it once, after picking the flank-aware
+## key, so this guards that ordering.
+func test_a_rear_flank_killing_blow_still_appends_the_defeated_suffix() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.RIGHT
+	units.goblin.health = 1
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_string_contains(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.defeated") % units.goblin.display_name
+	)
+
+
+## Proves try_attack_selected_unit() records the resolved flank/effective_*
+## values it computed for this exact attack, not just that the keys exist --
+## goblins are always unarmored (defense 0, see BattleController._ready()),
+## so a rear flank's guard penalty has nothing to reduce and effective_defense
+## stays 0; effective_hit_chance therefore equals the attacker's raw hit
+## chance unmodified, isolating the crit-bonus half of the formula (0.05 base
+## + the configured 0.50 rear bonus) as the case's real assertion.
+func test_last_attack_result_records_the_resolved_flank_and_effective_values() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	units.goblin.facing = Vector2i.RIGHT
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+
+	var result: Dictionary = battlefield.grid.last_attack_result
+	assert_eq(result.flank, "rear")
+	assert_eq(result.effective_defense, 0, "The goblin is unarmored, so a rear flank has no guard left to reduce")
+	assert_almost_eq(result.effective_hit_chance, units.warrior.hit_chance, 0.0001)
+	assert_almost_eq(result.effective_crit_chance, 0.55, 0.0001, "0.05 base + the configured 0.50 rear crit bonus")
+
+
 func test_a_miss_appends_a_miss_line_naming_both_units() -> void:
 	GameSession.reset()
 	var battlefield: Node2D = BattlefieldScene.instantiate()

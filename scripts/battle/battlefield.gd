@@ -512,16 +512,32 @@ func _log_attack(step: Dictionary) -> void:
 	_append_log_line(_describe_log_entry(step))
 
 
+## Step 3 of docs/plans/2026-08-18-critical-hits-and-flanking: a side or rear
+## flank (see battle_controller.gd's get_flank_type()/try_attack_selected_
+## unit()) gets its own log line naming the angle of attack, crossed with
+## whether it landed a critical hit -- a front attack (the common case) keeps
+## the plain hit/critical_hit lines untouched.
 func _describe_log_entry(step: Dictionary) -> String:
 	var attacker_name: String = step.attacker.display_name
 	var defender_name: String = step.defender.display_name
 	if not step.hit:
 		return tr("battle.log.miss") % [attacker_name, defender_name]
-	var line_key: String = "battle.log.critical_hit" if step.get("critical", false) else "battle.log.hit"
+	var critical: bool = step.get("critical", false)
+	var line_key: String = _log_key_for_flank(String(step.get("flank", "front")), critical)
 	var line: String = tr(line_key) % [attacker_name, defender_name, step.damage]
 	if step.defeated:
 		line += " " + tr("battle.log.defeated") % defender_name
 	return line
+
+
+func _log_key_for_flank(flank: String, critical: bool) -> String:
+	match flank:
+		"side":
+			return "battle.log.flank.side_crit" if critical else "battle.log.flank.side"
+		"rear":
+			return "battle.log.flank.rear_crit" if critical else "battle.log.flank.rear"
+		_:
+			return "battle.log.critical_hit" if critical else "battle.log.hit"
 
 
 func _append_log_line(text: String) -> void:

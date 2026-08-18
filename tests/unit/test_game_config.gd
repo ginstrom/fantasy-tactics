@@ -20,6 +20,16 @@ func test_loads_critical_hit_config_values_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_int("combat", "critical_resistance_reduction", -1), 20)
 
 
+## Step 3 of docs/plans/2026-08-18-critical-hits-and-flanking: flanking
+## balance constants (see battle_controller.gd's get_flank_type()/
+## try_attack_selected_unit()).
+func test_loads_flanking_config_values_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("combat", "side_flank_guard_penalty", -1), 20)
+	assert_eq(GameConfig.get_float("combat", "side_flank_crit_bonus", -1.0), 0.20)
+	assert_eq(GameConfig.get_int("combat", "rear_flank_guard_penalty", -1), 50)
+	assert_eq(GameConfig.get_float("combat", "rear_flank_crit_bonus", -1.0), 0.50)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

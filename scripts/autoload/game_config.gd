@@ -15,6 +15,10 @@ const DEFAULTS: Dictionary = {
 		"base_critical_chance": 0.05,
 		"critical_damage_multiplier": 1.5,
 		"critical_resistance_reduction": 20,
+		"side_flank_guard_penalty": 20,
+		"side_flank_crit_bonus": 0.20,
+		"rear_flank_guard_penalty": 50,
+		"rear_flank_crit_bonus": 0.50,
 	},
 	"progression": {
 		"perk_level_interval": 3,

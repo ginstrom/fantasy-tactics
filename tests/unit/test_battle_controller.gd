@@ -2468,3 +2468,204 @@ func test_update_highlights_renders_two_tier_movement_and_direct_and_indirect_at
 	assert_true(orange_index > green_index, "Target overlays must render after movement fills so they remain visible on top")
 
 
+## --- Flanking geometry classification (docs/plans/2026-08-18-critical-hits-
+## and-flanking/03-flanking-tactics-and-combat-resolution.md) ---
+##
+## Truth table verified relative to a defender at (0, 0); every case below
+## restates it relative to a non-origin defender position to also prove
+## get_flank_type() is translation-invariant.
+
+func test_get_flank_type_classifies_all_eight_neighbors_for_a_defender_facing_left() -> void:
+	var controller := _make_controller(6, 6)
+	var defender_pos := Vector2i(3, 3)
+
+	for offset in [Vector2i(-1, -1), Vector2i(-1, 0), Vector2i(-1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.LEFT), "front", "offset %s" % offset)
+	for offset in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, -1), Vector2i(1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.LEFT), "side", "offset %s" % offset)
+	assert_eq(controller.get_flank_type(defender_pos + Vector2i(1, 0), defender_pos, Vector2i.LEFT), "rear")
+
+
+func test_get_flank_type_classifies_all_eight_neighbors_for_a_defender_facing_up() -> void:
+	var controller := _make_controller(6, 6)
+	var defender_pos := Vector2i(3, 3)
+
+	for offset in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.UP), "front", "offset %s" % offset)
+	for offset in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(-1, 1), Vector2i(1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.UP), "side", "offset %s" % offset)
+	assert_eq(controller.get_flank_type(defender_pos + Vector2i(0, 1), defender_pos, Vector2i.UP), "rear")
+
+
+func test_get_flank_type_classifies_all_eight_neighbors_for_a_defender_facing_right() -> void:
+	var controller := _make_controller(6, 6)
+	var defender_pos := Vector2i(3, 3)
+
+	for offset in [Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.RIGHT), "front", "offset %s" % offset)
+	for offset in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, -1), Vector2i(-1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.RIGHT), "side", "offset %s" % offset)
+	assert_eq(controller.get_flank_type(defender_pos + Vector2i(-1, 0), defender_pos, Vector2i.RIGHT), "rear")
+
+
+func test_get_flank_type_classifies_all_eight_neighbors_for_a_defender_facing_down() -> void:
+	var controller := _make_controller(6, 6)
+	var defender_pos := Vector2i(3, 3)
+
+	for offset in [Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.DOWN), "front", "offset %s" % offset)
+	for offset in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(-1, -1), Vector2i(1, -1)]:
+		assert_eq(controller.get_flank_type(defender_pos + offset, defender_pos, Vector2i.DOWN), "side", "offset %s" % offset)
+	assert_eq(controller.get_flank_type(defender_pos + Vector2i(0, -1), defender_pos, Vector2i.DOWN), "rear")
+
+
+## A non-adjacent ranged attacker straight behind a north-facing defender is
+## still a rear flank -- get_flank_type() is pure geometry with no adjacency
+## requirement of its own (see try_attack_selected_unit(), which is what
+## actually restricts range).
+func test_get_flank_type_classifies_a_non_adjacent_ranged_position_as_rear() -> void:
+	var controller := _make_controller(6, 6)
+
+	assert_eq(controller.get_flank_type(Vector2i(0, 4), Vector2i(0, 2), Vector2i.UP), "rear")
+
+
+## Proves the classifier and combat resolution agree on legal (diagonal-
+## inclusive) melee geometry, not just in isolation -- a classifier that
+## labels a diagonal cell correctly but that combat never lets an attacker
+## reach would still pass the pure get_flank_type() tests above.
+func test_try_attack_selected_unit_records_the_classified_flank_for_a_defender_facing_left() -> void:
+	var defender_pos := Vector2i(3, 3)
+	var expected_flank_by_offset := {
+		Vector2i(-1, -1): "front", Vector2i(-1, 0): "front", Vector2i(-1, 1): "front",
+		Vector2i(0, -1): "side", Vector2i(0, 1): "side", Vector2i(1, -1): "side", Vector2i(1, 1): "side",
+		Vector2i(1, 0): "rear",
+	}
+
+	for offset in expected_flank_by_offset:
+		var controller := _make_controller(6, 6)
+		var attacker = UnitScript.new(defender_pos + offset, Color.CORNFLOWER_BLUE)
+		var defender = UnitScript.new(defender_pos, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+		defender.facing = Vector2i.LEFT
+		controller.units = [attacker, defender]
+		controller.selected_unit = attacker
+
+		assert_true(
+			controller.try_attack_selected_unit(defender.grid_position),
+			"An attack from offset %s must be a legal melee target (diagonals included)" % offset
+		)
+		assert_eq(
+			controller.last_attack_result.flank, expected_flank_by_offset[offset],
+			"Attack from offset %s must record flank \"%s\"" % [offset, expected_flank_by_offset[offset]]
+		)
+
+
+## --- Flanking guard reduction and hit-chance modifiers ---
+
+## defender_facing is always LEFT here; attacker_offset selects which arc of
+## that facing the case exercises (front/side/rear), matching the classifier
+## tests above.
+func _flank_hit_chance_setup(attacker_offset: Vector2i) -> Dictionary:
+	var defender_pos := Vector2i(3, 3)
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(defender_pos + attacker_offset, Color.CORNFLOWER_BLUE, 0, 6, 10, 1, 1, 0.70)
+	var defender = UnitScript.new(defender_pos, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 1.0, "Attack", "", 40)
+	defender.facing = Vector2i.LEFT
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	return {"controller": controller, "defender": defender}
+
+
+func test_front_attack_applies_the_defenders_full_guard_to_effective_hit_chance() -> void:
+	var setup := _flank_hit_chance_setup(Vector2i(-1, 0))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "front")
+	assert_eq(setup.controller.last_attack_result.effective_defense, 40)
+	assert_almost_eq(setup.controller.last_attack_result.effective_hit_chance, 0.30, 0.0001)
+
+
+func test_side_attack_reduces_guard_by_the_configured_side_penalty() -> void:
+	var setup := _flank_hit_chance_setup(Vector2i(0, -1))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "side")
+	assert_eq(setup.controller.last_attack_result.effective_defense, 20, "40 - the configured 20-point side penalty")
+	assert_almost_eq(setup.controller.last_attack_result.effective_hit_chance, 0.50, 0.0001)
+
+
+func test_rear_attack_reduces_guard_by_the_configured_rear_penalty_floored_at_zero() -> void:
+	var setup := _flank_hit_chance_setup(Vector2i(1, 0))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "rear")
+	assert_eq(setup.controller.last_attack_result.effective_defense, 0, "max(0, 40 - the configured 50-point rear penalty)")
+	assert_almost_eq(setup.controller.last_attack_result.effective_hit_chance, 0.70, 0.0001)
+
+
+func test_flank_effective_hit_chance_still_honors_a_lowered_configured_cap() -> void:
+	var original_cap: float = GameSession.EFFECTIVE_HIT_CHANCE_CAP
+	GameSession.EFFECTIVE_HIT_CHANCE_CAP = 0.5
+
+	var defender_pos := Vector2i(3, 3)
+	var controller := _make_controller(6, 6)
+	# Front attack (attacker directly west of an east-facing defender) with a
+	# near-100% attacker hit chance and zero defender guard, so the raw
+	# hit-chance math alone would exceed the lowered cap and only the cap
+	# clamp can explain the recorded value.
+	var attacker = UnitScript.new(defender_pos + Vector2i(-1, 0), Color.CORNFLOWER_BLUE, 0, 6, 10, 1, 1, 0.99)
+	var defender = UnitScript.new(defender_pos, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.RIGHT
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_almost_eq(
+		controller.last_attack_result.effective_hit_chance, 0.5, 0.0001,
+		"A configured EFFECTIVE_HIT_CHANCE_CAP below 0.95 must still cap flank-adjusted hit chance"
+	)
+
+	GameSession.EFFECTIVE_HIT_CHANCE_CAP = original_cap
+
+
+## --- Flanking critical hit chance bonuses ---
+
+func _flank_crit_setup(attacker_offset: Vector2i) -> Dictionary:
+	var defender_pos := Vector2i(3, 3)
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(defender_pos + attacker_offset, Color.CORNFLOWER_BLUE, 0, 6, 10, 1, 1, 1.0)
+	var defender = UnitScript.new(defender_pos, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.LEFT
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 0.40
+	return {"controller": controller, "defender": defender}
+
+
+func test_front_attack_uses_the_base_five_percent_critical_threshold() -> void:
+	var setup := _flank_crit_setup(Vector2i(-1, 0))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "front")
+	assert_almost_eq(setup.controller.last_attack_result.effective_crit_chance, 0.05, 0.0001)
+	assert_false(setup.controller.last_attack_result.critical, "An injected 0.40 roll must not crit at the 5% front threshold")
+
+
+func test_side_attack_adds_the_configured_side_critical_bonus() -> void:
+	var setup := _flank_crit_setup(Vector2i(0, -1))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "side")
+	assert_almost_eq(setup.controller.last_attack_result.effective_crit_chance, 0.25, 0.0001)
+	assert_false(setup.controller.last_attack_result.critical, "An injected 0.40 roll must not crit at the 25% side threshold")
+
+
+func test_rear_attack_adds_the_configured_rear_critical_bonus_and_lands_a_crit() -> void:
+	var setup := _flank_crit_setup(Vector2i(1, 0))
+
+	assert_true(setup.controller.try_attack_selected_unit(setup.defender.grid_position))
+	assert_eq(setup.controller.last_attack_result.flank, "rear")
+	assert_almost_eq(setup.controller.last_attack_result.effective_crit_chance, 0.55, 0.0001)
+	assert_true(setup.controller.last_attack_result.critical, "An injected 0.40 roll must crit at the 55% rear threshold")
+
+

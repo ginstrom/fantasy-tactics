@@ -73,6 +73,22 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		"Warrior 2 attacks Kobold 2 — Critical Hit! Hits for 6 damage!"
 	)
 	assert_eq(tr("battle.log.defeated") % "Kobold 2", "Kobold 2 is defeated!")
+	assert_eq(
+		tr("battle.log.flank.side") % ["Warrior", "Kobold 1", 3],
+		"Warrior attacks Kobold 1 from the side — hits for 3 damage!"
+	)
+	assert_eq(
+		tr("battle.log.flank.rear") % ["Warrior", "Kobold 1", 3],
+		"Warrior attacks Kobold 1 from behind — hits for 3 damage!"
+	)
+	assert_eq(
+		tr("battle.log.flank.side_crit") % ["Warrior", "Kobold 1", 6],
+		"Warrior attacks Kobold 1 from the side — Critical Hit! Hits for 6 damage!"
+	)
+	assert_eq(
+		tr("battle.log.flank.rear_crit") % ["Warrior", "Kobold 1", 6],
+		"Warrior attacks Kobold 1 from behind — Critical Hit! Hits for 6 damage!"
+	)
 	assert_eq(tr("battle.unit_info.empty"), "Hover or click a unit to see its details.")
 	assert_eq(tr("battle.unit_info.hp") % [3, 8], "HP: 3/8")
 	assert_eq(tr("battle.unit_info.ap") % [3, 9], "AP: 3/9")

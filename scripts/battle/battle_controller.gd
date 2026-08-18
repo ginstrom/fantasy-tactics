@@ -402,6 +402,29 @@ func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i]
 	return attackable
 
 
+## Classifies an attack's angle against the defender's own facing --
+## "front"/"side"/"rear" -- per the design doc's 3x3 directional diagrams (see
+## docs/plans/2026-08-18-critical-hits-and-flanking/
+## 03-flanking-tactics-and-combat-resolution.md's truth table). Pure
+## geometry: takes plain positions/facing rather than Unit instances, has no
+## adjacency or range requirement of its own, and never mutates state --
+## try_attack_selected_unit() is what actually restricts which of these
+## angles a given weapon can reach. `u` is the forward/backward component of
+## the attacker's offset along the defender's facing axis (positive means
+## the attacker stands ahead of the defender, i.e. within its front arc);
+## `v` is the sideways component perpendicular to that axis (zero only on
+## the facing axis itself, i.e. directly ahead or directly behind).
+func get_flank_type(attacker_pos: Vector2i, defender_pos: Vector2i, defender_facing: Vector2i) -> String:
+	var offset: Vector2i = attacker_pos - defender_pos
+	var u: int = offset.x * defender_facing.x + offset.y * defender_facing.y
+	var v: int = absi(offset.x * defender_facing.y - offset.y * defender_facing.x)
+	if u > 0:
+		return "front"
+	if u < 0 and v == 0:
+		return "rear"
+	return "side"
+
+
 ## Automated move-and-attack targeting: the cheapest green-range tile (see
 ## get_move_and_attack_tiles()) from which attacker can legally hit target,
 ## tie-broken by reading order (mirrors _best_enemy_move()'s own tie-break).
@@ -535,7 +558,30 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	selected_unit.set_facing(target.grid_position - selected_unit.grid_position)
 
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
-	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
+
+	# Flanking geometry (docs/plans/2026-08-18-critical-hits-and-flanking/
+	# 03-flanking-tactics-and-combat-resolution.md): a side or rear flank
+	# reduces the defender's effective Guard (raising hit chance) and adds to
+	# the base critical chance Step 2 introduced. Read against the defender's
+	# facing and both units' now-final positions, so a move-and-attack that
+	# repositioned the attacker above is already reflected here.
+	var flank_type: String = get_flank_type(selected_unit.grid_position, target.grid_position, target.facing)
+	var guard_penalty: int = 0
+	var crit_bonus: float = 0.0
+	if flank_type == "side":
+		guard_penalty = GameConfig.get_int("combat", "side_flank_guard_penalty", 20)
+		crit_bonus = GameConfig.get_float("combat", "side_flank_crit_bonus", 0.20)
+	elif flank_type == "rear":
+		guard_penalty = GameConfig.get_int("combat", "rear_flank_guard_penalty", 50)
+		crit_bonus = GameConfig.get_float("combat", "rear_flank_crit_bonus", 0.50)
+
+	var effective_defense: int = maxi(0, target.defense - guard_penalty)
+	var effective_hit_chance: float = clampf(
+		selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+	)
+	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
+	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
+
 	var hit: bool = hit_roll.call() < effective_hit_chance
 	var damage: int = 0
 	# Critical hits only exist on a landed hit -- crit_roll is never consumed
@@ -545,8 +591,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	# and-flanking/02-critical-hit-mechanics.md).
 	var is_critical := false
 	if hit:
-		var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
-		is_critical = crit_roll.call() < base_critical_chance
+		is_critical = crit_roll.call() < effective_crit_chance
 		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max) + selected_unit.raw_damage_bonus + selected_unit.might
 		var effective_resistance: int = target.resistance
 		if is_critical:
@@ -568,6 +613,10 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"damage": damage,
 		"critical": is_critical,
 		"defeated": defeated,
+		"flank": flank_type,
+		"effective_defense": effective_defense,
+		"effective_hit_chance": effective_hit_chance,
+		"effective_crit_chance": effective_crit_chance,
 	}
 	if hit:
 		_dispatch_completed_hit(selected_unit, target)

@@ -1,0 +1,17 @@
+{
+  "scenario_id": "flanking_tactics",
+  "board": {"width": 6, "height": 6},
+  "player": {
+    "units": [
+      {"id": "hero", "template_id": "warrior", "position": {"x": 1, "y": 3}, "facing": "right"}
+    ]
+  },
+  "enemy": {
+    "units": [
+      {"id": "goblin", "template_id": "goblin", "position": {"x": 3, "y": 3}, "facing": "left"}
+    ]
+  },
+  "rules": {"round_limit": 20},
+  "policies": {"player": "greedy_pursuit", "enemy": "current_enemy_policy"},
+  "labels": ["flanking-tactics", "step3-smoke"]
+}
