@@ -182,13 +182,21 @@ This is the single most common source of confusion reading battle code —
    input-handling logic. `Battlefield.gd`'s `@onready var grid: Node2D = $Grid`
    refers to *this*.
 2. **`GridScript`** (`scripts/battle/grid.gd`) — a plain `RefCounted` helper
-   for tile geometry only (`is_in_bounds`, `get_adjacent`,
-   `get_tiles_in_range`). `BattleController` holds one of these as its own
-   `grid` member variable (`battle_controller.gd`'s `var grid`);
-   `get_tile_distances` runs the identical BFS but also records
-   distance-from-start, and is what `battle_controller.gd`'s
-   `_move_distances()` uses for both `get_legal_moves()` and
-   `try_move_selected_unit()`.
+   for tile geometry only: `is_in_bounds`, `get_adjacent`,
+   `get_tiles_in_range`, `get_shortest_path` (a deterministic BFS route from
+   start to target, retaining predecessors so callers that need the actual
+   route, not just its cost, can walk it), and `is_attack_adjacent`
+   (eight-directional, combat-only adjacency for range-1 melee weapons —
+   movement/pathing itself stays cardinal-only via `get_adjacent`).
+   `BattleController` holds one of these as its own `grid` member variable
+   (`battle_controller.gd`'s `var grid`); `get_tile_distances` runs the
+   identical BFS but also records distance-from-start, and is what
+   `battle_controller.gd`'s `_move_distances()` uses for
+   `get_legal_moves()`'s reachable/highlight set. `try_move_selected_unit()`,
+   however, bypasses `_move_distances()` and calls `grid.get_shortest_path()`
+   directly, using it both to validate that the destination is reachable
+   within the unit's remaining AP and to derive the unit's final facing from
+   the route's last step.
 
 So `battlefield.grid` (the controller) and `battlefield.grid.grid` (the
 tile-geometry helper) are two different objects. `scripts/world/world_map.gd`
@@ -215,9 +223,9 @@ of the click path described above.
   left, one portrait per party member with HP overlaid, click-to-select; the
   `Grid` node (`BattleController`) centered; `UnitInfoPanel`
   (`scripts/battle/unit_info_panel.gd`) on the right, split into a
-  `HoveredSection` (unit under the mouse cursor: name, wound tier) and a
-  `SelectedSection` (the active unit: name, class, level, HP, AP, weapon)
-  that stays pinned even when nothing is hovered — see
+  `HoveredSection` (unit under the mouse cursor: name, facing, wound tier)
+  and a `SelectedSection` (the active unit: name, facing, class, level, HP,
+  AP, weapon) that stays pinned even when nothing is hovered — see
   `UnitInfoPanel.update_panel(hovered_unit, selected_unit)`.
 - `BottomPanel` — a full-width `LogScroll` combat log that auto-scrolls to
   `max_value` on every new line (`Battlefield._append_log_line()`), sitting
@@ -318,9 +326,12 @@ use actually resolves.
 `scripts/tools/battle_bot.gd` (`BattleBot`) and
 `scripts/tools/battle_sim.gd`/`battle_sim_main.gd` play full, real
 battles with no human input — `BattleBot` picks player actions with the
-same "move toward nearest living opponent, attack if adjacent" policy
+same "move toward nearest living opponent, attack any legal target" policy
 `BattleController._take_enemy_unit_actions()` already uses for the enemy
-side — down to its reading-order tie-break and its "relocate to some
+side — legality per `get_legal_attack_targets()`, which for range-1 melee
+weapons includes diagonals (`Grid.is_attack_adjacent()`'s eight-directional
+adjacency), not just the four cardinal neighbors — down to its
+reading-order tie-break and its "relocate to some
 legal tile whenever one exists, even a non-improving one" move rule,
 both re-implemented in `battle_bot.gd` because `battle_controller.gd`
 is never modified — and `battle_sim.gd` drives a real `battlefield.tscn` instance

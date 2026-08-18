@@ -5,6 +5,14 @@ const UnitScript := preload("res://scripts/battle/unit.gd")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 
+## Sentinel (an impossible hit-chance cap) rather than -1.0 alone would also
+## work, but any negative value signals "no test currently owns a lowered
+## cap" -- set only by tests that temporarily override
+## GameSession.EFFECTIVE_HIT_CHANCE_CAP, and always restored (then reset back
+## to this sentinel) by after_each(), so a mid-test runtime error can never
+## leave a lowered cap corrupting every later test's hit-chance math.
+var _original_effective_hit_chance_cap: float = -1.0
+
 
 func before_each() -> void:
 	GameSession.reset()
@@ -12,6 +20,9 @@ func before_each() -> void:
 
 func after_each() -> void:
 	GameSession.reset_injectable_rolls()
+	if _original_effective_hit_chance_cap >= 0.0:
+		GameSession.EFFECTIVE_HIT_CHANCE_CAP = _original_effective_hit_chance_cap
+		_original_effective_hit_chance_cap = -1.0
 
 
 func _make_controller(width: int, height: int) -> Node2D:
@@ -2603,7 +2614,7 @@ func test_rear_attack_reduces_guard_by_the_configured_rear_penalty_floored_at_ze
 
 
 func test_flank_effective_hit_chance_still_honors_a_lowered_configured_cap() -> void:
-	var original_cap: float = GameSession.EFFECTIVE_HIT_CHANCE_CAP
+	_original_effective_hit_chance_cap = GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	GameSession.EFFECTIVE_HIT_CHANCE_CAP = 0.5
 
 	var defender_pos := Vector2i(3, 3)
@@ -2623,8 +2634,6 @@ func test_flank_effective_hit_chance_still_honors_a_lowered_configured_cap() -> 
 		controller.last_attack_result.effective_hit_chance, 0.5, 0.0001,
 		"A configured EFFECTIVE_HIT_CHANCE_CAP below 0.95 must still cap flank-adjusted hit chance"
 	)
-
-	GameSession.EFFECTIVE_HIT_CHANCE_CAP = original_cap
 
 
 ## --- Flanking critical hit chance bonuses ---
