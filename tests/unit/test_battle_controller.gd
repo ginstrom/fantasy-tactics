@@ -59,6 +59,273 @@ func test_two_adjacent_basic_attacks_are_legal_with_six_action_points() -> void:
 	assert_eq(attacker.action_points_remaining, 0)
 
 
+## --- Unit facing model (docs/plans/2026-08-18-critical-hits-and-flanking) --
+
+func test_unit_facing_defaults_to_right() -> void:
+	var unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+
+	assert_eq(unit.facing, Vector2i.RIGHT)
+
+
+func test_unit_set_facing_accepts_each_cardinal_direction() -> void:
+	var unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+
+	unit.set_facing(Vector2i.DOWN)
+	assert_eq(unit.facing, Vector2i.DOWN)
+	unit.set_facing(Vector2i.LEFT)
+	assert_eq(unit.facing, Vector2i.LEFT)
+	unit.set_facing(Vector2i.UP)
+	assert_eq(unit.facing, Vector2i.UP)
+	unit.set_facing(Vector2i.RIGHT)
+	assert_eq(unit.facing, Vector2i.RIGHT)
+
+
+func test_unit_set_facing_resolves_a_non_cardinal_vector_to_its_primary_cardinal_direction() -> void:
+	var unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+
+	unit.set_facing(Vector2i(3, 1))
+	assert_eq(unit.facing, Vector2i.RIGHT, "A wider x-component resolves to the horizontal cardinal")
+
+	unit.set_facing(Vector2i(1, 3))
+	assert_eq(unit.facing, Vector2i.DOWN, "A wider y-component resolves to the vertical cardinal")
+
+	unit.set_facing(Vector2i(-2, 2))
+	assert_eq(unit.facing, Vector2i.LEFT, "A tied magnitude resolves toward the x-axis")
+
+
+func test_unit_set_facing_ignores_a_zero_vector() -> void:
+	var unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+	unit.set_facing(Vector2i.DOWN)
+
+	unit.set_facing(Vector2i.ZERO)
+
+	assert_eq(unit.facing, Vector2i.DOWN, "A zero-length direction must not change the current facing")
+
+
+## --- Initial facings at battle setup ---------------------------------------
+
+func test_ready_sets_player_units_facing_right_and_enemy_units_facing_left() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_true(controller.units.size() > 0)
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.PLAYER:
+			assert_eq(unit.facing, Vector2i.RIGHT, "Player units must start facing right, toward the enemy spawn")
+		else:
+			assert_eq(unit.facing, Vector2i.LEFT, "Enemy units must start facing left, toward the player spawn")
+
+
+## --- Facing updates on movement ---------------------------------------------
+
+func test_wasd_step_down_sets_the_movers_facing_down() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	controller.try_step_selected_unit(Vector2i.DOWN)
+
+	assert_eq(mover.facing, Vector2i.DOWN)
+
+
+func test_wasd_step_up_sets_the_movers_facing_up() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	mover.facing = Vector2i.DOWN
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	controller.try_step_selected_unit(Vector2i.UP)
+
+	assert_eq(mover.facing, Vector2i.UP)
+
+
+func test_get_legal_moves_never_includes_a_diagonal_tile() -> void:
+	var controller := _make_controller(6, 6)
+	# A single action point (move_range 1) means only tiles reachable in one
+	# cardinal step are legal -- a two-cardinal-step L-shaped route to a
+	# diagonal-looking tile like (3, 3) would need move_range 2, so this
+	# isolates the "no direct diagonal step" rule from "reachable via a
+	# multi-step cardinal path", which (3, 3) would otherwise satisfy.
+	var mover = UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 1)
+	controller.units = [mover]
+
+	var moves: Array[Vector2i] = controller.get_legal_moves(mover)
+
+	assert_false(moves.has(Vector2i(3, 3)), "Diagonal tiles are never legal move destinations")
+	assert_true(moves.has(Vector2i(3, 2)), "Cardinal tiles remain legal move destinations")
+
+
+## Mirrors test_shortest_path_breaks_ties_between_equally_short_routes_using_
+## get_adjacents_neighbor_order() in test_grid.gd: of the three equally-short
+## routes from (0,0) to (2,1), get_shortest_path()'s down-first tie-break
+## makes the route's final edge RIGHT, so try_move_selected_unit() must set
+## facing from that edge -- not from some path-agnostic shortcut like
+## sign(target - origin).
+func test_move_along_an_ambiguous_shortest_path_sets_facing_from_the_paths_final_edge() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	mover.set_facing(Vector2i.UP)
+	controller.units = [mover]
+	controller.selected_unit = mover
+
+	var moved: bool = controller.try_move_selected_unit(Vector2i(2, 1))
+
+	assert_true(moved)
+	assert_eq(mover.grid_position, Vector2i(2, 1))
+	assert_eq(mover.facing, Vector2i.RIGHT)
+
+
+## --- Diagonal melee, cardinal movement --------------------------------------
+
+func test_range_one_attacker_can_legally_and_successfully_strike_each_diagonal_neighbor() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 12)
+	var diagonal_offsets: Array[Vector2i] = [
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	for offset in diagonal_offsets:
+		var defender = UnitScript.new(
+			attacker.grid_position + offset, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10
+		)
+		controller.units = [attacker, defender]
+		controller.selected_unit = attacker
+		controller.hit_roll = func() -> float: return 0.0
+
+		assert_true(
+			controller.get_legal_attack_targets(attacker).has(defender),
+			"Diagonal neighbor %s must be a legal melee target" % [defender.grid_position]
+		)
+		var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+		assert_true(attacked, "A range-one attacker must be able to strike a diagonal neighbor")
+		assert_eq(attacker.grid_position, Vector2i(2, 2), "A direct diagonal attack must not move the attacker")
+		assert_true(defender.health < 10)
+
+
+func test_ranged_weapon_keeps_using_manhattan_distance_not_diagonal_adjacency() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 2
+	# Manhattan distance is 3 (out of the [1, 2] range); Chebyshev distance is
+	# only 2. A ranged weapon must keep rejecting this target via the
+	# existing Manhattan rule, not the melee adjacency shortcut.
+	var defender = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+
+	assert_false(controller.get_legal_attack_targets(attacker).has(defender))
+
+
+## --- Facing updates on attack ------------------------------------------------
+
+func test_attack_directly_below_faces_the_attacker_down() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.facing, Vector2i.DOWN)
+
+
+func test_attack_to_the_left_faces_the_attacker_left() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.facing, Vector2i.LEFT)
+
+
+## A bow attack that is mostly-rightward (dx=3, dy=1) must resolve to the
+## wider axis, matching Unit.set_facing()'s own tie rule.
+func test_ranged_attack_mostly_to_the_right_faces_the_attacker_right() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 5
+	var defender = UnitScript.new(Vector2i(4, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(attacker.facing, Vector2i.RIGHT)
+
+
+## --- Enemy AI / BattleBot facing consistency --------------------------------
+
+func test_run_enemy_turn_updates_facing_on_move_and_on_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 0.3, "Short Sword"
+	)
+	var player_unit = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
+	)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+
+	controller.run_enemy_turn()
+
+	# Mirrors test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap:
+	# the goblin moves to (1, 0), then attacks the player directly below it.
+	assert_eq(goblin.grid_position, Vector2i(1, 0))
+	assert_eq(goblin.facing, Vector2i.DOWN, "Attacking a target directly below must face the attacker south")
+
+
+## --- Visual facing indicator -------------------------------------------------
+
+func test_draw_units_attaches_a_facing_indicator_positioned_toward_each_units_facing() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	# Battlefield._ready() already populated unit_container once with its own
+	# auto-spawned units; those children are queue_free()'d (deferred, not
+	# synchronous), so they would still show up in get_children() below
+	# alongside our own scenario's bodies unless removed immediately here
+	# (see the same workaround in
+	# test_update_highlights_renders_two_tier_movement_and_direct_and_indirect_attack_targets_in_precedence_order).
+	for stale_child in controller.unit_container.get_children():
+		stale_child.free()
+	var right_unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	right_unit.set_facing(Vector2i.RIGHT)
+	var down_unit = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	down_unit.set_facing(Vector2i.DOWN)
+	var left_unit = UnitScript.new(Vector2i(2, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	left_unit.set_facing(Vector2i.LEFT)
+	var up_unit = UnitScript.new(Vector2i(3, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	up_unit.set_facing(Vector2i.UP)
+	controller.units = [right_unit, down_unit, left_unit, up_unit]
+
+	controller._draw_units()
+
+	var bodies: Array = controller.unit_container.get_children()
+	assert_eq(bodies.size(), 4, "One body per unit")
+	for body in bodies:
+		var indicator: Node = body.get_node_or_null("FacingIndicator")
+		assert_not_null(indicator, "Every unit body must carry a FacingIndicator child")
+		var center: Vector2 = body.size / 2.0
+		var grid_pos := Vector2i(body.position / BattleControllerScript.TILE_SIZE)
+		match grid_pos:
+			Vector2i(0, 0):
+				assert_true(indicator.position.x > center.x, "RIGHT facing offsets the indicator toward the right edge")
+			Vector2i(1, 0):
+				assert_true(indicator.position.y > center.y, "DOWN facing offsets the indicator toward the bottom edge")
+			Vector2i(2, 0):
+				assert_true(indicator.position.x < center.x, "LEFT facing offsets the indicator toward the left edge")
+			Vector2i(3, 0):
+				assert_true(indicator.position.y < center.y, "UP facing offsets the indicator toward the top edge")
+
+
 func test_sharpened_weapon_adds_one_raw_damage_before_resistance() -> void:
 	var controller := _make_controller(3, 3)
 	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)

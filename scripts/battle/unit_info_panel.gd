@@ -5,14 +5,28 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const HEALTHY_THRESHOLD := 0.66
 const WOUNDED_THRESHOLD := 0.33
 
+## Cardinal Unit.facing -> its translation key (see translations/en.tres'
+## battle.facing.* entries). Shown in both the hovered and selected sections
+## (unlike class/HP/wound, which are side-conditional) -- Steps 2/3 of this
+## plan (critical hits, flanking) make an enemy's facing just as tactically
+## relevant as an ally's.
+const FACING_KEYS := {
+	Vector2i.RIGHT: "battle.facing.east",
+	Vector2i.LEFT: "battle.facing.west",
+	Vector2i.UP: "battle.facing.north",
+	Vector2i.DOWN: "battle.facing.south",
+}
+
 @onready var empty_label: Label = $Content/EmptyLabel
 @onready var hovered_section: VBoxContainer = $Content/HoveredSection
 @onready var hovered_name_label: Label = $Content/HoveredSection/NameLabel
+@onready var hovered_facing_label: Label = $Content/HoveredSection/FacingLabel
 @onready var hovered_class_label: Label = $Content/HoveredSection/ClassLabel
 @onready var hovered_hp_label: Label = $Content/HoveredSection/HpLabel
 @onready var hovered_wound_label: Label = $Content/HoveredSection/WoundLabel
 @onready var selected_section: VBoxContainer = $Content/SelectedSection
 @onready var selected_name_label: Label = $Content/SelectedSection/NameLabel
+@onready var selected_facing_label: Label = $Content/SelectedSection/FacingLabel
 @onready var selected_class_label: Label = $Content/SelectedSection/ClassLabel
 @onready var selected_level_label: Label = $Content/SelectedSection/LevelLabel
 @onready var selected_hp_label: Label = $Content/SelectedSection/HpLabel
@@ -56,6 +70,7 @@ func clear() -> void:
 ## enemy's wound-tier row gaining a class label.
 func _populate_hovered(unit) -> void:
 	hovered_name_label.text = unit.display_name
+	hovered_facing_label.text = _facing_text(unit)
 
 	var is_player: bool = unit.side == BattleControllerScript.Side.PLAYER
 	hovered_class_label.visible = is_player
@@ -72,6 +87,7 @@ func _populate_hovered(unit) -> void:
 
 func _populate_selected(unit) -> void:
 	selected_name_label.text = unit.display_name
+	selected_facing_label.text = _facing_text(unit)
 
 	var is_player: bool = unit.side == BattleControllerScript.Side.PLAYER
 	selected_class_label.visible = is_player
@@ -95,6 +111,10 @@ func _populate_selected(unit) -> void:
 	selected_status_label.visible = not status_names.is_empty()
 	if not status_names.is_empty():
 		selected_status_label.text = ", ".join(status_names)
+
+
+func _facing_text(unit) -> String:
+	return tr("battle.unit_info.facing") % tr(FACING_KEYS.get(unit.facing, "battle.facing.east"))
 
 
 func _wound_tier_key(unit) -> String:

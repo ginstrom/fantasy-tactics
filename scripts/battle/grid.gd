@@ -118,3 +118,58 @@ func get_tile_distances(start: Vector2i, move_range: int, is_blocked: Callable) 
 
 	distances.erase(start)
 	return distances
+
+
+## Deterministic BFS route from start to target, inclusive of both endpoints,
+## or [] when target is unreachable within move_range. Mirrors
+## get_tile_distances()'s own BFS shape (same get_adjacent() neighbor order,
+## same is_blocked contract, same "first frontier to claim a tile wins" rule
+## via predecessors.has()) so the two never disagree about which tiles are
+## reachable -- but this one also retains predecessors, so callers that need
+## the actual route (not just its cost), such as
+## BattleController.try_move_selected_unit() deriving facing from the
+## route's final edge, have one to walk. Neighbor order is get_adjacent()'s
+## own UP/DOWN/LEFT/RIGHT, so a target reachable by multiple equally-short
+## routes always resolves to the same one.
+func get_shortest_path(start: Vector2i, target: Vector2i, move_range: int, is_blocked: Callable) -> Array[Vector2i]:
+	if start == target:
+		return [start]
+
+	var predecessors := {}
+	var frontier: Array[Vector2i] = [start]
+
+	for _step in move_range:
+		var next_frontier: Array[Vector2i] = []
+		for pos in frontier:
+			for neighbor in get_adjacent(pos):
+				if neighbor == start or predecessors.has(neighbor):
+					continue
+				if is_blocked.call(neighbor):
+					continue
+				predecessors[neighbor] = pos
+				next_frontier.append(neighbor)
+		frontier = next_frontier
+		if predecessors.has(target):
+			break
+
+	if not predecessors.has(target):
+		return []
+
+	var path: Array[Vector2i] = [target]
+	var current := target
+	while current != start:
+		current = predecessors[current]
+		path.append(current)
+	path.reverse()
+	return path
+
+
+## Combat-only adjacency: true for any of the eight neighboring tiles,
+## cardinal or diagonal. Movement/pathing must keep using get_adjacent()
+## (four-directional only, see get_shortest_path()/get_tile_distances());
+## this helper is for melee attack legality only (weapons whose maximum
+## range is one -- see battle_controller.gd's diagonal-melee slice).
+func is_attack_adjacent(a: Vector2i, b: Vector2i) -> bool:
+	var delta_x: int = abs(a.x - b.x)
+	var delta_y: int = abs(a.y - b.y)
+	return max(delta_x, delta_y) == 1

@@ -94,6 +94,46 @@ func test_equidistant_enemies_are_tie_broken_by_reading_order() -> void:
 	)
 
 
+## BattleController.get_legal_attack_targets() now allows a range-one weapon
+## to strike any of the eight neighboring tiles (see Grid.is_attack_adjacent()
+## and battle_controller.gd's diagonal-melee slice). The bot must drive that
+## same public rule (controller.get_legal_attack_targets(unit).has(target)),
+## not its own four-directional controller.grid.get_adjacent() check, so a
+## diagonally-adjacent enemy is attacked in place rather than stepped toward.
+func test_attacks_a_diagonally_adjacent_enemy_instead_of_moving() -> void:
+	var controller := _make_controller(6, 6)
+	var player := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)
+	var enemy := UnitScript.new(Vector2i(3, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [player, enemy]
+	controller.hit_roll = func() -> float: return 0.0
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(player.grid_position, Vector2i(2, 2), "Already diagonally adjacent: unit should not move")
+	assert_eq(player.action_points_remaining, 0, "Adjacent attacks spend the full AP budget")
+	assert_eq(steps.size(), 1)
+	assert_eq(steps[0].type, "attack")
+	assert_eq(steps[0].defender, enemy)
+
+
+## Mirrors test_moves_then_attacks_in_the_same_turn_once_in_range: the bot
+## moves the unit adjacent, then attacks -- and both the move step and the
+## attack step must update the acting unit's facing (see Unit.facing /
+## BattleController.try_move_selected_unit()/try_attack_selected_unit()),
+## since the bot drives those same public methods.
+func test_take_player_turn_updates_facing_on_move_and_on_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var player := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var enemy := UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [player, enemy]
+	controller.hit_roll = func() -> float: return 0.0
+
+	BattleBot.take_player_turn(controller)
+
+	assert_eq(player.grid_position, Vector2i(1, 0))
+	assert_eq(player.facing, Vector2i.RIGHT, "Attacking a target directly to the east must face the attacker east")
+
+
 ## BattleController._best_move_toward() seeds has_candidate := false, so the
 ## first legal move is accepted unconditionally and the unit always relocates
 ## when any legal move exists — even one that does not close the gap. The bot

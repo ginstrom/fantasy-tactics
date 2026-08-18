@@ -48,6 +48,11 @@ const TARGET_ATTACK_COLOR := Color(1.0, 0.2, 0.2, 0.65)
 ## selected unit's current position, but attackable after moving to a green
 ## move-and-attack tile first (see _update_highlights()).
 const MOVE_AND_ATTACK_TARGET_COLOR := Color(1.0, 0.65, 0.1, 0.65)
+## High-contrast marker for the per-unit facing indicator (see _draw_units()/
+## _add_facing_indicator()) -- readable on top of every player and enemy
+## unit color.
+const FACING_INDICATOR_COLOR := Color(1, 1, 1, 0.85)
+const FACING_INDICATOR_SIZE := 12.0
 
 enum Side { PLAYER, ENEMY }
 ## CONTEXTUAL is the opening and reset mode (see _select_unit()): an empty
@@ -141,6 +146,7 @@ func _ready() -> void:
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
 		if GameSession.owned_item_instances.has(armor_instance_id):
 			player_unit.rune_id = str(GameSession.owned_item_instances[armor_instance_id].get("rune_id", ""))
+		player_unit.facing = Vector2i.RIGHT
 		units.append(player_unit)
 	var enemy_count: int = enemy_stats.get("count", 1)
 	var enemy_type_name: String = tr(enemy_stats.name_key)
@@ -155,6 +161,7 @@ func _ready() -> void:
 		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
 		enemy_unit.display_name = "%s %d" % [enemy_type_name, index + 1]
 		enemy_unit.enemy_type_name = enemy_type_name
+		enemy_unit.facing = Vector2i.LEFT
 		units.append(enemy_unit)
 	# Round one is a new round too: open it with the first party member
 	# already selected rather than forcing a manual pick. Assigned directly
@@ -349,12 +356,22 @@ func get_legal_attack_targets(unit) -> Array:
 			blocking_tiles.append(candidate.grid_position)
 	for target in units:
 		if target.side != unit.side and target.is_alive():
-			var distance: int = grid.get_manhattan_distance(unit.grid_position, target.grid_position)
-			if distance < unit.attack_min_range or distance > unit.attack_max_range:
+			if not _in_attack_range(unit, unit.grid_position, target.grid_position):
 				continue
 			if grid.has_line_of_sight(unit.grid_position, target.grid_position, blocking_tiles):
 				legal_targets.append(target)
 	return legal_targets
+
+
+## Weapons whose maximum range is one may target any of the eight
+## neighboring tiles (see Grid.is_attack_adjacent()) -- melee attacks are
+## diagonal-capable even though movement stays cardinal-only. Ranged weapons
+## keep the existing Manhattan min/max range contract untouched.
+func _in_attack_range(unit, from_pos: Vector2i, target_pos: Vector2i) -> bool:
+	if unit.attack_max_range == 1:
+		return grid.is_attack_adjacent(from_pos, target_pos)
+	var distance: int = grid.get_manhattan_distance(from_pos, target_pos)
+	return distance >= unit.attack_min_range and distance <= unit.attack_max_range
 
 
 func get_attackable_tiles_for_unit(unit) -> Array[Vector2i]:
@@ -364,7 +381,24 @@ func get_attackable_tiles_for_unit(unit) -> Array[Vector2i]:
 	for candidate in units:
 		if candidate != unit and candidate.is_alive():
 			blocking_tiles.append(candidate.grid_position)
+	if unit.attack_max_range == 1:
+		return _melee_attackable_tiles(unit.grid_position, blocking_tiles)
 	return grid.get_attackable_tiles(unit.grid_position, unit.attack_min_range, unit.attack_max_range, blocking_tiles)
+
+
+## Eight-neighbor counterpart to Grid.get_attackable_tiles() for range-one
+## weapons, so the attack-range highlight (_update_highlights()) always
+## matches what get_legal_attack_targets()/_in_attack_range() actually allow.
+func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i]) -> Array[Vector2i]:
+	var attackable: Array[Vector2i] = []
+	for delta_x in range(-1, 2):
+		for delta_y in range(-1, 2):
+			if delta_x == 0 and delta_y == 0:
+				continue
+			var tile := from_pos + Vector2i(delta_x, delta_y)
+			if grid.is_in_bounds(tile) and grid.has_line_of_sight(from_pos, tile, blocking_tiles):
+				attackable.append(tile)
+	return attackable
 
 
 ## Automated move-and-attack targeting: the cheapest green-range tile (see
@@ -414,8 +448,7 @@ func _classify_move_and_attack_failure(attacker, target) -> String:
 	var legal_unaffordable_found := false
 	var affordable_in_range_found := false
 	for tile in reachable:
-		var distance: int = grid.get_manhattan_distance(tile, target.grid_position)
-		if distance < attacker.attack_min_range or distance > attacker.attack_max_range:
+		if not _in_attack_range(attacker, tile, target.grid_position):
 			continue
 		var move_cost: int = int(reachable[tile]) * MOVE_ACTION_POINT_COST
 		if move_cost + BASIC_ATTACK_ACTION_POINT_COST <= attacker.action_points_remaining:
@@ -429,6 +462,13 @@ func _classify_move_and_attack_failure(attacker, target) -> String:
 	return "out_of_range"
 
 
+## Route (not just destination legality) comes from grid.get_shortest_path():
+## its inclusive start-to-target path both proves the destination reachable
+## within the unit's remaining AP and supplies the route's final edge, which
+## sets the mover's facing (see Unit.set_facing()) -- deliberately not
+## inferred from sign(target - origin), which would disagree with
+## get_shortest_path()'s own get_adjacent()-ordered tie-break on an ambiguous
+## multi-tile route.
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
 		return false
@@ -436,12 +476,16 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 		return false
 	if selected_unit.side != active_side:
 		return false
-	if not target in get_legal_moves(selected_unit):
+
+	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+	var move_range: int = selected_unit.action_points_remaining / MOVE_ACTION_POINT_COST
+	var path: Array[Vector2i] = grid.get_shortest_path(selected_unit.grid_position, target, move_range, is_blocked)
+	if path.size() < 2:
 		return false
 
-	var distances := _move_distances(selected_unit)
 	selected_unit.grid_position = target
-	selected_unit.action_points_remaining -= distances[target] * MOVE_ACTION_POINT_COST
+	selected_unit.action_points_remaining -= (path.size() - 1) * MOVE_ACTION_POINT_COST
+	selected_unit.set_facing(path[-1] - path[-2])
 	last_attack_result = {}
 	last_targeting_failure = {}
 	return true
@@ -483,6 +527,11 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		var distances := _move_distances(selected_unit)
 		selected_unit.grid_position = move_tile
 		selected_unit.action_points_remaining -= int(distances[move_tile]) * MOVE_ACTION_POINT_COST
+
+	# The attacker turns to face the defender from its (possibly just-moved-to)
+	# position, whether the strike lands or not -- see Unit.set_facing()'s
+	# same wider-axis-wins tie rule, used here for a diagonal or ranged shot.
+	selected_unit.set_facing(target.grid_position - selected_unit.grid_position)
 
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
 	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
@@ -571,6 +620,7 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 		return try_attack_selected_unit(target)
 	if selected_unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return false
+	selected_unit.set_facing(direction)
 	selected_unit.grid_position = target
 	selected_unit.action_points_remaining -= MOVE_ACTION_POINT_COST
 	last_attack_result = {}
@@ -710,8 +760,7 @@ func _best_enemy_move(unit, target) -> Vector2i:
 
 
 func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
-	var distance: int = grid.get_manhattan_distance(from_pos, target.grid_position)
-	if distance < unit.attack_min_range or distance > unit.attack_max_range:
+	if not _in_attack_range(unit, from_pos, target.grid_position):
 		return false
 	var blocking_tiles: Array[Vector2i] = []
 	for candidate in units:
@@ -905,6 +954,23 @@ func _draw_units() -> void:
 		body.color = unit.color
 		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		unit_container.add_child(body)
+		_add_facing_indicator(body, unit)
+
+
+## A small high-contrast square offset from the unit body's center toward the
+## edge unit.facing points at -- the board's only visible cue for a unit's
+## orientation, which Steps 2/3 of this plan (critical hits, flanking) reason
+## about for attack geometry.
+func _add_facing_indicator(body: ColorRect, unit) -> void:
+	var indicator := ColorRect.new()
+	indicator.name = "FacingIndicator"
+	indicator.size = Vector2(FACING_INDICATOR_SIZE, FACING_INDICATOR_SIZE)
+	indicator.color = FACING_INDICATOR_COLOR
+	indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var center: Vector2 = body.size / 2.0 - indicator.size / 2.0
+	var edge_offset: float = body.size.x / 2.0 - FACING_INDICATOR_SIZE
+	indicator.position = center + Vector2(unit.facing) * edge_offset
+	body.add_child(indicator)
 
 
 ## Full-tile overlay used for every highlight_container fill (movement tiers,

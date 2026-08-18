@@ -34,7 +34,7 @@ static func _take_unit_actions(controller, unit) -> Array:
 		var target = _nearest_living_enemy(controller, unit.grid_position)
 		if target == null:
 			break
-		if target.grid_position in controller.grid.get_adjacent(unit.grid_position):
+		if controller.get_legal_attack_targets(unit).has(target):
 			if controller.try_attack_selected_unit(target.grid_position):
 				steps.append(controller.last_attack_result)
 				continue

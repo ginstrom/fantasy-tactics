@@ -108,6 +108,42 @@ func test_normalize_preserves_explicit_unit_fields_over_shorthand_defaults() -> 
 	assert_eq(unit.modifiers, {"max_health": 5})
 
 
+## --- facing: normalized defaults mirror production side defaults -----------
+
+func test_normalize_defaults_facing_to_the_sides_production_default() -> void:
+	var scenario := ScenarioContract.normalize(_minimal_raw_scenario())
+
+	assert_eq(scenario.player.units[0].facing, "right")
+	assert_eq(scenario.enemy.units[0].facing, "left")
+
+
+func test_normalize_preserves_an_explicit_unit_facing() -> void:
+	var raw := {
+		"scenario_id": "explicit_facing",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "facing": "down"}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+
+	assert_eq(scenario.player.units[0].facing, "down")
+
+
+func test_validate_rejects_an_invalid_facing() -> void:
+	var raw := {
+		"scenario_id": "invalid_facing",
+		"player": {
+			"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "facing": "sideways"}],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "invalid_facing"), "Expected an invalid_facing error, got: %s" % [errors])
+
+
 func test_normalize_does_not_mutate_its_input() -> void:
 	var raw := _minimal_raw_scenario()
 	var raw_copy := raw.duplicate(true)

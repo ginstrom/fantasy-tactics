@@ -566,6 +566,39 @@ func test_unit_info_panel_selected_section_shows_exact_hp_ap_name_class_level_an
 	)
 
 
+## Facing is shown for both the selected and hovered sections (see
+## unit_info_panel.gd's FacingLabel wiring) -- unlike class/HP/wound, it is
+## never side-conditional, since Steps 2/3 of this plan (critical hits,
+## flanking) make an enemy's facing just as tactically relevant as an ally's.
+func test_unit_info_panel_selected_section_shows_the_selected_units_facing() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	warrior.facing = Vector2i.DOWN
+	battlefield.grid._select_unit(warrior)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_eq(
+		panel.get_node("Content/SelectedSection/FacingLabel").text,
+		tr("battle.unit_info.facing") % tr("battle.facing.south")
+	)
+
+
+func test_unit_info_panel_hovered_section_shows_the_hovered_units_facing() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.facing = Vector2i.UP
+
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel: Control = battlefield.unit_info_panel
+	assert_eq(
+		panel.get_node("Content/HoveredSection/FacingLabel").text,
+		tr("battle.unit_info.facing") % tr("battle.facing.north")
+	)
+
+
 ## Hovering an enemy while a player unit is selected is the panel's core new
 ## scenario: both halves must render at once, from two different units.
 func test_unit_info_panel_shows_hovered_enemy_and_selected_player_simultaneously() -> void:

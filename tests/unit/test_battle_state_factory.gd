@@ -68,6 +68,32 @@ func test_build_selects_the_first_living_player_unit_and_starts_on_the_player_si
 	assert_eq(controller.selected_unit.side, BattleControllerScript.Side.PLAYER)
 
 
+## --- facing: scene-free defaults mirror production, overrides are honored ---
+
+func test_build_hydrates_default_facing_matching_production_side_defaults() -> void:
+	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	var grunt = controller.get_unit_at(Vector2i(5, 5))
+	assert_eq(hero.facing, Vector2i.RIGHT, "A scene-free player unit must start facing right, matching production")
+	assert_eq(grunt.facing, Vector2i.LEFT, "A scene-free enemy unit must start facing left, matching production")
+
+
+func test_build_honors_an_explicit_scenario_facing_override() -> void:
+	var scenario := _normalized({
+		"scenario_id": "facing_override",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "facing": "down"}]},
+		"enemy": {"units": [{"id": "grunt", "template_id": "goblin", "position": {"x": 5, "y": 5}, "facing": "up"}]},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	assert_eq(controller.get_unit_at(Vector2i(0, 0)).facing, Vector2i.DOWN)
+	assert_eq(controller.get_unit_at(Vector2i(5, 5)).facing, Vector2i.UP)
+
+
 ## --- end_turn() round-start reselection ---------------------------------------
 ## BattleController.end_turn() re-selects the first living player unit via
 ## its own _first_living_player_unit(), which walks _player_adventurer_ids

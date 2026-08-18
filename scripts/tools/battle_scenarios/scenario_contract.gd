@@ -58,6 +58,11 @@ const DEFAULT_ENEMY_POLICY := "current_enemy_policy"
 const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout"]
 const KNOWN_ENEMY_TEMPLATES: Array[String] = ["goblin", "orc", "kobold", "hobgoblin"]
 
+# JSON-safe facing values a unit record may declare (see _normalize_side()'s
+# per-side default and facing_from_string(), which BattleStateFactory uses to
+# hydrate the real Unit.facing Vector2i).
+const KNOWN_FACINGS: Array[String] = ["right", "left", "up", "down"]
+
 
 ## Fills every optional field with its documented default and expands each
 ## side's count/template_id shorthand into an explicit, positioned unit
@@ -163,11 +168,34 @@ static func position_from_dict(raw) -> Vector2i:
 	return Vector2i.ZERO
 
 
+## Reads a normalized unit's JSON-safe "facing" string (see KNOWN_FACINGS)
+## back into the Vector2i Unit.facing expects. An unrecognized value falls
+## back to RIGHT -- validate() is what actually rejects one before
+## construction, so this is never reached with anything outside
+## KNOWN_FACINGS on a validated scenario.
+static func facing_from_string(value: String) -> Vector2i:
+	match value:
+		"left":
+			return Vector2i.LEFT
+		"up":
+			return Vector2i.UP
+		"down":
+			return Vector2i.DOWN
+		_:
+			return Vector2i.RIGHT
+
+
 static func _normalize_side(raw_side: Dictionary, side_label: String) -> Dictionary:
 	var default_positions: Array = (
 		BattleControllerScript.PLAYER_START_POSITIONS if side_label == "player" else BattleControllerScript.ENEMY_START_POSITIONS
 	)
 	var default_template: String = "warrior" if side_label == "player" else "goblin"
+	# Mirrors BattleController._ready()'s own production side defaults (player
+	# RIGHT, enemy LEFT -- see battle_controller.gd's explicit post-construction
+	# assignment), kept as a JSON-safe string here since this contract never
+	# touches Vector2i (see facing_from_string(), which BattleStateFactory uses
+	# to hydrate the real Unit.facing value).
+	var default_facing: String = "right" if side_label == "player" else "left"
 
 	var raw_units: Array = raw_side.get("units", [])
 	if raw_units.is_empty() and raw_side.has("template_id"):
@@ -199,6 +227,7 @@ static func _normalize_side(raw_side: Dictionary, side_label: String) -> Diction
 		)
 		var modifiers: Dictionary = raw_unit.get("modifiers", {})
 		unit["modifiers"] = modifiers.duplicate(true)
+		unit["facing"] = String(raw_unit.get("facing", default_facing))
 		units.append(unit)
 
 	return {"units": units}
@@ -254,6 +283,10 @@ static func _validate_side(
 			errors.append(
 				"out_of_bounds: %s unit %s position %s is outside the %dx%d board" % [side_label, unit_id, pos, width, height]
 			)
+
+		var facing: String = String(unit.get("facing", ""))
+		if not facing in KNOWN_FACINGS:
+			errors.append("invalid_facing: %s unit %s has unknown facing \"%s\"" % [side_label, unit_id, facing])
 	return errors
 
 

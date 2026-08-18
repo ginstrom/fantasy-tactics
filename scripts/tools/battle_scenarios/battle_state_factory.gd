@@ -161,6 +161,7 @@ static func _build_player_unit(spec: Dictionary, index: int):
 		TranslationServer.translate(weapon.get("name_key", "")), String(spec.id), defense, resistance, 0, might
 	)
 	unit.display_name = String(spec.id)
+	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "right")))
 	return unit
 
 
@@ -191,4 +192,5 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	)
 	unit.display_name = String(spec.id)
 	unit.enemy_type_name = TranslationServer.translate(base.get("name_key", ""))
+	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "left")))
 	return unit

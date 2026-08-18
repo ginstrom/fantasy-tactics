@@ -54,6 +54,16 @@ var rune_id: String = ""
 # Status ids map to their remaining lifetime. Current statuses last through
 # the active round and are cleared as the next player round begins.
 var statuses: Dictionary = {}
+# Cardinal facing (one of the four unit vectors below): which way this unit
+# is oriented on the battlefield. BattleController assigns the side default
+# in _ready() (see also BattleStateFactory, which hydrates the same default
+# from ScenarioContract's normalized "facing" field), then keeps it current
+# via set_facing() as the unit moves and attacks (see
+# BattleController.try_step_selected_unit()/try_move_selected_unit()/
+# try_attack_selected_unit()). Read by the board renderer's facing indicator
+# and the unit info panel, and by Steps 2/3 of this plan (critical hits,
+# flanking) for attack geometry.
+var facing: Vector2i = Vector2i.RIGHT
 
 
 func _init(
@@ -88,6 +98,19 @@ func _init(
 	resistance = p_resistance
 	kill_xp = p_kill_xp
 	might = p_might
+
+
+## Normalizes any non-zero vector to its primary cardinal direction: whichever
+## axis has the larger magnitude wins, ties resolving toward the x-axis --
+## the same rule try_attack_selected_unit() uses to turn an attacker to face
+## a diagonal or ranged target. A zero vector leaves facing unchanged.
+func set_facing(direction: Vector2i) -> void:
+	if direction == Vector2i.ZERO:
+		return
+	if abs(direction.x) >= abs(direction.y):
+		facing = Vector2i(sign(direction.x), 0)
+	else:
+		facing = Vector2i(0, sign(direction.y))
 
 
 func is_alive() -> bool:
