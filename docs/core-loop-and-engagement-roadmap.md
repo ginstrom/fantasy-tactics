@@ -1,9 +1,11 @@
 # Core Loop Completion and Engagement Roadmap
 
-> **Status:** Decision-gated product roadmap — the loop and sequencing are
-> approved in principle, but the decisions in
+> **Status:** Decision-recorded product roadmap — the blocking campaign
+> decisions (D1–D5) from
 > [`core-loop-and-engagement-required-decisions.md`](core-loop-and-engagement-required-decisions.md)
-> must be resolved before this becomes an implementation contract.
+> are incorporated below. D6–D9 remain feature-slice decisions; assign their
+> owners and decision dates before treating this as a complete implementation
+> contract.
 
 ## Goal
 
@@ -63,22 +65,27 @@ The core loop is complete when a fresh campaign can, without debug tools:
 
 ### 1. Lock the campaign contract and durable state
 
-Define the first campaign as a 60–90 minute Borderlands-cleared arc (~10–15
-battles total). Specify the three encounter tiers, their authored objectives,
-their unlock conditions, and the final boss encounter.
+Define the first campaign as a 60–90 minute Borderlands-cleared arc of twelve
+required battles: three tiers of three authored encounters, a two-battle
+pre-boss sequence, and one final boss. Each next node unlocks only when its
+campaign-objective prerequisite is complete; repeatable free-play vacancies
+appear only after victory.
 
-- **Party Scope:** Exactly 1 active party (`party_001`). Resolve the starting
-  and upgraded party-size sequence before implementation; the current game
-  supports four members at Guild Hall level 1 and five at level 2. Multi-party
-  coordination remains post-campaign work.
+- **Party Scope:** Exactly 1 active party (`party_001`). Start with three
+  deployable slots, then upgrade to four and five. The initial roster may have
+  more than three adventurers, but only three deploy. Multi-party coordination
+  remains post-campaign work.
 - **Campaign vs Sandbox State:** Track campaign milestone progression in
   `GameSession` separately from repeatable encounter vacancies. Persist a
   versioned campaign state containing the current objective, completed
   objective ids, unlocked authored encounters, final-victory state, and
   post-victory free-play state. Respawns must never reopen or invalidate a
-  completed objective.
-- **Authored Arc:** Define a fixed objective graph that supplies the promised
-  10–15 battles. Repeatable vacancies are free-play content, not a source of
+  completed objective. The final boss atomically records victory, shows a
+  dedicated victory screen, and unlocks clearly labelled free play; free play
+  never modifies completed objectives or replays that screen.
+- **Authored Arc:** Every authored node declares an objective id, exact enemy
+  composition, prerequisite, reward, intended counterplay, and loss
+  consequence. Repeatable vacancies are free-play content, not a source of
   required campaign battles or progression gates.
 - **Onboarding Flow:** Starting a new game routes directly to party formation
   with clear guidance toward the first objective (for example, clearing the
@@ -97,10 +104,10 @@ Core Encampment Hubs:
 
 | Building Hub | Core Role | Progression & Tier Unlocks |
 |---|---|---|
-| **Guild Hall** | Roster & Party Capacity | Raises the resolved party-size cap and houses general recruitment (Warrior, Scout). Do not promise a roster cap until one is specified and implemented. |
-| **Temple** | Sustain & Faith | Recruits Clerics, provides encampment healing/blessing services, accelerates wound recovery. |
+| **Guild Hall** | Roster & Party Capacity | Raises deployment from 3 to 4 to 5 and houses general recruitment (Warrior, Scout). Tier 1 holds up to 10 roster members and 4 recruitable offers; tier 2 holds 15 and 6 respectively. When a new offer arrives to a full pool, remove the oldest offer. |
+| **Temple** | Sustain & Faith | Recruits Clerics and provides one encampment blessing. The first Cleric slice adds one targeted in-battle heal and one temporary protection effect; it does not add a broad spell tree or Mage prerequisites. |
 | **Blacksmith & Workshops** | Physical & Magical Gear | Weapon/armor crafting, sharpening (Blacksmith), healing potions (Alchemy), rune upgrades (Runic). |
-| **Shop & Stores** | Economy & Supplies | Sells encounter loot and buys basic weapons, armor, and provisions. It also owns the campaign's passive-income rule; its exact base, upgrade amount, and time-advance path are decision-gated. |
+| **Shop & Stores** | Economy & Supplies | Sells encounter loot and buys basic weapons, armor, and provisions. It supplies 2 gold/turn at tier 1 (iron arms), 5 gold/turn at tier 2 (steel arms), and 10 gold/turn at tier 3 (2–8 HP healing potions for 20 gold). |
 
 **Milestone:** A fresh player can afford and understand the first upgrade,
 then see it unlock a new recruit, tool, or capability before tier 2.
@@ -115,9 +122,10 @@ remove legacy manual Attack-spending.
    protects allies, and punishes flanking enemies.
 2. **Scout (Ranged Pressure & Reconnaissance):** High Accuracy and AP. On the
    tactical grid, delivers safe ranged attacks. On the World Map, provides
-   **Strategic Reconnaissance** (reveals exact enemy composition, danger rating,
-   and potential loot drops before entering an encounter). Specify which of
-   those facts are exact, which are ranges, and how the player reads them.
+   **Strategic Reconnaissance** (reveals exact enemy types and counts, danger
+   tier, and reward categories—gold band, crystal tier, and possible gear—before
+   entering an encounter). It does not reveal random-roll outcomes, enemy
+   positions, or every future ability.
 3. **Cleric (Sustain & Protection):** Moderate durability, blunt melee, and
    in-combat healing/protection spells. Mitigates attrition without trivializing
    defeat risk.
@@ -130,10 +138,14 @@ abilities, save state, deterministic scenarios, and `make check` all agree.
 
 ### 4. Build the encounter and reward ladder
 
-Create authored tier-1, tier-2, tier-3, and final boss encounter templates.
-For every required battle, define its objective id, exact composition,
-prerequisite, reward, intended counterplay, and failure consequence. Calibrate
-rewards against the resolved economy contract rather than fixed averages alone:
+Create three authored encounters in each of tiers 1–3, a two-battle pre-boss
+sequence, and a final boss. For every required battle, define its objective id,
+exact composition, prerequisite, reward, intended counterplay, and failure
+consequence. Monster threat rises over world turns; its timing must allow a
+party of five to reach about level 6, make several Encampment upgrades, and
+reach the final boss. Show the resulting threat level as 1–5 star icons in the
+UI. Calibrate rewards against the resolved economy contract rather than fixed
+averages alone:
 
 - **Tier 1 (Goblins / Kobolds):** Teaches formation, directional facing,
   flanking, and returning with loot.
@@ -154,18 +166,29 @@ Enforce high stakes through permanent loss while guarding against unrecoverable
 campaign soft locks:
 
 - **Unit Permadeath:** Define the battle state that constitutes a death and
-  permanently remove that unit from the roster and party. Resolve the fate of
-  carried, equipped, and unique modified gear atomically; it cannot be left
-  owned by a removed adventurer.
-- **Expedition Defeat / Wipe:** If all party members fall or retreat, the
-  expedition fails. The party is routed back to the Encampment, unbanked battle
-  and pending loot are lost, and the resolved recovery-time rule applies. State
-  whether retreat is an explicit player action or only the result of a wipe.
+  permanently remove a unit at battle resolution when it reaches 0 HP. Validate
+  all state before mutation, then transfer its equipped, carried, and unique
+  modified items atomically to the party loot pool, returning them to the
+  Encampment bank after a successful retreat. A dead id may not remain in party
+  members, item ownership, save data, or battle-aftermath input.
+- **Retreat & Wipe:** Add a Retreat button at the lower left of the bottom
+  panel, alongside Move, Action, and End Turn. On retreat, apply the
+  nearest-enemy consequence below and leave the party over the encounter
+  location; on a party wipe, return to the Encampment and lose all gold and
+  loot. In either case, discard unbanked/pending rewards.
+
+  | Nearest enemy distance | No remaining-HP loss | 10% loss | 50% loss | Death |
+  |---|---:|---:|---:|---:|
+  | 1–3 | 10% | 30% | 30% | 30% |
+  | 4–6 | 20% | 50% | 10% | 10% |
+  | 7+ | 50% | 30% | 10% | 10% |
+
 - **Soft-Lock Prevention & Encampment Income:** Guarantee an affordable
   level-1 replacement and a player-accessible way to advance recovery time
-  after a wipe or bankruptcy. The passive-income amount, its Shop-tier scaling,
-  and whether time can advance from the Encampment are explicit decisions, not
-  assumptions.
+  after a wipe or bankruptcy. Every turn advances healing, jobs, recruitment
+  vacancies, and the Shop income above even when no party is deployable. Test
+  zero-gold, no-party, repeated-retreat, and wipe states through to a legal
+  replacement party.
 
 **Milestone:** Unit death, party retreat, recruitment replenishment, and
 recovery paths are fully tested and prevent dead ends.
@@ -180,8 +203,8 @@ prove a campaign is completable.
 
 - Run headless campaign passes measuring rounds, damage, survival rate,
   gold velocity, and upgrade progression.
-- Execute manual playthroughs from clean save to final victory, including
-  at least one party setback/rebuilding loop.
+- Execute manual playthroughs from a clean save to final victory, including a
+  setback/rebuilding loop from a zero-gold wipe.
 
 **Milestone:** A clean campaign consistently reaches victory without soft
 locks or opaque mechanics, and `make check` passes.
@@ -214,25 +237,35 @@ clarity and game feel.
 - **Audio Controls:** Master, Music, and SFX volume buses with complete visual
   feedback parity when sound is muted.
 
-**Milestone:** Screenshots, audio tours, and manual play confirm that 3/4
-top-down graphics and audio elevate clarity and game feel without obscuring
-tactical information.
+**Milestone:** Screenshots, an audio checklist, and a manual clarity test cover
+tactical selection, facing, hit results, wounds, objectives, gates, and mute
+parity without obscuring tactical information.
 
 ## Decisions Locked
 
-1. **Campaign Scope:** 60–90 minute compact Borderlands campaign (~10–15 battles).
-2. **Party Count:** Exactly 1 deployed party for Campaign 1; Guild Hall scales
-   party size using the sequence selected in the decision register.
-3. **Third Root Class:** Cleric (combat sustain, holy protection, Temple synergy).
-4. **Visual Perspective & Assets:** 3/4 top-down perspective; hybrid asset
+1. **Campaign Scope:** 60–90 minute compact Borderlands campaign with twelve
+   required battles: three tiers of three, two pre-boss battles, and a final boss.
+2. **Party Count & Recruitment:** Exactly one deployed party starts at three
+   slots and upgrades to four then five; Guild Hall tier 1 caps the roster at
+   10 and recruitable offers at 4, tier 2 at 15 and 6, with oldest-offer removal
+   on overflow.
+3. **Defeat & Recovery:** Slain units are removed atomically at battle
+   resolution; retreat has distance-based HP-loss/death consequences, while a
+   wipe loses all gold and loot. Shop tiers provide 2/5/10 gold per turn and
+   all recovery systems advance without a deployable party.
+4. **Threat Visibility:** World-turn monster threat rises on a campaign pace
+   toward level 6 and several upgrades, and appears as 1–5 star icons.
+5. **Third Root Class:** Cleric (combat sustain, holy protection, Temple synergy).
+6. **Visual Perspective & Assets:** 3/4 top-down perspective; hybrid asset
    strategy beginning with simple, rapid placeholders and iterating.
 
 ## Required decisions
 
 The companion [required decision register](core-loop-and-engagement-required-decisions.md)
-contains the remaining product decisions, recommended defaults, alternatives,
-and the implementation consequences of each. Resolve its blocking decisions
-before changing this roadmap back to an approved implementation contract.
+records the implemented contract choices D1–D5. Assign an owner and decision
+date for D6 (Scout reconnaissance), D7 (Cleric and Temple scope), D8 (final
+encounter and free play), and D9 (presentation proof standard) before their
+feature slices begin.
 
 ## Sequencing Rule
 
