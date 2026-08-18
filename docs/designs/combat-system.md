@@ -54,6 +54,12 @@ Cover provides a direct bonus to `guard` against missile attacks:
 
 Units face left, right, up, or down. This impacts flanking and attacks of opportunity (see below).
 
+A player can chang the facing of a unit during their turn by right clicking in the direction the selected used should be faced.
+
+Also, if a unit is hit by an attack, its facing will automatically be changed to the direction of the attack. The facing can only be changed in this way once during a round.
+
+Ths facing mechanic models the mechanic in Xenonauts.
+
 ### Flanking
 Attack angles provide tactical modifiers:
 * **Side / Oblique Flank:** -20% defender Guard, +20% critical hit chance.
