@@ -178,9 +178,35 @@ func complete_battle() -> Error:
 	return go_to_world_map()
 
 
+## is_battle_lost() (the only real call site -- see battlefield.gd's
+## _apply_battle_outcome()) requires every player unit to already be dead, so
+## every real call here is unconditionally a full party wipe: apply the same
+## forfeiture GameSession.resolve_party_wipe() defines (lose all gold and
+## pending loot, keep completed objectives/buildings) before the party ever
+## reaches return_party_to_encampment() -> go_to_encampment(), which would
+## otherwise bank the now-already-cleared pending reward as a harmless no-op.
 func fail_battle() -> Error:
 	GameSession.abandon_current_encounter()
+	GameSession.resolve_party_wipe()
 	return return_party_to_encampment()
+
+
+## BattleController.try_retreat()'s routing decision (see battlefield.gd's
+## _on_retreat_resolved(), called after aftermath -- unit permadeath and
+## surviving HP -- is already persisted). abandon_current_encounter() alone
+## (not complete_current_encounter()) keeps the encounter active and
+## unconquered. Two outcomes: any surviving party member routes to the World
+## Map, landing back on the same encounter tile the party never left
+## (world_position is untouched by anything in this path); every unit having
+## died from the retreat's own risk roll is a full party wipe exactly like
+## fail_battle()'s, so it takes the identical forfeit-and-go-home path
+## instead.
+func retreat_from_battle() -> Error:
+	GameSession.abandon_current_encounter()
+	if GameSession.get_selected_party().get("member_ids", []).is_empty():
+		GameSession.resolve_party_wipe()
+		return return_party_to_encampment()
+	return go_to_world_map()
 
 
 func go_to_units() -> Error:

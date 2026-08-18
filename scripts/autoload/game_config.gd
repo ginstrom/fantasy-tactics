@@ -43,7 +43,9 @@ const DEFAULTS: Dictionary = {
 		"recruitment_vacancy_jitter_turns": 5,
 	},
 	"shop": {
-		"income_per_turn": 1,
+		"level_1_income": 2,
+		"level_2_income": 5,
+		"level_3_income": 10,
 	},
 }
 

@@ -30,6 +30,14 @@ func test_loads_flanking_config_values_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_float("combat", "rear_flank_crit_bonus", -1.0), 0.50)
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: passive Shop
+## income tiers (see game_session.gd's _shop_income_per_turn()).
+func test_loads_shop_income_tiers_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("shop", "level_1_income", -1), 2)
+	assert_eq(GameConfig.get_int("shop", "level_2_income", -1), 5)
+	assert_eq(GameConfig.get_int("shop", "level_3_income", -1), 10)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

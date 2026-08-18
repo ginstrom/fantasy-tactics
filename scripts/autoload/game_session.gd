@@ -414,7 +414,16 @@ var GUILD_HALL_MAX_LEVEL: int = 2
 const SHOP_UPGRADE_COST := 50
 const SHOP_LEVEL_ONE_GOLD_CAP := 100
 const SHOP_LEVEL_TWO_GOLD_CAP := 200
-var SHOP_INCOME_PER_TURN: int = 1
+# Passive per-turn gold income by Shop level (docs/designs/campaign-loop.md's
+# economy floor: 2/5/10 gold/turn at tiers 1/2/3). SHOP_INCOME_PER_TURN keeps
+# its established name for tier 1 -- every existing call site already reads
+# it as "the Shop's passive income" -- while LEVEL_2/LEVEL_3 are new tiers
+# read by _shop_income_per_turn(). A Shop level 3 upgrade path does not exist
+# yet (upgrade_shop() only reaches level 2); this tier is forward-looking for
+# when it does.
+var SHOP_INCOME_PER_TURN: int = 2
+var SHOP_INCOME_LEVEL_2: int = 5
+var SHOP_INCOME_LEVEL_3: int = 10
 # Legacy save compatibility only. New games always have a level-one Shop.
 var TRADING_POST_PURCHASE_COST: int = 50
 var TRADING_POST_INCOME_PER_TURN: int = 1
@@ -732,7 +741,9 @@ func _load_balance_config() -> void:
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_UPGRADE_COST = GameConfig.get_int("guild_hall", "upgrade_cost", GUILD_HALL_UPGRADE_COST)
 	GUILD_HALL_MAX_LEVEL = GameConfig.get_int("guild_hall", "max_level", GUILD_HALL_MAX_LEVEL)
-	SHOP_INCOME_PER_TURN = GameConfig.get_int("shop", "income_per_turn", SHOP_INCOME_PER_TURN)
+	SHOP_INCOME_PER_TURN = GameConfig.get_int("shop", "level_1_income", SHOP_INCOME_PER_TURN)
+	SHOP_INCOME_LEVEL_2 = GameConfig.get_int("shop", "level_2_income", SHOP_INCOME_LEVEL_2)
+	SHOP_INCOME_LEVEL_3 = GameConfig.get_int("shop", "level_3_income", SHOP_INCOME_LEVEL_3)
 	TRADING_POST_INCOME_PER_TURN = SHOP_INCOME_PER_TURN
 	ENCOUNTER_INSTANCE_CAP = GameConfig.get_int("population", "encounter_instance_cap", ENCOUNTER_INSTANCE_CAP)
 	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
@@ -1161,7 +1172,7 @@ func end_world_turn() -> bool:
 	_advance_alchemy_craft_job()
 	_advance_runic_craft_job()
 	if shop_level >= 1:
-		gold += SHOP_INCOME_PER_TURN
+		gold += _shop_income_per_turn()
 	if shop_level >= 1 and world_turn % 10 == 0:
 		shop_gold = max(shop_gold, shop_gold_cap())
 	_apply_natural_recovery()
@@ -1170,6 +1181,18 @@ func end_world_turn() -> bool:
 	_advance_encounter_vacancies()
 	_advance_recruitment_vacancies()
 	return auto_moved
+
+
+## Economy floor (docs/designs/campaign-loop.md): 2/5/10 gold per World Map
+## Turn at Shop tiers 1/2/3, gated by shop_level in end_world_turn() (level 0
+## -- the legacy "no Shop" state -- grants nothing there, so this never needs
+## its own zero case).
+func _shop_income_per_turn() -> int:
+	if shop_level >= 3:
+		return SHOP_INCOME_LEVEL_3
+	if shop_level >= 2:
+		return SHOP_INCOME_LEVEL_2
+	return SHOP_INCOME_PER_TURN
 
 
 func return_deployed_party_to_settlement() -> bool:
@@ -1375,6 +1398,16 @@ func merge_battle_loot_into_party() -> void:
 	battle_mana_crystals = {}
 
 
+## Discards this battle's own not-yet-shared loot store outright, the other
+## way a battle can end besides merge_battle_loot_into_party() -- see
+## BattleController.try_retreat(), which calls this instead of ever letting
+## a Retreat's loot reach the party's own pending_* store.
+func discard_battle_loot() -> void:
+	battle_reward = 0
+	battle_mana_crystals = {}
+	battle_gear = {}
+
+
 ## True whenever this battle's own loot store (battle_reward/battle_gear/
 ## battle_mana_crystals) still holds anything merge_battle_loot_into_party()
 ## has not yet folded into the party's carried store -- i.e. the window
@@ -1389,16 +1422,52 @@ func has_unsettled_battle_loot() -> bool:
 
 ## Merges the party's carried store into the Encampment's bank -- the other
 ## half of the shared _merge_counts() pair (see merge_battle_loot_into_
-## party() for the battle -> party merge).
+## party() for the battle -> party merge). pending_gear holds two different
+## kinds of key with the same id->count shape banked_gear/pending_gear
+## always used: an ordinary stackable item id (banked into banked_gear, same
+## as always) and -- since resolve_battle_deaths() -- a unique owned-item
+## instance id recovered from a slain adventurer's equipment (see that
+## function). An instance id must bank into banked_item_instance_ids
+## instead, preserving its one-of-a-kind modifier record rather than
+## folding it into a fungible count; _merge_counts() alone cannot tell the
+## two apart, so this walks pending_gear itself rather than reusing it.
 func deposit_pending_reward() -> int:
 	var deposited := pending_reward
 	gold += deposited
 	pending_reward = 0
-	_merge_counts(pending_gear, banked_gear)
-	_merge_counts(pending_mana_crystals, mana_crystals)
+	for item_id in pending_gear:
+		var count: int = int(pending_gear[item_id])
+		if count <= 0:
+			continue
+		if owned_item_instances.has(item_id):
+			if not banked_item_instance_ids.has(item_id):
+				banked_item_instance_ids.append(item_id)
+		else:
+			banked_gear[item_id] = banked_gear.get(item_id, 0) + count
 	pending_gear = {}
+	_merge_counts(pending_mana_crystals, mana_crystals)
 	pending_mana_crystals = {}
 	return deposited
+
+
+## Party-wipe forfeiture (docs/designs/campaign-loop.md's loss rule): every
+## pending pickup this run -- ordinary gear counts and any unique item
+## instances recovered from a fallen party member alike (see
+## resolve_battle_deaths()) -- plus this run's own unbanked reward and gold
+## already on hand are lost outright ("a wipe loses all gold and loot").
+## Preserved: completed campaign objectives, building levels, and anything
+## already banked before this run (banked_gear/mana_crystals/
+## banked_item_instance_ids are never touched here). A pending instance id's
+## owned_item_instances record is erased too -- it was never banked, so
+## nothing else still references it once this forfeits it.
+func resolve_party_wipe() -> void:
+	for item_id in pending_gear:
+		if owned_item_instances.has(item_id):
+			owned_item_instances.erase(item_id)
+	pending_reward = 0
+	pending_mana_crystals = {}
+	pending_gear = {}
+	gold = 0
 
 
 func get_max_party_size() -> int:
@@ -2471,6 +2540,56 @@ func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
 	var max_hp := get_effective_max_health(adventurer_id)
 	adventurers[adventurer_index]["health"] = clampi(amount, 1, max_hp)
 	return true
+
+
+## Unit permadeath transaction (docs/plans/2026-08-18-core-loop-and-
+## engagement/02-permadeath-retreat-and-economy-floor.md): called by
+## Battlefield._persist_battle_aftermath() -- before apply_battle_aftermath()
+## -- with every player unit's reported end-of-battle health, keyed by
+## adventurer id. Every reported id at or below 0 HP is a kill. Validation
+## (which ids actually name a live adventurer) runs to completion before any
+## mutation, so a batch containing an already-unknown id still resolves
+## every genuine kill in it rather than aborting the whole call. For each
+## confirmed kill, in order: its full carried and equipped gear (ordinary
+## stackable items and unique modified instances alike) moves atomically
+## into the party's own pending_gear store (see _transfer_dead_unit_gear_
+## to_pending()), its id is erased from every party's member_ids, and the
+## adventurer record itself is deleted from the roster -- so a dead id can
+## never remain in live session state afterward. A later successful retreat
+## or victory banks that gear through the existing settlement transition
+## (deposit_pending_reward()); a wipe forfeits it instead
+## (resolve_party_wipe()). owned_item_instances records are never deleted
+## here -- only resolve_party_wipe() ever discards a recovered instance
+## record, never a successful recovery. Returns the ids actually removed.
+func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
+	var dead_ids: Array[String] = []
+	for id_key in health_by_id:
+		var adventurer_id := String(id_key)
+		if int(health_by_id[id_key]) <= 0 and _has_adventurer(adventurer_id):
+			dead_ids.append(adventurer_id)
+
+	for adventurer_id in dead_ids:
+		_transfer_dead_unit_gear_to_pending(adventurer_id)
+		for party_index in parties.size():
+			parties[party_index].member_ids.erase(adventurer_id)
+		adventurers.remove_at(_get_adventurer_index(adventurer_id))
+	return dead_ids
+
+
+## Moves every item a slain adventurer carried -- weapons, armor, and
+## potions, active or spare alike, since a unit's *_inventory array already
+## lists everything it carries including its currently-active item -- into
+## the party's pending_gear store, one count per item id. Whether an id
+## later banks as a fungible count or a unique instance record is decided
+## once, at deposit_pending_reward() time (see its own doc comment), not
+## here.
+func _transfer_dead_unit_gear_to_pending(adventurer_id: String) -> void:
+	var adventurer := get_adventurer(adventurer_id)
+	var equipment: Dictionary = adventurer.get("equipment", {})
+	for slot in ["weapon", "armor", "potion"]:
+		for item_id in equipment.get("%s_inventory" % slot, []):
+			var id := str(item_id)
+			pending_gear[id] = pending_gear.get(id, 0) + 1
 
 
 ## Batch write-back used by the battlefield after victory or defeat.

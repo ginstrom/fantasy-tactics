@@ -1111,7 +1111,13 @@ func test_victory_aftermath_persists_surviving_player_unit_health() -> void:
 	assert_eq(GameSession.get_current_health("warrior_001"), 6, "Surviving unit health (6) persists after victory")
 
 
-func test_defeat_aftermath_persists_downed_player_units_at_one_health() -> void:
+## Superseded by permadeath (docs/plans/2026-08-18-core-loop-and-engagement/
+## 02-permadeath-retreat-and-economy-floor.md): a unit reduced to 0 HP by
+## battle's end is no longer floored back up to 1 -- it is permanently
+## removed from the roster. is_battle_lost() (which _apply_battle_outcome(false)
+## always follows in real play) requires every player unit to already be
+## dead, so a defeat with a single-member party is always a full wipe.
+func test_defeat_aftermath_permanently_removes_a_unit_that_reached_zero_health() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
@@ -1123,7 +1129,43 @@ func test_defeat_aftermath_persists_downed_player_units_at_one_health() -> void:
 
 	battlefield._apply_battle_outcome(false)
 
-	assert_eq(GameSession.get_current_health("warrior_001"), 1, "Downed units persist at 1 health on defeat")
+	assert_true(
+		GameSession.get_adventurer("warrior_001").is_empty(),
+		"A unit reduced to 0 HP is permanently removed from the roster, not downed to 1 HP"
+	)
+	assert_eq(GameSession.get_selected_party().member_ids, [] as Array[String])
+
+
+## The same permadeath rule holds for a unit that actually dies to a real
+## enemy attack mid-battle, not just one whose health a test sets directly --
+## regression coverage for the fact that try_attack_selected_unit() erases a
+## defeated unit from grid.units immediately (see BattleController.
+## defeated_player_health_by_id), so _persist_battle_aftermath() must still
+## be able to learn about it from there.
+func test_a_player_unit_killed_in_real_combat_is_permanently_removed_after_the_battle_resolves() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.grid_position = warrior.grid_position + Vector2i(1, 0)
+	goblin.damage_min = 999
+	goblin.damage_max = 999
+	battlefield.grid.selected_unit = goblin
+	battlefield.grid.active_side = BattleControllerScript.Side.ENEMY
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+
+	assert_true(battlefield.grid.try_attack_selected_unit(warrior.grid_position), "Test setup must actually land the kill")
+	battlefield._apply_battle_outcome(false)
+
+	assert_true(
+		GameSession.get_adventurer("warrior_001").is_empty(),
+		"A unit killed in real combat must be permanently removed once the battle resolves"
+	)
 
 
 ## Task 2: battle XP events (kill XP on an enemy defeat, clear XP on victory),
@@ -1610,6 +1652,42 @@ func test_action_bar_contains_move_and_attack_buttons() -> void:
 	)
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: the Retreat
+## button sits to the left of Move/Attack on the same ActionBar and, through
+## the real .tscn signal wiring (not a direct method call), invokes
+## BattleController.try_retreat().
+func test_action_bar_contains_a_retreat_button_left_of_move_and_attack() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.retreat_button.text, "battle.action.retreat")
+	assert_eq(
+		battlefield.retreat_button.get_parent(), battlefield.move_button.get_parent(),
+		"Retreat must share the ActionBar container with Move/Attack"
+	)
+	var action_bar: Node = battlefield.retreat_button.get_parent()
+	var children := action_bar.get_children()
+	assert_lt(
+		children.find(battlefield.retreat_button), children.find(battlefield.move_button),
+		"Retreat must be positioned to the left of Move"
+	)
+	assert_lt(
+		children.find(battlefield.move_button), children.find(battlefield.attack_button),
+		"Move must stay to the left of Attack"
+	)
+
+
+func test_clicking_retreat_button_invokes_try_retreat_through_the_real_signal_wiring() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var retreated: Array = []
+	battlefield.grid.retreat_resolved.connect(func(results: Array) -> void: retreated.append(results))
+
+	battlefield.retreat_button.emit_signal("pressed")
+
+	assert_eq(retreated.size(), 1, "The real button-press wiring must invoke try_retreat()")
+
+
 func test_clicking_move_button_activates_move_mode_and_highlights_it() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -1942,4 +2020,70 @@ func test_enemy_health_column_never_overlaps_the_battle_grid_even_with_wide_cont
 		enemy_health_scroll.get_global_rect().position.x >= grid_right_edge,
 		"The enemy health column must never grow wide enough to encroach on the battle grid"
 	)
+
+
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: end-to-end
+## Retreat aftermath. Follows testing.md's "waiting for a fire-and-forget
+## coroutine" pattern -- enemy_turn_beat_seconds is zeroed and GameSession.
+## selected_encounter (cleared only once GameManager.retreat_from_battle()
+## -> GameSession.abandon_current_encounter() actually runs) is the settle
+## sentinel.
+
+func test_a_survived_retreat_persists_hp_loss_discards_loot_and_stays_on_the_encounter_tile() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.set_deployed_party_position(encounter_position)
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	# Fresh battle start positions put the lone warrior and the goblin at
+	# Chebyshev distance 5 (the "mid" bucket): a 0.30 roll lands in
+	# [0.20, 0.70) -> a 10% HP loss (1 of 10 max HP).
+	battlefield.grid.retreat_roll = func() -> float: return 0.30
+
+	battlefield.grid.try_retreat()
+	var settle_frames := 0
+	while GameSession.selected_encounter != "" and settle_frames < 30:
+		await get_tree().process_frame
+		settle_frames += 1
+
+	assert_eq(GameSession.get_current_health("warrior_001"), 9, "10% of 10 max HP is 1 lost")
+	assert_false(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID), "Retreat leaves the encounter unconquered")
+	assert_true(GameSession.has_deployed_party(), "A survived retreat keeps the party deployed, not sent home")
+	assert_eq(GameSession.get_deployed_party_position(), encounter_position, "The party stays on the encounter tile")
+	assert_eq(GameSession.battle_reward, 0, "Unbanked battle loot is discarded")
+
+
+func test_a_full_wipe_from_retreats_own_risk_roll_routes_home_and_forfeits_gold_and_loot() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	GameSession.gold = 40
+	# 0.99 lands in the death region of every distance bucket.
+	battlefield.grid.retreat_roll = func() -> float: return 0.99
+
+	battlefield.grid.try_retreat()
+	var settle_frames := 0
+	while GameSession.selected_encounter != "" and settle_frames < 30:
+		await get_tree().process_frame
+		settle_frames += 1
+
+	assert_true(
+		GameSession.get_adventurer("warrior_001").is_empty(), "The unit died from the retreat's own risk roll"
+	)
+	assert_false(GameSession.has_deployed_party(), "A full wipe from retreat routes the party home")
+	assert_eq(
+		GameSession.get_deployed_party_position(), GameSession.STARTING_SETTLEMENT_WORLD_POSITION,
+		"An undeployed party's position reads back as the settlement"
+	)
+	assert_eq(GameSession.gold, 0, "A wipe forfeits all gold")
 

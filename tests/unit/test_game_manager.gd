@@ -442,6 +442,91 @@ func test_fail_battle_abandons_the_encounter_and_returns_the_party_home() -> voi
 	assert_false(GameSession.is_encounter_complete("goblin_camp"))
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: fail_battle()'s
+## only real call site (is_battle_lost()) always means a full party wipe, so
+## it must apply the same forfeiture GameSession.resolve_party_wipe() defines
+## -- returning the party to the Encampment settlement position and losing
+## all gold/pending loot -- while completed objectives and building levels
+## survive untouched.
+func test_fail_battle_wipe_returns_party_position_to_the_encampment_settlement() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.set_deployed_party_position(Vector2i(6, 6))
+	GameSession.enter_encounter("goblin_camp")
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.fail_battle()
+
+	assert_eq(GameSession.get_deployed_party_position(), Vector2i(3, 3))
+	assert_eq(GameSession.get_deployed_party_position(), GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
+
+
+func test_fail_battle_wipe_forfeits_pending_loot_and_gold_but_preserves_progress_and_buildings() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.gold = 80
+	GameSession.pending_reward = 25
+	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.guild_hall_level = 2
+	GameSession.completed_objectives = ["obj_tier1_1_goblin_outpost"]
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.fail_battle()
+
+	assert_eq(GameSession.gold, 0, "A wipe loses all gold")
+	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.pending_gear, {})
+	assert_eq(GameSession.guild_hall_level, 2, "Building levels survive a wipe")
+	assert_eq(
+		GameSession.completed_objectives, ["obj_tier1_1_goblin_outpost"],
+		"Completed campaign objectives survive a wipe"
+	)
+
+
+func test_retreat_from_battle_routes_survivors_to_the_world_map_leaving_the_encounter_active() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_position: Vector2i = GameSession.get_expedition("goblin_camp").position
+	GameSession.set_deployed_party_position(encounter_position)
+	GameSession.enter_encounter("goblin_camp")
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.retreat_from_battle()
+
+	assert_eq(GameSession.selected_encounter, "")
+	assert_false(GameSession.is_encounter_complete("goblin_camp"), "Retreat leaves the encounter unconquered")
+	assert_true(GameSession.has_deployed_party(), "Survivors keep the party deployed, not sent home")
+	assert_eq(GameSession.get_deployed_party_position(), encounter_position)
+
+
+func test_retreat_from_battle_wipe_routes_home_and_forfeits_loot() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+	GameSession.gold = 60
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.retreat_from_battle()
+
+	assert_false(GameSession.has_deployed_party())
+	assert_eq(GameSession.get_deployed_party_position(), GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
+	assert_eq(GameSession.gold, 0)
+
+
 func test_apply_super_power_reports_unavailable_without_an_active_battlefield() -> void:
 	assert_eq(GameManager.apply_super_power(), ERR_UNAVAILABLE)
 

@@ -579,6 +579,27 @@ func test_ready_resumes_the_party_position_saved_in_the_session() -> void:
 	)
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: a retreat leaves
+## the party on the encounter tile it retreated from -- GameManager.
+## retreat_from_battle() never touches world_position for a surviving
+## retreat (see its own doc comment) -- so a freshly (re)instantiated World
+## Map must resume showing the party there, not snapped back to the
+## settlement.
+func test_world_map_shows_the_party_still_on_the_encounter_tile_after_a_retreat() -> void:
+	var encounter_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
+	GameSession.set_deployed_party_position(encounter_position)
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	GameManager.retreat_from_battle()
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.party_position, encounter_position)
+	assert_true(GameSession.has_deployed_party(), "A survived retreat keeps the party deployed")
+	assert_false(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID), "Retreat leaves the encounter unconquered")
+
+
 func test_moving_the_party_persists_the_new_position_to_the_session() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

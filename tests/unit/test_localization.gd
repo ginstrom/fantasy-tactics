@@ -125,6 +125,11 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	)
 	assert_eq(tr("battle.action.move"), "Move")
 	assert_eq(tr("battle.action.attack"), "Attack")
+	assert_eq(tr("battle.action.retreat"), "Retreat")
+	assert_eq(tr("battle.result.retreat"), "The party retreats.")
+	assert_eq(tr("battle.log.retreat.no_loss") % "Warrior", "Warrior slips away unscathed.")
+	assert_eq(tr("battle.log.retreat.hp_loss") % ["Warrior", 3], "Warrior retreats, losing 3 HP.")
+	assert_eq(tr("battle.log.retreat.death") % "Warrior", "Warrior does not survive the retreat.")
 	assert_eq(
 		tr("battle.feedback.move_mode"),
 		"Move mode: click a highlighted tile to move."

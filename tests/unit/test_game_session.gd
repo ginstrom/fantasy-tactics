@@ -1909,6 +1909,147 @@ func test_apply_battle_aftermath_persists_reported_health_with_a_floor_of_one() 
 	assert_eq(session.get_current_health("warrior_001"), 1, "Downed units persist at 1 health")
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: unit permadeath
+## resolution (resolve_battle_deaths()) and its gear-recovery pipeline.
+
+func test_resolve_battle_deaths_removes_a_zero_health_unit_from_the_roster_and_party() -> void:
+	GameSession.reset()
+	var survivor_id: String = GameSession.adventurers[1].id
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.assign_adventurer_to_selected_party(survivor_id)
+
+	var dead_ids: Array[String] = GameSession.resolve_battle_deaths({"warrior_001": 0, survivor_id: 5})
+
+	assert_eq(dead_ids, ["warrior_001"])
+	assert_true(GameSession.get_adventurer("warrior_001").is_empty(), "The dead unit is erased from the roster")
+	assert_false(GameSession.get_adventurer(survivor_id).is_empty(), "A surviving unit is untouched")
+	assert_eq(GameSession.get_selected_party().member_ids, [survivor_id])
+
+
+func test_resolve_battle_deaths_ignores_negative_reported_health_the_same_as_zero() -> void:
+	GameSession.reset()
+
+	var dead_ids: Array[String] = GameSession.resolve_battle_deaths({"warrior_001": -3})
+
+	assert_eq(dead_ids, ["warrior_001"])
+	assert_true(GameSession.get_adventurer("warrior_001").is_empty())
+
+
+## Validation runs to completion before any mutation: an unknown id in the
+## same batch as a genuine kill must not block that genuine kill from
+## resolving, and the unknown id itself must never crash roster inspection.
+func test_resolve_battle_deaths_validates_every_id_before_mutating_and_ignores_unknown_ids() -> void:
+	GameSession.reset()
+
+	var dead_ids: Array[String] = GameSession.resolve_battle_deaths({"warrior_001": 0, "no_such_id": 0})
+
+	assert_eq(dead_ids, ["warrior_001"], "The unknown id must not be reported as a resolved kill")
+	assert_true(GameSession.get_adventurer("warrior_001").is_empty(), "The genuine kill in the same batch must still resolve")
+	assert_true(GameSession.get_adventurer("no_such_id").is_empty(), "An unknown id must remain a safe no-op lookup")
+
+
+## The slain unit's ordinary carried gear (its starting Iron Longsword and
+## Leather Armor -- both plain stackable ids, not unique instances) and its
+## carried potion all move to pending_gear in one pass, retained until the
+## existing settlement transition (deposit_pending_reward()) banks them --
+## never banked directly by this transaction.
+func test_resolve_battle_deaths_transfers_ordinary_carried_gear_to_pending_loot() -> void:
+	GameSession.reset()
+	GameSession.banked_gear["healing_potion"] = 1
+	GameSession.equip_item_from_bank("warrior_001", "healing_potion")
+
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+
+	assert_eq(GameSession.pending_gear, {"longsword_iron": 1, "leather_armor": 1, "healing_potion": 1})
+	assert_eq(GameSession.banked_gear.get("longsword_iron", 0), 0, "Not banked directly by the permadeath transaction")
+	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 0, "Not banked directly by the permadeath transaction")
+
+
+## A unique modified instance (e.g. a sharpened weapon) moves into pending_
+## gear by its own instance id, not folded into a plain item count, and its
+## owned_item_instances record (carrying its modifier tiers) is left
+## completely untouched -- "never delete a recovered owned-item record."
+func test_resolve_battle_deaths_transfers_a_unique_item_instance_preserving_its_modifiers() -> void:
+	GameSession.reset()
+	GameSession.banked_gear["dagger_steel"] = 1
+	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
+	GameSession.set_item_instance_modifier(instance_id, "treatment", GameSession.SHARPENED_TREATMENT_ID, 1)
+	GameSession.equip_item_from_bank("warrior_001", instance_id)
+
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+
+	assert_eq(GameSession.pending_gear.get(instance_id, 0), 1, "The instance id itself moves to pending loot")
+	assert_true(
+		GameSession.owned_item_instances.has(instance_id),
+		"The owned-instance record must never be deleted on a successful recovery"
+	)
+	assert_eq(
+		GameSession.owned_item_instances[instance_id].treatment_id, GameSession.SHARPENED_TREATMENT_ID,
+		"Its modifiers must survive the transfer intact"
+	)
+	assert_false(
+		GameSession.banked_item_instance_ids.has(instance_id),
+		"Not banked directly -- only the settlement transition banks recovered loot"
+	)
+
+
+## Only the dead unit's own carried gear moves; a party's survivors keep
+## their own equipment untouched, and only the party membership reference
+## unique to the dead unit is stripped.
+func test_resolve_battle_deaths_only_transfers_the_dead_units_own_gear() -> void:
+	GameSession.reset()
+	var survivor_id: String = GameSession.adventurers[1].id
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.assign_adventurer_to_selected_party(survivor_id)
+
+	GameSession.resolve_battle_deaths({"warrior_001": 0, survivor_id: 5})
+
+	assert_eq(GameSession.pending_gear, {"longsword_iron": 1, "leather_armor": 1})
+	assert_eq(
+		GameSession.get_adventurer(survivor_id).equipment.weapon_inventory, ["longsword_iron"],
+		"A surviving member's own equipment must be untouched"
+	)
+
+
+## deposit_pending_reward() -- the existing party-to-Encampment settlement
+## transition -- is the only thing that ever banks recovered permadeath
+## loot; resolve_battle_deaths() alone never reaches banked_gear/banked_
+## item_instance_ids.
+func test_recovered_permadeath_loot_is_only_banked_by_the_settlement_transition() -> void:
+	GameSession.reset()
+	GameSession.banked_gear["dagger_steel"] = 1
+	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
+	GameSession.equip_item_from_bank("warrior_001", instance_id)
+
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 0, "Not banked yet")
+	assert_false(GameSession.banked_item_instance_ids.has(instance_id), "Not banked yet")
+
+	GameSession.deposit_pending_reward()
+
+	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 1, "Now banked by the settlement transition")
+	assert_true(GameSession.banked_item_instance_ids.has(instance_id), "The instance is now banked, not folded into a count")
+	assert_eq(GameSession.pending_gear, {})
+
+
+## A dead id must not remain in live session state, parties, or save
+## snapshots (docs/designs/campaign-loop.md).
+func test_dead_unit_id_does_not_survive_into_the_campaign_snapshot() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+	var snapshot: Dictionary = GameSession.export_campaign_snapshot()
+
+	for adventurer in snapshot.adventurers:
+		assert_ne(adventurer.id, "warrior_001")
+	for party in snapshot.parties:
+		assert_false(party.member_ids.has("warrior_001"))
+
+
 func test_leveling_up_raises_current_health_by_the_vitality_delta() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -3369,6 +3510,90 @@ func test_end_world_turn_adds_shop_income() -> void:
 	assert_eq(GameSession.gold, GameSession.SHOP_INCOME_PER_TURN)
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: the economy
+## floor's passive Shop income tiers (2/5/10 gold per World Map Turn).
+func test_end_world_turn_shop_income_scales_with_shop_level() -> void:
+	GameSession.shop_level = 1
+	GameSession.end_world_turn()
+	assert_eq(GameSession.gold, 2, "Shop level 1 grants 2 gold/turn")
+
+	GameSession.reset()
+	GameSession.shop_level = 2
+	GameSession.end_world_turn()
+	assert_eq(GameSession.gold, 5, "Shop level 2 grants 5 gold/turn")
+
+	GameSession.reset()
+	GameSession.shop_level = 3
+	GameSession.end_world_turn()
+	assert_eq(GameSession.gold, 10, "Shop level 3 grants 10 gold/turn")
+
+
+## Soft-lock prevention: every recovery system (healing, workshop jobs,
+## encounter/recruitment vacancies, Shop income) must keep advancing on
+## World Map Turns even with zero parties, or a party with zero living
+## members -- e.g. right after a wipe, before the player has recruited a
+## replacement.
+func test_end_world_turn_advances_every_recovery_system_with_no_deployable_party() -> void:
+	GameSession.reset()
+	GameSession.parties = []
+	GameSession.set_adventurer_health("warrior_001", 1)
+	GameSession.blacksmith_level = 2
+	GameSession.gold = 100
+	assert_true(GameSession.start_blacksmith_craft("shortsword_iron"), "Test setup must actually start the job")
+	var starting_world_turn: int = GameSession.world_turn
+	var starting_gold: int = GameSession.gold
+
+	var advanced: bool = GameSession.end_world_turn()
+
+	assert_false(advanced, "No deployed party means no auto-move step")
+	assert_eq(GameSession.world_turn, starting_world_turn + 1)
+	assert_eq(GameSession.get_current_health("warrior_001"), 1 + GameSession.HEAL_RATE_ENCAMPED, "Roster healing advances")
+	assert_eq(GameSession.gold, starting_gold + GameSession.SHOP_INCOME_PER_TURN, "Shop income advances")
+	assert_eq(
+		GameSession.get_blacksmith_job_turns_remaining(GameSession.blacksmith_craft_job),
+		GameSession.BLACKSMITH_CRAFT_DURATION_TURNS - 1,
+		"The blacksmith job clock advances"
+	)
+
+
+## Same as above, but for a party record that still exists (deployed=false,
+## encamped) with zero living members -- e.g. the party dict a wipe leaves
+## behind before it is ever removed or repopulated.
+func test_end_world_turn_advances_recovery_when_the_only_party_has_no_living_members() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var starting_world_turn: int = GameSession.world_turn
+	var starting_gold: int = GameSession.gold
+
+	var advanced: bool = GameSession.end_world_turn()
+
+	assert_false(advanced, "The party has no living members, so nothing can auto-move")
+	assert_eq(GameSession.world_turn, starting_world_turn + 1)
+	assert_eq(GameSession.gold, starting_gold + GameSession.SHOP_INCOME_PER_TURN)
+
+
+## Soft-lock prevention: a fresh recruitment offer must always include at
+## least one level-1 candidate costing 50 gold or less, so a player who just
+## hit zero gold (e.g. after a wipe) can still recruit a legal replacement
+## once passive income accrues.
+func test_recruitment_refill_always_offers_an_affordable_level_one_recruit() -> void:
+	GameSession.reset()
+	GameSession.reset_injectable_rolls()
+	# Empty the live offers and advance past every vacancy's delay so a
+	# refill actually happens.
+	GameSession.recruitment_candidates = []
+	GameSession.recruitment_vacancies = [{"turns_remaining": 1}]
+	GameSession.gold = 0
+
+	GameSession.end_world_turn()
+
+	assert_false(GameSession.recruitment_candidates.is_empty(), "A refill must actually occur")
+	var affordable_level_one := GameSession.recruitment_candidates.any(
+		func(candidate: Dictionary) -> bool: return int(candidate.level) == 1 and int(candidate.cost) <= 50
+	)
+	assert_true(affordable_level_one, "At least one refreshed offer must be a level-1 recruit costing <= 50 gold")
+
+
 func test_get_item_sale_price_halves_gear_price_and_keeps_mana_crystal_value_full() -> void:
 	assert_eq(GameSession.get_item_sale_price("shortsword_iron"), 10, "Half of 20")
 	assert_eq(GameSession.get_item_sale_price("leather_armor"), 5, "Half of 10")
@@ -3594,6 +3819,53 @@ func test_unequip_to_bank_rejects_the_active_item_an_uncarried_item_or_an_unknow
 	assert_eq(GameSession.banked_gear, {}, "Nothing rejected should ever reach the bank")
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: party-wipe
+## forfeiture (resolve_party_wipe()) -- "a wipe loses all gold and loot" but
+## must never touch already-completed campaign progress or anything already
+## banked before the run that ended in a wipe.
+func test_resolve_party_wipe_forfeits_unbanked_gold_and_pending_loot_but_preserves_progress_and_banked_state() -> void:
+	GameSession.reset()
+	GameSession.gold = 250
+	GameSession.pending_reward = 40
+	GameSession.pending_mana_crystals = {1: 2}
+	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.banked_gear = {"leather_armor": 3}
+	GameSession.mana_crystals = {1: 5}
+	GameSession.guild_hall_level = 2
+	GameSession.completed_objectives = ["obj_tier1_1_goblin_outpost"]
+
+	GameSession.resolve_party_wipe()
+
+	assert_eq(GameSession.gold, 0, "A wipe loses all gold, banked included")
+	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.pending_mana_crystals, {})
+	assert_eq(GameSession.pending_gear, {})
+	assert_eq(GameSession.banked_gear, {"leather_armor": 3}, "Already-banked gear is preserved")
+	assert_eq(GameSession.mana_crystals, {1: 5}, "Already-banked crystals are preserved")
+	assert_eq(GameSession.guild_hall_level, 2, "Building levels are preserved")
+	assert_eq(
+		GameSession.completed_objectives, ["obj_tier1_1_goblin_outpost"],
+		"Completed campaign objectives are preserved"
+	)
+
+
+## A unique item instance still sitting in pending_gear (recovered from a
+## fallen member this same run, never banked) is truly lost on a wipe, not
+## left as an orphaned, unreferenced owned_item_instances record.
+func test_resolve_party_wipe_discards_an_unbanked_recovered_item_instances_record() -> void:
+	GameSession.reset()
+	GameSession.banked_gear["dagger_steel"] = 1
+	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
+	GameSession.equip_item_from_bank("warrior_001", instance_id)
+	GameSession.resolve_battle_deaths({"warrior_001": 0})
+	assert_true(GameSession.pending_gear.has(instance_id), "Test setup: the instance is pending, not yet banked")
+
+	GameSession.resolve_party_wipe()
+
+	assert_false(GameSession.owned_item_instances.has(instance_id), "An unbanked recovered instance is lost on a wipe")
+	assert_false(GameSession.banked_item_instance_ids.has(instance_id))
+
+
 func test_reset_clears_the_trading_post() -> void:
 	GameSession.shop_level = 2
 
@@ -3817,6 +4089,8 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"TRADING_POST_PURCHASE_COST": true,
 		"TRADING_POST_INCOME_PER_TURN": true,
 		"SHOP_INCOME_PER_TURN": true,
+		"SHOP_INCOME_LEVEL_2": true,
+		"SHOP_INCOME_LEVEL_3": true,
 		"EFFECTIVE_HIT_CHANCE_CAP": true,
 		"ATTACK_TO_HIT_CHANCE_DIVISOR": true,
 		"ENCOUNTER_INSTANCE_CAP": true,

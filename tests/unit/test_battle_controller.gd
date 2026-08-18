@@ -2678,3 +2678,193 @@ func test_rear_attack_adds_the_configured_rear_critical_bonus_and_lands_a_crit()
 	assert_true(setup.controller.last_attack_result.critical, "An injected 0.40 roll must crit at the 55% rear threshold")
 
 
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: a player unit
+## defeated in real combat is erased from `units` immediately (freeing its
+## tile), the same way a defeated enemy already was -- but its final (0)
+## health must still be recoverable at battle resolution so permadeath can
+## run. See defeated_player_health_by_id's own doc comment.
+func test_a_player_unit_defeated_in_combat_is_erased_but_recorded_for_aftermath() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 20, 20, 1.0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 5)
+	defender.adventurer_id = "warrior_001"
+	controller.units = [attacker, defender]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.units.has(defender), "The defeated unit is erased so its tile frees up")
+	assert_eq(controller.defeated_player_health_by_id.get("warrior_001", -1), 0)
+
+
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: Tactical Retreat.
+
+func _make_retreat_scene(distance: int, health: int = 10) -> Dictionary:
+	var controller := _make_controller(20, 20)
+	var player = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, health)
+	player.adventurer_id = "warrior_001"
+	var enemy = UnitScript.new(Vector2i(distance, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [player, enemy]
+	controller.active_side = BattleControllerScript.Side.PLAYER
+	return {"controller": controller, "player": player, "enemy": enemy}
+
+
+func test_nearest_enemy_distance_uses_chebyshev_not_manhattan_distance() -> void:
+	var controller := _make_controller(20, 20)
+	var player = UnitScript.new(Vector2i(5, 5), Color.CORNFLOWER_BLUE)
+	var enemy = UnitScript.new(Vector2i(7, 6), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [player, enemy]
+
+	# Chebyshev: max(|7-5|, |6-5|) = 2. Manhattan (the wrong measure) would be 3.
+	assert_eq(controller._nearest_enemy_distance(player.grid_position), 2)
+
+
+func test_retreat_distance_bucket_matches_the_locked_roadmap_ranges() -> void:
+	var controller := _make_controller(20, 20)
+	assert_eq(controller._retreat_distance_bucket(1), "near")
+	assert_eq(controller._retreat_distance_bucket(3), "near")
+	assert_eq(controller._retreat_distance_bucket(4), "mid")
+	assert_eq(controller._retreat_distance_bucket(6), "mid")
+	assert_eq(controller._retreat_distance_bucket(7), "far")
+	assert_eq(controller._retreat_distance_bucket(20), "far")
+
+
+## Distance 1-3 ("near"): 10% no-loss / 30% 10%-loss / 30% 50%-loss / 30% death.
+func test_retreat_near_distance_outcome_distribution() -> void:
+	var scene := _make_retreat_scene(2, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.0
+	var results: Array[Dictionary] = scene.controller.try_retreat()
+	assert_eq(results[0].distance, 2)
+	assert_eq(results[0].outcome, "no_loss")
+	assert_eq(results[0].hp_loss, 0)
+	assert_eq(scene.player.health, 10)
+
+	scene = _make_retreat_scene(2, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.10
+	results = scene.controller.try_retreat()
+	assert_eq(results[0].outcome, "ten_percent")
+	assert_eq(results[0].hp_loss, 1, "ceil(10 * 0.10)")
+	assert_eq(scene.player.health, 9)
+
+	scene = _make_retreat_scene(2, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.40
+	results = scene.controller.try_retreat()
+	assert_eq(results[0].outcome, "fifty_percent")
+	assert_eq(results[0].hp_loss, 5, "ceil(10 * 0.50)")
+	assert_eq(scene.player.health, 5)
+
+	scene = _make_retreat_scene(2, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.70
+	results = scene.controller.try_retreat()
+	assert_eq(results[0].outcome, "death")
+	assert_eq(results[0].hp_loss, 10)
+	assert_eq(scene.player.health, 0)
+	assert_true(results[0].died)
+
+
+## The step doc's TDD list is explicit that the percentage is "10% max HP
+## loss" / "50% max HP loss" -- of max_health, not current/remaining health
+## (even though the roadmap table's column header, "No remaining-HP loss",
+## could be misread as applying to every column). A wounded unit's loss must
+## scale off its max, not its already-reduced current health.
+func test_retreat_hp_loss_percentage_is_based_on_max_health_not_current_health() -> void:
+	var scene := _make_retreat_scene(2, 10)
+	scene.player.health = 4
+	scene.controller.retreat_roll = func() -> float: return 0.10
+
+	var results: Array[Dictionary] = scene.controller.try_retreat()
+
+	assert_eq(results[0].outcome, "ten_percent")
+	assert_eq(results[0].hp_loss, 1, "10% of max health (10), not current health (4)")
+	assert_eq(scene.player.health, 3)
+
+
+## Distance 4-6 ("mid"): 20% no-loss / 50% 10%-loss / 10% 50%-loss / 10% death.
+func test_retreat_mid_distance_outcome_distribution() -> void:
+	var scene := _make_retreat_scene(5, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.0
+	assert_eq(scene.controller.try_retreat()[0].outcome, "no_loss")
+
+	scene = _make_retreat_scene(5, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.20
+	assert_eq(scene.controller.try_retreat()[0].outcome, "ten_percent")
+
+	scene = _make_retreat_scene(5, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.70
+	assert_eq(scene.controller.try_retreat()[0].outcome, "fifty_percent")
+
+	scene = _make_retreat_scene(5, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.80
+	assert_eq(scene.controller.try_retreat()[0].outcome, "death")
+
+
+## Distance 7+ ("far"): 50% no-loss / 30% 10%-loss / 10% 50%-loss / 10% death.
+func test_retreat_far_distance_outcome_distribution() -> void:
+	var scene := _make_retreat_scene(9, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.0
+	assert_eq(scene.controller.try_retreat()[0].outcome, "no_loss")
+
+	scene = _make_retreat_scene(9, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.50
+	assert_eq(scene.controller.try_retreat()[0].outcome, "ten_percent")
+
+	scene = _make_retreat_scene(9, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.80
+	assert_eq(scene.controller.try_retreat()[0].outcome, "fifty_percent")
+
+	scene = _make_retreat_scene(9, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.90
+	assert_eq(scene.controller.try_retreat()[0].outcome, "death")
+
+
+func test_try_retreat_discards_unbanked_battle_loot_and_emits_retreat_resolved() -> void:
+	GameSession.reset()
+	GameSession.battle_reward = 5
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.battle_mana_crystals = {1: 1}
+	var scene := _make_retreat_scene(2, 10)
+	scene.controller.retreat_roll = func() -> float: return 0.0
+	var emitted: Array = []
+	scene.controller.retreat_resolved.connect(func(results: Array) -> void: emitted.append(results))
+
+	var results: Array[Dictionary] = scene.controller.try_retreat()
+
+	assert_eq(GameSession.battle_reward, 0)
+	assert_eq(GameSession.battle_gear, {})
+	assert_eq(GameSession.battle_mana_crystals, {})
+	assert_eq(emitted.size(), 1, "retreat_resolved must fire exactly once")
+	assert_eq(emitted[0], results)
+
+
+func test_try_retreat_is_a_no_op_outside_the_players_active_turn() -> void:
+	var scene := _make_retreat_scene(2, 10)
+	scene.controller.active_side = BattleControllerScript.Side.ENEMY
+
+	var results: Array[Dictionary] = scene.controller.try_retreat()
+
+	assert_eq(results, [] as Array[Dictionary])
+	assert_eq(scene.player.health, 10, "A rejected retreat must not roll or apply any consequence")
+
+
+func test_try_retreat_only_rolls_for_living_player_units() -> void:
+	var scene := _make_retreat_scene(2, 10)
+	var dead_ally = UnitScript.new(Vector2i(0, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	dead_ally.health = 0
+	scene.controller.units.append(dead_ally)
+	# An Array, not a plain int counter: GDScript lambdas capture an outer
+	# local by value, so mutating a captured int inside the lambda would
+	# never be visible out here -- but a captured Array/Dictionary still
+	# refers to the same underlying object, so appending to it is.
+	var roll_log: Array = []
+	scene.controller.retreat_roll = func() -> float:
+		roll_log.append(true)
+		return 0.0
+
+	var results: Array[Dictionary] = scene.controller.try_retreat()
+
+	assert_eq(results.size(), 1, "Only the living unit produces a result")
+	assert_eq(roll_log.size(), 1, "A dead unit must not consume a roll")
+
+

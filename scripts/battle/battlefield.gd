@@ -13,6 +13,7 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var round_label: Label = %RoundLabel
 @onready var action_points_label: Label = %ActionPointsLabel
 @onready var end_turn_button: Button = %EndTurnButton
+@onready var retreat_button: Button = %RetreatButton
 @onready var move_button: Button = %MoveButton
 @onready var attack_button: Button = %AttackButton
 @onready var potion_option: OptionButton = %PotionOption
@@ -85,6 +86,7 @@ func _ready() -> void:
 	grid.enemy_defeated.connect(_award_kill_xp)
 	grid.unit_focus_changed.connect(_on_unit_focus_changed)
 	grid.action_mode_changed.connect(_on_action_mode_changed)
+	grid.retreat_resolved.connect(_on_retreat_resolved)
 	level_up.resolved.connect(_on_level_up_resolved)
 	portrait_panel.grid = grid
 	_on_board_changed()
@@ -111,6 +113,12 @@ func _on_end_turn_pressed() -> void:
 		return
 	grid.end_turn()
 	_play_enemy_turn()
+
+
+func _on_retreat_button_pressed() -> void:
+	if _enemy_turn_in_progress or _battle_resolved:
+		return
+	grid.try_retreat()
 
 
 ## set_action_mode() no-ops (and so never re-emits action_mode_changed) when
@@ -269,6 +277,36 @@ func _on_transfer_button_pressed() -> void:
 		str(transfer_item_option.get_selected_metadata()), str(recipient_option.get_selected_metadata())
 	):
 		_on_board_changed()
+
+
+## BattleController.try_retreat()'s exit signal. Retreat is a third battle
+## outcome alongside win/loss (see _resolve_battle()) rather than a variant
+## of either: it logs each unit's distance-based result, persists aftermath
+## the same way a win or loss does (unit permadeath + surviving HP), then
+## hands routing off to GameManager.retreat_from_battle(), which alone
+## decides World Map vs. Encampment (see its own doc comment).
+func _on_retreat_resolved(results: Array) -> void:
+	if _battle_resolved:
+		return
+	_battle_resolved = true
+	_set_enemy_turn_in_progress(true)
+	status.text = tr("battle.result.retreat")
+	for result in results:
+		_append_log_line(_describe_retreat_result(result))
+	await get_tree().create_timer(enemy_turn_beat_seconds).timeout
+	_persist_battle_aftermath()
+	GameManager.retreat_from_battle()
+
+
+func _describe_retreat_result(result: Dictionary) -> String:
+	var unit_name: String = result.unit.display_name
+	match String(result.get("outcome", "")):
+		"death":
+			return tr("battle.log.retreat.death") % unit_name
+		"no_loss":
+			return tr("battle.log.retreat.no_loss") % unit_name
+		_:
+			return tr("battle.log.retreat.hp_loss") % [unit_name, int(result.get("hp_loss", 0))]
 
 
 func _resolve_battle(victory: bool) -> void:
@@ -436,12 +474,25 @@ func _finish_victory() -> void:
 	GameManager.go_to_battle_result(summary)
 
 
+## Permadeath resolves before the health write-back, not after: resolve_
+## battle_deaths() removes any adventurer id whose reported health is at or
+## below 0 from the roster entirely, so apply_battle_aftermath()'s own
+## floor-of-one clamp (see its doc comment) never gets a chance to write a
+## dead id back to 1 HP -- it simply no-ops for an id that no longer exists.
 func _persist_battle_aftermath() -> void:
 	var health_by_id: Dictionary = {}
 	if grid != null and grid.get("units") != null:
 		for unit in grid.units:
 			if unit.side == BattleControllerScript.Side.PLAYER and unit.adventurer_id != "":
 				health_by_id[unit.adventurer_id] = unit.health
+		# A player unit defeated in real combat (as opposed to a unit whose
+		# health a test set directly, or one that survived to battle's end at
+		# low HP) is erased from grid.units well before this point -- see
+		# BattleController.defeated_player_health_by_id's own doc comment for
+		# why its 0 HP must be merged in from there instead.
+		for adventurer_id in grid.get("defeated_player_health_by_id"):
+			health_by_id[adventurer_id] = grid.defeated_player_health_by_id[adventurer_id]
+	GameSession.resolve_battle_deaths(health_by_id)
 	GameSession.apply_battle_aftermath(health_by_id)
 
 
@@ -462,6 +513,7 @@ func _set_level_up_in_progress(value: bool) -> void:
 func _update_input_lock() -> void:
 	var locked := _enemy_turn_in_progress or _level_up_active
 	end_turn_button.disabled = locked
+	retreat_button.disabled = locked
 	grid.input_locked = locked
 	_update_action_bar()
 

@@ -24,6 +24,13 @@ signal completed_hit(result)
 ## _select_unit()). Battlefield connects this to drive the action bar's
 ## toggle/highlight state.
 signal action_mode_changed(mode)
+## Battle exit signal for the Retreat action (see try_retreat()): fires
+## exactly once per retreat, carrying one result Dictionary per living
+## player unit at the moment of the retreat -- {"unit", "adventurer_id",
+## "distance", "outcome", "hp_loss", "died"}. Battlefield connects this to
+## log each outcome, persist aftermath, and hand routing off to
+## GameManager.retreat_from_battle().
+signal retreat_resolved(results: Array[Dictionary])
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
@@ -91,6 +98,26 @@ const THORN_RUNE_ID := "thorn"
 const PARALYZED_STATUS_ID := "paralyzed"
 const THORN_TRIGGER_CHANCE := 0.25
 
+## Retreat outcome ids (see try_retreat()).
+const RETREAT_OUTCOME_NO_LOSS := "no_loss"
+const RETREAT_OUTCOME_TEN_PERCENT := "ten_percent"
+const RETREAT_OUTCOME_FIFTY_PERCENT := "fifty_percent"
+const RETREAT_OUTCOME_DEATH := "death"
+## Locked roadmap distribution (docs/designs/campaign-loop.md's Retreat
+## table), expressed as cumulative upper bounds on a [0.0, 1.0) roll: a roll
+## below "no_loss" is a clean escape, below "ten_percent" a 10% HP loss,
+## below "fifty_percent" a 50% HP loss, and anything else (up to 1.0) is a
+## death. Each row's own four percentages already sum to 100%, so these
+## three cumulative cuts alone fully define all four outcomes.
+const RETREAT_OUTCOME_THRESHOLDS := {
+	# 1-3 tiles: 10% / 30% / 30% / 30%.
+	"near": {"no_loss": 0.10, "ten_percent": 0.40, "fifty_percent": 0.70},
+	# 4-6 tiles: 20% / 50% / 10% / 10%.
+	"mid": {"no_loss": 0.20, "ten_percent": 0.70, "fifty_percent": 0.80},
+	# 7+ tiles: 50% / 30% / 10% / 10%.
+	"far": {"no_loss": 0.50, "ten_percent": 0.80, "fifty_percent": 0.90},
+}
+
 var grid
 var units: Array = []
 var _player_adventurer_ids: Array[String] = []
@@ -108,8 +135,20 @@ var crit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var rune_trigger_roll: Callable = func() -> float: return randf()
+## Injectable so tests can seed an exact Retreat outcome per unit instead of
+## depending on real randomness (see hit_roll for the same pattern). Called
+## once per living player unit in try_retreat(), in the same stable unit
+## order every other per-unit sweep in this file uses.
+var retreat_roll: Callable = func() -> float: return randf()
 var last_attack_result: Dictionary = {}
 var last_targeting_failure: Dictionary = {}
+## A player-side unit defeated in real combat is erased from `units`
+## immediately (see try_attack_selected_unit()) so its tile frees up and it
+## stops rendering. Battlefield still needs its final (0) health at battle
+## resolution to run permadeath, so every such defeat is also recorded here
+## by adventurer id, independent of `units` -- see _persist_battle_
+## aftermath(), which reads both.
+var defeated_player_health_by_id: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
 @onready var unit_container: Node2D = $Units
@@ -604,6 +643,15 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
 		units.erase(target)
+		# A defeated unit is erased from `units` immediately (freeing its tile
+		# for movement/pathing -- see get_unit_at()'s blocking check, and
+		# _draw_units(), which would otherwise keep rendering a corpse) -- but
+		# battle resolution (Battlefield._persist_battle_aftermath()) still
+		# needs to learn a defeated player unit's final (0) health to run
+		# permadeath, and by then this unit is long gone from `units`.
+		# Recorded here, separately, so it survives the erasure above.
+		if target.side == Side.PLAYER and target.adventurer_id != "":
+			defeated_player_health_by_id[target.adventurer_id] = target.health
 
 	last_attack_result = {
 		"type": "attack",
@@ -624,6 +672,101 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit(target)
 	return true
+
+
+## Tactical Retreat (docs/plans/2026-08-18-core-loop-and-engagement/
+## 02-permadeath-retreat-and-economy-floor.md): only callable during the
+## player's active turn, matching every other player action in this file.
+## Ends the battle immediately -- every living player unit rolls its own
+## distance-based consequence against the nearest living enemy (see
+## RETREAT_OUTCOME_THRESHOLDS), this battle's own unbanked loot is
+## discarded outright (a retreat never banks battle_reward/battle_gear/
+## battle_mana_crystals -- see GameSession.discard_battle_loot()), and
+## retreat_resolved fires once with every unit's result so Battlefield can
+## log the outcome and hand off routing to GameManager.retreat_from_battle().
+func try_retreat() -> Array[Dictionary]:
+	if input_locked or active_side != Side.PLAYER:
+		return []
+
+	var results: Array[Dictionary] = []
+	for unit in units.duplicate():
+		if unit.side != Side.PLAYER or not unit.is_alive():
+			continue
+		var distance := _nearest_enemy_distance(unit.grid_position)
+		var roll: float = retreat_roll.call()
+		var outcome := _resolve_retreat_outcome(distance, roll)
+		var hp_loss := _retreat_hp_loss(unit, outcome)
+		if hp_loss > 0:
+			unit.take_damage(hp_loss)
+		results.append({
+			"unit": unit,
+			"adventurer_id": unit.adventurer_id,
+			"distance": distance,
+			"outcome": outcome,
+			"hp_loss": hp_loss,
+			"died": not unit.is_alive(),
+		})
+
+	GameSession.discard_battle_loot()
+	retreat_resolved.emit(results)
+	return results
+
+
+## The step doc's own TDD list is explicit -- "10% max HP loss" / "50% max
+## HP loss" -- so the percentage is of the unit's max_health, not its
+## current/remaining health, even though the roadmap table's column header
+## ("No remaining-HP loss") could be misread as applying to every column.
+## Death always empties whatever health remains, regardless of max.
+func _retreat_hp_loss(unit, outcome: String) -> int:
+	match outcome:
+		RETREAT_OUTCOME_TEN_PERCENT:
+			return mini(unit.health, int(ceil(unit.max_health * 0.10)))
+		RETREAT_OUTCOME_FIFTY_PERCENT:
+			return mini(unit.health, int(ceil(unit.max_health * 0.50)))
+		RETREAT_OUTCOME_DEATH:
+			return unit.health
+		_:
+			return 0
+
+
+## Chebyshev (grid/king-move) distance to the nearest living enemy, per the
+## Retreat table's own "Nearest Enemy Distance" column -- deliberately not
+## _grid_distance()'s Manhattan measure, which the rest of this file (attack
+## range, enemy AI pathing) uses instead. No living enemy (should not arise
+## in practice -- is_battle_won() would already have ended the battle first)
+## reads as the farthest ("7+") bucket rather than crashing.
+func _nearest_enemy_distance(from_pos: Vector2i) -> int:
+	var nearest_distance := -1
+	for unit in units:
+		if unit.side != Side.ENEMY or not unit.is_alive():
+			continue
+		var distance := _chebyshev_distance(from_pos, unit.grid_position)
+		if nearest_distance == -1 or distance < nearest_distance:
+			nearest_distance = distance
+	return nearest_distance if nearest_distance != -1 else 999
+
+
+func _chebyshev_distance(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(a.x - b.x), absi(a.y - b.y))
+
+
+func _retreat_distance_bucket(distance: int) -> String:
+	if distance <= 3:
+		return "near"
+	if distance <= 6:
+		return "mid"
+	return "far"
+
+
+func _resolve_retreat_outcome(distance: int, roll: float) -> String:
+	var thresholds: Dictionary = RETREAT_OUTCOME_THRESHOLDS[_retreat_distance_bucket(distance)]
+	if roll < float(thresholds.no_loss):
+		return RETREAT_OUTCOME_NO_LOSS
+	if roll < float(thresholds.ten_percent):
+		return RETREAT_OUTCOME_TEN_PERCENT
+	if roll < float(thresholds.fifty_percent):
+		return RETREAT_OUTCOME_FIFTY_PERCENT
+	return RETREAT_OUTCOME_DEATH
 
 
 func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String) -> bool:
