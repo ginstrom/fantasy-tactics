@@ -32,10 +32,20 @@ On the bottom we have battle log text, scrollable. New text is added to the
 bottom, and the field scrolled to show the final row whevenver new text is
 added.
 
-On the very bottom we have a row of action buttons. At first, we just have move
-and attack buttons. So I can select a unit (e.g. 1) and then click move, and
-the move destination. I can also click attack, and a target. If the target is
-not in range, I will move to within range then attack automatically. 
+On the very bottom we have a row of action buttons. Move and Action are
+button-only modes; they do not introduce keyboard shortcuts, preserving WASD
+movement controls. I can select a unit (e.g. 1) and then click Move and the
+destination. I can also click Action and a target. If the target is not in
+range, I will move to within range then attack automatically.
 
 I should see a green range that shows how far I can move and still
 attack. The full range beyond my move-and-attack range is shown in yellow.
+
+## Retreat
+
+The bottom panel has a **Retreat** button at its lower left, alongside Move,
+Action, and End Turn. Retreat is a campaign-level battle-resolution action,
+not an AP action. It ends the encounter, discards unbanked/pending rewards,
+and applies the nearest-enemy retreat consequence defined in the
+[Borderlands Campaign Loop](campaign-loop.md#defeat-death-and-retreat).
+The player remains over the encounter location after retreat.

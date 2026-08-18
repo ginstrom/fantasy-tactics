@@ -2,7 +2,12 @@
 
 ## About
 
-A deep tactical/strategic turn-based RPG in a fantasy setting.
+A deep tactical/strategic turn-based RPG in a fantasy setting. The first
+complete experience is a compact, 60–90 minute Borderlands campaign: recruit
+and deploy a party, clear authored objectives, return with loot to improve the
+Encampment, and ultimately defeat the source of the incursions. See the
+[Borderlands Campaign Loop](campaign-loop.md) for its locked progression,
+defeat, and recovery contract.
 
 The player controls units organized into parties. Battles provide strategic benefits (stronger units, loot) while strategic decisions affect game play (buildings, bonuses, units, equipment).
 
@@ -53,32 +58,47 @@ Instead of set movement/attack phases, units get a generic action point budget (
 
 ### Healing
 
-Units heal naturally over time, more if they don't move, and more if they are in the encampment. Various buffs can speed healing, including healing potions (found, bought or made), clerics, and presence of temple in encampment.
+Units heal naturally over time, more if they don't move, and more if they are in the encampment. Various buffs can speed healing, including healing potions (found, bought or made). Cleric and Temple healing/protection details remain a deferred campaign-slice decision.
 
 ## Party management
 
-The player starts with a single party of 4 members, but various research and buildings can increase the number and size of parties. I envision creating specialized parties like scouts, bandit hunting, and dungeon diving.
+The first campaign has exactly one active party. It begins with three
+deployable slots; Guild Hall upgrades raise that to four and then five. The
+initial roster may contain more adventurers than can deploy, but multi-party
+coordination and specialized parties remain future work.
 
 A rich unit and party UI is required, inspired by XCOM/Xenonauts: recruitment,
 development/skills/equipment, party formation, and stats.
 
-As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. For example, building and upgrading a temple attracts clerics and later paladins; building and upgrading a fighter's guild attracts warriors, and so on.
+As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. The Guild Hall provides the first Warrior/Scout recruitment; Temple recruitment and its later Cleric/Paladin path remain deferred campaign-slice work.
 
 ## Town management
 
-The player starts out with a bare encampment. As they accumulate gold, they can attract various NPCs such as shopkeepers, blacksmiths, alchemists, and scholars. Various buildings give bonuses, provide gear, unlock spells and other abilities, provide training to recruits, and so on. Items and gold from dungeon diving fund the initial growth of the encampment into a settlement, but eventually the settlement becomes self sufficient and its income outpaces adventuring income. 
+The player starts out with a bare Encampment. As they accumulate gold, they can
+improve the Guild Hall, Temple, Blacksmith/Workshops, and Shop/Stores. Each
+upgrade has a visible cost, completion rule, prerequisite, and concrete unlock.
+Items and gold from dungeon diving fund that growth, while Shop income and
+recruitment/recovery progression ensure a setback cannot permanently end a
+campaign. The exact building and economy contract is in the
+[Borderlands Campaign Loop](campaign-loop.md#encampment-progression-and-economy-floor).
 
 The player must tame and settle the area around the settlement for further growth, clearing out bandits and wandering monsters, protecting trade routes, and so on.
 
 As trade routes are developed, traders come to the town. The number, quality, and types of traders depend on the safety of the trade routes, size of the town, and types of buildings (e.g. trader's guild). The player can also organize trading caravans which must be protected, with guards and/or patrols along trade routes.
 
-Town management needs its own rich UI, although a true town-building experience is not needed. Something like the card-based town building in Rome: Total War is better. For example, building a temple will attract clerics, and leveling up the temple will allow the recruitment of higher-level clerics/paladins and training for low-level recruits.
+Town management needs its own rich UI, although a true town-building experience is not needed. Something like the card-based town building in Rome: Total War is better. The Temple's exact recruitment and upgrade effects are deferred; they must not be represented as shipped behaviour before that decision is made.
 
 ## World map
 
 The world should play somewhat like Civ, although instead of warring against other nations, the player wars against the monster threat. 
 
 On the world map, time advances in **Turns** (the unit of time governing encounter repopulation, recruit availability, crafting, etc.). In tactical combat, time advances in **Rounds**. World map turn time is frozen while a party is engaged in an encounter; players can view the map, encampment, and trade, but world turns cannot advance until the battle resolves.
+
+The first campaign uses authored, prerequisite-gated objectives rather than
+repeatable vacancies for required progress. After final victory, repeatable
+free play can refill vacancies without changing the completed campaign state.
+Threat rises at a campaign pace and is displayed as a one-to-five-star World
+Map risk signal.
 
 ### Fog of war
 

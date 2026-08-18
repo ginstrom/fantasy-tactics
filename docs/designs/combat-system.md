@@ -5,6 +5,18 @@
 * **Combat Round:** In combat, the unit of time is **Round**. Every eligible unit acts during a Round.
 * **World Map Turn:** On the world map, time advances in **Turns**. World map turn time is frozen while a party is in an encounter; players can manage inventory, encampment, and shop, but world map turns do not advance until the battle resolves.
 
+## Battle resolution and campaign stakes
+
+Combat may resolve in victory, retreat, or party wipe. A unit at 0 HP is dead;
+death is made permanent during validated battle aftermath, not silently undone
+by later recovery. Retreat and wipe consequences, including item transfer,
+reward loss, and the nearest-enemy retreat table, are owned by the
+[Borderlands Campaign Loop](campaign-loop.md#defeat-death-and-retreat).
+
+Retreat is never a free tactical action and does not consume AP: it ends the
+battle and resolves its campaign consequence. Combat rules remain responsible
+for reporting the final unit state needed to resolve that aftermath.
+
 ## Attacking and Damage
 
 Physical to-hit chance is based on the attacker's hit attribute (`melee` or `missile`) minus the target's `guard`, plus/minus modifiers, clamped between 5% and 95%:
@@ -102,7 +114,9 @@ Action points are a generic budget (fixed base of 6 AP per unit per Round) used 
 Players do not have omniscient vision of the battlefield. Visibility is limited to the units' line of sight (assuming 360-degree view). Out-of-sight areas grow "stale."
 
 ### Enemy Info
-The accuracy and detail of enemy status depend on proximity and the party's best scouting score.
+The accuracy and detail of enemy status may depend on proximity and the party's
+best scouting score. Exact Scout reconnaissance reveals and UI rules are
+deferred; see [Borderlands Campaign Loop](campaign-loop.md#deferred-roadmap-decisions).
 
 ## Conditions, Wounds, and Status Effects
 
@@ -111,5 +125,3 @@ Conditions and debuffs alter combat attributes.
 * **Wounds:** Physical degradation based on current health:
   * **50% or less Max HP:** -10% to all combat stats, available AP, and world map movement speed.
   * **Under 20% Max HP:** -25% to all combat stats, available AP, and world map movement speed.
-
-

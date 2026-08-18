@@ -72,6 +72,14 @@ enhancements:
 
 `GameSession` owns catalogues, instances, banked normal-item stacks, unit-held item ids, recipes, and materials. The active weapon/armor pointer becomes an owned item id. Craft, equip, upgrade, rune replacement, sale, and snapshot import preserve ownership exactly once. Invalid inputs, missing requirements, duplicate ids, incompatible slots, or unavailable sockets leave all state unchanged.
 
+When an adventurer dies, battle aftermath validates ownership before mutation
+and atomically transfers that adventurer's equipped, carried, and unique
+modified items to the party loot pool. Those items return to the Encampment
+bank after a successful retreat. A dead adventurer may not retain item
+ownership in the save or aftermath input. The campaign-level death, retreat,
+and wipe contract is defined in the
+[Borderlands Campaign Loop](campaign-loop.md#defeat-death-and-retreat).
+
 ## Generic Action Points & Item Action Costs
 
 The [Movement and Action Points](movement-and-action-points.md) guide owns the

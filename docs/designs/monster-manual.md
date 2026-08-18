@@ -6,6 +6,19 @@ This is the long-term monster roster and a balance contract for adding it in sli
 
 The canonical monster data is eventually a template table owned by `GameSession`, copied into a runtime `Unit` at battle start. A monster has no adventurer progression, equipment inventory, or mutable template state.
 
+## Campaign encounter contract
+
+The first completable campaign uses twelve required authored battles: three in
+each of tiers 1–3, two pre-boss battles, and a final boss. An authored
+encounter declares its objective id, exact composition, prerequisite, reward,
+intended counterplay, and loss consequence. Repeatable vacancies are
+post-victory free-play content and cannot supply a required campaign battle or
+reopen a completed objective.
+
+Monster threat rises at a campaign pace and appears on the World Map as a
+one-to-five-star risk indicator. It is separate from this manual's `tier`,
+which groups encounter design purpose. See the [Borderlands Campaign Loop](campaign-loop.md#objectives-gates-and-encounter-threat) for campaign gates.
+
 ## Calibration baseline
 
 The current shipped values below are calibrated against a fresh Warrior with the

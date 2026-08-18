@@ -2,15 +2,15 @@
 
 ## Purpose and status
 
-This is the long-term class vision for Fantasy Tactics. It is deliberately broader than the currently playable Warrior-and-Scout campaign. A heading marked **Shipped** describes live behaviour; **Next slice** is the approved order of delivery; **Future** is design intent only and must not be presented as a current game feature.
+This is the long-term class vision for Fantasy Tactics. It is deliberately broader than the currently playable Warrior-and-Scout campaign. A heading marked **Shipped** describes live behaviour; **Next slice** is the approved order of delivery; **Future** is design intent only and must not be presented as a current game feature. The campaign roadmap locks the Warrior/Scout/Cleric triad as the first three-class composition, but Scout reconnaissance details and the Cleric/Temple slice are still deferred decisions; see [Borderlands Campaign Loop](campaign-loop.md#deferred-roadmap-decisions).
 
 The design grows a balanced party through four complementary roots, rather than fully implementing one class tree before the other roles exist:
 
 | Root class | Party role | Tactical emphasis | Earliest playable purpose |
 |---|---|---|---|
 | Warrior | Front line | Health, Might, Guard | Holds space and survives attacks. |
-| Scout | Ranged pressure and reconnaissance | Accuracy, Action Points | Attacks safely at range and reveals expedition risk. |
-| Cleric | Sustain and protection | Health, Guard, Resistance | Restores allies and prevents attrition. |
+| Scout | Ranged pressure and reconnaissance | Accuracy, Action Points | Attacks safely at range; reconnaissance details are deferred. |
+| Cleric | Sustain and protection | Health, Guard, Resistance | Proposed targeted healing/protection; exact slice is deferred. |
 | Mage | Control and burst | spell Accuracy, Action Points | Trades durability for area damage and control. |
 
 Specializations build on a proven root role: Warrior becomes Knight or Archer, Mage becomes Spellcaster or Battle Mage, Cleric becomes Healer or Paladin, and Scout becomes Ranger. A specialization never arrives before its root's core combat loop and counterplay are playable.
