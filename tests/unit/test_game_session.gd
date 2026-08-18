@@ -2695,12 +2695,47 @@ func test_recruitment_refill_is_capped_at_four_offers_with_no_catch_up() -> void
 	assert_eq(
 		session.recruitment_vacancies,
 		[] as Array[Dictionary],
-		"A clock blocked by the cap is discarded, not rescheduled or caught up later"
+		"A fired clock is consumed after evicting the oldest offer to make room, not rescheduled or caught up later"
 	)
 
 	for i in 5:
 		session.end_world_turn()
-	assert_eq(session.get_recruitment_candidates().size(), 4, "A capped, discarded vacancy must never catch up")
+	assert_eq(session.get_recruitment_candidates().size(), 4, "A capped pool must never grow past its cap, no matter how many clocks fire")
+
+
+## TDD Task 1's overflow bullet: "Test candidate overflow removes oldest
+## offer when new offer arrives." The sibling test above only asserts
+## .size() holds at the cap, which would also pass if refills were silently
+## discarded instead of evicting-and-replacing -- this test pins the actual
+## FIFO contract (_advance_recruitment_vacancies(): recruitment_candidates.
+## remove_at(0) before appending the new offer) by asserting the specific
+## oldest offer is gone while the rest survive in their original order.
+func test_recruitment_refill_evicts_the_oldest_offer_specifically() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.recruitment_candidates = [
+		_recruitment_candidate("warrior_002"),
+		_recruitment_candidate("warrior_003"),
+		_recruitment_candidate("warrior_004"),
+		_recruitment_candidate("warrior_010"),
+	] as Array[Dictionary]
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_eq(candidates.size(), 4, "A refill must never push active offers above the cap")
+	assert_false(
+		session.has_recruitment_candidate("warrior_002"),
+		"The oldest offer (FIFO head, index 0) must be evicted to make room for the refill"
+	)
+	assert_eq(candidates[0].id, "warrior_003", "The second-oldest offer becomes the new head, preserving arrival order")
+	assert_eq(candidates[1].id, "warrior_004", "Surviving offers keep their relative order")
+	assert_eq(candidates[2].id, "warrior_010", "Surviving offers keep their relative order")
+	assert_eq(
+		["warrior_002", "warrior_003", "warrior_004", "warrior_010"].find(candidates[3].id), -1,
+		"The newly spawned offer (FIFO tail) must be distinct from every surviving seeded offer"
+	)
 
 
 func test_no_new_recruitment_vacancy_clock_starts_while_already_at_capacity() -> void:

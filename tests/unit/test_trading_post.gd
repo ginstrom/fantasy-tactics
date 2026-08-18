@@ -36,6 +36,57 @@ func test_back_button_returns_to_trade() -> void:
 	assert_string_contains(source, "GameManager.go_to_trade()")
 
 
+func test_upgrade_button_is_disabled_below_the_upgrade_cost_and_enabled_at_it() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var upgrade_button: Button = screen.get_node("Body/Center/VBox/UpgradeButton")
+
+	assert_true(upgrade_button.visible)
+	assert_true(upgrade_button.disabled, "Level 1 with no gold cannot afford the upgrade")
+	assert_eq(upgrade_button.text, tr("shop.upgrade") % [2, GameSession.SHOP_UPGRADE_COST])
+
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
+	screen.refresh()
+
+	assert_false(upgrade_button.disabled, "150 gold is exactly enough to afford the upgrade")
+
+
+## Guards the Critical finding from the Step 3 review: shop_level could
+## previously only ever be advanced from a test, never from any UI, so
+## Tier 2/3 income and the Tier-3 healing potion purchase (stores.gd) were
+## permanently unreachable by a real player. Mirrors guild_hall.gd's
+## pressing-upgrade tests.
+func test_pressing_upgrade_raises_the_shop_level_and_deducts_gold() -> void:
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var upgrade_button: Button = screen.get_node("Body/Center/VBox/UpgradeButton")
+
+	upgrade_button.emit_signal("pressed")
+
+	assert_eq(GameSession.shop_level, 2)
+	assert_eq(GameSession.gold, 0)
+	assert_true(screen.get_node("Body/Center/VBox/UpgradeButton").visible, "Level 2 still has a level 3 upgrade to offer")
+	assert_false(screen.get_node("Body/Center/VBox/MaxLevelLabel").visible)
+	assert_eq(upgrade_button.text, tr("shop.upgrade") % [3, GameSession.SHOP_LEVEL_3_UPGRADE_COST])
+
+
+func test_pressing_upgrade_at_level_two_reaches_the_max_level_state() -> void:
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+	GameSession.gold = GameSession.SHOP_LEVEL_3_UPGRADE_COST
+	screen.refresh()
+
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+
+	assert_eq(GameSession.shop_level, 3)
+	assert_eq(GameSession.gold, 0)
+	assert_false(screen.get_node("Body/Center/VBox/UpgradeButton").visible, "Max level has no further upgrade to offer")
+	assert_true(screen.get_node("Body/Center/VBox/MaxLevelLabel").visible)
+
+
 func test_buy_table_lists_only_level_one_iron_weapons() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)

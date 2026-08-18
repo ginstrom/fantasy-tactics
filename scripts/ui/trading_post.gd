@@ -3,14 +3,21 @@ extends Control
 ## Shows Shop status and its unlocked weapon catalogue. Selecting a
 ## row shows its detail and a Buy action gated on affordability, mirroring
 ## recruitment.gd's row-selection-drives-a-gated-purchase-button pattern.
-## Note: no upgrade tiers here — see this plan's Phase C architecture note.
+## Also carries an Upgrade action gated on GameSession.can_upgrade_shop(),
+## mirroring guild_hall.gd's "below the level cap" Upgrade button /
+## MaxLevelLabel pattern — Shop's 3 tiers gate income (2/5/10 gold/turn) and
+## the Tier-3 healing potion purchase (see stores.gd).
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var income_label: Label = $Body/Center/VBox/IncomeLabel
+@onready var upgrade_button: Button = $Body/Center/VBox/UpgradeButton
+@onready var max_level_label: Label = $Body/Center/VBox/MaxLevelLabel
 @onready var buy_table: TableView = $Body/Center/VBox/BuyTable
 @onready var selected_item_label: Label = $Body/Center/VBox/SelectedItemLabel
 @onready var buy_button: Button = $Body/Center/VBox/BuyButton
+
+const SHOP_MAX_LEVEL := 3
 
 var selected_item_id: String = ""
 
@@ -31,6 +38,15 @@ func refresh() -> void:
 	income_label.text = tr("shop.status") % [GameSession.shop_level, GameSession.shop_gold, GameSession.shop_gold_cap()]
 	buy_table.set_rows(_build_rows())
 	_refresh_selection()
+
+	var at_max_level: bool = GameSession.shop_level >= SHOP_MAX_LEVEL
+	upgrade_button.visible = not at_max_level
+	upgrade_button.disabled = not GameSession.can_upgrade_shop()
+	var upgrade_cost := (
+		GameSession.SHOP_LEVEL_3_UPGRADE_COST if GameSession.shop_level == 2 else GameSession.SHOP_UPGRADE_COST
+	)
+	upgrade_button.text = tr("shop.upgrade") % [GameSession.shop_level + 1, upgrade_cost]
+	max_level_label.visible = at_max_level
 
 
 func _build_columns() -> Array[TableColumn]:
@@ -74,6 +90,11 @@ func _on_row_selected(row_id: Variant) -> void:
 
 func _on_buy_button_pressed() -> void:
 	GameSession.buy_item(selected_item_id)
+	refresh()
+
+
+func _on_upgrade_button_pressed() -> void:
+	GameSession.upgrade_shop()
 	refresh()
 
 
