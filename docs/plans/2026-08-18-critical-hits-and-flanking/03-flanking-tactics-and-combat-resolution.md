@@ -12,9 +12,9 @@ Implement **Flanking Geometry** and **Tactical Flanking Modifiers** per [`docs/d
   - **Side / Oblique Flank:** -20% defender Guard, +20% critical hit chance (25% total).
   - **Rear Flank:** -50% defender Guard, +50% critical hit chance (55% total).
   - **Front:** Standard defender Guard, base 5% critical hit chance.
-- Geometry rigorously matches the 3x3 directional diagrams in the design document for all four facings, and generalizes to ranged line-of-sight attacks.
-- Combat log, status messaging, and unit inspection display flanking information.
-- A new deterministic scenario suite (`scenarios/battle/flanking-tactics.json`) verifies balance and tactical positioning benefits.
+- Geometry rigorously matches the 3x3 directional diagrams in the design document for all four facings. Step 1 makes every one of those adjacent cells a legal melee target, including diagonals; range attacks retain their existing range/LoS contract.
+- Combat log and status messaging display flanking information; it is not persistent unit state.
+- A new deterministic scenario fixture smoke-tests the runner contract. Exact front/side/rear advantages are proved by scripted public-action traces in tests, not by stochastic aggregate win-rate claims from the greedy policy.
 
 ---
 
@@ -73,15 +73,20 @@ In `try_attack_selected_unit(target_pos)`:
        crit_bonus = GameConfig.get_float("combat", "rear_flank_crit_bonus", 0.50)
 
    var effective_defense: int = maxi(0, target.defense - guard_penalty)
-   var effective_hit_chance: float = clampf(selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, 0.95)
+   var effective_hit_chance: float = clampf(selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP)
    ```
 3. Compute effective critical chance:
    ```gdscript
    var base_crit: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
    var effective_crit_chance: float = clampf(base_crit + crit_bonus, 0.0, 0.95)
    ```
-4. Record flank type in `last_attack_result`:
-   `last_attack_result["flank"] = flank_type`
+4. Record the resolved values in `last_attack_result`:
+   ```gdscript
+   last_attack_result["flank"] = flank_type
+   last_attack_result["effective_defense"] = effective_defense
+   last_attack_result["effective_hit_chance"] = effective_hit_chance
+   last_attack_result["effective_crit_chance"] = effective_crit_chance
+   ```
 
 ### 4. Battlefield Presentation & Combat Logs (`scripts/battle/battlefield.gd`)
 - If attack is a side or rear flank, enhance the combat log entry and status message:
@@ -90,6 +95,7 @@ In `try_attack_selected_unit(target_pos)`:
   - `"battle.log.flank.rear_crit": "%s attacks %s from behind — Critical Hit! Hits for %d damage!"`
   - `"battle.log.flank.side_crit": "%s attacks %s from the side — Critical Hit! Hits for %d damage!"`
 - Add translation entries in `translations/en.tres` and lockstep tests in [`tests/unit/test_localization.gd`](../../../tests/unit/test_localization.gd).
+- Do not add a persistent "flank" row to the unit inspection panel: flank is attack-event context, not durable unit state. The combat status/log is its player-facing presentation.
 
 ---
 
@@ -109,7 +115,7 @@ make check   # confirm clean baseline before changes
    - Add `side_flank_guard_penalty`, `side_flank_crit_bonus`, `rear_flank_guard_penalty`, and `rear_flank_crit_bonus` to `config/game_config.json` and `game_config.gd` `DEFAULTS`.
    - Update `test_game_config.gd` to assert all new keys match.
 
-2. **Flanking Classification Geometry ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
+2. **Flanking Classification and Legal-Attack Geometry ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
    - Test all 8 adjacent tiles for **Facing Left** (`(-1, 0)`):
      - Assert `(-1, -1)`, `(-1, 0)`, `(-1, 1)` are `"front"`.
      - Assert `(0, -1)`, `(0, 1)`, `(1, -1)`, `(1, 1)` are `"side"`.
@@ -118,12 +124,14 @@ make check   # confirm clean baseline before changes
    - Test all 8 adjacent tiles for **Facing Right** (`(1, 0)`).
    - Test all 8 adjacent tiles for **Facing Down** (`(0, 1)`).
    - Test ranged attack positions (e.g., attacker at `(0, 4)` vs defender at `(0, 2)` facing Up is `"rear"`).
+   - For each adjacent cell in one complete facing table, use `try_attack_selected_unit()` and assert the actual result records the same flank type. This catches a classifier that labels diagonal cells correctly but combat never permits them.
 
-3. **Guard Reduction & Hit Chance Modifiers ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
+3. **Guard Reduction, Configured Cap, and Hit Chance Modifiers ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
    - Given defender with `40%` defense and attacker with `70%` hit chance:
      - Front attack: effective defense `40%` -> effective hit chance `30%` (`0.30`).
      - Side attack: effective defense `20%` (`40 - 20`) -> effective hit chance `50%` (`0.50`).
      - Rear attack: effective defense `0%` (`max(0, 40 - 50)`) -> effective hit chance `70%` (`0.70`).
+   - Set `GameSession.EFFECTIVE_HIT_CHANCE_CAP` below `0.95` in an isolated test and assert flank resolution honors it; restore the value in teardown.
 
 4. **Flanking Critical Hit Chance Bonuses ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
    - Given base critical chance `5%`:
@@ -137,12 +145,15 @@ make check   # confirm clean baseline before changes
 
 5. **Combat Result & Logging ([`tests/unit/test_battlefield.gd`](../../../tests/unit/test_battlefield.gd) & [`tests/unit/test_localization.gd`](../../../tests/unit/test_localization.gd)):**
    - Test `last_attack_result.flank` contains `"front"`, `"side"`, or `"rear"`.
+   - Test its effective-defense, hit-chance, and critical-chance values are the resolved values used for that attack.
    - Test log output formats correctly for side and rear flanks with and without critical hits.
    - Update `translations/en.tres` and `test_localization.gd`.
 
-6. **Scenario Suite & Balance Tooling ([`scenarios/battle/flanking-tactics.json`](../../../scenarios/battle/)):**
-   - Create `scenarios/battle/flanking-tactics.json` matrixing attack angles (front vs flank).
-   - Run `make scenario SCENARIO=scenarios/battle/flanking-tactics.json SEED=20260818 ITERATIONS=20`.
+6. **Scripted Tactical Trace and Runner Smoke Fixture ([`tests/unit/test_scenario_runner.gd`](../../../tests/unit/test_scenario_runner.gd), [`scripts/tools/battle_scenarios/scenario_runner.gd`](../../../scripts/tools/battle_scenarios/scenario_runner.gd), & [`scenarios/battle/flanking-tactics.json`](../../../scenarios/battle/)):**
+   - Add a test-only policy override that makes explicit public `try_attack_selected_unit()` calls from fixed front, side, and rear positions. It must never mutate unit state directly.
+   - Assert the trace records expected flank, hit threshold, critical outcome, and damage for injected rolls. Use three separate isolated battle cases so a unit turning after its attack cannot contaminate the next angle.
+   - Create `flanking-tactics.json` with explicit positions and facings for a smoke run, then assert repeated `ScenarioRunner` runs for the same case/seed have byte-identical records. It may report results but must not assert that greedy policies produce higher win or damage rates.
+   - Run `make scenario SCENARIO=scenarios/battle/flanking-tactics.json SEED=20260818 ITERATIONS=20` as a smoke check only.
 
 ---
 
@@ -177,7 +188,7 @@ make simulate RUNS=20
 5. **Rear Flank:**
    - Maneuver a unit directly behind the goblin (east of the goblin who faces west).
    - Attack and observe combat log reads: `<Attacker> attacks <Defender> from behind — hits for <N> damage!`.
-   - Confirm increased critical hit occurrence and higher damage output from rear positioning.
+   - Confirm the combat log identifies the rear flank. Critical-frequency and exact damage proofs are covered by deterministic automated tests rather than chance during manual play.
 6. **Enemy AI Symmetry:**
    - Position a player unit facing away from approaching goblins.
    - End turn and verify enemy attacks from behind/side correctly apply flanking bonuses against the player.
@@ -187,7 +198,9 @@ make simulate RUNS=20
 ## Commit and Merge
 
 ```bash
-git add -A && git status
+git status --short
+git add config/game_config.json scripts/autoload/game_config.gd scripts/battle/battle_controller.gd scripts/battle/battlefield.gd scripts/tools/battle_scenarios/scenario_runner.gd scenarios/battle/flanking-tactics.json translations/en.tres tests/unit/test_game_config.gd tests/unit/test_battle_controller.gd tests/unit/test_battlefield.gd tests/unit/test_localization.gd tests/unit/test_scenario_runner.gd
+git diff --cached --check
 git commit -m "feat(combat): implement flanking geometry, tactical guard penalties, and critical hit bonuses"
 
 # After user sign-off:
@@ -202,5 +215,5 @@ git branch -d feat/combat-flanking-tactics
 
 - `get_flank_type()` classifies Front, Side, and Rear positions matching design doc diagrams 100%.
 - Side and Rear flanks apply exact Guard reductions (-20%, -50%) and Critical Hit bonuses (+20%, +50%).
-- `scenarios/battle/flanking-tactics.json` passes deterministically with higher win/damage rates for flanked attacks.
+- A scripted public-action trace proves each front/side/rear modifier deterministically, and `flanking-tactics.json` produces byte-identical smoke-run records for an identical seed.
 - `make check` is 100% green with zero errors or warnings.

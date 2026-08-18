@@ -40,6 +40,7 @@ Mirror these keys identically in `GameConfig.DEFAULTS["combat"]`.
   ```gdscript
   var crit_roll: Callable = func() -> float: return randf()
   ```
+- In `BattleStateFactory.build()`, assign `controller.crit_roll` from the same per-iteration `RandomNumberGenerator` already used for `hit_roll` and `damage_roll`. Do not use global `randf()` in scenario execution.
 - In `try_attack_selected_unit(target_pos)`:
   1. Roll hit chance as normal: `hit = hit_roll.call() < effective_hit_chance`.
   2. If `hit`:
@@ -97,13 +98,17 @@ Write failing tests first, run to confirm failure, then implement:
    - Test that when `crit_roll` returns `>= 0.05` (e.g. `0.50`), `last_attack_result.critical` is `false`.
    - Test that missed attacks (`hit == false`) never trigger critical hits and have `last_attack_result.critical == false`.
 
-3. **Damage Amplification Formula ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
+3. **Seeded Scenario-Roll Determinism ([`tests/unit/test_battle_state_factory.gd`](../../../tests/unit/test_battle_state_factory.gd) & [`tests/unit/test_scenario_runner.gd`](../../../tests/unit/test_scenario_runner.gd)):**
+   - Build the same normalized scenario twice with one seed and assert its hit, damage, and critical callables yield the same sequence.
+   - Run the same critical-capable scenario case twice with identical iteration seeds and assert the resulting records are byte-identical, including `damage` and survivors.
+
+4. **Damage Amplification Formula ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
    - Given an attacker with base damage `4` and `0` might, against a defender with `0` resistance:
      - Normal hit: `4` damage.
      - Critical hit (`crit_roll = 0.0`): `round(4 * 1.5) = 6` damage.
    - Assert `target.health` reflects the amplified damage.
 
-4. **Resistance Reduction on Critical Hit ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
+5. **Resistance Reduction on Critical Hit ([`tests/unit/test_battle_controller.gd`](../../../tests/unit/test_battle_controller.gd)):**
    - Given an attacker with raw damage `10`, against a defender with `50%` resistance:
      - Normal hit: `round(10 * (1 - 0.50)) = 5` damage.
      - Critical hit: Raw damage becomes `round(10 * 1.5) = 15`. Effective resistance is reduced by 20% points to `30%`. Final damage is `round(15 * (1 - 0.30)) = round(10.5) = 11` damage.
@@ -111,7 +116,7 @@ Write failing tests first, run to confirm failure, then implement:
    - Given a defender with `10%` resistance:
      - Critical hit reduces resistance to `max(0, 10 - 20) = 0%`. Final damage is `round(10 * 1.5) = 15`.
 
-5. **Combat Feedback and Log Presentation ([`tests/unit/test_battlefield.gd`](../../../tests/unit/test_battlefield.gd) & [`tests/unit/test_localization.gd`](../../../tests/unit/test_localization.gd)):**
+6. **Combat Feedback and Log Presentation ([`tests/unit/test_battlefield.gd`](../../../tests/unit/test_battlefield.gd) & [`tests/unit/test_localization.gd`](../../../tests/unit/test_localization.gd)):**
    - Test `_describe_step()` with critical hit result formats expected critical status string.
    - Test `_describe_log_entry()` with critical hit result formats expected critical log entry.
    - Verify `translations/en.tres` entries and lockstep assertions in `test_localization.gd`.
@@ -150,7 +155,9 @@ make scenario SCENARIO=scenarios/battle/baseline-party-viability.json SEED=20260
 ## Commit and Merge
 
 ```bash
-git add -A && git status
+git status --short
+git add config/game_config.json scripts/autoload/game_config.gd scripts/battle/battle_controller.gd scripts/tools/battle_scenarios/battle_state_factory.gd scripts/battle/battlefield.gd translations/en.tres tests/unit/test_game_config.gd tests/unit/test_battle_controller.gd tests/unit/test_battle_state_factory.gd tests/unit/test_scenario_runner.gd tests/unit/test_battlefield.gd tests/unit/test_localization.gd
+git diff --cached --check
 git commit -m "feat(combat): implement base critical hits with damage amplification and resistance reduction"
 
 # After user sign-off:

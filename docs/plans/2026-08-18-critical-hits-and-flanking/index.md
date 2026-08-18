@@ -8,7 +8,7 @@
 
 The combat design specification adds tactical depth through **Unit Facing**, **Critical Hits**, and **Flanking**:
 
-1. **Unit Facing:** Units have a cardinal facing (`LEFT`, `RIGHT`, `UP`, `DOWN`). Moving or attacking updates facing orientation. Facing is visually indicated on the battlefield grid.
+1. **Unit Facing and attack geometry:** Units have a cardinal facing (`LEFT`, `RIGHT`, `UP`, `DOWN`). Moving or attacking updates facing orientation. Facing is visually indicated on the battlefield grid. Melee may strike any of the eight neighboring tiles, while movement remains cardinal-only.
 2. **Critical Hits:** Successful physical weapon hits have a natural 5% base chance to land a critical hit. A critical hit amplifies raw damage by +50% and reduces defender damage resistance by 20 percentage points.
 3. **Flanking:** Attack angle relative to defender facing determines whether an attack strikes the **Front**, **Side / Oblique Flank**, or **Rear Flank**:
    - **Front:** Standard guard, base 5% critical hit chance.
@@ -19,9 +19,9 @@ This plan decomposes the implementation into three self-contained steps executed
 
 | # | Step file | Summary | Branch | Depends on |
 |---|---|---|---|---|
-| 1 | [01-unit-facing-and-visualization.md](01-unit-facing-and-visualization.md) | Unit facing model, movement/attack orientation updates, and board facing visual indicators | `feat/combat-unit-facing` | — |
-| 2 | [02-critical-hit-mechanics.md](02-critical-hit-mechanics.md) | Base critical hit roll, damage amplification (+50%), resistance reduction (-20%), and combat log presentation | `feat/combat-critical-hits` | Step 1 merged |
-| 3 | [03-flanking-tactics-and-combat-resolution.md](03-flanking-tactics-and-combat-resolution.md) | Flanking angle calculation (Front/Side/Rear), tactical Guard penalties, critical bonuses, and balance scenario suite | `feat/combat-flanking-tactics` | Step 2 merged |
+| 1 | [01-unit-facing-and-visualization.md](01-unit-facing-and-visualization.md) | Unit facing model, deterministic move paths, diagonal-melee legality, production/headless initialization, and board indicators | `feat/combat-unit-facing` | — |
+| 2 | [02-critical-hit-mechanics.md](02-critical-hit-mechanics.md) | Seeded base critical roll, damage amplification (+50%), resistance reduction (-20%), and combat log presentation | `feat/combat-critical-hits` | Step 1 merged |
+| 3 | [03-flanking-tactics-and-combat-resolution.md](03-flanking-tactics-and-combat-resolution.md) | Flanking geometry, tactical Guard/critical modifiers, and deterministic scripted tactical verification | `feat/combat-flanking-tactics` | Step 2 merged |
 
 Each step is self-contained: setup, red/green TDD task list, automated verification, manual `make play` sign-off, commit, and local merge to `main`.
 
@@ -45,8 +45,8 @@ Verified against codebase state at commit `6024931`:
   Houses combat balance values (`base_move_range`, `effective_hit_chance_cap`, `attack_to_hit_chance_divisor`). `DEFAULTS` in `game_config.gd` mirrors the JSON file key-for-key and is locked by [`tests/unit/test_game_config.gd`](../../../tests/unit/test_game_config.gd).
 - **Localization ([`translations/en.tres`](../../../translations/en.tres) & [`tests/unit/test_localization.gd`](../../../tests/unit/test_localization.gd)):**
   Centralizes player-facing combat status and log strings (`battle.status.*`, `battle.log.*`).
-- **Headless Balance Tools ([`Makefile`](../../../Makefile)):**
-  `make check` (GUT test suite), `make simulate` (headless batch simulator), and `make scenario` (deterministic seed-pinned scenario runner over `scenarios/battle/*.json`).
+- **Headless Balance Tools ([`scripts/tools/battle_scenarios/battle_state_factory.gd`](../../../scripts/tools/battle_scenarios/battle_state_factory.gd) & [`Makefile`](../../../Makefile)):**
+  `BattleStateFactory` constructs a bare controller rather than calling `_ready()`, and currently seeds `hit_roll` and `damage_roll`. `make check` runs the GUT suite; `make simulate` is a scene-driven smoke client; and `make scenario` runs seed-pinned scenario cases. New combat randomness and initial unit state must be wired through this factory or records cease to be reproducible and diverge from play.
 
 ---
 
@@ -94,7 +94,7 @@ Facing Left (<):       Facing Up (^):         Facing Right (>):      Facing Down
    - Rear Flank: `effective_guard = max(0, defender.defense - 50)`
 
 2. **Hit Chance:**
-   `effective_hit_chance = clamp(attacker.hit_chance - effective_guard / 100.0, 0.05, 0.95)`
+   `effective_hit_chance = clamp(attacker.hit_chance - effective_guard / 100.0, 0.05, GameSession.EFFECTIVE_HIT_CHANCE_CAP)`
    `is_hit = hit_roll.call() < effective_hit_chance`
 
 3. **Critical Hit Chance:**
@@ -124,7 +124,7 @@ Facing Left (<):       Facing Up (^):         Facing Right (>):      Facing Down
 2. **Red/Green TDD:**
    Write failing unit tests first, verify test failure, implement changes, and confirm `make check` is fully green.
 3. **Deterministic Injectable Callables:**
-   Maintain testability using injectable callables on `BattleController` (`hit_roll`, `damage_roll`, `crit_roll`).
+   Maintain testability using injectable callables on `BattleController` (`hit_roll`, `damage_roll`, `crit_roll`). `BattleStateFactory` must assign every gameplay-random callable from its per-iteration seeded RNG; two runs with the same scenario/seed/iterations must write byte-identical records.
 4. **Config & Defaults Invariant:**
    Any added configuration in `config/game_config.json` must be reflected identically in `scripts/autoload/game_config.gd`'s `DEFAULTS` and verified by `tests/unit/test_game_config.gd`.
 5. **Localization Invariant:**
@@ -134,6 +134,7 @@ Facing Left (<):       Facing Up (^):         Facing Right (>):      Facing Down
    - Attacks of Opportunity (movement out of adjacent melee tiles).
    - Dodge and Parry mechanics / Off-balance conditions.
    - Spells & Magic Resistance.
+   - Diagonal movement. Diagonal attacks are expressly in scope; only movement stays four-directional.
 
 ---
 
@@ -142,5 +143,8 @@ Facing Left (<):       Facing Up (^):         Facing Right (>):      Facing Down
 - `make check` passes with 0 failures and 0 warnings.
 - All new methods and properties have complete unit test coverage in `tests/unit/`.
 - Combat determinism and scenario contracts are preserved.
+- New `ScenarioContract` fields have normalization, validation, factory-hydration, and byte-identical-record coverage.
 - Manual verification performed via `make play` and verified against the step's criteria.
 - Local feature branch merged to `main` and branch deleted.
+
+Every commit stages an explicit, reviewed file list. Do not use `git add -A`: the shared checkout can contain unrelated user edits.
