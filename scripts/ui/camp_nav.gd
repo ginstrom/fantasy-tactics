@@ -81,6 +81,10 @@ func _on_guild_hall_button_pressed() -> void:
 	GameManager.go_to_guild_hall()
 
 
+func _on_temple_button_pressed() -> void:
+	GameManager.go_to_temple()
+
+
 func _on_blacksmith_button_pressed() -> void:
 	GameManager.go_to_blacksmith()
 

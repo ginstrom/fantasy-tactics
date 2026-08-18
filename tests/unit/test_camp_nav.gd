@@ -3,6 +3,7 @@ extends GutTest
 const CampNavScene := preload("res://scenes/ui/camp_nav.tscn")
 const RosterScene := preload("res://scenes/ui/roster.tscn")
 const BlacksmithScene := preload("res://scenes/ui/blacksmith.tscn")
+const TempleScene := preload("res://scenes/ui/temple.tscn")
 const StoresScene := preload("res://scenes/ui/stores.tscn")
 const ShopScene := preload("res://scenes/ui/trading_post.tscn")
 
@@ -66,6 +67,7 @@ func test_descendant_scenes_explicitly_select_their_camp_nav_category() -> void:
 	var cases: Array[Array] = [
 		[RosterScene, 1], # CampNav.Category.UNITS
 		[BlacksmithScene, 2], # CampNav.Category.BUILDINGS
+		[TempleScene, 2], # CampNav.Category.BUILDINGS
 		[StoresScene, 3], # CampNav.Category.TRADE
 		[ShopScene, 3], # CampNav.Category.TRADE
 	]
@@ -84,6 +86,7 @@ func test_submenu_buttons_route_to_every_listed_destination() -> void:
 		"GameManager.go_to_parties()",
 		"GameManager.go_to_recruitment()",
 		"GameManager.go_to_guild_hall()",
+		"GameManager.go_to_temple()",
 		"GameManager.go_to_blacksmith()",
 		"GameManager.go_to_alchemy_workshop()",
 		"GameManager.go_to_runic_workshop()",

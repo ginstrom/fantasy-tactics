@@ -347,6 +347,26 @@ const CLASS_DEFINITIONS: Dictionary = {
 			"might": {"tier": "low", "min_gain": 1, "max_gain": 2},
 		},
 	},
+	# Minimal Cleric stub (see docs/plans/2026-08-18-core-loop-and-engagement/
+	# 03-encampment-buildings-and-tier-model.md): base stats/skills only, in
+	# the same family as warrior/scout, so the Temple can generate a real,
+	# recruitable Cleric candidate this step. MP, Heal, Bless, and every
+	# other battle mechanic are deliberately out of scope here -- that is
+	# Step 4's job (04-cleric-class-and-scout-reconnaissance.md). Defaults to
+	# a dagger (a category every class can already use) rather than
+	# inventing a new blunt/mace weapon category this step does not need.
+	"cleric": {
+		"allowed_weapon_categories": ["dagger"],
+		"base_stats": {"max_health": 11, "vitality": 11, "melee": 45, "missile": 40, "guard": 0, "might": 0, "move_range": 3},
+		"primary_attribute_ranges": {"strength": Vector2i(4, 6), "agility": Vector2i(4, 6), "vitality": Vector2i(6, 8), "intelligence": Vector2i(3, 5), "piety": Vector2i(6, 8), "luck": Vector2i(1, 10)},
+		"class_multiplier": 1.0,
+		"skills": {
+			"melee": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"missile": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"might": {"tier": "low", "min_gain": 1, "max_gain": 2},
+		},
+	},
 }
 const BLACKSMITH_BUILD_COST := 50
 const BLACKSMITH_UPGRADE_COSTS := {2: 50, 3: 100}
@@ -407,11 +427,36 @@ const DEFAULT_ARMOR_ID := "leather_armor"
 var BASE_MOVE_RANGE: int = 3
 var PERK_LEVEL_INTERVAL: int = 3
 const BONUS_MOVE_PERK_ID := "bonus_move"
-var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 4
-var GUILD_HALL_LEVEL_2_PARTY_CAP: int = 5
+# Guild Hall tier model (see docs/plans/2026-08-18-core-loop-and-engagement/
+# 03-encampment-buildings-and-tier-model.md): three tiers scaling deployable
+# party size (3/4/5), roster capacity (10/15/20), and recruitment offer
+# capacity (4/8/10). GUILD_HALL_LEVEL_2_PARTY_CAP predates this step (it used
+# to be the final/max cap, valued 5); it now names the level-2 cap (4)
+# specifically, with GUILD_HALL_LEVEL_3_PARTY_CAP naming the new final cap.
+var GUILD_HALL_LEVEL_1_PARTY_CAP: int = 3
+var GUILD_HALL_LEVEL_2_PARTY_CAP: int = 4
+var GUILD_HALL_LEVEL_3_PARTY_CAP: int = 5
 var GUILD_HALL_UPGRADE_COST: int = 50
-var GUILD_HALL_MAX_LEVEL: int = 2
-const SHOP_UPGRADE_COST := 50
+var GUILD_HALL_LEVEL_3_UPGRADE_COST: int = 100
+var GUILD_HALL_MAX_LEVEL: int = 3
+var GUILD_HALL_LEVEL_1_ROSTER_CAP: int = 10
+var GUILD_HALL_LEVEL_2_ROSTER_CAP: int = 15
+var GUILD_HALL_LEVEL_3_ROSTER_CAP: int = 20
+var GUILD_HALL_LEVEL_2_OFFER_CAP: int = 8
+var GUILD_HALL_LEVEL_3_OFFER_CAP: int = 10
+# Temple build cost (see docs/plans/2026-08-18-core-loop-and-engagement/03-
+# encampment-buildings-and-tier-model.md): Level 1 ("consecrated") unlocks
+# Cleric recruitment candidate generation only. Temple level 2
+# ("sanctified") and any blessing state are explicitly out of scope.
+var TEMPLE_BUILD_COST: int = 100
+const TEMPLE_MAX_LEVEL := 1
+# Shop tier upgrade costs (see docs/plans/2026-08-18-core-loop-and-engagement/
+# 03-encampment-buildings-and-tier-model.md): SHOP_UPGRADE_COST predates this
+# step (it used to be the Shop's only upgrade, a flat one-time cost of 50);
+# it now specifically names the level 1 -> 2 cost (150), with
+# SHOP_LEVEL_3_UPGRADE_COST naming the new level 2 -> 3 cost (300).
+var SHOP_UPGRADE_COST: int = 150
+var SHOP_LEVEL_3_UPGRADE_COST: int = 300
 const SHOP_LEVEL_ONE_GOLD_CAP := 100
 const SHOP_LEVEL_TWO_GOLD_CAP := 200
 # Passive per-turn gold income by Shop level (docs/designs/campaign-loop.md's
@@ -496,6 +541,29 @@ func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictio
 		"availability_status": "available",
 		"stats": CLASS_DEFINITIONS.scout.base_stats.duplicate(true),
 		"health": CLASS_DEFINITIONS.scout.base_stats.max_health,
+		"progression": {
+			"xp": 0.0,
+			"perks": [],
+		},
+	}
+
+
+## Minimal Cleric factory (see CLASS_DEFINITIONS.cleric's own doc comment):
+## enough for the Temple to generate a real, recruitable candidate this
+## step. No MP/Heal/Bless fields -- those are Step 4's job.
+func get_default_cleric(adventurer_id: String, adventurer_name: String) -> Dictionary:
+	return {
+		"id": adventurer_id,
+		"name": adventurer_name,
+		"class": "cleric",
+		"equipment": {
+			"weapon": "dagger_iron", "weapon_inventory": ["dagger_iron"],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
+		"level": 1,
+		"availability_status": "available",
+		"stats": CLASS_DEFINITIONS.cleric.base_stats.duplicate(true),
+		"health": CLASS_DEFINITIONS.cleric.base_stats.max_health,
 		"progression": {
 			"xp": 0.0,
 			"perks": [],
@@ -604,6 +672,15 @@ var vacancy_delay_roll: Callable = func(minimum: int, maximum: int) -> int: retu
 ## or Scout with equal probability; tests may force either outcome without
 ## waiting through unrelated offers.
 var recruitment_class_roll: Callable = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+## Injectable so tests can force whether a recruitment refill becomes a
+## Cleric offer instead of the warrior/scout pool (see recruitment_class_
+## roll above for the same pattern). Only ever consulted from
+## _spawn_next_recruitment_offer() while temple_level >= 1 -- structurally,
+## not just probabilistically, a Cleric candidate can never appear before
+## the Temple is built (see docs/plans/2026-08-18-core-loop-and-engagement/
+## 03-encampment-buildings-and-tier-model.md). Production rolls a flat 25%
+## chance once eligible.
+var cleric_offer_roll: Callable = func() -> bool: return randf() < 0.25
 ## Injectable entropy source for generated instance ids (see
 ## _new_instance_id()). Production composes a GUID-style id from randi()
 ## blocks mixed with a unix-time fragment; tests may pin it to make every
@@ -633,6 +710,7 @@ func reset_injectable_rolls() -> void:
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
 	recruitment_class_roll = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+	cleric_offer_roll = func() -> bool: return randf() < 0.25
 	skill_gain_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	instance_id_roll = func() -> String:
 		var time_fragment := int(Time.get_unix_time_from_system())
@@ -689,6 +767,10 @@ var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+# Temple hub level: 0 (unbuilt), 1 (consecrated -- unlocks Cleric recruitment
+# candidate generation). Level 2 ("sanctified") and any blessing state are
+# out of scope for this step (see TEMPLE_BUILD_COST/TEMPLE_MAX_LEVEL above).
+var temple_level: int = 0
 var blacksmith_level: int = 0
 # Each job stores only catalog input and its absolute World Map completion
 # turn. The two slots deliberately remain independent so crafting and
@@ -739,11 +821,21 @@ func _load_balance_config() -> void:
 	PERK_LEVEL_INTERVAL = GameConfig.get_int("progression", "perk_level_interval", PERK_LEVEL_INTERVAL)
 	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
+	GUILD_HALL_LEVEL_3_PARTY_CAP = GameConfig.get_int("guild_hall", "level_3_party_cap", GUILD_HALL_LEVEL_3_PARTY_CAP)
 	GUILD_HALL_UPGRADE_COST = GameConfig.get_int("guild_hall", "upgrade_cost", GUILD_HALL_UPGRADE_COST)
+	GUILD_HALL_LEVEL_3_UPGRADE_COST = GameConfig.get_int("guild_hall", "level_3_upgrade_cost", GUILD_HALL_LEVEL_3_UPGRADE_COST)
 	GUILD_HALL_MAX_LEVEL = GameConfig.get_int("guild_hall", "max_level", GUILD_HALL_MAX_LEVEL)
+	GUILD_HALL_LEVEL_1_ROSTER_CAP = GameConfig.get_int("guild_hall", "level_1_roster_cap", GUILD_HALL_LEVEL_1_ROSTER_CAP)
+	GUILD_HALL_LEVEL_2_ROSTER_CAP = GameConfig.get_int("guild_hall", "level_2_roster_cap", GUILD_HALL_LEVEL_2_ROSTER_CAP)
+	GUILD_HALL_LEVEL_3_ROSTER_CAP = GameConfig.get_int("guild_hall", "level_3_roster_cap", GUILD_HALL_LEVEL_3_ROSTER_CAP)
+	GUILD_HALL_LEVEL_2_OFFER_CAP = GameConfig.get_int("guild_hall", "level_2_offer_cap", GUILD_HALL_LEVEL_2_OFFER_CAP)
+	GUILD_HALL_LEVEL_3_OFFER_CAP = GameConfig.get_int("guild_hall", "level_3_offer_cap", GUILD_HALL_LEVEL_3_OFFER_CAP)
+	TEMPLE_BUILD_COST = GameConfig.get_int("temple", "build_cost", TEMPLE_BUILD_COST)
 	SHOP_INCOME_PER_TURN = GameConfig.get_int("shop", "level_1_income", SHOP_INCOME_PER_TURN)
 	SHOP_INCOME_LEVEL_2 = GameConfig.get_int("shop", "level_2_income", SHOP_INCOME_LEVEL_2)
 	SHOP_INCOME_LEVEL_3 = GameConfig.get_int("shop", "level_3_income", SHOP_INCOME_LEVEL_3)
+	SHOP_UPGRADE_COST = GameConfig.get_int("shop", "level_2_upgrade_cost", SHOP_UPGRADE_COST)
+	SHOP_LEVEL_3_UPGRADE_COST = GameConfig.get_int("shop", "level_3_upgrade_cost", SHOP_LEVEL_3_UPGRADE_COST)
 	TRADING_POST_INCOME_PER_TURN = SHOP_INCOME_PER_TURN
 	ENCOUNTER_INSTANCE_CAP = GameConfig.get_int("population", "encounter_instance_cap", ENCOUNTER_INSTANCE_CAP)
 	RECRUITMENT_OFFER_CAP = GameConfig.get_int("population", "recruitment_offer_cap", RECRUITMENT_OFFER_CAP)
@@ -794,6 +886,7 @@ func reset() -> void:
 	world_turn = 1
 	gold = 0
 	guild_hall_level = 1
+	temple_level = 0
 	blacksmith_level = 0
 	blacksmith_craft_job = {}
 	blacksmith_sharpening_job = {}
@@ -962,11 +1055,14 @@ func recruit_adventurer() -> void:
 ## _spawn_next_recruitment_offer() both call this before a template-derived
 ## record can be purchased into the roster.
 func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
-	var baseline := (
-		get_default_scout(str(record.id), str(record.name))
-		if record.get("class", "warrior") == "scout"
-		else get_default_warrior()
-	)
+	var class_id: String = record.get("class", "warrior")
+	var baseline: Dictionary
+	if class_id == "scout":
+		baseline = get_default_scout(str(record.id), str(record.name))
+	elif class_id == "cleric":
+		baseline = get_default_cleric(str(record.id), str(record.name))
+	else:
+		baseline = get_default_warrior()
 	record["stats"] = baseline.stats.duplicate(true)
 	record["health"] = baseline.health
 	record["progression"] = baseline.progression.duplicate(true)
@@ -1000,7 +1096,11 @@ func _new_instance_id() -> String:
 ## counts every roster adventurer and live offer of that class. Names are
 ## purely cosmetic — a duplicated name carries no correctness risk.
 func _next_cosmetic_adventurer_name(class_id: String) -> String:
-	var display_class := "Warrior" if class_id == "warrior" else "Scout"
+	var display_class := "Warrior"
+	if class_id == "scout":
+		display_class = "Scout"
+	elif class_id == "cleric":
+		display_class = "Cleric"
 	var count := 0
 	for adventurer in adventurers:
 		if adventurer.get("class", "") == class_id:
@@ -1027,7 +1127,11 @@ func get_recruitment_candidates() -> Array[Dictionary]:
 ## needed.
 func purchase_recruit(candidate_id: String) -> bool:
 	var candidate_index := _get_recruitment_candidate_index(candidate_id)
-	if candidate_index == -1 or gold < recruitment_candidates[candidate_index].cost:
+	if (
+		candidate_index == -1
+		or gold < recruitment_candidates[candidate_index].cost
+		or adventurers.size() >= get_roster_cap()
+	):
 		return false
 
 	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
@@ -1050,6 +1154,7 @@ func purchase_recruit_for_party(candidate_id: String, party_id: String) -> bool:
 		or gold < recruitment_candidates[candidate_index].cost
 		or not _is_party_encamped(parties[party_index])
 		or parties[party_index].member_ids.size() >= get_max_party_size()
+		or adventurers.size() >= get_roster_cap()
 	):
 		return false
 	var candidate: Dictionary = recruitment_candidates[candidate_index].duplicate(true)
@@ -1471,20 +1576,58 @@ func resolve_party_wipe() -> void:
 
 
 func get_max_party_size() -> int:
-	if guild_hall_level >= GUILD_HALL_MAX_LEVEL:
+	if guild_hall_level >= 3:
+		return GUILD_HALL_LEVEL_3_PARTY_CAP
+	if guild_hall_level >= 2:
 		return GUILD_HALL_LEVEL_2_PARTY_CAP
 	return GUILD_HALL_LEVEL_1_PARTY_CAP
 
 
+## Maximum roster size (see purchase_recruit()/purchase_recruit_for_party()):
+## 10/15/20 at Guild Hall levels 1/2/3.
+func get_roster_cap() -> int:
+	if guild_hall_level >= 3:
+		return GUILD_HALL_LEVEL_3_ROSTER_CAP
+	if guild_hall_level >= 2:
+		return GUILD_HALL_LEVEL_2_ROSTER_CAP
+	return GUILD_HALL_LEVEL_1_ROSTER_CAP
+
+
+## Maximum simultaneous recruitment offers (see _start_recruitment_vacancy()/
+## _advance_recruitment_vacancies()): 4/8/10 at Guild Hall levels 1/2/3.
+func get_recruitment_offer_cap() -> int:
+	if guild_hall_level >= 3:
+		return GUILD_HALL_LEVEL_3_OFFER_CAP
+	if guild_hall_level >= 2:
+		return GUILD_HALL_LEVEL_2_OFFER_CAP
+	return RECRUITMENT_OFFER_CAP
+
+
+func _guild_hall_upgrade_cost() -> int:
+	return GUILD_HALL_LEVEL_3_UPGRADE_COST if guild_hall_level == 2 else GUILD_HALL_UPGRADE_COST
+
+
 func can_upgrade_guild_hall() -> bool:
-	return guild_hall_level < GUILD_HALL_MAX_LEVEL and gold >= GUILD_HALL_UPGRADE_COST
+	return guild_hall_level < GUILD_HALL_MAX_LEVEL and gold >= _guild_hall_upgrade_cost()
 
 
 func upgrade_guild_hall() -> bool:
 	if not can_upgrade_guild_hall():
 		return false
-	gold -= GUILD_HALL_UPGRADE_COST
+	gold -= _guild_hall_upgrade_cost()
 	guild_hall_level += 1
+	return true
+
+
+func can_build_temple() -> bool:
+	return temple_level == 0 and gold >= TEMPLE_BUILD_COST
+
+
+func build_temple() -> bool:
+	if not can_build_temple():
+		return false
+	gold -= TEMPLE_BUILD_COST
+	temple_level = 1
 	return true
 
 
@@ -1737,15 +1880,39 @@ func get_shop_catalogue_item_ids() -> Array[String]:
 	return item_ids
 
 
+func _shop_upgrade_cost() -> int:
+	return SHOP_LEVEL_3_UPGRADE_COST if shop_level == 2 else SHOP_UPGRADE_COST
+
+
 func can_upgrade_shop() -> bool:
-	return shop_level == 1 and gold >= SHOP_UPGRADE_COST
+	return shop_level >= 1 and shop_level < 3 and gold >= _shop_upgrade_cost()
 
 
 func upgrade_shop() -> bool:
 	if not can_upgrade_shop():
 		return false
-	gold -= SHOP_UPGRADE_COST
-	shop_level = 2
+	gold -= _shop_upgrade_cost()
+	shop_level += 1
+	return true
+
+
+## Shop Tier 3 unlocks direct purchase of the Minor Healing Potion (restores
+## 2-8 HP for 20 gold -- see docs/plans/2026-08-18-core-loop-and-engagement/
+## 03-encampment-buildings-and-tier-model.md), the same catalog entry
+## Alchemy Workshop crafting already produces (POTIONS.greater_healing_
+## potion), banked exactly like a crafted potion so Stores' existing
+## sell/equip flow needs no separate code path for it.
+func can_buy_healing_potion() -> bool:
+	return shop_level >= 3 and gold >= int(POTIONS.greater_healing_potion.gold_cost)
+
+
+func buy_healing_potion() -> bool:
+	if not can_buy_healing_potion():
+		return false
+	var cost := int(POTIONS.greater_healing_potion.gold_cost)
+	gold -= cost
+	shop_gold += cost
+	banked_gear["greater_healing_potion"] = banked_gear.get("greater_healing_potion", 0) + 1
 	return true
 
 
@@ -2347,12 +2514,18 @@ func _mint_encounter_instance_id() -> String:
 ## Mirrors _start_encounter_vacancy()/_advance_encounter_vacancies() for the
 ## recruitment category (see their docstrings for the capacity-guard split).
 func _start_recruitment_vacancy() -> void:
-	if recruitment_candidates.size() >= RECRUITMENT_OFFER_CAP:
+	if recruitment_candidates.size() >= get_recruitment_offer_cap():
 		return
 	var turns_remaining := _resolve_vacancy_delay(RECRUITMENT_VACANCY_TURNS, RECRUITMENT_VACANCY_JITTER_TURNS)
 	recruitment_vacancies.append({"turns_remaining": turns_remaining})
 
 
+## A fired clock always mints a new offer (see _spawn_next_recruitment_offer()),
+## even when the pool is already at get_recruitment_offer_cap() -- the oldest
+## offer (index 0, the FIFO head) is evicted first to make room, rather than
+## discarding the refill (see docs/plans/2026-08-18-core-loop-and-engagement/
+## 03-encampment-buildings-and-tier-model.md's overflow policy). Either way
+## the clock itself is consumed, not rescheduled.
 func _advance_recruitment_vacancies() -> void:
 	var still_pending: Array[Dictionary] = []
 	for vacancy in recruitment_vacancies:
@@ -2360,8 +2533,9 @@ func _advance_recruitment_vacancies() -> void:
 		if vacancy.turns_remaining > 0:
 			still_pending.append(vacancy)
 			continue
-		if recruitment_candidates.size() < RECRUITMENT_OFFER_CAP:
-			recruitment_candidates.append(_spawn_next_recruitment_offer())
+		if recruitment_candidates.size() >= get_recruitment_offer_cap():
+			recruitment_candidates.remove_at(0)
+		recruitment_candidates.append(_spawn_next_recruitment_offer())
 	recruitment_vacancies = still_pending
 
 
@@ -2371,18 +2545,28 @@ func _advance_recruitment_vacancies() -> void:
 ## candidate with a generated id and no template_id, so refills stay
 ## class-diverse rather than silently becoming Warrior-only.
 func _spawn_next_recruitment_offer() -> Dictionary:
-	var class_id: String = recruitment_class_roll.call()
+	# cleric_offer_roll is only ever consulted once the Temple is built, so a
+	# Cleric candidate is structurally impossible before temple_level >= 1 --
+	# see that Callable's own doc comment.
+	var class_id: String = "cleric" if (temple_level >= 1 and cleric_offer_roll.call()) else recruitment_class_roll.call()
 	for template in RECRUITMENT_CANDIDATE_TEMPLATES:
 		if template["class"] == class_id and not _is_recruitment_template_claimed(template.id):
 			return _make_recruitment_offer(template)
 
-	var offer := (
-		get_default_scout(_new_instance_id(), _next_cosmetic_adventurer_name("scout"))
-		if class_id == "scout"
-		else get_default_warrior(_new_instance_id(), _next_cosmetic_adventurer_name("warrior"))
-	)
+	var offer := _make_overflow_recruitment_offer(class_id)
 	offer["cost"] = 10
 	return offer
+
+
+## The RECRUITMENT_CANDIDATE_TEMPLATES pool has no Cleric entries (it is the
+## decided 3-warrior + 1-scout starting composition -- see that const's own
+## doc comment), so a Cleric refill always mints an overflow candidate here.
+func _make_overflow_recruitment_offer(class_id: String) -> Dictionary:
+	if class_id == "cleric":
+		return get_default_cleric(_new_instance_id(), _next_cosmetic_adventurer_name("cleric"))
+	if class_id == "scout":
+		return get_default_scout(_new_instance_id(), _next_cosmetic_adventurer_name("scout"))
+	return get_default_warrior(_new_instance_id(), _next_cosmetic_adventurer_name("warrior"))
 
 
 ## Builds one live offer record from a fixed-pool template: a fresh record
@@ -2737,6 +2921,7 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.world_turn = world_turn
 	snapshot.gold = gold
 	snapshot.guild_hall_level = guild_hall_level
+	snapshot.temple_level = temple_level
 	snapshot.blacksmith_level = blacksmith_level
 	snapshot.blacksmith_craft_job = blacksmith_craft_job.duplicate(true)
 	snapshot.blacksmith_sharpening_job = blacksmith_sharpening_job.duplicate(true)
@@ -2816,6 +3001,7 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	world_turn = snapshot.world_turn
 	gold = snapshot.gold
 	guild_hall_level = snapshot.guild_hall_level
+	temple_level = snapshot.temple_level
 	blacksmith_level = snapshot.blacksmith_level
 	blacksmith_craft_job = snapshot.blacksmith_craft_job.duplicate(true)
 	blacksmith_sharpening_job = snapshot.blacksmith_sharpening_job.duplicate(true)

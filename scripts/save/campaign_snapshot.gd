@@ -54,6 +54,12 @@ var used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+# Temple hub level (see GameSession.temple_level's own doc comment): 0
+# (unbuilt) or 1 (consecrated). Added after version one shipped, so a
+# version-1 payload normalizes to the harmless unbuilt default rather than
+# rejecting -- see the blacksmith_level/alchemy_workshop_level fields below
+# for the same incremental-field-addition pattern.
+var temple_level: int = 0
 var blacksmith_level: int = 0
 var blacksmith_craft_job: Dictionary = {}
 var blacksmith_sharpening_job: Dictionary = {}
@@ -107,6 +113,7 @@ func to_dictionary() -> Dictionary:
 		"world_turn": world_turn,
 		"gold": gold,
 		"guild_hall_level": guild_hall_level,
+		"temple_level": temple_level,
 		"blacksmith_level": blacksmith_level,
 		"blacksmith_craft_job": blacksmith_craft_job.duplicate(true),
 		"blacksmith_sharpening_job": blacksmith_sharpening_job.duplicate(true),
@@ -234,6 +241,14 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		normalized[scalar_key] = int(data[scalar_key])
 
 	# Added after version one shipped, so existing snapshots normalize to the
+	# harmless unbuilt state while new saves retain the Temple's real level.
+	if data.has("temple_level") and not data.temple_level is int:
+		return _invalid("temple_level is not an int")
+	normalized["temple_level"] = int(data.get("temple_level", 0))
+	if normalized.temple_level < 0 or normalized.temple_level > _GameSessionScript.TEMPLE_MAX_LEVEL:
+		return _invalid("temple_level is out of range")
+
+	# Added after version one shipped, so existing snapshots normalize to the
 	# harmless unbuilt/no-job state while new saves retain active work.
 	if data.has("blacksmith_level") and not data.blacksmith_level is int:
 		return _invalid("blacksmith_level is not an int")
@@ -266,7 +281,7 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	# Shop tier and a safe cash pool.
 	normalized["shop_level"] = int(data.get("shop_level", 1 if data.has_trading_post else 0))
 	normalized["shop_gold"] = int(data.get("shop_gold", 100 if data.has_trading_post else 0))
-	if normalized.shop_level < 0 or normalized.shop_level > 2 or normalized.shop_gold < 0:
+	if normalized.shop_level < 0 or normalized.shop_level > 3 or normalized.shop_gold < 0:
 		return _invalid("shop state is out of range")
 
 	if not data.get("player_name") is String:

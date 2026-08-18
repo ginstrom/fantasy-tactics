@@ -30,12 +30,14 @@ func test_guild_hall_contains_the_camp_nav() -> void:
 	assert_not_null(screen.get_node_or_null("Body/CampNav"))
 
 
-func test_level_one_default_display_shows_the_level_and_party_size() -> void:
+func test_level_one_default_display_shows_the_level_party_size_and_caps() -> void:
 	var screen: Control = GuildHallScene.instantiate()
 	add_child_autofree(screen)
 
 	assert_eq(screen.get_node("Body/Center/VBox/LevelLabel").text, tr("guild_hall.level") % 1)
-	assert_eq(screen.get_node("Body/Center/VBox/PartySizeLabel").text, tr("guild_hall.party_size") % 4)
+	assert_eq(screen.get_node("Body/Center/VBox/PartySizeLabel").text, tr("guild_hall.party_size") % 3)
+	assert_eq(screen.get_node("Body/Center/VBox/RosterCapLabel").text, tr("guild_hall.roster_cap") % 10)
+	assert_eq(screen.get_node("Body/Center/VBox/OfferCapLabel").text, tr("guild_hall.offer_cap") % 4)
 
 
 func test_upgrade_button_is_disabled_below_the_upgrade_cost_and_enabled_at_it() -> void:
@@ -53,7 +55,7 @@ func test_upgrade_button_is_disabled_below_the_upgrade_cost_and_enabled_at_it() 
 	assert_false(upgrade_button.disabled, "50 gold is exactly enough to afford the upgrade")
 
 
-func test_pressing_upgrade_raises_the_guild_hall_level_and_shows_the_max_level_state() -> void:
+func test_pressing_upgrade_raises_the_guild_hall_level_and_shows_tier_two_state() -> void:
 	GameSession.gold = GameSession.GUILD_HALL_UPGRADE_COST
 	var screen: Control = GuildHallScene.instantiate()
 	add_child_autofree(screen)
@@ -62,9 +64,30 @@ func test_pressing_upgrade_raises_the_guild_hall_level_and_shows_the_max_level_s
 	upgrade_button.emit_signal("pressed")
 
 	assert_eq(GameSession.guild_hall_level, 2)
+	assert_true(screen.get_node("Body/Center/VBox/UpgradeButton").visible, "Level 2 still has a level 3 upgrade to offer")
+	assert_false(screen.get_node("Body/Center/VBox/MaxLevelLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/PartySizeLabel").text, tr("guild_hall.party_size") % 4)
+	assert_eq(screen.get_node("Body/Center/VBox/RosterCapLabel").text, tr("guild_hall.roster_cap") % 15)
+	assert_eq(screen.get_node("Body/Center/VBox/OfferCapLabel").text, tr("guild_hall.offer_cap") % 8)
+	assert_eq(upgrade_button.text, tr("guild_hall.upgrade_to_level_3") % GameSession.GUILD_HALL_LEVEL_3_UPGRADE_COST)
+
+
+func test_pressing_upgrade_at_level_two_reaches_the_max_level_state() -> void:
+	GameSession.gold = GameSession.GUILD_HALL_UPGRADE_COST
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+	GameSession.gold = GameSession.GUILD_HALL_LEVEL_3_UPGRADE_COST
+	screen.refresh()
+
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+
+	assert_eq(GameSession.guild_hall_level, 3)
 	assert_false(screen.get_node("Body/Center/VBox/UpgradeButton").visible, "Max level has no further upgrade to offer")
 	assert_true(screen.get_node("Body/Center/VBox/MaxLevelLabel").visible)
 	assert_eq(screen.get_node("Body/Center/VBox/PartySizeLabel").text, tr("guild_hall.party_size") % 5)
+	assert_eq(screen.get_node("Body/Center/VBox/RosterCapLabel").text, tr("guild_hall.roster_cap") % 20)
+	assert_eq(screen.get_node("Body/Center/VBox/OfferCapLabel").text, tr("guild_hall.offer_cap") % 10)
 
 
 func test_back_button_returns_to_buildings() -> void:

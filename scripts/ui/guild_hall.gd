@@ -11,6 +11,8 @@ extends Control
 
 @onready var level_label: Label = $Body/Center/VBox/LevelLabel
 @onready var party_size_label: Label = $Body/Center/VBox/PartySizeLabel
+@onready var roster_cap_label: Label = $Body/Center/VBox/RosterCapLabel
+@onready var offer_cap_label: Label = $Body/Center/VBox/OfferCapLabel
 @onready var upgrade_button: Button = $Body/Center/VBox/UpgradeButton
 @onready var max_level_label: Label = $Body/Center/VBox/MaxLevelLabel
 
@@ -28,11 +30,17 @@ func _unhandled_input(event: InputEvent) -> void:
 func refresh() -> void:
 	level_label.text = tr("guild_hall.level") % GameSession.guild_hall_level
 	party_size_label.text = tr("guild_hall.party_size") % GameSession.get_max_party_size()
+	roster_cap_label.text = tr("guild_hall.roster_cap") % GameSession.get_roster_cap()
+	offer_cap_label.text = tr("guild_hall.offer_cap") % GameSession.get_recruitment_offer_cap()
 
 	var at_max_level: bool = GameSession.guild_hall_level >= GameSession.GUILD_HALL_MAX_LEVEL
 	upgrade_button.visible = not at_max_level
 	upgrade_button.disabled = not GameSession.can_upgrade_guild_hall()
-	upgrade_button.text = tr("guild_hall.upgrade") % GameSession.GUILD_HALL_UPGRADE_COST
+	var upgrade_key := "guild_hall.upgrade_to_level_3" if GameSession.guild_hall_level == 2 else "guild_hall.upgrade"
+	var upgrade_cost := (
+		GameSession.GUILD_HALL_LEVEL_3_UPGRADE_COST if GameSession.guild_hall_level == 2 else GameSession.GUILD_HALL_UPGRADE_COST
+	)
+	upgrade_button.text = tr(upgrade_key) % upgrade_cost
 	max_level_label.visible = at_max_level
 
 

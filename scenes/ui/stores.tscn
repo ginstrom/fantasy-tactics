@@ -44,8 +44,13 @@ horizontal_alignment = 1
 layout_mode = 2
 custom_minimum_size = Vector2(640, 280)
 
+[node name="BuyHealingPotionButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
 
+[connection signal="pressed" from="Body/Center/VBox/BuyHealingPotionButton" to="." method="_on_buy_healing_potion_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

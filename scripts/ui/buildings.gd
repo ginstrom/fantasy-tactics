@@ -4,15 +4,16 @@ extends Control
 ## building, keyed by a stable building id, following the Roster/Deploy
 ## Party list-screen pattern (see roster.gd) minus the shared
 ## InformationPanel — a one-row building list has nothing to summarize.
-## Currently the only building is Guild Hall; activating its row routes to
-## the Guild Hall screen (see guild_hall.gd).
+## Activating a row routes to that building's own screen.
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 const GUILD_HALL_ROW_ID := "guild_hall"
+const TEMPLE_ROW_ID := "temple"
 const BLACKSMITH_ROW_ID := "blacksmith"
 const ALCHEMY_WORKSHOP_ROW_ID := "alchemy_workshop"
 const RUNIC_WORKSHOP_ROW_ID := "runic_workshop"
+const SHOP_ROW_ID := "shop"
 
 @onready var building_table: TableView = $Body/Center/VBox/BuildingTable
 
@@ -42,21 +43,27 @@ func _build_columns() -> Array[TableColumn]:
 func _build_rows() -> Array[Dictionary]:
 	return [
 		{"id": GUILD_HALL_ROW_ID, "name": tr("buildings.guild_hall")},
+		{"id": TEMPLE_ROW_ID, "name": tr("buildings.temple")},
 		{"id": BLACKSMITH_ROW_ID, "name": tr("buildings.blacksmith")},
 		{"id": ALCHEMY_WORKSHOP_ROW_ID, "name": tr("buildings.alchemy_workshop")},
 		{"id": RUNIC_WORKSHOP_ROW_ID, "name": tr("buildings.runic_workshop")},
+		{"id": SHOP_ROW_ID, "name": tr("buildings.shop")},
 	]
 
 
 func _on_row_activated(row_id: Variant) -> void:
 	if str(row_id) == GUILD_HALL_ROW_ID:
 		GameManager.go_to_guild_hall()
+	elif str(row_id) == TEMPLE_ROW_ID:
+		GameManager.go_to_temple()
 	elif str(row_id) == BLACKSMITH_ROW_ID:
 		GameManager.go_to_blacksmith()
 	elif str(row_id) == ALCHEMY_WORKSHOP_ROW_ID:
 		GameManager.go_to_alchemy_workshop()
 	elif str(row_id) == RUNIC_WORKSHOP_ROW_ID:
 		GameManager.go_to_runic_workshop()
+	elif str(row_id) == SHOP_ROW_ID:
+		GameManager.go_to_shop()
 
 
 func _on_back_pressed() -> void:

@@ -63,6 +63,11 @@ layout_mode = 2
 text = "buildings.guild_hall"
 alignment = 0
 
+[node name="TempleButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
+layout_mode = 2
+text = "buildings.temple"
+alignment = 0
+
 [node name="BlacksmithButton" type="Button" parent="VBox/BuildingsSubmenuMargin/Submenu"]
 layout_mode = 2
 text = "buildings.blacksmith"
@@ -121,6 +126,7 @@ alignment = 0
 [connection signal="pressed" from="VBox/UnitsSubmenuMargin/Submenu/PartiesButton" to="." method="_on_parties_button_pressed"]
 [connection signal="pressed" from="VBox/UnitsSubmenuMargin/Submenu/RecruitmentButton" to="." method="_on_recruitment_button_pressed"]
 [connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/GuildHallButton" to="." method="_on_guild_hall_button_pressed"]
+[connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/TempleButton" to="." method="_on_temple_button_pressed"]
 [connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/BlacksmithButton" to="." method="_on_blacksmith_button_pressed"]
 [connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/AlchemyWorkshopButton" to="." method="_on_alchemy_workshop_button_pressed"]
 [connection signal="pressed" from="VBox/BuildingsSubmenuMargin/Submenu/RunicWorkshopButton" to="." method="_on_runic_workshop_button_pressed"]

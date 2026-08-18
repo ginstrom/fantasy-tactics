@@ -2808,19 +2808,63 @@ func test_reset_restores_guild_hall_level_to_one() -> void:
 	assert_eq(session.guild_hall_level, 1)
 
 
-func test_get_max_party_size_returns_four_at_level_one() -> void:
+func test_get_max_party_size_returns_three_at_level_one() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	assert_eq(session.get_max_party_size(), 4)
+	assert_eq(session.get_max_party_size(), 3)
 
 
-func test_get_max_party_size_returns_five_at_level_two() -> void:
+func test_get_max_party_size_returns_four_at_level_two() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.guild_hall_level = 2
 
+	assert_eq(session.get_max_party_size(), 4)
+
+
+func test_get_max_party_size_returns_five_at_level_three() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = 3
+
 	assert_eq(session.get_max_party_size(), 5)
+
+
+## Guild Hall tier model: 10/4 roster/offer caps at level 1, 15/8 at level 2,
+## 20/10 at level 3 (see docs/plans/2026-08-18-core-loop-and-engagement/03-
+## encampment-buildings-and-tier-model.md).
+func test_get_roster_cap_scales_with_guild_hall_level() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_roster_cap(), 10)
+	session.guild_hall_level = 2
+	assert_eq(session.get_roster_cap(), 15)
+	session.guild_hall_level = 3
+	assert_eq(session.get_roster_cap(), 20)
+
+
+func test_get_recruitment_offer_cap_scales_with_guild_hall_level() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_recruitment_offer_cap(), 4)
+	session.guild_hall_level = 2
+	assert_eq(session.get_recruitment_offer_cap(), 8)
+	session.guild_hall_level = 3
+	assert_eq(session.get_recruitment_offer_cap(), 10)
+
+
+func test_purchase_recruit_rejects_a_roster_already_at_cap() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 1000
+	while session.adventurers.size() < session.get_roster_cap():
+		session.adventurers.append(_adventurer("filler_%d" % session.adventurers.size(), "available"))
+	var candidate_id: String = session.get_recruitment_candidates()[0].id
+
+	assert_false(session.purchase_recruit(candidate_id), "A full roster must reject a new recruit")
 
 
 func test_upgrade_guild_hall_with_fifty_gold_succeeds() -> void:
@@ -2832,7 +2876,7 @@ func test_upgrade_guild_hall_with_fifty_gold_succeeds() -> void:
 
 	assert_eq(session.guild_hall_level, 2)
 	assert_eq(session.gold, 0)
-	assert_eq(session.get_max_party_size(), 5)
+	assert_eq(session.get_max_party_size(), 4)
 
 
 func test_upgrade_guild_hall_with_forty_nine_gold_fails() -> void:
@@ -2846,16 +2890,37 @@ func test_upgrade_guild_hall_with_forty_nine_gold_fails() -> void:
 	assert_eq(session.gold, 49)
 
 
+## Level 2 -> 3 costs GUILD_HALL_LEVEL_3_UPGRADE_COST (100), a different
+## amount than the level 1 -> 2 upgrade (50) -- see _guild_hall_upgrade_cost().
+func test_upgrade_guild_hall_from_level_two_to_three_costs_one_hundred_gold() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = 50
+	session.upgrade_guild_hall()
+	session.gold = 99
+
+	assert_false(session.upgrade_guild_hall(), "99 gold is not enough for the level 2 -> 3 upgrade")
+
+	session.gold = 100
+
+	assert_true(session.upgrade_guild_hall())
+	assert_eq(session.guild_hall_level, 3)
+	assert_eq(session.gold, 0)
+	assert_eq(session.get_max_party_size(), 5)
+
+
 func test_upgrade_guild_hall_at_max_level_returns_false() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.gold = 100
+	session.gold = 200
 	session.upgrade_guild_hall()
+	session.upgrade_guild_hall()
+	assert_eq(session.guild_hall_level, 3)
 
 	assert_false(session.upgrade_guild_hall())
 
-	assert_eq(session.gold, 50, "Gold should not be deducted on a failed upgrade after first success")
-	assert_eq(session.guild_hall_level, 2)
+	assert_eq(session.gold, 50, "Gold should not be deducted on a failed upgrade after two successes (50 + 100 spent)")
+	assert_eq(session.guild_hall_level, 3)
 
 
 func test_can_upgrade_guild_hall_is_false_with_no_gold() -> void:
@@ -2876,10 +2941,140 @@ func test_can_upgrade_guild_hall_is_true_with_fifty_gold() -> void:
 func test_can_upgrade_guild_hall_is_false_at_max_level() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.gold = 50
+	session.gold = 200
+	session.upgrade_guild_hall()
 	session.upgrade_guild_hall()
 
 	assert_false(session.can_upgrade_guild_hall())
+
+
+## --- Temple ---
+
+func test_new_session_starts_with_temple_unbuilt() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.temple_level, 0)
+
+
+func test_reset_restores_temple_level_to_zero() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.temple_level = 1
+
+	session.reset()
+
+	assert_eq(session.temple_level, 0)
+
+
+func test_can_build_temple_requires_the_build_cost() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.can_build_temple())
+
+	session.gold = session.TEMPLE_BUILD_COST - 1
+	assert_false(session.can_build_temple())
+
+	session.gold = session.TEMPLE_BUILD_COST
+	assert_true(session.can_build_temple())
+
+
+func test_build_temple_deducts_gold_and_sets_level_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = session.TEMPLE_BUILD_COST
+
+	assert_true(session.build_temple())
+
+	assert_eq(session.temple_level, 1)
+	assert_eq(session.gold, 0)
+
+
+func test_build_temple_fails_once_already_built() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = session.TEMPLE_BUILD_COST * 2
+	session.build_temple()
+
+	assert_false(session.build_temple(), "The Temple has only one buildable level in this slice")
+	assert_eq(session.temple_level, 1)
+
+
+## Minimal Cleric stub (see CLASS_DEFINITIONS.cleric's own doc comment): base
+## stats in the same family as warrior/scout, no MP/Heal/Bless fields --
+## those are Step 4's job.
+func test_cleric_class_definition_exists_in_the_warrior_scout_family() -> void:
+	assert_true(GameSession.CLASS_DEFINITIONS.has("cleric"))
+	var cleric: Dictionary = GameSession.CLASS_DEFINITIONS.cleric
+	assert_true(cleric.has("base_stats"))
+	assert_true(cleric.has("allowed_weapon_categories"))
+	assert_false(cleric.has("mp"), "MP is out of scope for this step")
+	assert_false(cleric.has("abilities"), "Heal/Bless abilities are out of scope for this step")
+
+
+func test_get_default_cleric_returns_a_seeded_cleric_record() -> void:
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+
+	assert_eq(cleric.class, "cleric")
+	assert_eq(cleric.stats, GameSession.CLASS_DEFINITIONS.cleric.base_stats)
+	assert_eq(cleric.health, GameSession.CLASS_DEFINITIONS.cleric.base_stats.max_health)
+	assert_true(GameSession.CLASS_DEFINITIONS.cleric.allowed_weapon_categories.has(
+		GameSession.WEAPONS[cleric.equipment.weapon].category
+	), "the Cleric's default weapon must be one its own class can equip")
+
+
+## Temple gating (see docs/plans/2026-08-18-core-loop-and-engagement/03-
+## encampment-buildings-and-tier-model.md): a Cleric candidate must be
+## structurally impossible before the Temple is built, not just unlikely --
+## cleric_offer_roll is never even consulted while temple_level is 0.
+func test_cleric_offer_roll_is_never_consulted_before_the_temple_is_built() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	var roll_called := false
+	session.cleric_offer_roll = func() -> bool:
+		roll_called = true
+		return true
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	assert_false(roll_called, "cleric_offer_roll must not be consulted while the Temple is unbuilt")
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_false(candidates.any(func(c): return c.class == "cleric"))
+
+
+func test_a_built_temple_can_produce_a_real_cleric_recruitment_offer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	session.temple_level = 1
+	session.cleric_offer_roll = func() -> bool: return true
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+
+	session.end_world_turn()
+
+	var candidates: Array[Dictionary] = session.get_recruitment_candidates()
+	assert_true(candidates.any(func(c): return c.class == "cleric"), "A built Temple must be able to offer a real Cleric candidate")
+
+
+func test_purchasing_a_cleric_offer_lands_a_cleric_on_the_roster() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	session.temple_level = 1
+	session.cleric_offer_roll = func() -> bool: return true
+	session.recruitment_vacancies.append({"turns_remaining": 1})
+	session.end_world_turn()
+	var cleric_offer: Dictionary = session.get_recruitment_candidates().filter(func(c): return c.class == "cleric")[0]
+	session.gold = 1000
+
+	assert_true(session.purchase_recruit(cleric_offer.id))
+
+	var roster_cleric: Dictionary = session.get_adventurer(cleric_offer.id)
+	assert_eq(roster_cleric.class, "cleric")
+	assert_eq(roster_cleric.stats, GameSession.CLASS_DEFINITIONS.cleric.base_stats)
 
 
 ## --- Blacksmith ---
@@ -3213,7 +3408,7 @@ func test_snapshot_rejects_a_sharpened_treatment_without_its_modifier_tier() -> 
 	assert_eq(GameSession.owned_item_instances.forged_dagger.treatment_id, "")
 
 
-func test_assign_adventurer_to_party_rejects_fifth_member_at_level_one() -> void:
+func test_assign_adventurer_to_party_rejects_fourth_member_at_level_one() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
@@ -3222,17 +3417,14 @@ func test_assign_adventurer_to_party_rejects_fifth_member_at_level_one() -> void
 	session.adventurers.append(_adventurer("test_002", "available"))
 	session.adventurers.append(_adventurer("test_003", "available"))
 
-	session.adventurers.append(_adventurer("test_004", "available"))
-
 	assert_true(session.assign_adventurer_to_selected_party("test_001"))
 	assert_true(session.assign_adventurer_to_selected_party("test_002"))
-	assert_true(session.assign_adventurer_to_selected_party("test_003"))
-	assert_false(session.assign_adventurer_to_selected_party("test_004"), "Fifth member must be rejected at level 1")
+	assert_false(session.assign_adventurer_to_selected_party("test_003"), "Fourth member must be rejected at level 1")
 
-	assert_eq(session.get_selected_party().member_ids.size(), 4)
+	assert_eq(session.get_selected_party().member_ids.size(), 3)
 
 
-func test_assign_adventurer_to_party_accepts_fifth_member_after_upgrade() -> void:
+func test_assign_adventurer_to_party_accepts_fourth_member_after_upgrade() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
@@ -3240,17 +3432,15 @@ func test_assign_adventurer_to_party_accepts_fifth_member_after_upgrade() -> voi
 	session.adventurers.append(_adventurer("test_001", "available"))
 	session.adventurers.append(_adventurer("test_002", "available"))
 	session.adventurers.append(_adventurer("test_003", "available"))
-	session.adventurers.append(_adventurer("test_004", "available"))
 
 	assert_true(session.assign_adventurer_to_selected_party("test_001"))
 	assert_true(session.assign_adventurer_to_selected_party("test_002"))
-	assert_true(session.assign_adventurer_to_selected_party("test_003"))
-	session.gold = 50
+	session.gold = session.GUILD_HALL_UPGRADE_COST
 	session.upgrade_guild_hall()
 
-	assert_true(session.assign_adventurer_to_selected_party("test_004"), "Fifth member must be accepted after upgrade")
+	assert_true(session.assign_adventurer_to_selected_party("test_003"), "Fourth member must be accepted after upgrade")
 
-	assert_eq(session.get_selected_party().member_ids.size(), 5)
+	assert_eq(session.get_selected_party().member_ids.size(), 4)
 
 
 ## _load_balance_config() is what wires GameConfig into the balance vars, and
@@ -3421,7 +3611,7 @@ func test_new_session_starts_with_a_level_one_shop_and_cash() -> void:
 func test_shop_catalogue_unlocks_iron_then_steel_weapons() -> void:
 	assert_true(GameSession.get_shop_catalogue_item_ids().all(func(item_id): return item_id.ends_with("_iron")))
 	assert_false(GameSession.buy_item("dagger_steel"))
-	GameSession.gold = 50
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
 	assert_true(GameSession.upgrade_shop())
 	assert_true(GameSession.get_shop_catalogue_item_ids().has("dagger_steel"))
 
@@ -3487,7 +3677,7 @@ func test_invalid_shop_snapshot_keeps_live_state_unchanged() -> void:
 	GameSession.shop_level = 2
 	GameSession.shop_gold = 150
 	var data := GameSession.export_campaign_snapshot()
-	data.shop_level = 3
+	data.shop_level = 4
 	var result := GameSession.import_campaign_snapshot(data)
 	assert_false(result.ok)
 	assert_eq(GameSession.gold, 77)
@@ -3495,13 +3685,59 @@ func test_invalid_shop_snapshot_keeps_live_state_unchanged() -> void:
 	assert_eq(GameSession.shop_gold, 150)
 
 
-func test_shop_upgrade_requires_fifty_gold_and_is_one_time() -> void:
+func test_shop_upgrade_from_level_one_to_two_costs_one_hundred_fifty_gold() -> void:
 	assert_false(GameSession.can_upgrade_shop())
 	GameSession.gold = GameSession.SHOP_UPGRADE_COST
 	assert_true(GameSession.upgrade_shop())
 	assert_eq(GameSession.gold, 0)
 	assert_eq(GameSession.shop_level, 2)
+
+
+## Level 2 -> 3 costs SHOP_LEVEL_3_UPGRADE_COST (300), a different amount
+## than the level 1 -> 2 upgrade (150) -- see _shop_upgrade_cost(). Once at
+## level 3 (the max), a further upgrade is rejected.
+func test_shop_upgrade_from_level_two_to_three_costs_three_hundred_gold_and_then_maxes_out() -> void:
+	GameSession.gold = GameSession.SHOP_UPGRADE_COST
+	GameSession.upgrade_shop()
+	GameSession.gold = GameSession.SHOP_LEVEL_3_UPGRADE_COST - 1
+
+	assert_false(GameSession.upgrade_shop(), "One gold short of the level 2 -> 3 cost must fail")
+
+	GameSession.gold = GameSession.SHOP_LEVEL_3_UPGRADE_COST
+
+	assert_true(GameSession.upgrade_shop())
+	assert_eq(GameSession.shop_level, 3)
+	assert_eq(GameSession.gold, 0)
+	assert_false(GameSession.can_upgrade_shop(), "Shop level 3 is the max tier")
 	assert_false(GameSession.upgrade_shop())
+
+
+## Shop Tier 3 unlocks direct purchase of a Minor Healing Potion (restores
+## 2-8 HP for 20 gold -- see docs/plans/2026-08-18-core-loop-and-engagement/
+## 03-encampment-buildings-and-tier-model.md).
+func test_healing_potion_purchase_is_gated_on_shop_level_three() -> void:
+	GameSession.gold = 1000
+	assert_false(GameSession.can_buy_healing_potion(), "Shop level 1 does not sell healing potions")
+	assert_false(GameSession.buy_healing_potion())
+
+	GameSession.shop_level = 2
+	assert_false(GameSession.can_buy_healing_potion(), "Shop level 2 does not sell healing potions")
+
+	GameSession.shop_level = 3
+	assert_true(GameSession.can_buy_healing_potion())
+	assert_true(GameSession.buy_healing_potion())
+	assert_eq(GameSession.gold, 980, "A healing potion costs 20 gold")
+	assert_eq(GameSession.banked_gear.get("greater_healing_potion", 0), 1)
+
+
+func test_healing_potion_purchase_requires_twenty_gold() -> void:
+	GameSession.shop_level = 3
+	GameSession.gold = 19
+
+	assert_false(GameSession.can_buy_healing_potion())
+	assert_false(GameSession.buy_healing_potion())
+	assert_eq(GameSession.gold, 19)
+	assert_eq(GameSession.banked_gear.get("greater_healing_potion", 0), 0)
 
 
 func test_end_world_turn_adds_shop_income() -> void:
@@ -4084,13 +4320,23 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"PERK_LEVEL_INTERVAL": true,
 		"GUILD_HALL_LEVEL_1_PARTY_CAP": true,
 		"GUILD_HALL_LEVEL_2_PARTY_CAP": true,
+		"GUILD_HALL_LEVEL_3_PARTY_CAP": true,
 		"GUILD_HALL_UPGRADE_COST": true,
+		"GUILD_HALL_LEVEL_3_UPGRADE_COST": true,
 		"GUILD_HALL_MAX_LEVEL": true,
+		"GUILD_HALL_LEVEL_1_ROSTER_CAP": true,
+		"GUILD_HALL_LEVEL_2_ROSTER_CAP": true,
+		"GUILD_HALL_LEVEL_3_ROSTER_CAP": true,
+		"GUILD_HALL_LEVEL_2_OFFER_CAP": true,
+		"GUILD_HALL_LEVEL_3_OFFER_CAP": true,
+		"TEMPLE_BUILD_COST": true,
 		"TRADING_POST_PURCHASE_COST": true,
 		"TRADING_POST_INCOME_PER_TURN": true,
 		"SHOP_INCOME_PER_TURN": true,
 		"SHOP_INCOME_LEVEL_2": true,
 		"SHOP_INCOME_LEVEL_3": true,
+		"SHOP_UPGRADE_COST": true,
+		"SHOP_LEVEL_3_UPGRADE_COST": true,
 		"EFFECTIVE_HIT_CHANCE_CAP": true,
 		"ATTACK_TO_HIT_CHANCE_DIVISOR": true,
 		"ENCOUNTER_INSTANCE_CAP": true,

@@ -4,9 +4,15 @@ extends Control
 ## GameSession.mana_crystals) via the shared LootTable component (see
 ## loot_table.gd) — full [Sell]/[Equip] actions, unscoped (any roster
 ## adventurer can be assigned here, unlike the party-scoped Equip on the
-## victory summary and World Map Party Details — see Steps 6/7).
+## victory summary and World Map Party Details — see Steps 6/7). Also
+## surfaces Shop Tier 3's direct Minor Healing Potion purchase (see
+## GameSession.can_buy_healing_potion()/buy_healing_potion()) -- a purchase
+## banks the same POTIONS.greater_healing_potion entry Alchemy Workshop
+## crafting already produces, so it shows up in the LootTable above like any
+## other banked item once bought.
 
 @onready var loot_table: LootTable = $Body/Center/VBox/LootTable
+@onready var buy_healing_potion_button: Button = $Body/Center/VBox/BuyHealingPotionButton
 
 
 func _ready() -> void:
@@ -26,6 +32,16 @@ func refresh() -> void:
 	loot_table.set_rows(GameSession.build_loot_rows(
 		GameSession.banked_gear, GameSession.mana_crystals, GameSession.banked_item_instance_ids
 	))
+	buy_healing_potion_button.visible = GameSession.shop_level >= 3
+	if buy_healing_potion_button.visible:
+		var potion: Dictionary = GameSession.POTIONS.greater_healing_potion
+		buy_healing_potion_button.text = tr("stores.buy_healing_potion") % int(potion.gold_cost)
+		buy_healing_potion_button.disabled = not GameSession.can_buy_healing_potion()
+
+
+func _on_buy_healing_potion_button_pressed() -> void:
+	GameSession.buy_healing_potion()
+	refresh()
 
 
 func _on_equip_requested(item_id: String) -> void:

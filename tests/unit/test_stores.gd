@@ -208,6 +208,46 @@ func test_pressing_equip_routes_via_game_manager() -> void:
 	assert_string_contains(source, "GameManager.go_to_assign_equipment(item_id)")
 
 
+## Shop Tier 3 unlocks direct purchase of the Minor Healing Potion (see
+## docs/plans/2026-08-18-core-loop-and-engagement/03-encampment-buildings-
+## and-tier-model.md and GameSession.can_buy_healing_potion()/
+## buy_healing_potion()).
+func test_healing_potion_button_is_hidden_below_shop_level_three() -> void:
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("Body/Center/VBox/BuyHealingPotionButton").visible)
+
+
+func test_healing_potion_button_is_visible_and_priced_at_shop_level_three() -> void:
+	GameSession.shop_level = 3
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	var buy_button: Button = screen.get_node("Body/Center/VBox/BuyHealingPotionButton")
+
+	assert_true(buy_button.visible)
+	assert_eq(buy_button.text, tr("stores.buy_healing_potion") % 20)
+	assert_true(buy_button.disabled, "No gold cannot afford the potion")
+
+	GameSession.gold = 20
+	screen.refresh()
+
+	assert_false(buy_button.disabled, "20 gold is exactly enough to afford the potion")
+
+
+func test_pressing_buy_healing_potion_deducts_gold_and_banks_a_potion() -> void:
+	GameSession.shop_level = 3
+	GameSession.gold = 20
+	var screen: Control = StoresScene.instantiate()
+	add_child_autofree(screen)
+	var buy_button: Button = screen.get_node("Body/Center/VBox/BuyHealingPotionButton")
+
+	buy_button.emit_signal("pressed")
+
+	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.banked_gear.get("greater_healing_potion", 0), 1)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)

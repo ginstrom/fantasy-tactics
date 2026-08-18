@@ -18,6 +18,7 @@ const ROSTER_SCENE := "res://scenes/ui/roster.tscn"
 const RECRUITMENT_SCENE := "res://scenes/ui/recruitment.tscn"
 const BUILDINGS_SCENE := "res://scenes/ui/buildings.tscn"
 const GUILD_HALL_SCENE := "res://scenes/ui/guild_hall.tscn"
+const TEMPLE_SCENE := "res://scenes/ui/temple.tscn"
 const BLACKSMITH_SCENE := "res://scenes/ui/blacksmith.tscn"
 const ALCHEMY_WORKSHOP_SCENE := "res://scenes/ui/alchemy_workshop.tscn"
 const RUNIC_WORKSHOP_SCENE := "res://scenes/ui/runic_workshop.tscn"
@@ -264,6 +265,11 @@ func go_to_buildings() -> Error:
 func go_to_guild_hall() -> Error:
 	_clear_detail_context()
 	return _change_scene(GUILD_HALL_SCENE)
+
+
+func go_to_temple() -> Error:
+	_clear_detail_context()
+	return _change_scene(TEMPLE_SCENE)
 
 
 func go_to_blacksmith() -> Error:

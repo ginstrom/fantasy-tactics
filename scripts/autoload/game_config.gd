@@ -29,10 +29,17 @@ const DEFAULTS: Dictionary = {
 		"moving_rate": 1,
 	},
 	"guild_hall": {
-		"level_1_party_cap": 4,
-		"level_2_party_cap": 5,
+		"level_1_party_cap": 3,
+		"level_2_party_cap": 4,
+		"level_3_party_cap": 5,
 		"upgrade_cost": 50,
-		"max_level": 2,
+		"level_3_upgrade_cost": 100,
+		"max_level": 3,
+		"level_1_roster_cap": 10,
+		"level_2_roster_cap": 15,
+		"level_3_roster_cap": 20,
+		"level_2_offer_cap": 8,
+		"level_3_offer_cap": 10,
 	},
 	"population": {
 		"encounter_instance_cap": 2,
@@ -46,6 +53,11 @@ const DEFAULTS: Dictionary = {
 		"level_1_income": 2,
 		"level_2_income": 5,
 		"level_3_income": 10,
+		"level_2_upgrade_cost": 150,
+		"level_3_upgrade_cost": 300,
+	},
+	"temple": {
+		"build_cost": 100,
 	},
 }
 

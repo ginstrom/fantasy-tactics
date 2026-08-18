@@ -27,7 +27,8 @@ func test_back_button_returns_to_the_encampment() -> void:
 
 ## Column titles are resolved via tr() (see buildings.gd) to the real
 ## English copy in translations/en.tres (Name — see the design doc), and the
-## table has rows for Guild Hall, Blacksmith, and Alchemy Workshop.
+## table has one row per hub: Guild Hall, Temple, Blacksmith, Alchemy
+## Workshop, Runic Workshop, and Shop.
 func test_buildings_table_uses_the_documented_columns_and_has_building_rows() -> void:
 	var screen: Control = BuildingsScene.instantiate()
 	add_child_autofree(screen)
@@ -35,7 +36,10 @@ func test_buildings_table_uses_the_documented_columns_and_has_building_rows() ->
 
 	assert_eq(tree.columns, 1)
 	assert_eq(tree.get_column_title(0), "Name")
-	assert_eq(UiTestHelpers.tree_row_values(tree, 0), ["Guild Hall", "Blacksmith", "Alchemy Workshop", "Runic Workshop"])
+	assert_eq(
+		UiTestHelpers.tree_row_values(tree, 0),
+		["Guild Hall", "Temple", "Blacksmith", "Alchemy Workshop", "Runic Workshop", "Shop"]
+	)
 
 
 func test_activating_the_guild_hall_row_routes_via_game_manager() -> void:
@@ -48,9 +52,11 @@ func test_activating_the_guild_hall_row_routes_via_game_manager() -> void:
 
 	var source := FileAccess.get_file_as_string("res://scripts/ui/buildings.gd")
 	assert_string_contains(source, "GameManager.go_to_guild_hall()")
+	assert_string_contains(source, "GameManager.go_to_temple()")
 	assert_string_contains(source, "GameManager.go_to_blacksmith()")
 	assert_string_contains(source, "GameManager.go_to_alchemy_workshop()")
 	assert_string_contains(source, "GameManager.go_to_runic_workshop()")
+	assert_string_contains(source, "GameManager.go_to_shop()")
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:

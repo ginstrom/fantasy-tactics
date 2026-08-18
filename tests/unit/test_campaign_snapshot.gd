@@ -56,6 +56,7 @@ func _full_snapshot() -> CampaignSnapshot:
 	snapshot.world_turn = 7
 	snapshot.gold = 42
 	snapshot.guild_hall_level = 2
+	snapshot.temple_level = 1
 	snapshot.pending_reward = 17
 	snapshot.mana_crystals = {1: 3}
 	snapshot.banked_gear = {"shortsword_iron": 1}
@@ -130,6 +131,7 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.world_turn, 7)
 	assert_eq(snapshot.gold, 42)
 	assert_eq(snapshot.guild_hall_level, 2)
+	assert_eq(snapshot.temple_level, 1)
 	assert_eq(snapshot.pending_reward, 17)
 	assert_eq(snapshot.mana_crystals, {1: 3})
 	assert_eq(snapshot.banked_gear, {"shortsword_iron": 1})
@@ -143,6 +145,51 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.shop_gold, 150)
 	assert_eq(snapshot.player_name, "Ryan")
 	assert_eq(snapshot.tutorial_progress, {"formed_party": true})
+
+
+## Step 3 of docs/plans/2026-08-18-core-loop-and-engagement: temple_level
+## serializes/deserializes like any other durable building level, and a
+## fresh (never-built) snapshot defaults to 0 -- see GameSession.temple_level's
+## own doc comment for why no blessing state is introduced alongside it.
+func test_fresh_snapshot_defaults_temple_level_to_zero() -> void:
+	var data := CampaignSnapshot.new().to_dictionary()
+
+	assert_eq(data.temple_level, 0)
+	assert_false(data.keys().any(func(key): return str(key).to_lower().contains("blessing")))
+
+
+func test_temple_level_round_trips() -> void:
+	var snapshot := CampaignSnapshot.new()
+	snapshot.temple_level = 1
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.temple_level, 1)
+
+
+## A payload predating this step's temple_level field (e.g. a version-2 save
+## from before this step shipped) must migrate to the harmless unbuilt
+## default rather than being rejected -- the same incremental-field-addition
+## pattern blacksmith_level/alchemy_workshop_level already established.
+func test_a_payload_missing_temple_level_migrates_to_unbuilt() -> void:
+	var data := CampaignSnapshot.new().to_dictionary()
+	data.erase("temple_level")
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.temple_level, 0)
+
+
+func test_rejects_an_out_of_range_temple_level() -> void:
+	var data := CampaignSnapshot.new().to_dictionary()
+	data.temple_level = 2
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
 
 
 ## _normalize_party() must start from a duplicate of the raw party dict and

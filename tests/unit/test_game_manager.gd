@@ -765,6 +765,13 @@ func test_guild_hall_route_points_to_the_guild_hall_scene() -> void:
 	assert_string_contains(source, "func go_to_guild_hall()")
 
 
+func test_temple_route_points_to_the_temple_scene() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
+
+	assert_string_contains(source, "res://scenes/ui/temple.tscn")
+	assert_string_contains(source, "func go_to_temple()")
+
+
 func test_blacksmith_route_points_to_the_blacksmith_scene() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
 
@@ -805,6 +812,18 @@ func test_entering_guild_hall_clears_a_stale_route_context_id() -> void:
 	manager.route_context_id = "stale_id"
 
 	var err: Error = manager.go_to_guild_hall()
+
+	assert_eq(err, OK)
+	assert_eq(manager.route_context_id, "")
+
+
+func test_entering_temple_clears_a_stale_route_context_id() -> void:
+	GameSession.reset()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	manager.route_context_id = "stale_id"
+
+	var err: Error = manager.go_to_temple()
 
 	assert_eq(err, OK)
 	assert_eq(manager.route_context_id, "")
@@ -965,7 +984,6 @@ func test_targeted_purchase_clears_a_party_target_that_becomes_full() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[0].id)
 	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
-	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[2].id)
 	GameSession.gold = 10
 	var cand_id := str(GameSession.recruitment_candidates[0].id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
