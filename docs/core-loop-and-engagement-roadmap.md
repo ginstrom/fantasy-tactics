@@ -1,7 +1,8 @@
 # Core Loop Completion and Engagement Roadmap
 
-> **Status:** Draft for discussion — this is a product roadmap, not an
-> implementation plan or a claim that the listed work has shipped.
+> **Status:** Approved Product Roadmap — defines the scope and sequencing required
+> to deliver a complete, closed campaign loop before executing the full
+> presentation pass.
 
 ## Goal
 
@@ -9,7 +10,7 @@ Deliver a compact, completable Borderlands campaign in which tactical
 victories improve an encampment, the improved encampment expands the party's
 options, and those options unlock the next tactical challenge. Once that
 loop is trustworthy and satisfying, iterate on engagement and appeal through
-**graphics** and sound.
+**graphics** (3/4 top-down perspective) and **sound**.
 
 The intended first-complete loop is:
 
@@ -27,6 +28,8 @@ The following are already useful foundations, not roadmap promises:
   return to the Encampment, and bank loot.
 - Recruitment, equipment transfer, shops/stores, item instances, workshops,
   saving, and world-turn jobs are in place.
+- Tactical mechanics (directional facing, flanking, critical hits, armor/guard,
+  AP budgets) are implemented.
 - Warrior and Scout data exist, with automatic class-owned stat growth and
   every-third-level perk choices.
 - Encounters and recruitment offers replenish over world turns.
@@ -38,162 +41,177 @@ it a repeatable sandbox rather than a progression path with a final outcome.
 
 The core loop is complete when a fresh campaign can, without debug tools:
 
-1. Teach the player to create and deploy a viable party.
-2. Present a clear tier-1 objective and reward it with meaningful resources.
-3. Offer at least two mutually useful improvement paths: encampment and party.
-4. Gate tier-2 and tier-3 challenges behind understandable preparation,
-   rather than arbitrary level checks.
-5. Make class composition and equipment decisions matter to outcomes.
-6. Resolve defeat with a clear, durable recovery consequence.
-7. End in a final encounter, show campaign victory, and permit intentional
-   free play afterwards.
+1. **Streamline Onboarding:** Guide the player directly into recruiting and
+   deploying their initial party with a clear starting objective.
+2. **Authored Objectives & Rewards:** Present clear tier-1, tier-2, and tier-3
+   objectives with meaningful resources (calibrated for a 10–15 battle arc).
+3. **Dual Improvement Paths:** Offer encampment upgrades and party progression
+   as mutually reinforcing choices.
+4. **Meaningful Gating:** Gate tier-2, tier-3, and final challenges behind
+   understandable preparation (tactical counterplay, gear, composition).
+5. **Class & Tactical Relevance:** Make 3-class composition (Warrior / Scout / Cleric),
+   directional positioning, and equipment decisions matter to outcomes.
+6. **Permadeath & Stakes:** Enforce permanent death for slain units and
+   meaningful setback on party defeat, while ensuring recruitment replenishment
+   prevents unrecoverable soft locks.
+7. **Victory & Free Play:** End in an authored final boss encounter, display
+   a campaign victory screen, and permit optional free play afterwards.
 
 ## Roadmap
 
 ### 1. Lock the campaign contract
 
-Define the first campaign as a 60–90 minute Borderlands-cleared arc. Specify
-the three encounter tiers, their objectives, their unlock conditions, and the
-final encounter. Track campaign state separately from repeatable encounter
-vacancies so that free-play respawns cannot reopen or invalidate completed
-objectives.
+Define the first campaign as a 60–90 minute Borderlands-cleared arc (~10–15
+battles total). Specify the three encounter tiers, their authored objectives,
+their unlock conditions, and the final boss encounter.
 
-**Milestone:** a campaign screen communicates the current objective, next
-unlock, and final victory condition.
+- **Party Scope:** Exactly 1 active party (`party_001`). Guild Hall upgrades
+  increase party size capacity (from 3 up to 5 members), deferring multi-party
+  coordination to post-campaign expansion.
+- **Campaign vs Sandbox State:** Track campaign milestone progression in
+  `GameSession` separately from repeatable encounter vacancies so respawns cannot
+  reopen or invalidate completed objectives.
+- **Onboarding Flow:** Starting a new game routes directly to party formation
+  with clear guidance toward the first objective (e.g., clearing the Goblin Outpost).
 
-### 2. Establish the building and tier model
+**Milestone:** A campaign UI communicates the current objective, next unlock,
+and final victory condition, persisting across saves.
+
+### 2. Establish the streamlined building and tier model
 
 Make every building level a visible strategic choice with a cost, a world-turn
-or immediate completion rule, a prerequisite, and a concrete unlock.
+or immediate completion rule, a prerequisite, and a concrete unlock. Keep the
+Encampment a fast, card-like decision layer without screen sprawl.
 
-Initial building tree:
+Core Encampment Hubs:
 
-| Building | First role | Example tier unlocks |
+| Building Hub | Core Role | Progression & Tier Unlocks |
 |---|---|---|
-| Guild Hall | Party capacity and organisation | party size, then a second party only if multi-party play is in scope |
-| Fighters' Guild | Martial recruits and training | Warrior recruitment, martial equipment or training |
-| Scout Lodge | Reconnaissance | Scout recruitment, encounter previews, improved map information |
-| Temple | Sustain | Cleric recruitment, recovery or protection services |
-| Blacksmith | Physical gear | weapon/armor crafting and improvements |
-| Alchemy Workshop | Consumables | healing-potion tiers |
-| Runic Workshop | Magical gear | rune access and upgrades |
-| Trade Post / Watchtower | Economy and world access | income/trade stock; safer or more-visible routes |
+| **Guild Hall** | Roster & Party Capacity | Increases max party size (3 → 4 → 5), expands roster cap, houses general recruitment (Warrior, Scout). |
+| **Temple** | Sustain & Faith | Recruits Clerics, provides encampment healing/blessing services, accelerates wound recovery. |
+| **Blacksmith & Workshops** | Physical & Magical Gear | Weapon/armor crafting, sharpening (Blacksmith), healing potions (Alchemy), rune upgrades (Runic). |
+| **Trade Post & Stores** | Economy & Supplies | Selling encounter loot, purchasing basic weapons, armor, and provisions. |
 
-Do not build a city-builder simulation. The Encampment should remain a fast,
-card-like decision layer where each completed building changes a future
-adventuring choice.
-
-**Milestone:** a fresh player can afford and understand the first upgrade,
-then see it unlock a new recruit, tool, or route before tier 2.
+**Milestone:** A fresh player can afford and understand the first upgrade,
+then see it unlock a new recruit, tool, or capability before tier 2.
 
 ### 3. Finish the first class system slice
 
-Treat a class as a role with a unique decision, not a stat package. Retain
+Treat a class as a role with unique tactical and strategic decisions. Retain
 automatic class-owned skill growth and the every-third-level perk cadence;
-remove the temporary manual Attack-spending path rather than supporting both.
+remove legacy manual Attack-spending.
 
-1. Complete Warrior and Scout end-to-end: starting values, owned skills,
-   level-up presentation, save migration, perks, and balance coverage.
-2. Give Scout a world role before expanding its perk tree: reveal encounter
-   danger, composition, routes, or objectives in a way that changes expedition
-   choice.
-3. Add one sustain/control root class, recommended: Cleric. Its healing or
-   protection must create attrition-management decisions without removing
+1. **Warrior (Front Line):** High Health, Might, and Guard. Holds space,
+   protects allies, and punishes flanking enemies.
+2. **Scout (Ranged Pressure & Reconnaissance):** High Accuracy and AP. On the
+   tactical grid, delivers safe ranged attacks. On the World Map, provides
+   **Strategic Reconnaissance** (reveals exact enemy composition, danger rating,
+   and potential loot drops before entering an encounter).
+3. **Cleric (Sustain & Protection):** Moderate durability, blunt melee, and
+   in-combat healing/protection spells. Mitigates attrition without trivializing
    defeat risk.
-4. Defer Mage, specialisations, and complex reactions until the three-role
-   party has proven its value against distinct encounters.
+4. **Deferred:** Mage, advanced specializations, and complex reaction trees
+   remain deferred until the Warrior/Scout/Cleric triad is balanced.
 
-**Milestone:** a Warrior/Scout/Cleric party has understandable trade-offs,
-and each role has at least one encounter where it is clearly valuable but not
-mandatory.
+**Milestone:** A Warrior/Scout/Cleric party has clear tactical synergies,
+Scout reconnaissance provides real world-map value, and `make check` passes.
 
 ### 4. Build the encounter and reward ladder
 
-Create authored tier-1, tier-2, tier-3, and final encounter templates. Each
-needs a tactical pattern, a preparation expectation, a reward, and a reason
-to return to the Encampment.
+Create authored tier-1, tier-2, tier-3, and final boss encounter templates.
+Calibrate reward scaling (~25g average for tier 1, ~50g for tier 2, crafting
+materials for tier 3) to support a 60–90 minute playthrough:
 
-- Tier 1 teaches formation, movement, attacks, and returning with loot.
-- Tier 2 rewards scouting, ranged pressure, consumables, or first equipment
-  upgrades.
-- Tier 3 requires deliberate party composition and stronger gear.
-- The final encounter tests the campaign's accumulated decisions rather than
-  simply having larger numbers.
+- **Tier 1 (Goblins / Kobolds):** Teaches formation, directional facing,
+  flanking, and returning with loot.
+- **Tier 2 (Orcs / Brutes):** High durability and heavy armor; rewards
+  scouting, ranged kiting, armor-piercing gear, and potion use.
+- **Tier 3 (Hobgoblin Command / Mixed Forces):** Mixed compositions with
+  support and heavy frontline; requires deliberate target prioritization.
+- **Final Encounter (Borderlands Chieftain / Boss):** Climactic multi-unit
+  encounter testing party composition, positioning, and accumulated upgrades.
 
-Use repeatable encounters for optional income and practice only after the
-authored campaign objective has been recorded as completed.
+**Milestone:** Each tier has deterministic scenario coverage and a manual
+play-through demonstrating intended counterplay and clean victory resolution.
 
-**Milestone:** each tier has deterministic scenario coverage and a manual
-play-through demonstrating the intended preparation and counterplay.
+### 5. Define defeat, recovery, and permadeath policy
 
-### 5. Define defeat, recovery, and pacing
+Enforce high stakes through permanent loss while guarding against unrecoverable
+campaign soft locks:
 
-Choose and implement one coherent defeat policy before balancing the full
-campaign. Recommended initial policy: a defeated expedition retreats to the
-Encampment, advances world time, applies injuries/recovery time, and forfeits
-unbanked battle rewards; no permanent adventurer death in the first complete
-arc.
+- **Unit Permadeath:** Units reduced to 0 HP that are slain in combat are
+  permanently removed from the roster. High-level veterans and upgraded gear
+  are precious and painful to lose.
+- **Expedition Defeat / Wipe:** If all party members fall or retreat, the
+  expedition fails. The party is routed back to the Encampment, unbanked battle
+  and pending loot are lost, and world time advances (e.g., 2–3 turns).
+- **Soft-Lock Prevention:** The recruitment candidate pool always guarantees
+  affordable level-1 recruits (with an emergency gold stipend floor if the player
+  is bankrupt) so the player can rebuild a viable party after a wipe.
 
-This keeps setbacks meaningful while avoiding a campaign-ending punishment
-before recovery tools and replacement recruitment are sufficiently rich.
-
-**Milestone:** defeat, retreat, recovery, save/load, and return-to-objective
-paths are all explicit and tested.
+**Milestone:** Unit death, party retreat, recruitment replenishment, and
+recovery paths are fully tested and prevent dead ends.
 
 ### 6. Prove campaign balance and usability
 
-Use deterministic battle scenarios and the existing headless simulator to
-check that each required tier is winnable with intended preparation and that
-the economy does not stall. Run manual play-throughs from a clean save,
-including one loss and recovery.
+Use deterministic battle scenarios and the headless simulator (`battle_sim.gd`,
+`scenario_runner_main.gd`) to verify that each tier is winnable with intended
+preparation and that the economy does not stall.
 
-Measure campaign evidence such as completion rate, encounter outcome, rounds,
-damage, rewards, upgrade order, and recovery time. This is balance evidence,
-not a presentation feature.
+- Run headless campaign passes measuring rounds, damage, survival rate,
+  gold velocity, and upgrade progression.
+- Execute manual playthroughs from clean save to final victory, including
+  at least one party setback/rebuilding loop.
 
-**Milestone:** a clean campaign can reach victory reproducibly, with no soft
-locks or opaque requirements, and `make check` passes.
+**Milestone:** A clean campaign consistently reaches victory without soft
+locks or opaque mechanics, and `make check` passes.
 
 ### 7. Iterate for engagement and appeal: graphics and sound
 
-Only after the above loop works, improve its clarity and emotional payoff.
+Once the mechanical loop is proven, execute the presentation pass to maximize
+clarity and game feel.
 
-**Graphics**
+**Graphics (3/4 Top-Down Perspective)**
 
-- Establish a coherent visual direction for terrain, buildings, units,
-  portraits, items, status effects, and encounter tiers.
-- Add readable combat feedback: hit, miss, critical hit, damage, healing,
-  loot, completion, and defeat.
-- Improve World Map and Encampment state readability so new unlocks and
-  current objectives are visible at a glance.
+- **Perspective:** Standardize on a clear **3/4 top-down perspective** for both
+  the tactical Battlefield and the World Map.
+- **Asset Pipeline:** Use a hybrid approach starting with clean, simple
+  placeholders (curated CC0/Kenney assets and minimal geometric sprites) for
+  rapid iteration, upgrading to polished custom assets as systems settle.
+- **Tactical Feedback:** High-contrast combat floating numbers (hits, misses,
+  criticals, damage, healing), wound state indicators, and directional facing
+  arrows.
+- **Strategic Readability:** Clean Encampment building states and clear World Map
+  fog-of-war and scouting overlays.
 
 **Sound**
 
-- Add a small, consistent sound set for UI confirmation, movement, attacks,
-  hit/miss/critical outcomes, healing, loot, building completion, victory,
-  and defeat.
-- Add restrained music states for Encampment, travel, battle, and victory.
-- Provide master/music/effects volume controls and preserve clear visual
-  feedback when sound is disabled.
+- **Audio Cues:** Crisp sound effects for UI actions, movement, weapon swings,
+  hits/misses/crits, spell healing, loot acquisition, building upgrades,
+  victory, and unit death.
+- **Music & Ambience:** Restrained background music states for Encampment, World
+  Map travel, combat, and victory.
+- **Audio Controls:** Master, Music, and SFX volume buses with complete visual
+  feedback parity when sound is muted.
 
-**Milestone:** screenshots and manual play verify that graphics and sound make
-every major action and campaign-state change easier to read and more rewarding
-without slowing input or obscuring tactical information.
+**Milestone:** Screenshots, audio tours, and manual play confirm that 3/4
+top-down graphics and audio elevate clarity and game feel without obscuring
+tactical information.
 
-## Decisions still required
+## Decisions Locked
 
-1. Confirm the 60–90 minute first-campaign target, or choose a longer
-   settlement-builder arc.
-2. Confirm the recommended no-permadeath defeat policy for this first arc.
-3. Confirm whether Guild Hall tiering should include multi-party play now, or
-   leave it as a post-campaign expansion.
-4. Confirm Cleric as the third root class, or choose Mage instead.
-5. Choose the art direction and audio production approach before asset work:
-   placeholder/procedural, commissioned, licensed, or a defined hybrid.
+1. **Campaign Scope:** 60–90 minute compact Borderlands campaign (~10–15 encounters).
+2. **Defeat Policy:** Permadeath for slain adventurers; party wipe causes retreat
+   and loss of unbanked loot; recruitment floor prevents campaign soft-locks.
+3. **Party Count:** Exactly 1 deployed party for Campaign 1; Guild Hall scales
+   party size (3 to 5 units).
+4. **Third Root Class:** Cleric (combat sustain, holy protection, Temple synergy).
+5. **Visual Perspective & Assets:** 3/4 top-down perspective; hybrid asset
+   strategy beginning with simple, rapid placeholders and iterating.
 
-## Sequencing rule
+## Sequencing Rule
 
 Do not begin broad graphics or sound production until campaign progression,
-defeat recovery, and the final objective are stable. Small feedback assets may
-be added alongside a feature when they are necessary to understand it, but the
-large presentation pass follows a proven playable loop.
+permadeath/recovery loops, and the final objective are stable and verified.
+Small feedback placeholders may be used during feature development, but the
+major presentation pass follows a proven playable loop.
