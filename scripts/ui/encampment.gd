@@ -5,6 +5,7 @@ extends Control
 @onready var units_label: Label = $Body/Center/VBox/UnitsLabel
 @onready var information_panel: PanelContainer = %InformationPanel
 @onready var campaign_guide: PanelContainer = %CampaignGuide
+@onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 @onready var first_party_dialog: PanelContainer = $FirstPartyDialog
 @onready var first_party_title: Label = $FirstPartyDialog/Content/Title
 @onready var first_party_message: Label = $FirstPartyDialog/Content/Message
@@ -34,6 +35,7 @@ func refresh() -> void:
 	units_label.text = tr("encampment.units_count") % _count_encamped_units()
 	information_panel.refresh()
 	campaign_guide.refresh()
+	campaign_objective_banner.refresh()
 	first_party_dialog.visible = GameSession.parties.is_empty() and not first_party_dialog_dismissed
 
 

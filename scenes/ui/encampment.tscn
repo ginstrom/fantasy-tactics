@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/encampment.gd" id="1_encampment"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
 [ext_resource type="PackedScene" path="res://scenes/ui/campaign_guide.tscn" id="4_campaign_guide"]
+[ext_resource type="PackedScene" path="res://scenes/ui/campaign_objective_banner.tscn" id="5_campaign_objective_banner"]
 
 [node name="Encampment" type="Control"]
 layout_mode = 3
@@ -13,6 +14,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_encampment")
+
+[node name="CampaignObjectiveBanner" parent="." instance=ExtResource("5_campaign_objective_banner")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 8.0
+offset_right = -16.0
+offset_bottom = 88.0
+grow_horizontal = 2
 
 [node name="Body" type="HBoxContainer" parent="."]
 layout_mode = 1

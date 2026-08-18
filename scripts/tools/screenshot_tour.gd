@@ -35,7 +35,7 @@ func _build_steps() -> Array[Dictionary]:
 	return [
 		{"name": "start_menu", "action": func() -> void:
 			GameManager.go_to_start_menu()},
-		{"name": "starting_settlement", "action": func() -> void:
+		{"name": "new_game_party_formation", "action": func() -> void:
 			GameManager.go_to_game()},
 		{"name": "encampment", "action": func() -> void:
 			GameManager.go_to_encampment()},

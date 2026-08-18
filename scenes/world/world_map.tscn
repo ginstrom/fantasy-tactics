@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/campaign_guide.tscn" id="3_campaign_guide"]
+[ext_resource type="PackedScene" path="res://scenes/ui/campaign_objective_banner.tscn" id="4_campaign_objective_banner"]
 
 [node name="WorldMap" type="Node2D"]
 script = ExtResource("1_world_map")
@@ -27,6 +28,15 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = 332.0
 offset_bottom = 160.0
+
+[node name="CampaignObjectiveBanner" parent="HUD" instance=ExtResource("4_campaign_objective_banner")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 168.0
+offset_right = 332.0
+offset_bottom = 264.0
 
 [node name="Margin" type="MarginContainer" parent="HUD"]
 layout_mode = 1

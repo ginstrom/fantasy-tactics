@@ -36,6 +36,11 @@ func _full_snapshot() -> CampaignSnapshot:
 	]
 	snapshot.selected_party_id = "party_001"
 	snapshot.selected_encounter = "goblin_camp"
+	snapshot.campaign_objective_id = "obj_tier1_2_kobold_warren"
+	snapshot.completed_objectives = ["obj_tier1_1_goblin_outpost"]
+	snapshot.unlocked_authored_encounters = ["obj_tier1_1_goblin_outpost", "obj_tier1_2_kobold_warren"]
+	snapshot.is_campaign_completed = false
+	snapshot.is_free_play_active = false
 	snapshot.completed_encounters = ["orc_outpost"]
 	snapshot.active_encounters = [
 		{
@@ -67,13 +72,27 @@ func _full_snapshot() -> CampaignSnapshot:
 	return snapshot
 
 
-func test_format_version_is_1() -> void:
-	assert_eq(CampaignSnapshot.FORMAT_VERSION, 1)
+func test_format_version_is_2() -> void:
+	assert_eq(CampaignSnapshot.FORMAT_VERSION, 2)
 
 
 func test_to_dictionary_tags_the_format_version() -> void:
 	var data := CampaignSnapshot.new().to_dictionary()
-	assert_eq(data.version, 1)
+	assert_eq(data.version, 2)
+
+
+## Task-list item 3: to_dictionary() exports version 2 with every campaign
+## progression field, at their fresh-campaign defaults for a brand-new
+## (never-mutated) snapshot.
+func test_to_dictionary_exports_version_2_with_all_campaign_progression_fields() -> void:
+	var data := CampaignSnapshot.new().to_dictionary()
+
+	assert_eq(data.version, 2)
+	assert_eq(data.campaign_objective_id, "obj_tier1_1_goblin_outpost")
+	assert_eq(data.completed_objectives, [])
+	assert_eq(data.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
+	assert_eq(data.is_campaign_completed, false)
+	assert_eq(data.is_free_play_active, false)
 
 
 func test_to_dictionary_converts_vector2i_fields_to_x_y_dictionaries() -> void:
@@ -99,6 +118,11 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.parties[0].travel_route, [Vector2i(4, 5), Vector2i(4, 6)])
 	assert_eq(snapshot.selected_party_id, "party_001")
 	assert_eq(snapshot.selected_encounter, "goblin_camp")
+	assert_eq(snapshot.campaign_objective_id, "obj_tier1_2_kobold_warren")
+	assert_eq(snapshot.completed_objectives, ["obj_tier1_1_goblin_outpost"])
+	assert_eq(snapshot.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost", "obj_tier1_2_kobold_warren"])
+	assert_eq(snapshot.is_campaign_completed, false)
+	assert_eq(snapshot.is_free_play_active, false)
 	assert_eq(snapshot.completed_encounters, ["orc_outpost"])
 	assert_eq(snapshot.active_encounters[0].position, Vector2i(4, 4))
 	assert_eq(snapshot.encounter_vacancies, [{"turns_remaining": 8}])
@@ -187,7 +211,60 @@ func test_rejects_missing_version() -> void:
 
 func test_rejects_unknown_version() -> void:
 	var data := _full_snapshot().to_dictionary()
-	data.version = 2
+	data.version = 3
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+## Task-list item 3: a version 1 payload predates campaign milestone
+## progression entirely, so it never carries these five keys at all --
+## from_dictionary() must migrate it to a fresh campaign's starting values
+## rather than reject it, and must not drop any of its own real (non-
+## campaign) roster/building state in the process.
+func test_version_1_migrates_missing_campaign_fields_to_starting_values() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.version = 1
+	data.erase("campaign_objective_id")
+	data.erase("completed_objectives")
+	data.erase("unlocked_authored_encounters")
+	data.erase("is_campaign_completed")
+	data.erase("is_free_play_active")
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.campaign_objective_id, "obj_tier1_1_goblin_outpost")
+	assert_eq(result.snapshot.completed_objectives, [])
+	assert_eq(result.snapshot.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
+	assert_eq(result.snapshot.is_campaign_completed, false)
+	assert_eq(result.snapshot.is_free_play_active, false)
+	assert_eq(result.snapshot.gold, 42, "Version 1 migration must not drop the payload's own non-campaign state")
+	assert_eq(result.snapshot.guild_hall_level, 2)
+
+
+func test_rejects_a_version_2_payload_missing_campaign_objective_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.erase("campaign_objective_id")
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_version_2_payload_with_a_malformed_completed_objectives_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.completed_objectives = "not an array"
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_version_2_payload_with_a_malformed_is_campaign_completed_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.is_campaign_completed = "not a bool"
 
 	var result := CampaignSnapshot.from_dictionary(data)
 

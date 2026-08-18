@@ -277,6 +277,12 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("guild_hall.party_size") % 4, "Party size: 4")
 	assert_eq(tr("guild_hall.upgrade") % 50, "Upgrade to Level 2 — 50 gold")
 	assert_eq(tr("guild_hall.max_level"), "Max Level")
+	assert_eq(tr("campaign.objective.label"), "Active Objective:")
+	assert_eq(tr("campaign.victory.goal_label"), "Campaign Goal: Defeat the Borderlands Ogre")
+	assert_eq(tr("campaign.obj.tier1_1.title"), "Scout the Perimeter")
+	assert_eq(tr("campaign.obj.tier1_1.desc"), "Form a party and clear the Goblin Outpost.")
+	assert_eq(tr("campaign.obj.tier1_1.reward"), "50 Gold, Iron Weapon")
+	assert_eq(tr("campaign.free_play.active_label"), "Free Play Mode Active")
 
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:

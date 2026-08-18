@@ -344,5 +344,11 @@ messages = {
 "campaign_guide.return_bank.message": "Victory! Walk your party home and click the settlement to bank the reward.",
 "campaign_guide.return_bank.target": "World Map -> Settlement",
 "campaign_guide.first_improvement.message": "You have gold. Recruit an adventurer, buy equipment, or upgrade the Guild Hall.",
-"campaign_guide.first_improvement.target": "Encampment -> Units / Trade / Buildings"
+"campaign_guide.first_improvement.target": "Encampment -> Units / Trade / Buildings",
+"campaign.objective.label": "Active Objective:",
+"campaign.victory.goal_label": "Campaign Goal: Defeat the Borderlands Ogre",
+"campaign.obj.tier1_1.title": "Scout the Perimeter",
+"campaign.obj.tier1_1.desc": "Form a party and clear the Goblin Outpost.",
+"campaign.obj.tier1_1.reward": "50 Gold, Iron Weapon",
+"campaign.free_play.active_label": "Free Play Mode Active"
 }

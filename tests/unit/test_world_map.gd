@@ -1189,3 +1189,28 @@ func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() ->
 	add_child_autofree(world_map)
 
 	assert_true(world_map.get_node("%Hint").get_parent() is PanelContainer)
+
+
+func test_world_map_displays_the_active_campaign_objective() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var banner: Control = world_map.get_node("%CampaignObjectiveBanner")
+
+	assert_eq(banner.get_node("Content/TitleLabel").text, tr("campaign.obj.tier1_1.title"))
+	assert_eq(banner.get_node("Content/DescLabel").text, tr("campaign.obj.tier1_1.desc"))
+
+
+## Step 1 task list item 5: the banner self-subscribes to GameSession.
+## campaign_progress_changed (see campaign_objective_banner.gd), so it must
+## reflect a completed objective immediately, with no manual refresh call
+## required anywhere in world_map.gd.
+func test_world_map_campaign_objective_banner_updates_immediately_when_the_objective_advances() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var banner: Control = world_map.get_node("%CampaignObjectiveBanner")
+	var title_label: Label = banner.get_node("Content/TitleLabel")
+	assert_eq(title_label.text, tr("campaign.obj.tier1_1.title"))
+
+	GameSession.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+
+	assert_eq(title_label.text, tr("campaign.obj.tier1_2.title"))

@@ -17,7 +17,7 @@ extends RefCounted
 ## triggers reward-banking side effects (merge_battle_loot_into_party(),
 ## deposit_pending_reward()) -- it only moves values, never settles them.
 
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
 
 ## Same EXPEDITIONS template catalog GameSession exposes on its autoload
 ## singleton, reached here via preload of the script itself (a compile-time
@@ -31,6 +31,18 @@ var recruitment_vacancies: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
+# Durable campaign milestone progression (see GameSession.CAMPAIGN_OBJECTIVES
+# and complete_campaign_objective()/set_campaign_victory()) -- introduced in
+# format version 2. A version-1 payload has none of these keys; from_
+# dictionary() normalizes it to the same starting-campaign defaults these
+# vars themselves default to, rather than trying to infer progress from the
+# legacy completed_encounters list (which names sandbox EXPEDITIONS ids, not
+# CAMPAIGN_OBJECTIVES ids -- there is no reliable mapping between the two).
+var campaign_objective_id: String = "obj_tier1_1_goblin_outpost"
+var completed_objectives: Array[String] = []
+var unlocked_authored_encounters: Array[String] = ["obj_tier1_1_goblin_outpost"]
+var is_campaign_completed: bool = false
+var is_free_play_active: bool = false
 var completed_encounters: Array[String] = []
 var active_encounters: Array[Dictionary] = []
 var encounter_vacancies: Array[Dictionary] = []
@@ -83,6 +95,11 @@ func to_dictionary() -> Dictionary:
 		"parties": _parties_to_dictionary(parties),
 		"selected_party_id": selected_party_id,
 		"selected_encounter": selected_encounter,
+		"campaign_objective_id": campaign_objective_id,
+		"completed_objectives": completed_objectives.duplicate(true),
+		"unlocked_authored_encounters": unlocked_authored_encounters.duplicate(true),
+		"is_campaign_completed": is_campaign_completed,
+		"is_free_play_active": is_free_play_active,
 		"completed_encounters": completed_encounters.duplicate(true),
 		"active_encounters": _encounters_to_dictionary(active_encounters),
 		"encounter_vacancies": encounter_vacancies.duplicate(true),
@@ -124,7 +141,13 @@ func to_dictionary() -> Dictionary:
 static func from_dictionary(data: Variant) -> Dictionary:
 	if not data is Dictionary:
 		return _invalid("snapshot data is not a dictionary")
-	if not data.get("version") is int or int(data.version) != FORMAT_VERSION:
+	if not data.get("version") is int:
+		return _invalid("missing or unsupported snapshot version")
+	# Version 1 predates campaign milestone progression (see
+	# _normalize_campaign_progress()) and migrates gracefully; any other
+	# version besides the current FORMAT_VERSION is unsupported.
+	var version: int = int(data.version)
+	if version != 1 and version != FORMAT_VERSION:
 		return _invalid("missing or unsupported snapshot version")
 
 	var normalized: Dictionary = {}
@@ -176,6 +199,16 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not data.get("selected_encounter") is String:
 		return _invalid("selected_encounter is not a string")
 	normalized["selected_encounter"] = data.selected_encounter
+
+	var campaign_progress_result := _normalize_campaign_progress(data, version)
+	if not campaign_progress_result.ok:
+		return _invalid(campaign_progress_result.error)
+	var campaign_progress: Dictionary = campaign_progress_result.value
+	normalized["campaign_objective_id"] = campaign_progress.campaign_objective_id
+	normalized["completed_objectives"] = campaign_progress.completed_objectives
+	normalized["unlocked_authored_encounters"] = campaign_progress.unlocked_authored_encounters
+	normalized["is_campaign_completed"] = campaign_progress.is_campaign_completed
+	normalized["is_free_play_active"] = campaign_progress.is_free_play_active
 
 	for scalar_key in ["world_turn", "gold", "guild_hall_level", "pending_reward", "battle_reward"]:
 		if not data.get(scalar_key) is int:
@@ -398,6 +431,60 @@ static func _is_recruitment_template_id(id: String) -> bool:
 		if template.id == id:
 			return true
 	return false
+
+
+## Validates and normalizes the five durable campaign-milestone-progression
+## fields (see GameSession.CAMPAIGN_OBJECTIVES). A version-1 payload (which
+## predates this state) never carries these keys at all -- rather than
+## reject it or guess at progress from the legacy completed_encounters list
+## (a different id namespace entirely, see this field's own doc comment on
+## the class), it normalizes to the same fresh-campaign defaults campaign_
+## objective_id/completed_objectives/unlocked_authored_encounters/is_
+## campaign_completed/is_free_play_active themselves default to. A current-
+## format (version 2) payload is validated strictly: every field must be
+## present with the correct type, or the whole import is rejected exactly
+## like any other malformed field.
+static func _normalize_campaign_progress(data: Dictionary, version: int) -> Dictionary:
+	if version == 1:
+		return {
+			"ok": true,
+			"error": "",
+			"value": {
+				"campaign_objective_id": "obj_tier1_1_goblin_outpost",
+				"completed_objectives": [] as Array[String],
+				"unlocked_authored_encounters": ["obj_tier1_1_goblin_outpost"] as Array[String],
+				"is_campaign_completed": false,
+				"is_free_play_active": false,
+			},
+		}
+
+	if not data.get("campaign_objective_id") is String:
+		return {"ok": false, "error": "campaign_objective_id is not a string", "value": {}}
+
+	var completed_result := _normalize_string_array(data.get("completed_objectives"), "completed_objectives")
+	if not completed_result.ok:
+		return {"ok": false, "error": completed_result.error, "value": {}}
+
+	var unlocked_result := _normalize_string_array(data.get("unlocked_authored_encounters"), "unlocked_authored_encounters")
+	if not unlocked_result.ok:
+		return {"ok": false, "error": unlocked_result.error, "value": {}}
+
+	if not data.get("is_campaign_completed") is bool:
+		return {"ok": false, "error": "is_campaign_completed is not a bool", "value": {}}
+	if not data.get("is_free_play_active") is bool:
+		return {"ok": false, "error": "is_free_play_active is not a bool", "value": {}}
+
+	return {
+		"ok": true,
+		"error": "",
+		"value": {
+			"campaign_objective_id": data.campaign_objective_id,
+			"completed_objectives": completed_result.list,
+			"unlocked_authored_encounters": unlocked_result.list,
+			"is_campaign_completed": data.is_campaign_completed,
+			"is_free_play_active": data.is_free_play_active,
+		},
+	}
 
 
 ## Array[String] fields (completed_encounters, used_encounter_template_ids).

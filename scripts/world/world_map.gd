@@ -47,6 +47,7 @@ var repathing: bool = false
 @onready var end_turn_button: Button = %EndTurnButton
 @onready var information_panel: PanelContainer = %InformationPanel
 @onready var campaign_guide: PanelContainer = %CampaignGuide
+@onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 
 
 func _ready() -> void:
@@ -61,6 +62,7 @@ func _ready() -> void:
 	_refresh_turn_controls()
 	_refresh_information_panel()
 	_refresh_campaign_guide()
+	campaign_objective_banner.refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:

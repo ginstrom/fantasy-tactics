@@ -142,6 +142,112 @@ func test_get_max_party_count_is_one_and_create_party_fails_at_the_cap() -> void
 	assert_eq(session.get_selected_party().id, GameSessionScript.FIRST_PARTY_ID)
 
 
+## The complete authored-node catalog is this step's sole ownership
+## surface (see GameSession.CAMPAIGN_OBJECTIVES's own doc comment) -- twelve
+## unique ids (three tiers of three, a two-battle pre-boss sequence, and the
+## final boss), each non-first node naming a real prior node as its
+## prerequisite, and the campaign starting on the first tier-1 node.
+func test_campaign_objectives_catalog_has_twelve_unique_nodes_each_with_a_valid_prerequisite() -> void:
+	var ids: Array = GameSessionScript.CAMPAIGN_OBJECTIVES.keys()
+	assert_eq(ids.size(), 12, "The campaign contract is exactly twelve authored nodes")
+
+	var seen_ids: Dictionary = {}
+	for id in ids:
+		assert_false(seen_ids.has(id), "Objective id %s is not unique" % id)
+		seen_ids[id] = true
+
+	for id in ids:
+		var node: Dictionary = GameSessionScript.CAMPAIGN_OBJECTIVES[id]
+		var prerequisite_id: String = node.prerequisite_id
+		if id == "obj_tier1_1_goblin_outpost":
+			assert_eq(prerequisite_id, "", "The first node has no prerequisite")
+		else:
+			assert_true(
+				GameSessionScript.CAMPAIGN_OBJECTIVES.has(prerequisite_id),
+				"%s's prerequisite %s must name a real node" % [id, prerequisite_id]
+			)
+
+
+func test_new_session_starts_on_the_first_tier_one_objective() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.campaign_objective_id, "obj_tier1_1_goblin_outpost")
+	assert_eq(session.completed_objectives, [])
+	assert_eq(session.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
+	assert_false(session.is_campaign_completed)
+	assert_false(session.is_free_play_active)
+	assert_eq(
+		session.get_current_campaign_objective(),
+		GameSessionScript.CAMPAIGN_OBJECTIVES["obj_tier1_1_goblin_outpost"]
+	)
+
+
+func test_complete_campaign_objective_marks_it_completed_and_unlocks_the_next_node() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	watch_signals(session)
+
+	session.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+
+	assert_true(session.is_objective_completed("obj_tier1_1_goblin_outpost"))
+	assert_eq(session.completed_objectives, ["obj_tier1_1_goblin_outpost"])
+	assert_eq(session.campaign_objective_id, "obj_tier1_2_kobold_warren")
+	assert_true(session.unlocked_authored_encounters.has("obj_tier1_2_kobold_warren"))
+	assert_signal_emitted(session, "campaign_progress_changed")
+
+
+func test_completing_an_unknown_objective_id_does_nothing() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.complete_campaign_objective("no_such_objective")
+
+	assert_eq(session.completed_objectives, [])
+	assert_eq(session.campaign_objective_id, "obj_tier1_1_goblin_outpost")
+
+
+func test_completing_an_objective_twice_is_idempotent() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+	var completed_after_first: Array = session.completed_objectives.duplicate(true)
+	var unlocked_after_first: Array = session.unlocked_authored_encounters.duplicate(true)
+
+	session.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+
+	assert_eq(session.completed_objectives, completed_after_first, "A repeated completion must not double-append")
+	assert_eq(session.unlocked_authored_encounters, unlocked_after_first)
+	assert_eq(
+		session.campaign_objective_id, "obj_tier1_2_kobold_warren",
+		"A repeated completion must not re-advance past the next node"
+	)
+
+
+func test_completing_the_final_boss_node_sets_campaign_victory() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.complete_campaign_objective("obj_boss_borderlands_ogre")
+
+	assert_true(session.is_objective_completed("obj_boss_borderlands_ogre"))
+	assert_eq(session.campaign_objective_id, "", "No node follows the final boss")
+	assert_true(session.is_campaign_completed)
+	assert_true(session.is_free_play_active)
+
+
+func test_set_campaign_victory_atomically_flags_victory_and_free_play() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	watch_signals(session)
+
+	session.set_campaign_victory()
+
+	assert_true(session.is_campaign_completed)
+	assert_true(session.is_free_play_active)
+	assert_signal_emitted(session, "campaign_progress_changed")
+
+
 func test_public_ui_eligibility_queries_report_current_state_without_mutating_it() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -3585,6 +3691,11 @@ func _capture_durable_fields() -> Dictionary:
 		"parties": GameSession.parties.duplicate(true),
 		"selected_party_id": GameSession.selected_party_id,
 		"selected_encounter": GameSession.selected_encounter,
+		"campaign_objective_id": GameSession.campaign_objective_id,
+		"completed_objectives": GameSession.completed_objectives.duplicate(true),
+		"unlocked_authored_encounters": GameSession.unlocked_authored_encounters.duplicate(true),
+		"is_campaign_completed": GameSession.is_campaign_completed,
+		"is_free_play_active": GameSession.is_free_play_active,
 		"completed_encounters": GameSession.completed_encounters.duplicate(true),
 		"active_encounters": GameSession.active_encounters.duplicate(true),
 		"encounter_vacancies": GameSession.encounter_vacancies.duplicate(true),
@@ -3634,6 +3745,7 @@ func test_export_then_reset_then_import_restores_the_full_session() -> void:
 	GameSession.set_deployed_party_position(Vector2i(4, 3))
 	GameSession.set_deployed_party_route([Vector2i(4, 4)])
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_campaign_objective("obj_tier1_1_goblin_outpost")
 	GameSession.completed_encounters = ["orc_outpost"]
 	GameSession.encounter_vacancies = [{"turns_remaining": 3}]
 	GameSession.recruitment_vacancies = [{"turns_remaining": 6}]

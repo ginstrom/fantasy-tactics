@@ -183,11 +183,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -337,11 +341,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -534,11 +541,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -688,11 +699,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -885,11 +899,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -1039,11 +1057,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1236,11 +1257,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -1408,11 +1433,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1605,11 +1633,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -1775,11 +1807,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1972,11 +2007,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2144,11 +2183,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "World",
@@ -2341,11 +2383,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2513,11 +2559,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Battle",
@@ -2803,11 +2852,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2978,11 +3031,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3258,11 +3314,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -3432,11 +3492,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3631,11 +3694,15 @@
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_tier1_1_goblin_outpost",
         "completed_encounters": [],
+        "completed_objectives": [],
         "encounter_vacancies": [],
         "gold": 500,
         "guild_hall_level": 1,
         "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
         "mana_crystals": {
           "1": 2
         },
@@ -3805,11 +3872,14 @@
         "shop_gold": 100,
         "shop_level": 1,
         "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost"
+        ],
         "used_encounter_template_ids": [
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 1,
+        "version": 2,
         "world_turn": 1
       },
       "category": "Shop",

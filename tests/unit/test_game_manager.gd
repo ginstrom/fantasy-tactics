@@ -79,10 +79,33 @@ func test_start_menu_route_uses_start_menu_scene() -> void:
 	assert_string_contains(source, "go_to_start_menu()")
 
 
-func test_new_game_routes_to_starting_settlement() -> void:
+## Step 1 of docs/plans/2026-08-18-core-loop-and-engagement streamlines
+## onboarding: New Game must land directly on party formation with the
+## first objective already active, not the old generic settlement intro.
+func test_new_game_routes_to_party_formation() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/autoload/game_manager.gd")
 
-	assert_string_contains(source, "res://scenes/local/starting_settlement.tscn")
+	assert_string_contains(source, "func go_to_game(")
+	assert_string_contains(source, "return go_to_parties(true)")
+
+
+## Functional companion to the source-inspection test above: New Game must
+## flag Parties to create party_001 immediately, the same affordance the
+## Encampment's own "form your first party" dialog uses (see
+## test_encampment.gd's test_first_party_dialog_uses_the_exact_prompt_and_
+## create_routes_to_parties), so the party-formation screen genuinely
+## prompts the player to assign initial members to it rather than just
+## landing on an empty party list.
+func test_go_to_game_flags_parties_to_create_the_first_party_immediately() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+	GameSession.reset()
+
+	var err: Error = manager.go_to_game("Aria")
+
+	assert_eq(err, OK)
+	assert_eq(GameSession.player_name, "Aria")
+	assert_true(manager.create_party_on_open, "New Game must flag Parties to create party_001 immediately")
 
 
 ## --- Side-effect-free debug launch (Step 3) --------------------------------

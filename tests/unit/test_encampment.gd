@@ -123,6 +123,43 @@ func test_encampment_never_shows_party_info_since_it_has_no_selection_concept() 
 	assert_false(panel.get_node("Content/PartyViewButton").visible)
 
 
+func test_encampment_displays_the_active_campaign_objective() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var banner: Control = screen.get_node("%CampaignObjectiveBanner")
+
+	assert_eq(banner.get_node("Content/TitleLabel").text, tr("campaign.obj.tier1_1.title"))
+	assert_eq(banner.get_node("Content/DescLabel").text, tr("campaign.obj.tier1_1.desc"))
+
+
+## Step 1 task list item 5: the banner self-subscribes to GameSession.
+## campaign_progress_changed (see campaign_objective_banner.gd), so it must
+## reflect a completed objective immediately -- with no manual screen.refresh()
+## call in between.
+func test_encampment_campaign_objective_banner_updates_immediately_when_the_objective_advances() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var banner: Control = screen.get_node("%CampaignObjectiveBanner")
+	var title_label: Label = banner.get_node("Content/TitleLabel")
+	assert_eq(title_label.text, tr("campaign.obj.tier1_1.title"))
+
+	GameSession.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+
+	assert_eq(title_label.text, tr("campaign.obj.tier1_2.title"))
+
+
+func test_encampment_campaign_objective_banner_shows_free_play_after_victory() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+	var banner: Control = screen.get_node("%CampaignObjectiveBanner")
+
+	GameSession.set_campaign_victory()
+
+	assert_false(banner.get_node("Content/TitleLabel").visible)
+	assert_true(banner.get_node("Content/FreePlayLabel").visible)
+	assert_eq(banner.get_node("Content/FreePlayLabel").text, tr("campaign.free_play.active_label"))
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = EncampmentScene.instantiate()
 	add_child_autofree(screen)

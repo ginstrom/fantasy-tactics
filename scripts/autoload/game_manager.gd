@@ -105,13 +105,16 @@ func go_to_start_menu() -> Error:
 	return _change_scene(START_MENU_SCENE)
 
 
+## New Game's entry point (see docs/plans/2026-08-18-core-loop-and-
+## engagement/01-campaign-state-and-onboarding.md): after resetting
+## GameSession to a fresh campaign, routes straight to the existing Parties
+## flow with immediate party creation (go_to_parties(true)) rather than the
+## old generic starting-settlement intro screen, so a new campaign lands the
+## player directly on forming party_001 with the first objective already
+## active (GameSession.reset()'s campaign_objective_id).
 func go_to_game(player_name: String = "Player") -> Error:
 	GameSession.start_new_game(player_name)
-	return go_to_starting_settlement()
-
-
-func go_to_starting_settlement() -> Error:
-	return _change_scene(STARTING_SETTLEMENT_SCENE)
+	return go_to_parties(true)
 
 
 func open_party_manager() -> Error:

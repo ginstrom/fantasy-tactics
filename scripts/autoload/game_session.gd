@@ -1,5 +1,12 @@
 extends Node
 
+## Emitted whenever campaign_objective_id, completed_objectives,
+## unlocked_authored_encounters, is_campaign_completed, or
+## is_free_play_active changes (see complete_campaign_objective() and
+## set_campaign_victory()) so a UI component (e.g. CampaignObjectiveBanner)
+## can refresh itself without polling.
+signal campaign_progress_changed
+
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
 const STARTING_GOLD := 200
@@ -25,6 +32,137 @@ const CAMPAIGN_GUIDE_SEQUENCE: Array[String] = [
 	CAMPAIGN_GUIDE_RETURN_BANK,
 	CAMPAIGN_GUIDE_FIRST_IMPROVEMENT,
 ]
+
+## The complete, immutable authored-node catalog for the first campaign (see
+## docs/designs/campaign-loop.md and docs/plans/2026-08-18-core-loop-and-
+## engagement/01-campaign-state-and-onboarding.md). This step is the sole
+## owner of every objective id and encounter id below -- later steps (the
+## authored-encounter-ladder and final-boss step in particular) fill in each
+## node's exact enemy composition, balance numbers, and narrative copy, but
+## must never rename or renumber a node, since campaign_objective_id/
+## completed_objectives/unlocked_authored_encounters persist these ids
+## directly in save data.
+##
+## Twelve nodes total: three tiers of three (tier 1-3), a two-battle
+## pre-boss sequence (tier 4), and the final boss (tier 5). Each node's own
+## "encounter_id" mirrors its own key -- a later step's authored battle
+## reads this id to know which objective it completes. "prerequisite_id" is
+## the id of the node that must be completed first ("" only for the very
+## first node); "next_objective_id" is its forward link, mirrored so
+## complete_campaign_objective() never has to search the table. Only
+## obj_tier1_1_goblin_outpost's title/desc/reward keys are translated this
+## step (see translations/en.tres) -- the rest are stable keys reserved for
+## the content a later step adds.
+const CAMPAIGN_OBJECTIVES: Dictionary = {
+	"obj_tier1_1_goblin_outpost": {
+		"title_key": "campaign.obj.tier1_1.title",
+		"desc_key": "campaign.obj.tier1_1.desc",
+		"tier": 1,
+		"encounter_id": "obj_tier1_1_goblin_outpost",
+		"prerequisite_id": "",
+		"next_objective_id": "obj_tier1_2_kobold_warren",
+		"reward_summary_key": "campaign.obj.tier1_1.reward",
+	},
+	"obj_tier1_2_kobold_warren": {
+		"title_key": "campaign.obj.tier1_2.title",
+		"desc_key": "campaign.obj.tier1_2.desc",
+		"tier": 1,
+		"encounter_id": "obj_tier1_2_kobold_warren",
+		"prerequisite_id": "obj_tier1_1_goblin_outpost",
+		"next_objective_id": "obj_tier1_3_goblin_warcamp",
+		"reward_summary_key": "campaign.obj.tier1_2.reward",
+	},
+	"obj_tier1_3_goblin_warcamp": {
+		"title_key": "campaign.obj.tier1_3.title",
+		"desc_key": "campaign.obj.tier1_3.desc",
+		"tier": 1,
+		"encounter_id": "obj_tier1_3_goblin_warcamp",
+		"prerequisite_id": "obj_tier1_2_kobold_warren",
+		"next_objective_id": "obj_tier2_1_orc_outpost",
+		"reward_summary_key": "campaign.obj.tier1_3.reward",
+	},
+	"obj_tier2_1_orc_outpost": {
+		"title_key": "campaign.obj.tier2_1.title",
+		"desc_key": "campaign.obj.tier2_1.desc",
+		"tier": 2,
+		"encounter_id": "obj_tier2_1_orc_outpost",
+		"prerequisite_id": "obj_tier1_3_goblin_warcamp",
+		"next_objective_id": "obj_tier2_2_orc_warband",
+		"reward_summary_key": "campaign.obj.tier2_1.reward",
+	},
+	"obj_tier2_2_orc_warband": {
+		"title_key": "campaign.obj.tier2_2.title",
+		"desc_key": "campaign.obj.tier2_2.desc",
+		"tier": 2,
+		"encounter_id": "obj_tier2_2_orc_warband",
+		"prerequisite_id": "obj_tier2_1_orc_outpost",
+		"next_objective_id": "obj_tier2_3_brute_stronghold",
+		"reward_summary_key": "campaign.obj.tier2_2.reward",
+	},
+	"obj_tier2_3_brute_stronghold": {
+		"title_key": "campaign.obj.tier2_3.title",
+		"desc_key": "campaign.obj.tier2_3.desc",
+		"tier": 2,
+		"encounter_id": "obj_tier2_3_brute_stronghold",
+		"prerequisite_id": "obj_tier2_2_orc_warband",
+		"next_objective_id": "obj_tier3_1_hobgoblin_command",
+		"reward_summary_key": "campaign.obj.tier2_3.reward",
+	},
+	"obj_tier3_1_hobgoblin_command": {
+		"title_key": "campaign.obj.tier3_1.title",
+		"desc_key": "campaign.obj.tier3_1.desc",
+		"tier": 3,
+		"encounter_id": "obj_tier3_1_hobgoblin_command",
+		"prerequisite_id": "obj_tier2_3_brute_stronghold",
+		"next_objective_id": "obj_tier3_2_mixed_forces_ambush",
+		"reward_summary_key": "campaign.obj.tier3_1.reward",
+	},
+	"obj_tier3_2_mixed_forces_ambush": {
+		"title_key": "campaign.obj.tier3_2.title",
+		"desc_key": "campaign.obj.tier3_2.desc",
+		"tier": 3,
+		"encounter_id": "obj_tier3_2_mixed_forces_ambush",
+		"prerequisite_id": "obj_tier3_1_hobgoblin_command",
+		"next_objective_id": "obj_tier3_3_ruined_fortress",
+		"reward_summary_key": "campaign.obj.tier3_2.reward",
+	},
+	"obj_tier3_3_ruined_fortress": {
+		"title_key": "campaign.obj.tier3_3.title",
+		"desc_key": "campaign.obj.tier3_3.desc",
+		"tier": 3,
+		"encounter_id": "obj_tier3_3_ruined_fortress",
+		"prerequisite_id": "obj_tier3_2_mixed_forces_ambush",
+		"next_objective_id": "obj_preboss_1_borderlands_vanguard",
+		"reward_summary_key": "campaign.obj.tier3_3.reward",
+	},
+	"obj_preboss_1_borderlands_vanguard": {
+		"title_key": "campaign.obj.preboss_1.title",
+		"desc_key": "campaign.obj.preboss_1.desc",
+		"tier": 4,
+		"encounter_id": "obj_preboss_1_borderlands_vanguard",
+		"prerequisite_id": "obj_tier3_3_ruined_fortress",
+		"next_objective_id": "obj_preboss_2_borderlands_stronghold",
+		"reward_summary_key": "campaign.obj.preboss_1.reward",
+	},
+	"obj_preboss_2_borderlands_stronghold": {
+		"title_key": "campaign.obj.preboss_2.title",
+		"desc_key": "campaign.obj.preboss_2.desc",
+		"tier": 4,
+		"encounter_id": "obj_preboss_2_borderlands_stronghold",
+		"prerequisite_id": "obj_preboss_1_borderlands_vanguard",
+		"next_objective_id": "obj_boss_borderlands_ogre",
+		"reward_summary_key": "campaign.obj.preboss_2.reward",
+	},
+	"obj_boss_borderlands_ogre": {
+		"title_key": "campaign.obj.boss.title",
+		"desc_key": "campaign.obj.boss.desc",
+		"tier": 5,
+		"encounter_id": "obj_boss_borderlands_ogre",
+		"prerequisite_id": "obj_preboss_2_borderlands_stronghold",
+		"next_objective_id": "",
+		"reward_summary_key": "campaign.obj.boss.reward",
+	},
+}
 
 const EXPEDITIONS: Dictionary = {
 	"goblin_camp": {
@@ -504,6 +642,19 @@ func reset_injectable_rolls() -> void:
 # its own complete_current_encounter() call, same as enemy_composition_roll.
 var loot_gold_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var loot_gear_roll: Callable = func() -> float: return randf()
+
+# Durable campaign milestone progression -- separate from the repeatable
+# sandbox encounter/vacancy state below (completed_encounters, active_
+# encounters, encounter_vacancies), which tracks the free-roam EXPEDITIONS
+# pool, not the authored 12-node campaign arc. See CAMPAIGN_OBJECTIVES for
+# the catalog these ids reference and complete_campaign_objective()/
+# set_campaign_victory() for the only ways this state ever changes.
+var campaign_objective_id: String = "obj_tier1_1_goblin_outpost"
+var completed_objectives: Array[String] = []
+var unlocked_authored_encounters: Array[String] = ["obj_tier1_1_goblin_outpost"]
+var is_campaign_completed: bool = false
+var is_free_play_active: bool = false
+
 var completed_encounters: Array[String] = []
 # Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
 # instance is a spawned record: {id, template_id, position, ...copied
@@ -617,6 +768,11 @@ func reset() -> void:
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
+	campaign_objective_id = "obj_tier1_1_goblin_outpost"
+	completed_objectives = []
+	unlocked_authored_encounters = ["obj_tier1_1_goblin_outpost"]
+	is_campaign_completed = false
+	is_free_play_active = false
 	completed_encounters = []
 	active_encounters = [
 		_make_encounter_instance(GOBLIN_CAMP_ID, GOBLIN_CAMP_ID, EXPEDITIONS[GOBLIN_CAMP_ID].position),
@@ -1149,6 +1305,50 @@ func _roll_and_queue_loot(enemy: Dictionary) -> void:
 
 func abandon_current_encounter() -> void:
 	selected_encounter = ""
+
+
+## A duplicate of the current node's CAMPAIGN_OBJECTIVES entry, or {} once
+## the campaign is complete (campaign_objective_id is "" from that point on
+## -- see complete_campaign_objective()).
+func get_current_campaign_objective() -> Dictionary:
+	return CAMPAIGN_OBJECTIVES.get(campaign_objective_id, {}).duplicate(true)
+
+
+func is_objective_completed(id: String) -> bool:
+	return completed_objectives.has(id)
+
+
+## Marks id complete, unlocks its successor objective/encounter, and
+## advances campaign_objective_id to it. A no-op for an unknown id or one
+## already in completed_objectives, so a repeated call can never double-
+## append or re-unlock. Completing the final node (an empty
+## next_objective_id) instead atomically records campaign victory via
+## set_campaign_victory() rather than advancing to a next id that doesn't
+## exist.
+func complete_campaign_objective(id: String) -> void:
+	if not CAMPAIGN_OBJECTIVES.has(id) or is_objective_completed(id):
+		return
+	completed_objectives.append(id)
+	var next_id: String = CAMPAIGN_OBJECTIVES[id].get("next_objective_id", "")
+	if next_id.is_empty():
+		campaign_objective_id = ""
+		set_campaign_victory()
+		return
+	if not unlocked_authored_encounters.has(next_id):
+		unlocked_authored_encounters.append(next_id)
+	campaign_objective_id = next_id
+	campaign_progress_changed.emit()
+
+
+## Atomically flags final-boss victory and unlocks free play. Idempotent
+## (calling it again once both flags are already set changes nothing and
+## emits nothing further).
+func set_campaign_victory() -> void:
+	if is_campaign_completed and is_free_play_active:
+		return
+	is_campaign_completed = true
+	is_free_play_active = true
+	campaign_progress_changed.emit()
 
 
 ## Adds every count in source into dest in place -- both id/tier -> count
@@ -2406,6 +2606,11 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.parties = parties.duplicate(true)
 	snapshot.selected_party_id = selected_party_id
 	snapshot.selected_encounter = selected_encounter
+	snapshot.campaign_objective_id = campaign_objective_id
+	snapshot.completed_objectives = completed_objectives.duplicate(true)
+	snapshot.unlocked_authored_encounters = unlocked_authored_encounters.duplicate(true)
+	snapshot.is_campaign_completed = is_campaign_completed
+	snapshot.is_free_play_active = is_free_play_active
 	snapshot.completed_encounters = completed_encounters.duplicate(true)
 	snapshot.active_encounters = active_encounters.duplicate(true)
 	snapshot.encounter_vacancies = encounter_vacancies.duplicate(true)
@@ -2480,6 +2685,11 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	parties = snapshot.parties.duplicate(true)
 	selected_party_id = snapshot.selected_party_id
 	selected_encounter = snapshot.selected_encounter
+	campaign_objective_id = snapshot.campaign_objective_id
+	completed_objectives = snapshot.completed_objectives.duplicate(true)
+	unlocked_authored_encounters = snapshot.unlocked_authored_encounters.duplicate(true)
+	is_campaign_completed = snapshot.is_campaign_completed
+	is_free_play_active = snapshot.is_free_play_active
 	completed_encounters = snapshot.completed_encounters.duplicate(true)
 	active_encounters = snapshot.active_encounters.duplicate(true)
 	encounter_vacancies = snapshot.encounter_vacancies.duplicate(true)

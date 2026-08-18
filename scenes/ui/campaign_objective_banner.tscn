@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/campaign_objective_banner.gd" id="1_banner"]
+
+[node name="CampaignObjectiveBanner" type="PanelContainer"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 320.0
+offset_bottom = 96.0
+script = ExtResource("1_banner")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="ObjectiveLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.objective.label"
+
+[node name="TitleLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.obj.tier1_1.title"
+
+[node name="DescLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.obj.tier1_1.desc"
+autowrap_mode = 2
+
+[node name="ProgressBar" type="ProgressBar" parent="Content"]
+layout_mode = 2
+max_value = 12.0
+value = 0.0
+show_percentage = false
+
+[node name="GoalLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.victory.goal_label"
+
+[node name="FreePlayLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.free_play.active_label"
+visible = false
