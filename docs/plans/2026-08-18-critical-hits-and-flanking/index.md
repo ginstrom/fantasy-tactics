@@ -22,8 +22,11 @@ This plan decomposes the implementation into three self-contained steps executed
 | 1 | [01-unit-facing-and-visualization.md](01-unit-facing-and-visualization.md) | Unit facing model, deterministic move paths, diagonal-melee legality, production/headless initialization, and board indicators | `feat/combat-unit-facing` | — |
 | 2 | [02-critical-hit-mechanics.md](02-critical-hit-mechanics.md) | Seeded base critical roll, damage amplification (+50%), resistance reduction (-20%), and combat log presentation | `feat/combat-critical-hits` | Step 1 merged |
 | 3 | [03-flanking-tactics-and-combat-resolution.md](03-flanking-tactics-and-combat-resolution.md) | Flanking geometry, tactical Guard/critical modifiers, and deterministic scripted tactical verification | `feat/combat-flanking-tactics` | Step 2 merged |
+| 4 | [04-fix-debug-scenario-loot-regression.md](04-fix-debug-scenario-loot-regression.md) | Fix missing `loot_id` on debug-scenario enemy fixtures so debug-launched battles queue gold/mana-crystal/gear loot like real play | `fix/debug-scenario-loot-regression` | Step 1 merged (found during its manual sign-off) |
 
 Each step is self-contained: setup, red/green TDD task list, automated verification, manual `make play` sign-off, commit, and local merge to `main`.
+
+**Addendum (2026-08-18):** Step 4 was added after Step 1's manual sign-off surfaced a pre-existing, unrelated regression — debug-scenario battles (FN+F9) never queue gold/gear/mana-crystal loot on victory. Root-caused to `config/debug_scenarios.json`'s `active_encounters[].enemy` fixtures never carrying a `loot_id`, unlike real campaign play's resolved enemy compositions (see Step 4 for the full analysis). Scoped as its own step, ordered before the final whole-branch review, per user request.
 
 ---
 
