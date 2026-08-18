@@ -13,6 +13,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -33,6 +34,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -362,6 +364,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -382,6 +385,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -711,6 +715,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -731,6 +736,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -1060,6 +1066,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -1080,6 +1087,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -1427,6 +1435,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -1447,6 +1456,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -1792,6 +1802,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -1812,6 +1823,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -2159,6 +2171,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -2179,6 +2192,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -2526,6 +2540,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -2546,6 +2561,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 2,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -2989,6 +3005,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -3009,6 +3026,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },
@@ -3029,6 +3047,7 @@
               "attack_name_key": "battle.enemy.kobold.attack",
               "count": 8,
               "hit_chance": 0.25,
+              "loot_id": "kobold",
               "max_health": 6,
               "name_key": "battle.enemy.kobold"
             },
@@ -3440,6 +3459,7 @@
               "attack_name_key": "battle.enemy.goblin.attack",
               "count": 1,
               "hit_chance": 0.3,
+              "loot_id": "goblin",
               "max_health": 13,
               "name_key": "battle.enemy.goblin"
             },
@@ -3460,6 +3480,7 @@
               "attack_name_key": "battle.enemy.orc.attack",
               "count": 1,
               "hit_chance": 0.5,
+              "loot_id": "orc",
               "max_health": 22,
               "name_key": "battle.enemy.orc"
             },

@@ -443,3 +443,48 @@ func test_every_shipped_fixture_passes_canonical_snapshot_import_validation() ->
 	for scenario in DebugScenarios.get_all_scenarios():
 		var result := DebugScenarios.apply(scenario.id)
 		assert_true(result.ok, "scenario %s's fixture should import cleanly: %s" % [scenario.id, result.errors])
+
+
+## --- Debug-scenario loot regression (Step 4: fix-debug-scenario-loot-
+## regression) --------------------------------------------------------------
+##
+## Every active_encounters[].enemy entry in config/debug_scenarios.json was
+## captured from the static EXPEDITIONS template stub (game_session.gd's
+## EXPEDITIONS, not a resolved STAR_ENEMY_COMPOSITIONS entry), so none of
+## them ever carried a loot_id. GameSession._roll_and_queue_loot() silently
+## no-ops without one, so a debug-scenario victory queued no gold, gear, or
+## mana crystals at all -- confirmed live via FN+F9 -> Goblin Camp Battle.
+## The two tests below lock the fix: one enforces the fixture invariant
+## across every shipped scenario so it can't silently regress, the other
+## reproduces the exact bug end-to-end through the same
+## complete_current_encounter() call battlefield.gd's victory handler makes.
+
+
+func test_every_shipped_active_encounter_enemy_has_a_valid_loot_id() -> void:
+	for scenario in DebugScenarios.get_all_scenarios():
+		var active_encounters: Array = scenario.campaign_snapshot.get("active_encounters", [])
+		for encounter in active_encounters:
+			var enemy: Dictionary = encounter.get("enemy", {})
+			var loot_id: String = enemy.get("loot_id", "")
+			assert_true(
+				GameSession.ENEMY_LOOT_TABLES.has(loot_id),
+				(
+					"scenario %s's %s encounter enemy must declare a loot_id present in ENEMY_LOOT_TABLES, got '%s'"
+					% [scenario.id, encounter.get("template_id", "?"), loot_id]
+				)
+			)
+
+
+func test_completing_the_goblin_camp_debug_scenario_queues_gold_and_a_mana_crystal() -> void:
+	DebugScenarios.apply("goblin_camp")
+
+	GameSession.complete_current_encounter()
+
+	assert_eq(
+		GameSession.battle_mana_crystals, {1: 1},
+		"Goblin's mana_crystal_tier is 1 and the fixture fields exactly one goblin"
+	)
+	assert_true(
+		GameSession.battle_reward > 0,
+		"Completing the encounter should queue gold from the goblin's loot table"
+	)
