@@ -27,10 +27,13 @@ signal recruit_selected(candidate_id: String)
 @onready var recruitment_level_label: Label = $Content/RecruitmentLevel
 @onready var recruitment_cost_label: Label = $Content/RecruitmentCost
 @onready var recruit_button: Button = $Content/RecruitButton
+@onready var encounter_danger_label: Label = $Content/EncounterDanger
+@onready var encounter_enemies_label: Label = $Content/EncounterEnemies
 
 var _selected_party_id: String = ""
 var _selected_adventurer_id: String = ""
 var _selected_recruitment_candidate_id: String = ""
+var _selected_encounter_id: String = ""
 
 
 func _ready() -> void:
@@ -48,6 +51,7 @@ func refresh() -> void:
 	_clear_party_section()
 	_clear_adventurer_section()
 	_clear_recruitment_section()
+	_clear_encounter_section()
 
 
 ## Shows the permanent rows plus the named party's name, member count, and a
@@ -60,6 +64,7 @@ func refresh_party(party_id: String, pending_reward: int = 0) -> void:
 	_refresh_permanent_rows()
 	_clear_adventurer_section()
 	_clear_recruitment_section()
+	_clear_encounter_section()
 
 	var party := GameSession.get_party(party_id)
 	if party.is_empty():
@@ -85,6 +90,7 @@ func refresh_adventurer(adventurer_id: String) -> void:
 	_refresh_permanent_rows()
 	_clear_party_section()
 	_clear_recruitment_section()
+	_clear_encounter_section()
 
 	var adventurer := GameSession.get_adventurer(adventurer_id)
 	if adventurer.is_empty():
@@ -112,6 +118,7 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 	_refresh_permanent_rows()
 	_clear_party_section()
 	_clear_adventurer_section()
+	_clear_encounter_section()
 
 	var candidate := _find_recruitment_candidate(candidate_id)
 	if candidate.is_empty():
@@ -134,6 +141,39 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 	recruitment_cost_label.visible = true
 	recruit_button.visible = true
 	recruit_button.disabled = GameSession.gold < int(candidate["cost"])
+
+
+## Shows the permanent rows plus a World Map encounter's Scout intel (see
+## GameSession.get_party_scouting_intel(), docs/plans/2026-08-18-core-loop-
+## and-engagement/04-cleric-class-and-scout-reconnaissance.md). The danger
+## tier is always shown -- it's the same information already public as the
+## marker's own star label -- but the enemy composition row only appears
+## once get_party_scouting_intel() reports has_intel (a deployed party with a
+## Scout within range). Never shows reward/loot or in-battle positions,
+## matching that method's own contract. An unknown party or encounter id
+## clears the section safely, same as the other refresh_*() methods.
+func refresh_encounter(party_id: String, encounter_id: String) -> void:
+	_refresh_permanent_rows()
+	_clear_party_section()
+	_clear_adventurer_section()
+	_clear_recruitment_section()
+
+	var intel := GameSession.get_party_scouting_intel(party_id, encounter_id)
+	if intel.is_empty():
+		_clear_encounter_section()
+		return
+
+	_selected_encounter_id = encounter_id
+	var stars := "★".repeat(clampi(int(intel.danger_tier), 1, 5))
+	encounter_danger_label.text = tr("information.encounter_danger") % stars
+	encounter_danger_label.visible = true
+
+	if bool(intel.has_intel):
+		var enemy_type: String = String(intel.enemy_types[0]) if not intel.enemy_types.is_empty() else ""
+		encounter_enemies_label.text = tr("information.encounter_enemies") % [enemy_type, int(intel.enemy_count)]
+		encounter_enemies_label.visible = true
+	else:
+		encounter_enemies_label.visible = false
 
 
 ## Candidates are resolved fresh from GameSession.get_recruitment_candidates()
@@ -177,6 +217,12 @@ func _clear_recruitment_section() -> void:
 	recruitment_cost_label.visible = false
 	recruit_button.visible = false
 	recruit_button.disabled = true
+
+
+func _clear_encounter_section() -> void:
+	_selected_encounter_id = ""
+	encounter_danger_label.visible = false
+	encounter_enemies_label.visible = false
 
 
 func _on_party_view_button_pressed() -> void:

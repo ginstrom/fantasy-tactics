@@ -64,6 +64,19 @@ var statuses: Dictionary = {}
 # and the unit info panel, and by Steps 2/3 of this plan (critical hits,
 # flanking) for attack geometry.
 var facing: Vector2i = Vector2i.RIGHT
+# Tactical spellcasting (docs/plans/2026-08-18-core-loop-and-engagement/
+# 04-cleric-class-and-scout-reconnaissance.md). Battle-local: BattleController
+# hydrates spells/mp_max/mp_remaining from GameSession.CLASS_DEFINITIONS at
+# battle start for units whose class defines any spells (Cleric today), and
+# leaves every other unit at these defaults (no spells, 0 MP). Unlike
+# action_points_remaining, mp_remaining is never reset by end_turn() -- MP is
+# a whole-battle resource, not a per-round one, so it only ever goes down.
+## Plain (not Array[String]) so callers -- production and test alike -- can
+## assign an untyped array literal directly rather than fighting GDScript's
+## typed-array coercion rules.
+var spells: Array = []
+var mp_max: int = 0
+var mp_remaining: int = 0
 
 
 func _init(

@@ -3112,6 +3112,121 @@ func test_purchasing_a_cleric_offer_lands_a_cleric_on_the_roster() -> void:
 	assert_eq(roster_cleric.stats, GameSession.CLASS_DEFINITIONS.cleric.base_stats)
 
 
+## --- Cleric spellcasting schema & progression (Step 4) ---
+
+## Step 4 replaces Step 3's minimal stub with the full Cleric: blunt weapons,
+## a spellcasting stat, and its two spells.
+func test_cleric_class_definition_has_full_spellcasting_schema() -> void:
+	var cleric: Dictionary = GameSession.CLASS_DEFINITIONS.cleric
+
+	assert_true(cleric.allowed_weapon_categories.has("mace"))
+	assert_true(cleric.allowed_weapon_categories.has("hammer"))
+	assert_true(cleric.allowed_weapon_categories.has("staff"))
+	assert_true(cleric.base_stats.has("spellcasting"))
+	assert_eq(cleric.mp_max, 3)
+	assert_eq(cleric.spells, ["heal", "bless"])
+	assert_true(cleric.skills.has("spellcasting"))
+
+
+func test_get_default_cleric_equips_a_mace_weapon() -> void:
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+
+	assert_eq(cleric.equipment.weapon, "mace_iron")
+	assert_eq(GameSession.WEAPONS.mace_iron.category, "mace")
+
+
+func test_leveling_up_a_cleric_grows_health_melee_guard_and_spellcasting() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.skill_gain_roll = func(_min_val: int, max_val: int) -> int: return max_val
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	var leveled: Dictionary = session.get_adventurer("cleric_test")
+	assert_eq(leveled.level, 2)
+	assert_eq(leveled.stats.max_health, 24, "max_health = vitality(12) * level(2)")
+	assert_eq(leveled.stats.melee, 47, "melee tier low max gain (+2)")
+	assert_eq(leveled.stats.guard, 14, "guard tier med max gain (+4)")
+	assert_eq(leveled.stats.spellcasting, 60, "spellcasting tier hi max gain (+5)")
+	assert_eq(leveled.stats.might, 3, "might tier low max gain (+2)")
+
+
+## --- Scout strategic reconnaissance (Step 4) ---
+
+func test_get_party_scouting_intel_reveals_composition_when_a_scout_is_within_range() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+	session.set_deployed_party_position(goblin_camp.position)
+
+	var intel: Dictionary = session.get_party_scouting_intel(
+		GameSessionScript.FIRST_PARTY_ID, GameSessionScript.GOBLIN_CAMP_ID
+	)
+
+	assert_true(intel.has_intel)
+	assert_eq(intel.danger_tier, 1)
+	assert_eq(intel.enemy_count, 1)
+	assert_eq(intel.enemy_types, [tr("battle.enemy.goblin")])
+
+
+func test_get_party_scouting_intel_hides_composition_without_a_scout() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+	session.set_deployed_party_position(goblin_camp.position)
+
+	var intel: Dictionary = session.get_party_scouting_intel(
+		GameSessionScript.FIRST_PARTY_ID, GameSessionScript.GOBLIN_CAMP_ID
+	)
+
+	assert_false(intel.has_intel, "No Scout in the party means no detailed composition")
+	assert_eq(intel.enemy_types, [])
+	assert_eq(intel.enemy_count, 0)
+	assert_eq(intel.danger_tier, 1, "Danger tier is always disclosed")
+
+
+func test_get_party_scouting_intel_hides_composition_when_the_scout_is_four_or_more_squares_away() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	# Goblin Camp sits at (4, 4) (difficulty 1); (0, 4) is Manhattan distance 4.
+	session.set_deployed_party_position(Vector2i(0, 4))
+
+	var intel: Dictionary = session.get_party_scouting_intel(
+		GameSessionScript.FIRST_PARTY_ID, GameSessionScript.GOBLIN_CAMP_ID
+	)
+
+	assert_false(intel.has_intel, "A Scout four squares away is still out of reconnaissance range")
+
+
+func test_get_party_scouting_intel_returns_empty_for_an_unknown_party_or_encounter() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_eq(session.get_party_scouting_intel("nope", GameSessionScript.GOBLIN_CAMP_ID), {})
+	assert_eq(session.get_party_scouting_intel(GameSessionScript.FIRST_PARTY_ID, "nope"), {})
+
+
 ## --- Blacksmith ---
 
 ## --- Alchemy Workshop ---

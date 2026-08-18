@@ -594,6 +594,199 @@ func test_invalid_potion_use_preserves_action_points_and_inventory() -> void:
 	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 1)
 
 
+## --- Cleric tactical spells (Step 4) ---
+
+func test_try_cast_spell_heal_deducts_ap_and_mp_and_caps_at_max_health() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+	controller.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+
+	assert_true(controller.try_cast_spell("heal", ally.grid_position))
+
+	assert_eq(caster.action_points_remaining, 3)
+	assert_eq(caster.mp_remaining, 2)
+	assert_eq(ally.health, 10, "8 HP on top of 4 exceeds max health(10), so it caps there")
+	assert_eq(controller.last_attack_result.type, "spell")
+	assert_eq(controller.last_attack_result.spell_id, "heal")
+
+
+func test_heal_on_a_full_health_ally_is_rejected() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", ally.grid_position))
+	assert_eq(caster.action_points_remaining, 6)
+	assert_eq(caster.mp_remaining, 3)
+
+
+func test_heal_on_an_enemy_is_rejected() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.health = 4
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", enemy.grid_position))
+	assert_eq(enemy.health, 4)
+	assert_eq(caster.mp_remaining, 3)
+
+
+## Bless (see try_attack_selected_unit()): +10 percentage points of final hit
+## chance and +10% of final post-resistance damage, composed on top of --
+## never bypassing -- the existing hit-cap/resistance formulas.
+func test_bless_adds_ten_points_of_hit_chance_and_ten_percent_post_resistance_damage() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 10, 10, 0.5, "Mace"
+	)
+	var healer = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	healer.spells = ["bless"]
+	healer.mp_max = 3
+	healer.mp_remaining = 3
+	var target = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	target.resistance = 50
+	controller.units = [caster, healer, target]
+	controller.selected_unit = healer
+
+	assert_true(controller.try_cast_spell("bless", caster.grid_position))
+	assert_eq(healer.action_points_remaining, 3)
+	assert_eq(healer.mp_remaining, 2)
+
+	controller.selected_unit = caster
+	# 0.55 sits strictly between the unblessed 50% hit chance and the
+	# Blessed 60% -- only a hit here proves Bless's +10 points actually
+	# applied (and was re-clamped, not just added unconditionally).
+	controller.hit_roll = func() -> float: return 0.55
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_min_v: int, _max_v: int) -> int: return 10
+
+	assert_true(controller.try_attack_selected_unit(target.grid_position))
+	assert_true(
+		controller.last_attack_result.hit,
+		"0.55 must hit once Bless adds +10 points to the 50% base hit chance"
+	)
+	# raw damage 10, 50% resistance -> 5 post-resistance, +10% Bless -> round(5.5) = 6.
+	assert_eq(controller.last_attack_result.damage, 6)
+
+
+func test_bless_cannot_be_reapplied_to_an_already_blessed_ally() -> void:
+	var controller := _make_controller(6, 6)
+	var healer = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	healer.spells = ["bless"]
+	healer.mp_max = 3
+	healer.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [healer, ally]
+	controller.selected_unit = healer
+	assert_true(controller.try_cast_spell("bless", ally.grid_position))
+
+	assert_false(controller.try_cast_spell("bless", ally.grid_position))
+	assert_eq(healer.mp_remaining, 2, "A rejected re-bless must not spend a second MP")
+
+
+func test_spell_is_rejected_beyond_its_range() -> void:
+	var controller := _make_controller(8, 8)
+	var caster = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(4, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", ally.grid_position))
+	assert_eq(controller.last_targeting_failure.get("reason"), "out_of_range")
+	assert_eq(caster.mp_remaining, 3)
+
+
+func test_spell_is_rejected_when_line_of_sight_is_blocked() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var blocker = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var ally = UnitScript.new(Vector2i(0, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, blocker, ally]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", ally.grid_position))
+	assert_eq(controller.last_targeting_failure.get("reason"), "line_of_sight_blocked")
+
+
+func test_a_unit_without_the_spell_cannot_cast_it() -> void:
+	var controller := _make_controller(6, 6)
+	var warrior = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	var ally = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [warrior, ally]
+	controller.selected_unit = warrior
+
+	assert_false(controller.try_cast_spell("heal", ally.grid_position))
+	assert_eq(ally.health, 4)
+
+
+func test_end_turn_resets_ap_but_never_mp() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	var enemy = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [caster, ally, enemy]
+	controller.selected_unit = caster
+	assert_true(controller.try_cast_spell("heal", ally.grid_position))
+	assert_eq(caster.mp_remaining, 2)
+
+	controller.end_turn()
+	controller.end_turn()
+
+	assert_eq(caster.action_points_remaining, 6, "AP resets every round")
+	assert_eq(caster.mp_remaining, 2, "MP must never reset mid-battle")
+
+
+## Real hydration: BattleController._ready() reads GameSession.CLASS_
+## DEFINITIONS generically (only Cleric carries "spells" today).
+func test_ready_hydrates_mp_and_spells_only_for_a_fielded_cleric() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var warrior_unit = battlefield.grid._get_unit_by_adventurer_id(GameSession.WARRIOR_ID)
+	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
+
+	assert_eq(warrior_unit.spells, [])
+	assert_eq(warrior_unit.mp_max, 0)
+	assert_eq(cleric_unit.spells, ["heal", "bless"])
+	assert_eq(cleric_unit.mp_max, 3)
+	assert_eq(cleric_unit.mp_remaining, 3)
+
+
 func test_unaffordable_attack_preserves_action_points_and_combat_state() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)

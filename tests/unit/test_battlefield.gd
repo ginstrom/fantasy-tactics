@@ -146,6 +146,63 @@ func test_battlefield_exposes_the_selected_units_potion_as_a_separate_two_ap_act
 	assert_eq(GameSession.get_carried_item_ids(GameSession.WARRIOR_ID).count("healing_potion"), 0)
 
 
+## --- Cleric spell ActionBar (Step 4) ---
+
+func _setup_cleric_party() -> String:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	return "cleric_test"
+
+
+func test_action_bar_shows_heal_and_bless_and_mp_for_a_selected_cleric() -> void:
+	var cleric_id := _setup_cleric_party()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id(cleric_id)
+	battlefield._update_action_bar()
+
+	assert_true(battlefield.heal_button.visible)
+	assert_true(battlefield.bless_button.visible)
+	assert_true(battlefield.mp_label.visible)
+	assert_eq(battlefield.mp_label.text, tr("battle.mp") % [3, 3])
+
+
+func test_action_bar_hides_spell_buttons_when_a_warrior_is_selected() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._update_action_bar()
+
+	assert_false(battlefield.heal_button.visible)
+	assert_false(battlefield.bless_button.visible)
+	assert_false(battlefield.mp_label.visible)
+
+
+func test_action_bar_hides_spell_buttons_when_a_scout_is_selected() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id("scout_test")
+	battlefield._update_action_bar()
+
+	assert_false(battlefield.heal_button.visible)
+	assert_false(battlefield.bless_button.visible)
+	assert_false(battlefield.mp_label.visible)
+
+
 ## Task 6: the left-side portrait panel (one row per fielded party member)
 ## and the per-living-enemy HUD list that replaces the old aggregate
 ## PlayerHealth/EnemyHealth labels.

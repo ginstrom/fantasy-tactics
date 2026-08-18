@@ -321,6 +321,11 @@ const WEAPONS: Dictionary = {
 	"hunting_bow_steel": {"name_key": "item.hunting_bow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 7, "min_range": 1, "max_range": 10, "price": 75},
 	"longbow_iron": {"name_key": "item.longbow_iron", "slot": "weapon", "category": "bow", "damage_min": 1, "damage_max": 8, "min_range": 1, "max_range": 12, "price": 45},
 	"longbow_steel": {"name_key": "item.longbow_steel", "slot": "weapon", "category": "bow", "damage_min": 2, "damage_max": 9, "min_range": 1, "max_range": 15, "price": 135},
+	# Cleric's blunt weapon category (see CLASS_DEFINITIONS.cleric below). Same
+	# damage range and price tier as shortsword_iron -- mace/hammer/staff are
+	# distinct weapon *categories* (for allowed_weapon_categories gating) but
+	# not yet a distinct damage tier of their own.
+	"mace_iron": {"name_key": "item.mace_iron", "slot": "weapon", "category": "mace", "damage_min": 1, "damage_max": 6, "min_range": 1, "max_range": 1, "price": 20},
 }
 const CLASS_DEFINITIONS: Dictionary = {
 	"warrior": {
@@ -347,25 +352,35 @@ const CLASS_DEFINITIONS: Dictionary = {
 			"might": {"tier": "low", "min_gain": 1, "max_gain": 2},
 		},
 	},
-	# Minimal Cleric stub (see docs/plans/2026-08-18-core-loop-and-engagement/
-	# 03-encampment-buildings-and-tier-model.md): base stats/skills only, in
-	# the same family as warrior/scout, so the Temple can generate a real,
-	# recruitable Cleric candidate this step. MP, Heal, Bless, and every
-	# other battle mechanic are deliberately out of scope here -- that is
-	# Step 4's job (04-cleric-class-and-scout-reconnaissance.md). Defaults to
-	# a dagger (a category every class can already use) rather than
-	# inventing a new blunt/mace weapon category this step does not need.
+	# Full Cleric (see docs/plans/2026-08-18-core-loop-and-engagement/
+	# 04-cleric-class-and-scout-reconnaissance.md): replaces Step 3's minimal
+	# stub (same "cleric" key -- GDScript dict literals can't have a
+	# duplicate key -- see that step's own doc comment, which explicitly
+	# deferred MP/Heal/Bless to this step). Sustain/support role: moderate
+	# melee, real spellcasting, blunt weapons (mace/hammer/staff -- see
+	# WEAPONS.mace_iron). "spellcasting" is a new base_stats key nothing else
+	# reads yet outside spell-flavor text; it exists on no other class, and
+	# every reader treats a missing spellcasting stat as 0 rather than
+	# requiring every class to carry a dead field. "missile" stays in
+	# base_stats for schema parity with warrior/scout (get_effective_hit_
+	# chance() falls back to it for a bow-category weapon, which a Cleric can
+	# never equip) but is deliberately absent from "skills" below -- it never
+	# needs to grow. mp_max (this class's only spellcasting resource) is a
+	# flat 3, hydrated onto the battle-local Unit by BattleController, never
+	# a persistent adventurer stat (see unit.gd's mp_max/mp_remaining).
 	"cleric": {
-		"allowed_weapon_categories": ["dagger"],
-		"base_stats": {"max_health": 11, "vitality": 11, "melee": 45, "missile": 40, "guard": 0, "might": 0, "move_range": 3},
+		"allowed_weapon_categories": ["mace", "hammer", "staff"],
+		"base_stats": {"max_health": 12, "vitality": 12, "melee": 45, "missile": 30, "guard": 10, "might": 1, "spellcasting": 55, "move_range": 3},
 		"primary_attribute_ranges": {"strength": Vector2i(4, 6), "agility": Vector2i(4, 6), "vitality": Vector2i(6, 8), "intelligence": Vector2i(3, 5), "piety": Vector2i(6, 8), "luck": Vector2i(1, 10)},
 		"class_multiplier": 1.0,
 		"skills": {
 			"melee": {"tier": "low", "min_gain": 1, "max_gain": 2},
-			"missile": {"tier": "low", "min_gain": 1, "max_gain": 2},
-			"guard": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"guard": {"tier": "med", "min_gain": 3, "max_gain": 4},
+			"spellcasting": {"tier": "hi", "min_gain": 4, "max_gain": 5},
 			"might": {"tier": "low", "min_gain": 1, "max_gain": 2},
 		},
+		"mp_max": 3,
+		"spells": ["heal", "bless"],
 	},
 }
 const BLACKSMITH_BUILD_COST := 50
@@ -548,16 +563,15 @@ func get_default_scout(adventurer_id: String, adventurer_name: String) -> Dictio
 	}
 
 
-## Minimal Cleric factory (see CLASS_DEFINITIONS.cleric's own doc comment):
-## enough for the Temple to generate a real, recruitable candidate this
-## step. No MP/Heal/Bless fields -- those are Step 4's job.
+## Cleric factory: starting gear is mace_iron (the Cleric's own blunt
+## category) plus the shared default leather armor.
 func get_default_cleric(adventurer_id: String, adventurer_name: String) -> Dictionary:
 	return {
 		"id": adventurer_id,
 		"name": adventurer_name,
 		"class": "cleric",
 		"equipment": {
-			"weapon": "dagger_iron", "weapon_inventory": ["dagger_iron"],
+			"weapon": "mace_iron", "weapon_inventory": ["mace_iron"],
 			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
 		},
 		"level": 1,
@@ -1933,6 +1947,56 @@ func get_expedition(encounter_id: String) -> Dictionary:
 	if not EXPEDITIONS.has(encounter_id):
 		return {}
 	return EXPEDITIONS[encounter_id].duplicate(true)
+
+
+## Scout strategic reconnaissance (docs/plans/2026-08-18-core-loop-and-
+## engagement/04-cleric-class-and-scout-reconnaissance.md). Danger tier is
+## always disclosed (it already renders as marker stars on the World Map --
+## see world_map.gd's _get_difficulty_stars()); enemy_types/enemy_count are
+## revealed only when party_id's own deployed party contains a Scout AND
+## stands within Manhattan distance 3 (_grid_distance) of the encounter's
+## position. Today's encounter model resolves to exactly one enemy species
+## per active instance (see STAR_ENEMY_COMPOSITIONS/_resolve_enemy_
+## composition), so enemy_types is a single-element array, not a fabricated
+## multi-species breakdown. Never includes reward/loot or in-battle
+## (battlefield-grid) positions -- only what's already visible as this
+## encounter's world-map marker plus, when revealed, its composition.
+## Returns {} for an unknown party or encounter id.
+func get_party_scouting_intel(party_id: String, encounter_id: String) -> Dictionary:
+	var party := get_party(party_id)
+	var expedition := get_expedition(encounter_id)
+	if party.is_empty() or expedition.is_empty():
+		return {}
+
+	var danger_tier: int = int(expedition.get("difficulty", 1))
+	var has_scout := false
+	for member_id in party.member_ids:
+		var member := get_adventurer(str(member_id))
+		if not member.is_empty() and str(member.get("class", "")) == "scout":
+			has_scout = true
+			break
+
+	var within_range: bool = (
+		bool(party.get("deployed", false))
+		and _grid_distance(party.world_position, expedition.position) <= 3
+	)
+
+	if has_scout and within_range:
+		var enemy: Dictionary = expedition.get("enemy", {})
+		var enemy_types: Array[String] = [tr(str(enemy.get("name_key", "")))]
+		return {
+			"has_intel": true,
+			"enemy_types": enemy_types,
+			"enemy_count": int(enemy.get("count", 0)),
+			"danger_tier": danger_tier,
+		}
+
+	return {
+		"has_intel": false,
+		"enemy_types": [] as Array[String],
+		"enemy_count": 0,
+		"danger_tier": danger_tier,
+	}
 
 
 ## Looks up an item id in WEAPONS then ARMORS, returning a safe copy either

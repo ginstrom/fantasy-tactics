@@ -37,6 +37,13 @@ var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
 var hover_route: Array[Vector2i] = []
 var repathing: bool = false
+## The active-encounter instance id currently under the mouse, or "" when
+## the cursor isn't over one (see _update_hovered_encounter()). Drives
+## InformationPanel's Scout-intel preview (docs/plans/2026-08-18-core-loop-
+## and-engagement/04-cleric-class-and-scout-reconnaissance.md) whenever the
+## party itself isn't selected -- party_selected always wins so hovering an
+## encounter while mid-route-planning never clobbers the party summary.
+var hovered_encounter_id: String = ""
 
 @onready var board: Node2D = $Board
 @onready var tile_container: Node2D = $Board/Tiles
@@ -72,7 +79,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseMotion:
-		_update_hover_route(_to_grid_position(board.make_input_local(event).position))
+		var tile_pos := _to_grid_position(board.make_input_local(event).position)
+		_update_hover_route(tile_pos)
+		_update_hovered_encounter(tile_pos)
 		return
 
 	if not (event is InputEventMouseButton) or not event.pressed:
@@ -195,6 +204,18 @@ func _update_hover_route(tile_pos: Vector2i) -> void:
 	else:
 		hover_route = build_route(party_position, tile_pos)
 	_draw_routes()
+
+
+## Scout strategic reconnaissance preview (see hovered_encounter_id's own doc
+## comment): re-resolves the information panel only when the hovered
+## encounter id actually changes, so mouse motion within the same tile
+## doesn't thrash a refresh every frame.
+func _update_hovered_encounter(tile_pos: Vector2i) -> void:
+	var encounter_id := _expedition_id_at(tile_pos)
+	if encounter_id == hovered_encounter_id:
+		return
+	hovered_encounter_id = encounter_id
+	_refresh_information_panel()
 
 
 func _on_end_turn_pressed() -> void:
@@ -436,9 +457,14 @@ func _refresh_information_panel() -> void:
 		return
 	# World Map has no separate row-selection concept; "the party" is the
 	# single deployed party, so its click-to-select toggle simply chooses
-	# whether the panel requests that party's contextual summary.
+	# whether the panel requests that party's contextual summary. A hovered
+	# encounter (see hovered_encounter_id) only wins when the party itself
+	# isn't selected, so mid-route-planning hover never clobbers the party
+	# summary the player is actively looking at.
 	if party_selected:
 		information_panel.refresh_party(GameSession.selected_party_id, GameSession.pending_reward)
+	elif hovered_encounter_id != "":
+		information_panel.refresh_encounter(GameSession.selected_party_id, hovered_encounter_id)
 	else:
 		information_panel.refresh()
 

@@ -68,7 +68,13 @@ enum Side { PLAYER, ENEMY }
 ## the Move/Attack action-bar buttons existed. MOVE and ATTACK narrow
 ## _handle_tile_click() to just that one action; see the Action Mode State
 ## Machine section of docs/plans/2026-08-16-battle-screen-redesign/index.md.
-enum ActionMode { CONTEXTUAL, MOVE, ATTACK }
+## SPELL is Step 4's addition (docs/plans/2026-08-18-core-loop-and-engagement/
+## 04-cleric-class-and-scout-reconnaissance.md): entered via begin_spell_
+## targeting(), it narrows the next tile click to a single try_cast_spell()
+## call for whichever spell pending_spell_id names, on an ally tile
+## (including the caster's own, for a self-cast) rather than the ally-
+## reselect behavior every other mode gives an ally click.
+enum ActionMode { CONTEXTUAL, MOVE, ATTACK, SPELL }
 
 const GROUP := "battle_controller"
 
@@ -76,6 +82,23 @@ const BASE_ACTION_POINTS := 6
 const MOVE_ACTION_POINT_COST := 1
 const BASIC_ATTACK_ACTION_POINT_COST := 3
 const ITEM_ACTION_POINT_COST := 2
+## Tactical spells (docs/plans/2026-08-18-core-loop-and-engagement/
+## 04-cleric-class-and-scout-reconnaissance.md): both Heal and Bless cost the
+## same 3 AP / 1 MP and share the same 0-3 tile occupied-endpoint line-of-
+## sight range (0 so a caster can target itself -- has_line_of_sight() and
+## get_manhattan_distance() both already resolve trivially true/0 for a
+## same-tile target, so no self-cast special case is needed here).
+const SPELL_ACTION_POINT_COST := 3
+const SPELL_MP_COST := 1
+const SPELL_RANGE := 3
+const SPELL_HEAL_MIN := 2
+const SPELL_HEAL_MAX := 8
+## +10 percentage points to final hit chance (still respecting the hit cap)
+## and +10% to final post-resistance damage -- see try_attack_selected_unit(),
+## which applies both only when the attacker carries this status.
+const BLESSED_STATUS_ID := "blessed"
+const BLESS_HIT_CHANCE_BONUS := 0.10
+const BLESS_DAMAGE_MULTIPLIER := 1.10
 const SUPER_POWER_ACTION_POINTS := 100
 const SUPER_POWER_ATTACK_DAMAGE := 100
 const SUPER_POWER_HIT_CHANCE := 1.0
@@ -129,6 +152,10 @@ var active_side: int = Side.PLAYER
 ## set_action_mode(). Never set directly -- always go through
 ## set_action_mode() so action_mode_changed fires.
 var action_mode: int = ActionMode.CONTEXTUAL
+## Which spell the next tile click resolves to while action_mode == SPELL
+## (see begin_spell_targeting()). Stale while any other mode is active --
+## every reader only consults it under ActionMode.SPELL.
+var pending_spell_id: String = ""
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
 var crit_roll: Callable = func() -> float: return randf()
@@ -186,6 +213,17 @@ func _ready() -> void:
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
 		if GameSession.owned_item_instances.has(armor_instance_id):
 			player_unit.rune_id = str(GameSession.owned_item_instances[armor_instance_id].get("rune_id", ""))
+		# Tactical spellcasting (see unit.gd's spells/mp_max/mp_remaining doc
+		# comment): hydrated generically off whichever spells the class
+		# definition lists (only Cleric today) rather than a hardcoded class
+		# id check, so a future spellcasting class needs no change here.
+		var class_id: String = str(GameSession.get_adventurer(adventurer_id).get("class", ""))
+		var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, {})
+		var spell_ids: Array = class_def.get("spells", [])
+		if not spell_ids.is_empty():
+			player_unit.spells = spell_ids.duplicate()
+			player_unit.mp_max = int(class_def.get("mp_max", 0))
+			player_unit.mp_remaining = player_unit.mp_max
 		player_unit.facing = Vector2i.RIGHT
 		units.append(player_unit)
 	var enemy_count: int = enemy_stats.get("count", 1)
@@ -618,6 +656,14 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	var effective_hit_chance: float = clampf(
 		selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
+	# Bless (see try_cast_spell()): +10 percentage points to the attacker's
+	# already-computed final hit chance, composed on top of every other
+	# modifier above and still re-clamped to the same cap/floor rather than
+	# bypassing them.
+	if has_status(selected_unit, BLESSED_STATUS_ID):
+		effective_hit_chance = clampf(
+			effective_hit_chance + BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
 	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
 	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
 
@@ -639,6 +685,11 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 			var critical_resistance_reduction: int = GameConfig.get_int("combat", "critical_resistance_reduction", 20)
 			effective_resistance = maxi(0, target.resistance - critical_resistance_reduction)
 		damage = int(maxi(1, round(raw_damage * (1.0 - effective_resistance / 100.0))))
+		# Bless: +10% to the already-resolved final post-resistance damage
+		# (composed after crit's own raw-damage/resistance adjustments above,
+		# not folded into raw_damage before resistance is applied).
+		if has_status(selected_unit, BLESSED_STATUS_ID):
+			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
 		target.take_damage(damage)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
@@ -807,6 +858,73 @@ func try_use_selected_potion(potion_id: String) -> bool:
 	selected_unit.action_points_remaining -= ITEM_ACTION_POINT_COST
 	last_attack_result = {"type": "potion", "potion_id": potion_id, "unit": selected_unit, "healing": healed}
 	return true
+
+
+## Tactical spells (docs/plans/2026-08-18-core-loop-and-engagement/
+## 04-cleric-class-and-scout-reconnaissance.md): the only two spells today are
+## "heal" (restore an injectable 2-8 HP, capped at max, on a living ally
+## that isn't already at full health) and "bless" (apply the battle-local
+## BLESSED_STATUS_ID status -- see try_attack_selected_unit() -- to a living
+## ally not already blessed). Both share the same 3 AP / 1 MP cost and the
+## same 0-3 tile occupied-endpoint line-of-sight range (see grid.
+## has_line_of_sight()/get_manhattan_distance(), the same primitives ranged
+## attacks already use via get_legal_attack_targets()). Every validation runs
+## before any mutation, matching every other try_* action in this file, so a
+## rejected cast leaves AP/MP/target state untouched.
+func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
+	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
+		return false
+	if has_status(selected_unit, PARALYZED_STATUS_ID):
+		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit}
+		return false
+	if not selected_unit.spells.has(spell_id):
+		return false
+	if selected_unit.action_points_remaining < SPELL_ACTION_POINT_COST or selected_unit.mp_remaining < SPELL_MP_COST:
+		last_targeting_failure = {"reason": "insufficient_ap"}
+		return false
+
+	var target = get_unit_at(target_pos)
+	if target == null or target.side != selected_unit.side or not target.is_alive():
+		return false
+
+	var distance: int = grid.get_manhattan_distance(selected_unit.grid_position, target_pos)
+	if distance > SPELL_RANGE:
+		last_targeting_failure = {"reason": "out_of_range"}
+		return false
+	var blocking_tiles: Array[Vector2i] = []
+	for candidate in units:
+		if candidate != selected_unit and candidate.is_alive():
+			blocking_tiles.append(candidate.grid_position)
+	if not grid.has_line_of_sight(selected_unit.grid_position, target_pos, blocking_tiles):
+		last_targeting_failure = {"reason": "line_of_sight_blocked"}
+		return false
+
+	match spell_id:
+		"heal":
+			if target.health >= target.max_health:
+				return false
+			var healed: int = healing_roll.call(SPELL_HEAL_MIN, SPELL_HEAL_MAX)
+			target.health = mini(target.max_health, target.health + healed)
+			selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
+			selected_unit.mp_remaining -= SPELL_MP_COST
+			last_targeting_failure = {}
+			last_attack_result = {
+				"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target, "healing": healed,
+			}
+			return true
+		"bless":
+			if has_status(target, BLESSED_STATUS_ID):
+				return false
+			apply_status(target, BLESSED_STATUS_ID)
+			selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
+			selected_unit.mp_remaining -= SPELL_MP_COST
+			last_targeting_failure = {}
+			last_attack_result = {"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target}
+			return true
+		_:
+			return false
 
 
 func try_step_selected_unit(direction: Vector2i) -> bool:
@@ -1058,11 +1176,39 @@ func set_action_mode(mode: int) -> void:
 	action_mode_changed.emit(action_mode)
 
 
+## Enters spell-targeting mode (see ActionMode.SPELL's own doc comment): the
+## next tile click resolves to exactly one try_cast_spell() call for
+## spell_id. Called by Battlefield's Heal/Bless action-bar buttons, the same
+## way set_action_mode() itself is called by the Move/Attack buttons.
+## pending_spell_id is set before set_action_mode() so it's already current
+## even on the no-op path (re-pressing a spell button while already in SPELL
+## mode) -- callers resync their own button state unconditionally afterward,
+## the same way _on_move_button_pressed()/_on_attack_button_pressed() do.
+func begin_spell_targeting(spell_id: String) -> void:
+	pending_spell_id = spell_id
+	set_action_mode(ActionMode.SPELL)
+
+
 func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if input_locked:
 		return
 
 	last_targeting_failure = {}
+
+	if action_mode == ActionMode.SPELL:
+		# SPELL mode intercepts every click, including one on an ally tile
+		# (which every other mode treats as a reselect) -- a spell always
+		# targets an ally, so try_cast_spell() itself decides legality; this
+		# mode never falls through to the move/attack dispatch below.
+		if selected_unit != null and try_cast_spell(pending_spell_id, tile_pos):
+			_draw_units()
+			_select_unit_after_action()
+		else:
+			if last_targeting_failure.is_empty():
+				last_targeting_failure = {"reason": "spell_invalid_target"}
+			board_changed.emit()
+		return
+
 	var clicked_unit = get_unit_at(tile_pos)
 	if clicked_unit != null:
 		if clicked_unit.side == active_side:

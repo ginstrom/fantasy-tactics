@@ -16,6 +16,9 @@ const ENEMY_TURN_BEAT_SECONDS := 0.5
 @onready var retreat_button: Button = %RetreatButton
 @onready var move_button: Button = %MoveButton
 @onready var attack_button: Button = %AttackButton
+@onready var heal_button: Button = %HealButton
+@onready var bless_button: Button = %BlessButton
+@onready var mp_label: Label = %MPLabel
 @onready var potion_option: OptionButton = %PotionOption
 @onready var use_potion_button: Button = %UsePotionButton
 @onready var transfer_item_option: OptionButton = %TransferItemOption
@@ -139,6 +142,18 @@ func _on_attack_button_pressed() -> void:
 	_on_action_mode_changed(grid.action_mode)
 
 
+## Heal/Bless share the same begin_spell_targeting() entry point (see
+## BattleController's own doc comment) -- only pending_spell_id differs.
+func _on_heal_button_pressed() -> void:
+	grid.begin_spell_targeting("heal")
+	_on_action_mode_changed(grid.action_mode)
+
+
+func _on_bless_button_pressed() -> void:
+	grid.begin_spell_targeting("bless")
+	_on_action_mode_changed(grid.action_mode)
+
+
 ## Only the active-mode highlight lives here -- disabled state is driven
 ## separately by _update_action_bar(), since it depends on the selected
 ## unit's AP and the input lock, neither of which action_mode_changed alone
@@ -146,12 +161,18 @@ func _on_attack_button_pressed() -> void:
 func _on_action_mode_changed(mode: int) -> void:
 	move_button.button_pressed = mode == BattleControllerScript.ActionMode.MOVE
 	attack_button.button_pressed = mode == BattleControllerScript.ActionMode.ATTACK
+	var spell_mode: bool = mode == BattleControllerScript.ActionMode.SPELL
+	heal_button.button_pressed = spell_mode and grid.pending_spell_id == "heal"
+	bless_button.button_pressed = spell_mode and grid.pending_spell_id == "bless"
 
 
 ## Move requires at least one AP (its own cost); Attack requires enough AP
 ## for a basic attack -- so on low AP, Move can stay enabled while Attack
 ## disables first (Attack's cost is strictly higher). Both disable while
 ## input is locked (enemy turn / a queued level-up), matching End Turn.
+## Heal/Bless (plus the MP readout) show only for a unit that actually knows
+## spells (Cleric today, see unit.gd's spells field) -- every other class
+## keeps its default empty spells array, so this stays hidden for them.
 func _update_action_bar() -> void:
 	var selected_unit = grid.selected_unit
 	var can_act: bool = (
@@ -162,6 +183,20 @@ func _update_action_bar() -> void:
 	)
 	move_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.MOVE_ACTION_POINT_COST
 	attack_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+
+	var is_caster: bool = selected_unit != null and not selected_unit.spells.is_empty()
+	heal_button.visible = is_caster
+	bless_button.visible = is_caster
+	mp_label.visible = is_caster
+	if is_caster:
+		mp_label.text = tr("battle.mp") % [selected_unit.mp_remaining, selected_unit.mp_max]
+		var can_cast: bool = (
+			can_act
+			and selected_unit.action_points_remaining >= BattleControllerScript.SPELL_ACTION_POINT_COST
+			and selected_unit.mp_remaining >= BattleControllerScript.SPELL_MP_COST
+		)
+		heal_button.disabled = not can_cast
+		bless_button.disabled = not can_cast
 
 
 func _play_enemy_turn() -> void:
@@ -222,6 +257,8 @@ func _on_board_changed() -> void:
 		status.text = _describe_step(grid.last_attack_result)
 		if grid.last_attack_result.type == "attack":
 			_log_attack(grid.last_attack_result)
+		elif grid.last_attack_result.type == "spell":
+			_log_spell(grid.last_attack_result)
 
 	if grid.is_battle_won():
 		_resolve_battle(true)
@@ -533,8 +570,21 @@ func _describe_step(step: Dictionary) -> String:
 		return tr("battle.status.potion") % [step.unit.display_name, tr(GameSession.get_item_definition(step.potion_id).name_key), step.healing]
 	if step.type == "item_transfer":
 		return tr("battle.status.item_transfer") % [step.from.display_name, tr(GameSession.get_item_definition(step.item_id).name_key), step.to.display_name]
+	if step.type == "spell":
+		return _describe_spell_entry(step, "battle.status.spell_heal", "battle.status.spell_bless")
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
+
+
+## Shared by _describe_step() (the transient status line) and
+## _describe_spell_log_entry() (the persistent combat log) -- only the two
+## translation keys differ between the two surfaces.
+func _describe_spell_entry(step: Dictionary, heal_key: String, bless_key: String) -> String:
+	var caster_name: String = step.caster.display_name
+	var target_name: String = step.target.display_name
+	if step.spell_id == "heal":
+		return tr(heal_key) % [caster_name, target_name, step.healing]
+	return tr(bless_key) % [caster_name, target_name]
 
 
 func _describe_targeting_failure(failure: Dictionary) -> String:
@@ -553,6 +603,8 @@ func _describe_targeting_failure(failure: Dictionary) -> String:
 			return tr("battle.feedback.move_mode")
 		"attack_mode_no_target":
 			return tr("battle.feedback.attack_mode")
+		"spell_invalid_target":
+			return tr("battle.feedback.spell_invalid_target")
 		_:
 			return tr("battle.feedback.out_of_range")
 
@@ -562,6 +614,18 @@ func _log_attack(step: Dictionary) -> void:
 		return
 	_last_logged_attack_result = step
 	_append_log_line(_describe_log_entry(step))
+
+
+## Combat-log counterpart to _log_attack() -- same dedup guard (shared
+## _last_logged_attack_result var; is_same() alone already distinguishes any
+## two distinct result Dictionaries regardless of type), a persistent line
+## for Heal/Bless casts rather than only the transient status text
+## _describe_step() already provides.
+func _log_spell(step: Dictionary) -> void:
+	if is_same(_last_logged_attack_result, step):
+		return
+	_last_logged_attack_result = step
+	_append_log_line(_describe_spell_entry(step, "battle.log.spell.heal", "battle.log.spell.bless"))
 
 
 ## Step 3 of docs/plans/2026-08-18-critical-hits-and-flanking: a side or rear

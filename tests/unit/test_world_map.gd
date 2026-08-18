@@ -765,6 +765,62 @@ func test_information_panel_hides_the_party_gold_row_when_there_is_none() -> voi
 	assert_false(panel.get_node("Content/PartyGold").visible)
 
 
+## --- Scout strategic reconnaissance preview (Step 4) ---
+
+func test_hovering_an_encounter_tile_with_a_scout_in_range_reveals_composition() -> void:
+	# before_each() already deployed a warrior-only party; assigning a member
+	# requires the party to still be encamped, so rebuild it with a Scout
+	# before deploying rather than assigning into the already-deployed one.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	GameSession.set_deployed_party_position(goblin_camp.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+
+	world_map._update_hovered_encounter(goblin_camp.position)
+
+	assert_true(panel.get_node("Content/EncounterDanger").visible)
+	assert_true(panel.get_node("Content/EncounterEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterEnemies").text,
+		tr("information.encounter_enemies") % [tr("battle.enemy.goblin"), 1]
+	)
+
+
+func test_hovering_an_encounter_tile_without_scout_intel_shows_only_the_danger_tier() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+
+	world_map._update_hovered_encounter(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
+
+	assert_true(panel.get_node("Content/EncounterDanger").visible)
+	assert_false(
+		panel.get_node("Content/EncounterEnemies").visible,
+		"No Scout in range means only the already-public danger tier is shown"
+	)
+	assert_false(panel.get_node("Content/EncounterDanger").text.contains("gold"), "Never reveals rewards")
+
+
+func test_hovering_away_from_an_encounter_restores_the_default_panel() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+	world_map._update_hovered_encounter(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
+
+	world_map._update_hovered_encounter(Vector2i(6, 6))
+
+	assert_false(panel.get_node("Content/EncounterDanger").visible)
+	assert_false(panel.get_node("Content/EncounterEnemies").visible)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

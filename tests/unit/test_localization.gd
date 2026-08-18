@@ -126,6 +126,21 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.action.move"), "Move")
 	assert_eq(tr("battle.action.attack"), "Attack")
 	assert_eq(tr("battle.action.retreat"), "Retreat")
+	assert_eq(tr("battle.action.heal"), "Heal")
+	assert_eq(tr("battle.action.bless"), "Bless")
+	assert_eq(tr("battle.mp") % [2, 3], "MP: 2 / 3")
+	assert_eq(tr("battle.status.spell_heal") % ["Cleric", "Warrior", 5], "Cleric heals Warrior for 5 HP.")
+	assert_eq(tr("battle.status.spell_bless") % ["Cleric", "Warrior"], "Cleric blesses Warrior.")
+	assert_eq(
+		tr("battle.log.spell.heal") % ["Cleric", "Warrior", 5],
+		"Cleric casts Heal on Warrior, restoring 5 HP."
+	)
+	assert_eq(tr("battle.log.spell.bless") % ["Cleric", "Warrior"], "Cleric casts Bless on Warrior.")
+	assert_eq(tr("battle.feedback.spell_invalid_target"), "That target is not a legal spell target.")
+	assert_eq(tr("class.cleric"), "Cleric")
+	assert_eq(tr("item.mace_iron"), "Iron Mace")
+	assert_eq(tr("information.encounter_danger") % "★★", "Danger: ★★")
+	assert_eq(tr("information.encounter_enemies") % ["Goblin", 3], "Enemies: Goblin x3")
 	assert_eq(tr("battle.result.retreat"), "The party retreats.")
 	assert_eq(tr("battle.log.retreat.no_loss") % "Warrior", "Warrior slips away unscathed.")
 	assert_eq(tr("battle.log.retreat.hp_loss") % ["Warrior", 3], "Warrior retreats, losing 3 HP.")

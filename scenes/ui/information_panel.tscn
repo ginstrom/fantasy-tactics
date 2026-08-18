@@ -86,3 +86,11 @@ layout_mode = 2
 visible = false
 disabled = true
 text = "information.recruit"
+
+[node name="EncounterDanger" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="EncounterEnemies" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
