@@ -46,6 +46,7 @@ func test_ranged_enemy_attacks_stationary_player_at_three_tiles_without_moving()
 	controller.units = [archer, player]
 	controller.active_side = BattleControllerScript.Side.ENEMY
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
 
 	var steps: Array = controller.run_enemy_turn()
@@ -64,6 +65,7 @@ func test_ranged_enemy_repositions_to_a_clear_line_of_sight_before_attacking() -
 	controller.units = [archer, player, obstacle]
 	controller.active_side = BattleControllerScript.Side.ENEMY
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
 
 	var steps: Array = controller.run_enemy_turn()

@@ -56,6 +56,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.status.health") % ["Warrior", 3, 3], "Warrior: 3/3 HP")
 	assert_eq(tr("battle.status.defeated") % "Goblin", "Goblin: defeated")
 	assert_eq(tr("battle.status.hit") % ["Warrior", 2], "Warrior hits for 2 damage.")
+	assert_eq(tr("battle.status.critical_hit") % ["Warrior", 6], "Critical Hit! Warrior hits for 6 damage.")
 	assert_eq(tr("battle.status.miss") % "Goblin", "Goblin misses.")
 	assert_eq(tr("battle.status.enemy_move") % "Goblin", "Goblin moves closer.")
 	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
@@ -66,6 +67,10 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(
 		tr("battle.log.miss") % ["Warrior", "Kobold 1"],
 		"Warrior attacks Kobold 1 — misses."
+	)
+	assert_eq(
+		tr("battle.log.critical_hit") % ["Warrior 2", "Kobold 2", 6],
+		"Warrior 2 attacks Kobold 2 — Critical Hit! Hits for 6 damage!"
 	)
 	assert_eq(tr("battle.log.defeated") % "Kobold 2", "Kobold 2 is defeated!")
 	assert_eq(tr("battle.unit_info.empty"), "Hover or click a unit to see its details.")

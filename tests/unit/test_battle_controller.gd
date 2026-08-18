@@ -333,11 +333,120 @@ func test_sharpened_weapon_adds_one_raw_damage_before_resistance() -> void:
 	attacker.raw_damage_bonus = 1
 	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 2
 	controller.hit_roll = func() -> float: return 0.0
+	# Pinned above the base critical chance so this exact-damage assertion
+	# can't flake into an amplified critical roll (see the Critical Hits
+	# section below).
+	controller.crit_roll = func() -> float: return 1.0
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
 
 	assert_true(controller.try_attack_selected_unit(defender.grid_position))
 	assert_eq(controller.last_attack_result.damage, 2, "(2 + 1) raw damage rounds to 2 after 50% resistance")
+
+
+## --- Critical hits (docs/plans/2026-08-18-critical-hits-and-flanking/02-critical-hit-mechanics.md) ---
+
+func test_crit_roll_below_the_base_critical_chance_marks_the_hit_critical() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 0.01
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_true(controller.last_attack_result.critical, "A crit_roll below the 5% base chance must land a critical hit")
+
+
+func test_crit_roll_at_or_above_the_base_critical_chance_does_not_crit() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 0.50
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_false(controller.last_attack_result.critical, "A crit_roll at or above the 5% base chance must not crit")
+
+
+func test_a_missed_attack_never_triggers_a_critical_hit() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2, 0.5)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99
+	controller.crit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_false(controller.last_attack_result.get("hit", true))
+	assert_false(controller.last_attack_result.critical, "A miss must never roll or record a critical hit")
+
+
+func test_critical_hit_amplifies_raw_damage_by_the_configured_multiplier() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 4
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(defender.health, 16, "A normal hit deals the raw 4 damage with no resistance")
+
+	defender.health = 20
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(controller.last_attack_result.damage, 6, "round(4 * 1.5) = 6 damage on a critical hit")
+	assert_eq(defender.health, 14, "The defender's health must reflect the amplified critical damage")
+
+
+func test_critical_hit_reduces_defender_resistance_by_twenty_points() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 10, 10)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 30, 1, 1, 1.0, "Attack", "", 0, 50)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 10
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(controller.last_attack_result.damage, 5, "round(10 * (1 - 0.50)) = 5 damage on a normal hit")
+
+	defender.health = defender.max_health
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(
+		controller.last_attack_result.damage, 11,
+		"Raw damage becomes round(10 * 1.5) = 15; 50% resistance reduced by 20 points to 30%; round(15 * 0.7) = 11"
+	)
+
+
+func test_critical_hit_resistance_reduction_floors_at_zero() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 10, 10)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 30, 1, 1, 1.0, "Attack", "", 0, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 10
+	controller.crit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(
+		controller.last_attack_result.damage, 15,
+		"10% resistance reduced by 20 points floors at 0%; round(15 * 1.0) = 15"
+	)
 
 
 func test_thorn_rune_applies_paralyze_after_a_melee_hit_only_when_its_roll_succeeds() -> void:
@@ -989,6 +1098,7 @@ func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> vo
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
@@ -1330,6 +1440,7 @@ func test_run_enemy_turn_attacks_without_moving_when_already_adjacent() -> void:
 	controller.units = [goblin, player_unit]
 	controller.active_side = BattleControllerScript.Side.ENEMY
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 
 	var steps: Array = controller.run_enemy_turn()
 
@@ -1352,6 +1463,7 @@ func test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap() -> vo
 	controller.units = [goblin, player_unit]
 	controller.active_side = BattleControllerScript.Side.ENEMY
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 
 	var steps: Array = controller.run_enemy_turn()
 
@@ -1729,6 +1841,7 @@ func test_wasd_step_onto_an_enemy_tile_attacks_instead_of_moving() -> void:
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 
 	var stepped: bool = controller.try_step_selected_unit(Vector2i.RIGHT)
 
@@ -2100,6 +2213,7 @@ func test_attack_damage_is_rolled_between_the_attackers_min_and_max() -> void:
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 	controller.damage_roll = func(min_value: int, max_value: int) -> int:
 		assert_eq(min_value, 2)
 		assert_eq(max_value, 8)
@@ -2121,6 +2235,7 @@ func test_attack_applies_the_defenders_resistance_rounded_to_the_nearest_integer
 	controller.units = [attacker, defender]
 	controller.selected_unit = attacker
 	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
 	controller.damage_roll = func(_min_value: int, _max_value: int) -> int: return 10
 
 	controller.try_attack_selected_unit(defender.grid_position)

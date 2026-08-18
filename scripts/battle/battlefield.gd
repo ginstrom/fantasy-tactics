@@ -472,6 +472,8 @@ func _describe_step(step: Dictionary) -> String:
 	if step.type == "attack":
 		var attacker_name: String = tr(SIDE_NAME_KEYS[step.attacker.side])
 		if step.hit:
+			if step.get("critical", false):
+				return tr("battle.status.critical_hit") % [attacker_name, step.damage]
 			return tr("battle.status.hit") % [attacker_name, step.damage]
 		return tr("battle.status.miss") % attacker_name
 
@@ -515,7 +517,8 @@ func _describe_log_entry(step: Dictionary) -> String:
 	var defender_name: String = step.defender.display_name
 	if not step.hit:
 		return tr("battle.log.miss") % [attacker_name, defender_name]
-	var line: String = tr("battle.log.hit") % [attacker_name, defender_name, step.damage]
+	var line_key: String = "battle.log.critical_hit" if step.get("critical", false) else "battle.log.hit"
+	var line: String = tr(line_key) % [attacker_name, defender_name, step.damage]
 	if step.defeated:
 		line += " " + tr("battle.log.defeated") % defender_name
 	return line

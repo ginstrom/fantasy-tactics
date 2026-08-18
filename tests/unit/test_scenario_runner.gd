@@ -44,6 +44,37 @@ func test_run_case_records_reproducible_seeded_iterations_without_campaign_effec
 	assert_eq(GameSession.selected_encounter, selected_before)
 
 
+## Step 2 of docs/plans/2026-08-18-critical-hits-and-flanking: crit_roll must
+## be seeded exactly like hit_roll/damage_roll (see battle_state_factory.gd),
+## so re-running the same critical-capable case with the same root seed
+## reproduces byte-identical records -- including damage (which a critical
+## hit amplifies) and survivors.
+func test_run_case_reproduces_byte_identical_records_for_a_critical_capable_scenario() -> void:
+	var case := _case({
+		"scenario_id": "critical_capable_runner",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0},
+					"modifiers": {"damage_min": 20, "damage_max": 20},
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+		"randomness": {"root_seed": 20260810, "iterations": 20},
+	})
+	var runner := ScenarioRunner.new()
+
+	var first: Array = runner.run_case(case)
+	var second: Array = runner.run_case(case)
+
+	assert_eq(first, second, "Identical iteration seeds must reproduce byte-identical records")
+	assert_eq(first.size(), 20)
+	for record in first:
+		assert_has(record, "damage")
+		assert_has(record, "survivors")
+
+
 func test_run_case_classifies_a_round_cap_as_stalemate_not_a_loss() -> void:
 	var case := _case({
 		"scenario_id": "capped_runner",

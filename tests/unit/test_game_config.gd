@@ -12,6 +12,14 @@ func test_loads_float_values_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_float("combat", "effective_hit_chance_cap", -1.0), 0.95)
 
 
+## Step 2 of docs/plans/2026-08-18-critical-hits-and-flanking: critical hit
+## balance constants (see battle_controller.gd's try_attack_selected_unit()).
+func test_loads_critical_hit_config_values_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_float("combat", "base_critical_chance", -1.0), 0.05)
+	assert_eq(GameConfig.get_float("combat", "critical_damage_multiplier", -1.0), 1.5)
+	assert_eq(GameConfig.get_int("combat", "critical_resistance_reduction", -1), 20)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

@@ -2,7 +2,10 @@
 	"combat": {
 		"base_move_range": 3,
 		"effective_hit_chance_cap": 0.95,
-		"attack_to_hit_chance_divisor": 100.0
+		"attack_to_hit_chance_divisor": 100.0,
+		"base_critical_chance": 0.05,
+		"critical_damage_multiplier": 1.5,
+		"critical_resistance_reduction": 20
 	},
 	"progression": {
 		"perk_level_interval": 3

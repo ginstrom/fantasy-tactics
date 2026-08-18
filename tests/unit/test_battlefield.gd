@@ -88,6 +88,22 @@ func test_describe_step_reports_a_hit_with_damage() -> void:
 	assert_eq(battlefield._describe_step(step), tr("battle.status.hit") % [tr("battle.side.enemy"), 1])
 
 
+## Step 2 of docs/plans/2026-08-18-critical-hits-and-flanking:
+## try_attack_selected_unit() now includes a "critical" key on every attack
+## step's result dictionary (see battle_controller.gd) -- a critical hit gets
+## its own status line rather than the plain hit line.
+func test_describe_step_reports_a_critical_hit_with_amplified_damage() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var step := {"type": "attack", "attacker": attacker, "hit": true, "damage": 6, "critical": true}
+
+	assert_eq(
+		battlefield._describe_step(step),
+		tr("battle.status.critical_hit") % [tr("battle.side.enemy"), 6]
+	)
+
+
 func test_describe_step_reports_a_miss() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -399,6 +415,7 @@ func test_a_hit_appends_a_detailed_line_naming_both_units_and_the_damage() -> vo
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
 	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 3
 
 	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
@@ -408,6 +425,27 @@ func test_a_hit_appends_a_detailed_line_naming_both_units_and_the_damage() -> vo
 	assert_eq(
 		battlefield.log_list.get_child(0).text,
 		tr("battle.log.hit") % [units.warrior.display_name, units.goblin.display_name, 3]
+	)
+
+
+func test_a_critical_hit_appends_a_critical_log_line_with_amplified_damage() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 0.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 4
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		# round(4 * 1.5) = 6 damage on a critical hit (see battle_controller.gd's
+		# critical_damage_multiplier).
+		tr("battle.log.critical_hit") % [units.warrior.display_name, units.goblin.display_name, 6]
 	)
 
 
@@ -471,6 +509,7 @@ func test_enemy_turn_attacks_are_appended_to_the_log() -> void:
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	goblin.grid_position = warrior.grid_position + Vector2i(1, 0)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
 	battlefield._on_end_turn_pressed()
 
 	while battlefield._enemy_turn_in_progress:

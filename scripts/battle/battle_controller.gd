@@ -104,6 +104,7 @@ var active_side: int = Side.PLAYER
 var action_mode: int = ActionMode.CONTEXTUAL
 var input_locked: bool = false
 var hit_roll: Callable = func() -> float: return randf()
+var crit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var rune_trigger_roll: Callable = func() -> float: return randf()
@@ -537,9 +538,23 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	var effective_hit_chance: float = maxf(selected_unit.hit_chance - target.defense / 100.0, MIN_HIT_CHANCE)
 	var hit: bool = hit_roll.call() < effective_hit_chance
 	var damage: int = 0
+	# Critical hits only exist on a landed hit -- crit_roll is never consumed
+	# on a miss, keeping the roll sequence identical to hit_roll/damage_roll's
+	# own "no call on a miss" contract (see the Config & Defaults / Critical
+	# Hit Roll Determinism sections of docs/plans/2026-08-18-critical-hits-
+	# and-flanking/02-critical-hit-mechanics.md).
+	var is_critical := false
 	if hit:
+		var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
+		is_critical = crit_roll.call() < base_critical_chance
 		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max) + selected_unit.raw_damage_bonus + selected_unit.might
-		damage = int(maxi(1, round(raw_damage * (1.0 - target.resistance / 100.0))))
+		var effective_resistance: int = target.resistance
+		if is_critical:
+			var critical_damage_multiplier: float = GameConfig.get_float("combat", "critical_damage_multiplier", 1.5)
+			raw_damage = int(round(raw_damage * critical_damage_multiplier))
+			var critical_resistance_reduction: int = GameConfig.get_int("combat", "critical_resistance_reduction", 20)
+			effective_resistance = maxi(0, target.resistance - critical_resistance_reduction)
+		damage = int(maxi(1, round(raw_damage * (1.0 - effective_resistance / 100.0))))
 		target.take_damage(damage)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
@@ -551,6 +566,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"defender": target,
 		"hit": hit,
 		"damage": damage,
+		"critical": is_critical,
 		"defeated": defeated,
 	}
 	if hit:

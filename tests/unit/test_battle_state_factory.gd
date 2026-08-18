@@ -297,6 +297,23 @@ func test_build_seeds_hit_roll_and_damage_roll_deterministically_from_the_iterat
 		assert_eq(controller_a.damage_roll.call(1, 100), controller_b.damage_roll.call(1, 100))
 
 
+## Step 2 of docs/plans/2026-08-18-critical-hits-and-flanking: crit_roll must
+## be seeded from the same per-iteration RandomNumberGenerator as hit_roll/
+## damage_roll (see battle_controller.gd's own default `randf()` -- never
+## global randomness during scenario execution, so re-running the same case
+## with the same iteration seed reproduces the same critical-hit outcomes.
+func test_build_seeds_crit_roll_deterministically_from_the_iteration_seed() -> void:
+	var scenario := _one_v_one_scenario()
+
+	var controller_a: Node2D = BattleStateFactory.build(scenario, 12345)
+	var controller_b: Node2D = BattleStateFactory.build(scenario, 12345)
+	autofree(controller_a)
+	autofree(controller_b)
+
+	for _i in 5:
+		assert_eq(controller_a.crit_roll.call(), controller_b.crit_roll.call())
+
+
 func test_build_seeds_hit_roll_differently_for_different_iteration_seeds() -> void:
 	var scenario := _one_v_one_scenario()
 

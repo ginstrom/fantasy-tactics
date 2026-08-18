@@ -15,7 +15,7 @@ extends RefCounted
 ## try_attack_selected_unit, get_legal_moves, run_enemy_turn, end_turn,
 ## is_battle_won/is_battle_lost) for free -- this file only ever sets
 ## `grid`, `units`, `_player_adventurer_ids`, `active_side`, `selected_unit`,
-## `hit_roll`, and `damage_roll`. `_player_adventurer_ids` (player unit ids in
+## `hit_roll`, `crit_roll`, and `damage_roll`. `_player_adventurer_ids` (player unit ids in
 ## build order) is required for end_turn()'s own round-start reselection
 ## (BattleController._first_living_player_unit(), which end_turn() calls
 ## on the PLAYER side) to work correctly -- without it, end_turn() would
@@ -60,6 +60,7 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = iteration_seed
 	controller.hit_roll = func() -> float: return rng.randf()
+	controller.crit_roll = func() -> float: return rng.randf()
 	controller.damage_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
 
 	var units: Array = []
