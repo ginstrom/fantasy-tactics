@@ -51,9 +51,9 @@ The core loop is complete when a fresh campaign can, without debug tools:
    understandable preparation (tactical counterplay, gear, composition).
 5. **Class & Tactical Relevance:** Make 3-class composition (Warrior / Scout / Cleric),
    directional positioning, and equipment decisions matter to outcomes.
-6. **Permadeath & Stakes:** Enforce permanent death for slain units and
-   meaningful setback on party defeat, while ensuring recruitment replenishment
-   prevents unrecoverable soft locks.
+6. **Permadeath, Stakes & Economy Floor:** Enforce permanent death for slain
+   units and meaningful setback on party defeat, while ensuring recruitment
+   replenishment and encampment passive income prevent unrecoverable soft locks.
 7. **Victory & Free Play:** End in an authored final boss encounter, display
    a campaign victory screen, and permit optional free play afterwards.
 
@@ -90,7 +90,7 @@ Core Encampment Hubs:
 | **Guild Hall** | Roster & Party Capacity | Increases max party size (3 → 4 → 5), expands roster cap, houses general recruitment (Warrior, Scout). |
 | **Temple** | Sustain & Faith | Recruits Clerics, provides encampment healing/blessing services, accelerates wound recovery. |
 | **Blacksmith & Workshops** | Physical & Magical Gear | Weapon/armor crafting, sharpening (Blacksmith), healing potions (Alchemy), rune upgrades (Runic). |
-| **Trade Post & Stores** | Economy & Supplies | Selling encounter loot, purchasing basic weapons, armor, and provisions. |
+| **Trade Post & Stores** | Economy & Supplies | Selling encounter loot, purchasing basic weapons/armor/provisions, and generating passive encampment income (2 gold/turn base; increases to 5 gold/turn at shop tier 2). |
 
 **Milestone:** A fresh player can afford and understand the first upgrade,
 then see it unlock a new recruit, tool, or capability before tier 2.
@@ -145,9 +145,12 @@ campaign soft locks:
 - **Expedition Defeat / Wipe:** If all party members fall or retreat, the
   expedition fails. The party is routed back to the Encampment, unbanked battle
   and pending loot are lost, and world time advances (e.g., 2–3 turns).
-- **Soft-Lock Prevention:** The recruitment candidate pool always guarantees
-  affordable level-1 recruits (with an emergency gold stipend floor if the player
-  is bankrupt) so the player can rebuild a viable party after a wipe.
+- **Soft-Lock Prevention & Encampment Income:** The recruitment candidate pool
+  always guarantees affordable level-1 recruits. To guarantee the economy cannot
+  stall after a wipe or bankruptcy, the starting Encampment provides a baseline
+  passive income of **2 gold/turn**, scaling to **5 gold/turn** when upgrading
+  the shop to tier 2. This guarantees the player can always fund replacement
+  recruits and basic gear by advancing world turns.
 
 **Milestone:** Unit death, party retreat, recruitment replenishment, and
 recovery paths are fully tested and prevent dead ends.
@@ -201,8 +204,10 @@ tactical information.
 ## Decisions Locked
 
 1. **Campaign Scope:** 60–90 minute compact Borderlands campaign (~10–15 encounters).
-2. **Defeat Policy:** Permadeath for slain adventurers; party wipe causes retreat
-   and loss of unbanked loot; recruitment floor prevents campaign soft-locks.
+2. **Defeat Policy & Economy Floor:** Permadeath for slain adventurers; party
+   wipe causes retreat and loss of unbanked loot; recruitment floor and passive
+   encampment income (2 gold/turn base, 5 gold/turn at shop tier 2) prevent
+   campaign soft-locks.
 3. **Party Count:** Exactly 1 deployed party for Campaign 1; Guild Hall scales
    party size (3 to 5 units).
 4. **Third Root Class:** Cleric (combat sustain, holy protection, Temple synergy).
