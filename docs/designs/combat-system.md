@@ -33,6 +33,10 @@ final damage = max(1, round(raw damage × (1 - defender damage resistance / 100)
 ```
 It is mainly provided by armor, but can be modified by spells, perks, and items.
 
+### Critical Hits
+
+Any successful weapon hit has a natural 5% chance to land a criticl hit. This increases the inflicted damage by 50% and reduces enemy damage resistance by 20%.
+
 ### Dodge
 A small chance of evading an incoming attack. On a successful dodge, the attacker becomes off-balanced during their next round (-10% Guard).
 
@@ -46,10 +50,33 @@ Cover provides a direct bonus to `guard` against missile attacks:
 * **Low Cover:** +25% Guard against missile attacks.
 * **High Cover:** +50% Guard against missile attacks.
 
+### Facing
+
+Units face left, right, up, or down. This impacts flanking and attacks of opportunity (see below).
+
 ### Flanking
 Attack angles provide tactical modifiers:
-* **Side / Oblique Flank:** -20% defender Guard.
-* **Rear Flank:** -50% defender Guard and +50% raw damage multiplier for the attacker.
+* **Side / Oblique Flank:** -20% defender Guard, +20% critical hit chance.
+* **Rear Flank:** -50% defender Guard and +50% critical hit chance.
+
+Flanking works as follows.
+
+F = front, S = side, R = rear
+
+Facing left:
+```
+  F S S
+  F < R
+  F S S
+```
+Facing up:
+```
+  F F F
+  S ^ S
+  S R S
+```
+
+Note that attacks from diagonal are allowed, although not movement.
 
 ### Attacks of Opportunity
 If a unit moves out of a tile adjacent to an enemy, that enemy immediately gets a free melee attack against the moving unit at a -10% `melee` hit penalty.
