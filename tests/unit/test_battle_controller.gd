@@ -3187,10 +3187,29 @@ func _run_to_resolution(controller: Node2D, max_rounds: int) -> int:
 ## default gear gives ~1.62 expected damage per landed swing against the
 ## Ogre's defense/resistance, and the Ogre's own attack deals ~3.44 expected
 ## damage per landed swing against a 10-HP Warrior -- a multi-round fight
-## that is winnable but genuinely dangerous for four fresh Warriors, not a
-## one-round curbstomp in either direction. Several independent seeds are
-## checked so the power band is evidence about the tuning, not one lucky
-## roll sequence.
+## that is genuinely dangerous for four fresh Warriors, not a one-round
+## curbstomp in either direction. Several independent seeds are checked so
+## the power band is evidence about the tuning, not one lucky roll sequence.
+##
+## Regression for the Step 5 review's Finding 3: this test previously only
+## asserted the fight resolves within a loose 2-20 round window, never
+## checking WHO wins -- a regression that halved or doubled the Ogre's
+## stats would still have passed. Instrumenting the real outcome (done while
+## fixing this finding) shows all 5 of the seeds below resolve as an Ogre
+## victory: this bare, ungeared four-Warrior baseline (the Monster Manual's
+## own calibration convention -- explicitly NOT the real endgame party that
+## actually fights this boss, see OGRE_ENEMY_STATS' doc comment) never wins
+## the fight, though only after grinding the Ogre down to a fraction of its
+## health (12-46 of 90 across these 5 seeds) -- a hard-fought multi-round
+## loss, not an untouched stomp. Whether a bare 4-Warrior baseline should
+## legitimately win some fraction of the time is a tuning call for Step 6's
+## balance harness (or an explicit design decision) to make, not something
+## to silently resolve here by retuning OGRE_ENEMY_STATS underneath this
+## fix. What this test pins instead is today's actual power band: every
+## seed must still be a real, hard-fought loss -- neither an untouched
+## curbstomp (Ogre ends near full health) nor a near-miss (Ogre ends almost
+## dead) -- so a future regression that trivializes the Ogre, or one that
+## makes it unbeatably dominant, is caught either way.
 func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band() -> void:
 	for root_seed in [1001, 2002, 3003, 4004, 5005]:
 		var controller := _build_four_warriors_vs_ogre_controller(root_seed)
@@ -3203,12 +3222,29 @@ func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band(
 			"seed %d: the benchmark must resolve, not stalemate at the round cap" % root_seed
 		)
 		assert_true(
-			rounds >= 2,
-			"seed %d: the Ogre must survive at least one full round -- not a one-round curbstomp (took %d rounds)" % [root_seed, rounds]
+			rounds >= 8 and rounds <= 12,
+			(
+				"seed %d: the fight must resolve within the actually-observed 8-12 round band, not the old loose 2-20 (took %d rounds)"
+				% [root_seed, rounds]
+			)
 		)
 		assert_true(
-			rounds <= 20,
-			"seed %d: four Warriors must not need an implausibly long slog to resolve the fight (took %d rounds)" % [root_seed, rounds]
+			controller.is_battle_lost(),
+			(
+				"seed %d: today's tuning has the bare 4-Warrior calibration baseline losing every seed -- a flip to a Warrior win here is itself a tuning change worth reviewing deliberately, not one that should silently start passing"
+				% root_seed
+			)
+		)
+		var ogre_health := -1
+		for unit in controller.units:
+			if unit.side == BattleControllerScript.Side.ENEMY:
+				ogre_health = int(unit.health)
+		assert_true(
+			ogre_health >= 5 and ogre_health <= 60,
+			(
+				"seed %d: the Ogre must end the fight meaningfully damaged (ruling out an untouched curbstomp) but still clearly standing (ruling out a near-miss loss), ended at %d/90 HP"
+				% [root_seed, ogre_health]
+			)
 		)
 
 

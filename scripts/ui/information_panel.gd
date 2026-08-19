@@ -153,6 +153,21 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 ## _draw_markers(), which gates its star label the same way). Never shows
 ## reward/loot or in-battle positions. An unknown party or encounter id
 ## clears the section safely, same as the other refresh_*() methods.
+##
+## The danger row renders GameSession.get_threat_stars(encounter_id) -- the
+## same dynamic 1-5 rating world_map.gd's own marker label renders (see
+## _get_marker_star_text()) -- rather than intel.danger_tier, which is
+## static at the encounter's base difficulty forever. Reading the static
+## field here would let this panel and the World Map marker disagree the
+## moment world_turn crosses a THREAT_TURN_INTERVAL boundary (Step 5 review
+## Finding 4).
+##
+## The enemy row renders every group in intel.enemy_types/enemy_counts (see
+## get_party_scouting_intel()'s doc comment) rather than just the first
+## group's type paired with the summed enemy_count -- a mixed authored
+## formation (e.g. the pre-boss Gatehouse's 2 Hobgoblin Elite/2 Goblin
+## Archer/1 Kobold Swarmer) would otherwise misreport as one type times the
+## total (Step 5 review Finding 5).
 func refresh_encounter(party_id: String, encounter_id: String) -> void:
 	_refresh_permanent_rows()
 	_clear_party_section()
@@ -165,12 +180,17 @@ func refresh_encounter(party_id: String, encounter_id: String) -> void:
 		return
 
 	_selected_encounter_id = encounter_id
-	var stars := "★".repeat(clampi(int(intel.danger_tier), 1, 5))
+	var stars := "★".repeat(clampi(GameSession.get_threat_stars(encounter_id), 1, 5))
 	encounter_danger_label.text = tr("information.encounter_danger") % stars
 	encounter_danger_label.visible = true
 
-	var enemy_type: String = String(intel.enemy_types[0]) if not intel.enemy_types.is_empty() else ""
-	encounter_enemies_label.text = tr("information.encounter_enemies") % [enemy_type, int(intel.enemy_count)]
+	var enemy_types: Array = intel.get("enemy_types", [])
+	var enemy_counts: Array = intel.get("enemy_counts", [])
+	var breakdown: Array[String] = []
+	for i in enemy_types.size():
+		var count: int = int(enemy_counts[i]) if i < enemy_counts.size() else int(intel.enemy_count)
+		breakdown.append(tr("information.encounter_enemies") % [String(enemy_types[i]), count])
+	encounter_enemies_label.text = ", ".join(breakdown)
 	encounter_enemies_label.visible = true
 
 

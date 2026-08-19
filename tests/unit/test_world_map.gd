@@ -3,6 +3,7 @@ extends GutTest
 const GridScript := preload("res://scripts/battle/grid.gd")
 const WorldMapScript := preload("res://scripts/world/world_map.gd")
 const WorldMapScene := preload("res://scenes/world/world_map.tscn")
+const GameSessionScript := preload("res://scripts/autoload/game_session.gd")
 
 
 func before_each() -> void:
@@ -643,8 +644,12 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 
-	# One ColorRect + one Label per active encounter instance, plus one settlement ColorRect.
-	var expected_marker_count := GameSession.get_active_encounters().size() * 2 + 1
+	# One ColorRect + one Label per active encounter instance, plus one more
+	# ColorRect + Label pair for the current campaign objective's own marker
+	# (see _current_campaign_objective_marker() -- sourced independently of
+	# active_encounters, so it is not included in that count), plus one
+	# settlement ColorRect.
+	var expected_marker_count := (GameSession.get_active_encounters().size() + 1) * 2 + 1
 	assert_eq(world_map.get_node("Board/Markers").get_child_count(), expected_marker_count)
 	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
 
@@ -1328,6 +1333,88 @@ func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -
 			):
 				return marker
 	return null
+
+
+## --- Step 5 review fix: normal-play route onto an authored encounter ------
+## (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md). GameSession.reset() only ever
+## seeds the two sandbox templates into active_encounters, so before this fix
+## none of the 12 authored campaign nodes had a clickable World Map marker at
+## all -- only the debug menu's direct battlefield jump could reach one. See
+## _current_campaign_objective_marker() in world_map.gd.
+
+
+## A fresh campaign's current objective (obj_tier1_1_goblin_outpost, per
+## GameSession.reset()) must be reachable the ordinary way: standing on its
+## expedition position and activating the tile.
+func test_a_fresh_campaign_shows_a_clickable_marker_at_the_tier1_1_encounter_position() -> void:
+	var world_map := _make_world_map()
+	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+	world_map.party_position = tier1_1.position
+	watch_signals(world_map)
+
+	var activated: bool = world_map.try_activate_current_tile()
+
+	assert_true(activated, "Standing on the current campaign objective's tile should activate it")
+	assert_signal_emitted_with_parameters(
+		world_map, "encounter_activated", ["obj_tier1_1_goblin_outpost"]
+	)
+
+
+## Entering via the World Map click path must reach the exact same
+## battle-layer entry point (GameManager.enter_battle() -> GameSession.
+## enter_encounter()) the debug menu's "Jump to Pre-Boss Encounter" scenario
+## already proves works end-to-end for an authored id -- this test only
+## proves the World Map's own routing gets there, not the battle layer again.
+func test_activating_the_tier1_1_marker_selects_it_as_the_current_encounter() -> void:
+	var world_map := _make_world_map()
+	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+	world_map.party_position = tier1_1.position
+
+	world_map.try_activate_current_tile()
+	GameManager.enter_battle("obj_tier1_1_goblin_outpost")
+
+	assert_eq(GameSession.selected_encounter, "obj_tier1_1_goblin_outpost")
+
+
+## The current-objective marker must also be found by hovering/clicking
+## detection (_expedition_id_at()), not just by a party already standing on
+## it -- otherwise Scout intel preview and click-to-select would silently
+## miss it.
+func test_the_tier1_1_marker_is_found_by_expedition_id_at() -> void:
+	var world_map := _make_world_map()
+	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+
+	assert_eq(world_map._expedition_id_at(tier1_1.position), "obj_tier1_1_goblin_outpost")
+
+
+## Once Tier 1-1 is completed, the marker must move to the newly-unlocked
+## Tier 1-2 node's own position -- never lingering at the now-cleared Tier
+## 1-1 tile and never appearing at both simultaneously.
+func test_the_marker_moves_to_the_next_unlocked_encounter_after_completing_an_objective() -> void:
+	GameSession.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+	var world_map := _make_world_map()
+	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+	var tier1_2: Dictionary = GameSession.get_expedition("obj_tier1_2_kobold_warren")
+
+	assert_eq(world_map._expedition_id_at(tier1_1.position), "", "The completed node must no longer have a marker")
+	assert_eq(world_map._expedition_id_at(tier1_2.position), "obj_tier1_2_kobold_warren")
+
+
+## Once the campaign is complete there is no "current objective" left, so no
+## authored-node marker (beyond whatever sandbox instances still exist) may
+## render at all -- see GameSession.get_current_campaign_objective()'s own
+## "{} once complete" contract.
+func test_no_current_objective_marker_renders_once_the_campaign_is_complete() -> void:
+	var id: String = "obj_tier1_1_goblin_outpost"
+	while id != "":
+		var next_id: String = GameSessionScript.CAMPAIGN_OBJECTIVES[id].next_objective_id
+		GameSession.complete_campaign_objective(id)
+		id = next_id
+	assert_true(GameSession.is_campaign_completed, "Test setup must actually complete the campaign")
+	var world_map := _make_world_map()
+
+	assert_eq(world_map._current_campaign_objective_marker(), {})
 
 
 ## World Map isn't an encampment screen -- the persistent left nav belongs

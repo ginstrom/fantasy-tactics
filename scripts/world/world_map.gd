@@ -154,7 +154,43 @@ func _expedition_id_at(pos: Vector2i) -> String:
 	for instance in GameSession.get_active_encounters():
 		if instance.position == pos:
 			return instance.id
+	var objective_marker := _current_campaign_objective_marker()
+	if not objective_marker.is_empty() and objective_marker.position == pos:
+		return objective_marker.id
 	return ""
+
+
+## The World Map marker for the current campaign_objective_id's expedition,
+## sourced independently of GameSession.active_encounters/
+## get_active_encounters() -- see GameSession.reset() (only ever seeds the
+## two sandbox templates, goblin_camp/orc_outpost, into active_encounters)
+## and enter_encounter()'s authored-id gate (can_enter_encounter() checks
+## unlocked_authored_encounters/completed_encounters directly; an authored
+## node is never turned into a live active-encounter instance in normal
+## play, only by a debug scenario that seeds one explicitly). Without this,
+## a fresh campaign has no clickable route onto any of the 12 authored nodes
+## at all -- only the debug menu's direct battlefield jump could reach one.
+## Deliberately never appended into active_encounters itself: doing so would
+## count against ENCOUNTER_INSTANCE_CAP and the sandbox vacancy-refill
+## economy (_start_encounter_vacancy()/_advance_encounter_vacancies()), both
+## of which assume active_encounters holds only sandbox instances.
+## GameSession.get_expedition()'s own instance-then-template fallback is what
+## lets every other authored-id caller (get_threat_stars(),
+## get_party_scouting_intel()) already work correctly against this id with
+## no changes of their own, whether or not it is a live active-encounter
+## instance. Returns {} once the campaign is complete (campaign_objective_id
+## is "" from that point on -- see GameSession.get_current_campaign_
+## objective()), so no such marker renders once there is no current
+## objective left to point at.
+func _current_campaign_objective_marker() -> Dictionary:
+	var objective := GameSession.get_current_campaign_objective()
+	var encounter_id: String = objective.get("encounter_id", "")
+	if encounter_id == "":
+		return {}
+	var expedition := GameSession.get_expedition(encounter_id)
+	if not expedition.has("position"):
+		return {}
+	return {"id": encounter_id, "position": expedition.position}
 
 
 func _get_difficulty_stars(difficulty: int) -> String:
@@ -368,6 +404,27 @@ func _draw_tiles() -> void:
 			tile_container.add_child(tile)
 
 
+## Draws one encounter marker + its star label at position, shared by both
+## the sandbox active_encounters loop and the current-campaign-objective
+## marker in _draw_markers() below -- the two sources render identically and
+## behave identically for clicking/hovering (_expedition_id_at() matches
+## both the same way).
+func _draw_expedition_marker(encounter_id: String, tile_pos: Vector2i, margin: float) -> void:
+	var encounter := ColorRect.new()
+	encounter.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
+	encounter.position = Vector2(tile_pos) * TILE_SIZE + Vector2(margin, margin)
+	encounter.color = ENCOUNTER_COLOR
+	encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker_container.add_child(encounter)
+
+	var label := Label.new()
+	label.text = _get_marker_star_text(encounter_id)
+	var label_y := maxf(tile_pos.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
+	label.position = Vector2(tile_pos.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker_container.add_child(label)
+
+
 func _draw_markers() -> void:
 	if not is_inside_tree():
 		return
@@ -381,20 +438,19 @@ func _draw_markers() -> void:
 	# removed from GameSession.active_encounters (see GameSession.
 	# complete_current_encounter) and simply vanishes rather than lingering as
 	# a completed marker.
+	var active_ids: Dictionary = {}
 	for record in GameSession.get_active_encounters():
-		var encounter := ColorRect.new()
-		encounter.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
-		encounter.position = Vector2(record.position) * TILE_SIZE + Vector2(margin, margin)
-		encounter.color = ENCOUNTER_COLOR
-		encounter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		marker_container.add_child(encounter)
+		active_ids[record.id] = true
+		_draw_expedition_marker(record.id, record.position, margin)
 
-		var label := Label.new()
-		label.text = _get_marker_star_text(record.id)
-		var label_y := maxf(record.position.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
-		label.position = Vector2(record.position.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		marker_container.add_child(label)
+	# The current campaign objective's own authored node (see
+	# _current_campaign_objective_marker()'s doc comment) is drawn as its own
+	# marker in addition to the sandbox active_encounters above -- unless a
+	# debug scenario already seeded it directly into active_encounters, in
+	# which case the loop above already drew it and this would double it up.
+	var objective_marker := _current_campaign_objective_marker()
+	if not objective_marker.is_empty() and not active_ids.has(objective_marker.id):
+		_draw_expedition_marker(objective_marker.id, objective_marker.position, margin)
 
 	var settlement := ColorRect.new()
 	settlement.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2

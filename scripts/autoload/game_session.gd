@@ -2366,15 +2366,21 @@ func get_threat_stars(encounter_id: String) -> int:
 ## locked decision, an encounter discloses NOTHING beyond its bare location
 ## until party_id's own deployed party contains a Scout AND stands within
 ## Manhattan distance 3 (_grid_distance) of the encounter's position -- at
-## that point both danger_tier AND enemy_types/enemy_count become visible
-## together (rewards and battlefield placement are never revealed, at any
-## range). Today's encounter model resolves to exactly one enemy species per
-## active instance (see STAR_ENEMY_COMPOSITIONS/_resolve_enemy_composition),
-## so enemy_types is a single-element array, not a fabricated multi-species
-## breakdown. Returns {} for an unknown party or encounter id. When has_intel
-## is false, danger_tier is 0 -- a value no real expedition difficulty ever
-## takes (difficulties start at 1) -- meaning "not yet known", not "tier
-## zero"; callers must gate on has_intel before rendering danger_tier.
+## that point both danger_tier AND enemy_types/enemy_counts/enemy_count
+## become visible together (rewards and battlefield placement are never
+## revealed, at any range). A mixed authored formation (see EXPEDITIONS'
+## "enemies" field) fields more than one species: enemy_types and
+## enemy_counts are parallel arrays, one entry per composition group (e.g.
+## the pre-boss Gatehouse's ["Hobgoblin Elite", "Goblin Archer", "Kobold
+## Swarmer"] / [2, 2, 1]), so a caller can render each type with its own
+## count rather than one type times the total -- enemy_count remains the
+## flat sum across every group, for a caller that only wants the aggregate.
+## The legacy single-"enemy" template (the three sandbox expeditions) still
+## resolves to exactly one group, so both arrays stay single-element there.
+## Returns {} for an unknown party or encounter id. When has_intel is false,
+## danger_tier is 0 -- a value no real expedition difficulty ever takes
+## (difficulties start at 1) -- meaning "not yet known", not "tier zero";
+## callers must gate on has_intel before rendering danger_tier.
 func get_party_scouting_intel(party_id: String, encounter_id: String) -> Dictionary:
 	var party := get_party(party_id)
 	var expedition := get_expedition(encounter_id)
@@ -2395,23 +2401,29 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 
 	if has_scout and within_range:
 		var enemy_types: Array[String] = []
+		var enemy_counts: Array[int] = []
 		var enemy_count := 0
 		# Authored nodes (see EXPEDITIONS' "enemies" field) can field more
-		# than one species; every group's own name_key is reported and their
-		# counts summed, instead of the legacy single "enemy" + "count"
+		# than one species; every group's own name_key and count are reported
+		# in parallel arrays, instead of the legacy single "enemy" + "count"
 		# template's one-species read below.
 		if expedition.has("enemies"):
 			for group in expedition.enemies:
 				var stats: Dictionary = group.get("enemy", {})
+				var count: int = int(group.get("count", 1))
 				enemy_types.append(tr(str(stats.get("name_key", ""))))
-				enemy_count += int(group.get("count", 1))
+				enemy_counts.append(count)
+				enemy_count += count
 		else:
 			var enemy: Dictionary = expedition.get("enemy", {})
+			var count: int = int(enemy.get("count", 0))
 			enemy_types.append(tr(str(enemy.get("name_key", ""))))
-			enemy_count = int(enemy.get("count", 0))
+			enemy_counts.append(count)
+			enemy_count = count
 		return {
 			"has_intel": true,
 			"enemy_types": enemy_types,
+			"enemy_counts": enemy_counts,
 			"enemy_count": enemy_count,
 			"danger_tier": int(expedition.get("difficulty", 1)),
 		}
@@ -2419,6 +2431,7 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 	return {
 		"has_intel": false,
 		"enemy_types": [] as Array[String],
+		"enemy_counts": [] as Array[int],
 		"enemy_count": 0,
 		"danger_tier": 0,
 	}

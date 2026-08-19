@@ -304,6 +304,76 @@ func test_refresh_adventurer_hides_the_stale_recruitment_section() -> void:
 	assert_true(panel.get_node("Content/RecruitButton").disabled)
 
 
+## --- Encounter Scout intel (Step 5 review fixes) ---
+
+
+func _deploy_party_with_scout_at(position: Vector2i) -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_deployed_party_position(position)
+
+
+## Regression for the Step 5 review's Finding 4: refresh_encounter() used to
+## render the static intel.danger_tier, which stays frozen at the
+## encounter's base difficulty forever, while world_map.gd's own marker
+## renders GameSession.get_threat_stars()' dynamic rating -- the two
+## surfaces would disagree once world_turn crosses a THREAT_TURN_INTERVAL
+## boundary. Both must always agree.
+func test_refresh_encounter_renders_the_same_dynamic_threat_stars_as_get_threat_stars() -> void:
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	_deploy_party_with_scout_at(goblin_camp.position)
+	GameSession.world_turn = 1 + GameSession.THREAT_TURN_INTERVAL
+	var panel := _make_panel()
+
+	panel.refresh_encounter(GameSession.FIRST_PARTY_ID, GameSession.GOBLIN_CAMP_ID)
+
+	var expected_stars := "★".repeat(GameSession.get_threat_stars(GameSession.GOBLIN_CAMP_ID))
+	assert_eq(expected_stars, "★★", "Sanity: one threat interval elapsed should add one star over the base difficulty")
+	assert_true(panel.get_node("Content/EncounterDanger").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterDanger").text,
+		tr("information.encounter_danger") % expected_stars,
+		"The info panel's star count must track the same dynamic rating the World Map marker renders"
+	)
+
+
+## Regression for the Step 5 review's Finding 5: refresh_encounter() used to
+## read only intel.enemy_types[0] while pairing it with the summed
+## enemy_count, so a mixed authored formation (like the pre-boss Gatehouse's
+## 2 Hobgoblin Elite / 2 Goblin Archer / 1 Kobold Swarmer) rendered as one
+## type times the total instead of its real per-type breakdown.
+func test_refresh_encounter_shows_the_full_per_type_breakdown_for_a_mixed_authored_formation() -> void:
+	const GATEHOUSE_ID := "obj_preboss_1_borderlands_vanguard"
+	var gatehouse: Dictionary = GameSession.get_expedition(GATEHOUSE_ID)
+	_deploy_party_with_scout_at(gatehouse.position)
+	var panel := _make_panel()
+
+	panel.refresh_encounter(GameSession.FIRST_PARTY_ID, GATEHOUSE_ID)
+
+	var intel := GameSession.get_party_scouting_intel(GameSession.FIRST_PARTY_ID, GATEHOUSE_ID)
+	assert_eq(
+		intel.enemy_types as Array,
+		[tr("battle.enemy.hobgoblin_elite"), tr("battle.enemy.goblin_archer"), tr("battle.enemy.kobold")],
+		"Sanity: the Gatehouse fields three distinct enemy groups"
+	)
+	assert_eq(intel.enemy_counts as Array, [2, 2, 1])
+	var expected_text := "%s, %s, %s" % [
+		tr("information.encounter_enemies") % [tr("battle.enemy.hobgoblin_elite"), 2],
+		tr("information.encounter_enemies") % [tr("battle.enemy.goblin_archer"), 2],
+		tr("information.encounter_enemies") % [tr("battle.enemy.kobold"), 1],
+	]
+	assert_true(panel.get_node("Content/EncounterEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterEnemies").text,
+		expected_text,
+		"Each group must render its own type and count, not one type times the summed total"
+	)
+
+
 func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instead_of_purchasing() -> void:
 	GameSession.gold = 25
 	var candidate_id: String = _template_candidate("warrior_002").id

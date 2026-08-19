@@ -1111,6 +1111,50 @@ func test_defeating_final_boss_routes_to_the_victory_screen() -> void:
 	assert_string_contains(source, "just_won_campaign")
 
 
+## Regression for the Step 5 review's Finding 1: the ordinary go_to_world_
+## map() path merges the battle store into the party before ever landing on
+## a screen the player can act on, but go_to_victory_screen() skipped that
+## merge entirely, leaving the boss's own loot stranded in the transient
+## battle_* store forever (go_to_encampment()'s Continue-button deposit is
+## itself gated on the party no longer being deployed, which it still is
+## right after winning). Unmerged loot also meant has_unsettled_battle_loot()
+## stayed true, so the player could not save immediately after winning the
+## campaign, and the victory summary's own "gold_banked" figure under-
+## reported by omitting the unmerged reward. go_to_victory_screen() must
+## settle everything -- merge into the party's carried store, then all the
+## way into the durable banked totals -- so the screen shown, a save taken
+## from it, and its own stat line all agree.
+func test_go_to_victory_screen_settles_battle_loot_so_saving_is_immediately_possible() -> void:
+	GameSession.reset()
+	GameSession.gold = 100
+	GameSession.battle_reward = 5
+	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.battle_gear = {"dagger_iron": 1}
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.go_to_victory_screen()
+
+	assert_false(
+		GameSession.has_unsettled_battle_loot(),
+		"The boss battle's own loot must be fully settled the instant the victory screen is reached"
+	)
+	assert_true(
+		manager.can_save_current_campaign(),
+		"A save must be possible immediately after the campaign is won"
+	)
+	assert_eq(GameSession.gold, 105, "The battle's own reward must be folded all the way into banked gold")
+	assert_eq(
+		int(GameSession.get_campaign_victory_summary().get("gold_banked", 0)), 105,
+		"The victory summary's gold figure must reflect the merged total, not the pre-victory bank alone"
+	)
+	assert_eq(GameSession.battle_reward, 0)
+	assert_eq(GameSession.battle_mana_crystals, {})
+	assert_eq(GameSession.battle_gear, {})
+	assert_eq(GameSession.mana_crystals, {1: 1})
+	assert_eq(GameSession.banked_gear, {"dagger_iron": 1})
+
+
 ## --- Save/load wrappers (Step 2 -- see docs/plans/2026-08-10-initial- ------
 ## --- campaign-and-automation/02-atomic-save-repository.md). These tests ---
 ## --- only prove GameManager delegates to an injectable SaveRepository ----

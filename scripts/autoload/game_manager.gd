@@ -352,7 +352,22 @@ func go_to_battle_result(summary: Dictionary) -> Error:
 ## shows is durable GameSession state by the time this is called (see
 ## GameSession.get_campaign_victory_summary()), read directly rather than
 ## snapshotted here.
+##
+## Unlike the ordinary battle-result path, this route also fully settles the
+## boss battle's loot straight into the party's banked totals -- merge_
+## battle_loot_into_party() (the same merge go_to_world_map() performs) folds
+## the battle store into the party's carried pending_* store, then deposit_
+## pending_reward() (normally gated behind go_to_encampment()'s "party is
+## home" check, called directly here instead) folds that into the durable
+## gold/banked_gear/mana_crystals totals unconditionally -- the campaign is
+## over, so there is no more "carried vs. banked" distinction left to
+## preserve. This clears has_unsettled_battle_loot() immediately, so
+## can_save_current_campaign() is true the instant the boss falls, and
+## get_campaign_victory_summary()'s "gold_banked" figure reflects the full
+## merged total rather than under-reporting it.
 func go_to_victory_screen() -> Error:
+	GameSession.merge_battle_loot_into_party()
+	GameSession.deposit_pending_reward()
 	_clear_detail_context()
 	return _change_scene(VICTORY_SCREEN_SCENE)
 
