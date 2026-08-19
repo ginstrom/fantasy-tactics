@@ -54,7 +54,7 @@ func test_selected_healthy_player_shows_a_green_bar_and_no_badge() -> void:
 	battlefield.grid._select_unit(warrior)
 
 	var panel := _panel(battlefield)
-	assert_eq(_selected_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_HEALTHY])
+	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
 	assert_false(_selected_badge(panel).visible)
 
 
@@ -70,9 +70,9 @@ func test_selected_player_at_fifty_percent_health_shows_the_wounded_bar_and_badg
 	battlefield.grid._select_unit(warrior)
 
 	var panel := _panel(battlefield)
-	assert_eq(_selected_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_WOUNDED])
+	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_WOUNDED])
 	assert_true(_selected_badge(panel).visible)
-	assert_eq(_selected_badge(panel).text, UnitInfoPanelScript.WOUND_BADGE_GLYPHS[UnitInfoPanelScript.TIER_WOUNDED])
+	assert_eq(_selected_badge(panel).text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_WOUNDED])
 	assert_almost_eq(_selected_fill(panel).size.x, UnitInfoPanelScript.HEALTH_BAR_WIDTH * 0.5, 0.01)
 
 
@@ -88,9 +88,9 @@ func test_selected_player_at_twenty_percent_health_shows_the_critical_bar_badge_
 	battlefield.grid._select_unit(warrior)
 
 	var panel := _panel(battlefield)
-	assert_eq(_selected_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_CRITICAL])
+	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])
 	assert_true(_selected_badge(panel).visible)
-	assert_eq(_selected_badge(panel).text, UnitInfoPanelScript.WOUND_BADGE_GLYPHS[UnitInfoPanelScript.TIER_CRITICAL])
+	assert_eq(_selected_badge(panel).text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_CRITICAL])
 	assert_not_null(panel._selected_pulse_tween, "Critical tier must start a pulse tween on the bar")
 	assert_true(is_instance_valid(panel._selected_pulse_tween) and panel._selected_pulse_tween.is_valid())
 
@@ -108,6 +108,57 @@ func test_selected_bar_stops_pulsing_once_healed_back_above_the_critical_band() 
 	battlefield._on_board_changed()
 
 	assert_null(_panel(battlefield)._selected_pulse_tween)
+
+
+## Un-hovering a Critical-HP unit hides the HoveredSection without ever
+## calling _populate_hovered()/_update_health_visual() again -- the looping
+## pulse tween that section started must be killed here too (update_panel()'s
+## show_hovered == false path), not left running indefinitely on the now-
+## hidden shared Fill node until some later hover happens to touch it again.
+func test_hovered_bar_pulse_tween_is_killed_when_the_unit_is_unhovered() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.max_health = 100
+	goblin.health = 10  # Critical band
+
+	battlefield.grid._set_hovered_unit(goblin)
+	var panel := _panel(battlefield)
+	var tween: Tween = panel._hovered_pulse_tween
+	assert_not_null(tween, "Critical tier must start a pulse tween on the hovered bar")
+	assert_true(is_instance_valid(tween) and tween.is_valid())
+
+	battlefield.grid._set_hovered_unit(null)
+
+	assert_null(panel._hovered_pulse_tween, "The panel must drop its reference to the killed tween")
+	assert_true(
+		not is_instance_valid(tween) or not tween.is_valid(),
+		"The old pulse tween must be killed, not merely orphaned, once un-hovered"
+	)
+
+
+## Same cleanup as above, for the selected section becoming deselected
+## (show_selected == false path).
+func test_selected_bar_pulse_tween_is_killed_when_the_unit_is_deselected() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	warrior.max_health = 100
+	warrior.health = 10  # Critical band
+
+	battlefield.grid._select_unit(warrior)
+	var panel := _panel(battlefield)
+	var tween: Tween = panel._selected_pulse_tween
+	assert_not_null(tween, "Critical tier must start a pulse tween on the selected bar")
+	assert_true(is_instance_valid(tween) and tween.is_valid())
+
+	battlefield.grid._select_unit(null)
+
+	assert_null(panel._selected_pulse_tween, "The panel must drop its reference to the killed tween")
+	assert_true(
+		not is_instance_valid(tween) or not tween.is_valid(),
+		"The old pulse tween must be killed, not merely orphaned, once deselected"
+	)
 
 
 ## An enemy's hovered bar must never leak more precision than the existing
@@ -158,7 +209,7 @@ func test_hovered_unit_at_zero_health_shows_the_slain_badge() -> void:
 
 	var badge := _hovered_badge(_panel(battlefield))
 	assert_true(badge.visible)
-	assert_eq(badge.text, UnitInfoPanelScript.WOUND_BADGE_GLYPHS[UnitInfoPanelScript.TIER_SLAIN])
+	assert_eq(badge.text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_SLAIN])
 
 
 ## Both halves of the panel update immediately on damage/heal -- the same
@@ -177,12 +228,12 @@ func test_hovered_and_selected_bars_update_immediately_on_damage() -> void:
 	goblin.health = 100
 	battlefield.grid._select_unit(warrior)
 	battlefield.grid._set_hovered_unit(goblin)
-	assert_eq(_selected_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_HEALTHY])
-	assert_eq(_hovered_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_HEALTHY])
+	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
+	assert_eq(_hovered_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
 
 	warrior.health = 1
 	goblin.health = 10  # 10% of 100 -- Critical band
 	battlefield._on_board_changed()
 
-	assert_eq(_selected_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_CRITICAL])
-	assert_eq(_hovered_fill(panel).color, UnitInfoPanelScript.HEALTH_BAR_COLORS[UnitInfoPanelScript.TIER_CRITICAL])
+	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])
+	assert_eq(_hovered_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])

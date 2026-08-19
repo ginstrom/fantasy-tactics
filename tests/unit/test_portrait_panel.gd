@@ -35,7 +35,7 @@ func test_a_healthy_member_shows_a_green_bar_and_no_wound_badge() -> void:
 	battlefield.portrait_panel.refresh()
 
 	var row := _first_row(battlefield)
-	assert_eq(_fill(row).color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_HEALTHY])
+	assert_eq(_fill(row).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
 	assert_false(_badge(row).visible)
 
 
@@ -51,9 +51,9 @@ func test_a_member_at_exactly_fifty_percent_health_shows_the_wounded_bar_and_bad
 	battlefield.portrait_panel.refresh()
 
 	var row := _first_row(battlefield)
-	assert_eq(_fill(row).color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_WOUNDED])
+	assert_eq(_fill(row).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_WOUNDED])
 	assert_true(_badge(row).visible)
-	assert_eq(_badge(row).text, PortraitPanelScript.WOUND_BADGE_GLYPHS[PortraitPanelScript.WOUND_TIER_WOUNDED])
+	assert_eq(_badge(row).text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_WOUNDED])
 
 
 ## 51% must stay Healthy -- confirms the Wounded band's inclusive edge is
@@ -68,7 +68,7 @@ func test_a_member_at_fifty_one_percent_health_stays_in_the_healthy_band() -> vo
 	battlefield.portrait_panel.refresh()
 
 	var row := _first_row(battlefield)
-	assert_eq(_fill(row).color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_HEALTHY])
+	assert_eq(_fill(row).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
 	assert_false(_badge(row).visible)
 
 
@@ -85,9 +85,9 @@ func test_a_member_at_twenty_percent_health_shows_the_critical_bar_badge_and_pul
 
 	var row := _first_row(battlefield)
 	var fill := _fill(row)
-	assert_eq(fill.color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_CRITICAL])
+	assert_eq(fill.color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])
 	assert_true(_badge(row).visible)
-	assert_eq(_badge(row).text, PortraitPanelScript.WOUND_BADGE_GLYPHS[PortraitPanelScript.WOUND_TIER_CRITICAL])
+	assert_eq(_badge(row).text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_CRITICAL])
 	assert_true(fill.get_meta("pulsing", false), "A Critical-tier bar must be flagged for the pulse animation")
 
 
@@ -101,7 +101,7 @@ func test_a_defeated_member_shows_the_slain_badge() -> void:
 
 	var badge := _badge(_first_row(battlefield))
 	assert_true(badge.visible)
-	assert_eq(badge.text, PortraitPanelScript.WOUND_BADGE_GLYPHS[PortraitPanelScript.WOUND_TIER_SLAIN])
+	assert_eq(badge.text, WoundVisuals.WOUND_BADGE_GLYPHS[WoundVisuals.TIER_SLAIN])
 
 
 ## Damage applied mid-battle must be reflected immediately once the panel is
@@ -114,9 +114,9 @@ func test_refresh_updates_the_bar_and_badge_immediately_after_damage() -> void:
 	warrior.max_health = 10
 	warrior.health = 10
 	battlefield.portrait_panel.refresh()
-	assert_eq(_fill(_first_row(battlefield)).color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_HEALTHY])
+	assert_eq(_fill(_first_row(battlefield)).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
 
 	warrior.health = 1
 	battlefield.portrait_panel.refresh()
 
-	assert_eq(_fill(_first_row(battlefield)).color, PortraitPanelScript.HEALTH_BAR_COLORS[PortraitPanelScript.WOUND_TIER_CRITICAL])
+	assert_eq(_fill(_first_row(battlefield)).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])

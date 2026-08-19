@@ -5,34 +5,14 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const HEALTHY_THRESHOLD := 0.66
 const WOUNDED_THRESHOLD := 0.33
 
-## Visual wound-tier thresholds (Technical Design §3, docs/plans/2026-08-18-
-## core-loop-and-engagement/07-visual-perspective-and-tactical-polish.md):
-## Healthy 100-51% HP, Wounded 50-21%, Critical 20-1%, Slain 0. Deliberately
-## a second, distinct scale from HEALTHY_THRESHOLD/WOUNDED_THRESHOLD above
-## (66%/33%), which back the pre-existing "battle.unit_info.wounded"/
-## "badly_wounded" enemy-only text (_wound_tier_key()) and are left
-## untouched -- this is the new health-bar-color/badge tier, not a second
-## text system.
-const TIER_HEALTHY := "healthy"
-const TIER_WOUNDED := "wounded"
-const TIER_CRITICAL := "critical"
-const TIER_SLAIN := "slain"
-const WOUNDED_HEALTH_FRACTION := 0.50
-const CRITICAL_HEALTH_FRACTION := 0.20
+## The visual wound-tier thresholds/colors/badge glyphs/pulse timing and the
+## tier-classification function itself live in wound_visuals.gd, shared with
+## portrait_panel.gd. Deliberately a second, distinct scale from
+## HEALTHY_THRESHOLD/WOUNDED_THRESHOLD above (66%/33%), which back the
+## pre-existing "battle.unit_info.wounded"/"badly_wounded" enemy-only text
+## (_wound_tier_key()) and are left untouched -- this is the new health-bar-
+## color/badge tier, not a second text system.
 const HEALTH_BAR_WIDTH := 180.0
-const HEALTH_BAR_COLORS := {
-	TIER_HEALTHY: Color(0.3, 0.8, 0.3),
-	TIER_WOUNDED: Color(0.9, 0.65, 0.15),
-	TIER_CRITICAL: Color(0.85, 0.15, 0.15),
-}
-## Placeholder glyph badges (this step has design latitude on exact
-## iconography): a diamond stands in for a blood drop (Wounded), a double
-## exclamation for severe trauma (Critical), and a skull for Slain.
-const WOUND_BADGE_GLYPHS := {
-	TIER_WOUNDED: "♦",
-	TIER_CRITICAL: "‼",
-	TIER_SLAIN: "☠",
-}
 ## An enemy's hovered health bar must never leak more precision than the
 ## existing text tier already withholds (_wound_tier_key() only ever says
 ## "Healthy"/"Wounded"/"Badly Wounded", never a number) -- so unlike the
@@ -40,12 +20,10 @@ const WOUND_BADGE_GLYPHS := {
 ## numbers), a hovered enemy's bar fills to one of these fixed, tier-only
 ## widths rather than its true health fraction. See _update_health_visual().
 const ENEMY_BAR_DISPLAY_FRACTIONS := {
-	TIER_HEALTHY: 1.0,
-	TIER_WOUNDED: 0.5,
-	TIER_CRITICAL: 0.15,
+	WoundVisuals.TIER_HEALTHY: 1.0,
+	WoundVisuals.TIER_WOUNDED: 0.5,
+	WoundVisuals.TIER_CRITICAL: 0.15,
 }
-const PULSE_MIN_ALPHA := 0.35
-const PULSE_DURATION := 0.5
 
 ## Cardinal Unit.facing -> its translation key (see translations/en.tres'
 ## battle.facing.* entries). Shown in both the hovered and selected sections
@@ -102,11 +80,21 @@ func update_panel(hovered_unit, selected_unit) -> void:
 	hovered_section.visible = show_hovered
 	if show_hovered:
 		_populate_hovered(hovered_unit)
+	else:
+		# Un-hovering (or hovering the already-selected unit) hides this
+		# section without going through _populate_hovered()/
+		# _update_health_visual() -- kill any looping Critical-tier pulse
+		# tween so it doesn't keep animating a now-hidden fill node until
+		# some later hover happens to touch this same shared node again.
+		_hovered_pulse_tween = WoundVisuals.apply_pulse(hovered_health_fill, false, _hovered_pulse_tween)
 
 	var show_selected: bool = selected_unit != null
 	selected_section.visible = show_selected
 	if show_selected:
 		_populate_selected(selected_unit)
+	else:
+		# Same cleanup as the hovered branch above, for deselection.
+		_selected_pulse_tween = WoundVisuals.apply_pulse(selected_health_fill, false, _selected_pulse_tween)
 
 	empty_label.visible = not show_hovered and not show_selected
 
@@ -189,29 +177,15 @@ func _wound_tier_key(unit) -> String:
 	return "battle.unit_info.badly_wounded"
 
 
-## The new Technical Design §3 visual tier -- see the const block's own doc
-## comment for why this uses different cutoffs than _wound_tier_key() above.
-func _visual_wound_tier(unit) -> String:
-	if unit.health <= 0:
-		return TIER_SLAIN
-	if unit.max_health <= 0:
-		return TIER_CRITICAL
-	var fraction: float = float(unit.health) / float(unit.max_health)
-	if fraction <= CRITICAL_HEALTH_FRACTION:
-		return TIER_CRITICAL
-	if fraction <= WOUNDED_HEALTH_FRACTION:
-		return TIER_WOUNDED
-	return TIER_HEALTHY
-
-
 ## Drives one bar+badge pair from a unit's current wound tier. exact_fraction
 ## selects between the true health fraction (selected/player, or a hovered
 ## ally) and the coarse, tier-only display width (a hovered enemy -- see
 ## ENEMY_BAR_DISPLAY_FRACTIONS's own doc comment). Manages this bar's pulse
-## tween itself (Critical only) and returns the current Tween (or null) so
-## the caller can hold onto it for the next call to kill cleanly.
+## tween itself (Critical only, via WoundVisuals.apply_pulse()) and returns
+## the current Tween (or null) so the caller can hold onto it for the next
+## call to kill cleanly.
 func _update_health_visual(fill: ColorRect, badge: Label, unit, exact_fraction: bool, existing_tween: Tween) -> Tween:
-	var tier := _visual_wound_tier(unit)
+	var tier := WoundVisuals.tier(unit.health, unit.max_health)
 	var fraction: float
 	if unit.health <= 0:
 		fraction = 0.0
@@ -220,24 +194,7 @@ func _update_health_visual(fill: ColorRect, badge: Label, unit, exact_fraction: 
 	else:
 		fraction = float(ENEMY_BAR_DISPLAY_FRACTIONS.get(tier, 1.0))
 	fill.size.x = HEALTH_BAR_WIDTH * fraction
-	fill.color = HEALTH_BAR_COLORS.get(tier, HEALTH_BAR_COLORS[TIER_HEALTHY])
-	badge.visible = tier != TIER_HEALTHY
-	badge.text = WOUND_BADGE_GLYPHS.get(tier, "")
-	return _apply_pulse(fill, tier == TIER_CRITICAL, existing_tween)
-
-
-## Starts (Critical) or stops (every other tier) a looping alpha-pulse tween
-## on a health bar fill. Always kills whatever tween this bar had before, so
-## repeated update_panel() calls (fired on every board_changed) never stack
-## duplicate tweens on the same node.
-func _apply_pulse(fill: ColorRect, active: bool, existing_tween: Tween) -> Tween:
-	if existing_tween != null and is_instance_valid(existing_tween):
-		existing_tween.kill()
-	fill.modulate = Color(1, 1, 1, 1)
-	if not active or not fill.is_inside_tree():
-		return null
-	var tween := fill.create_tween()
-	tween.set_loops()
-	tween.tween_property(fill, "modulate:a", PULSE_MIN_ALPHA, PULSE_DURATION)
-	tween.tween_property(fill, "modulate:a", 1.0, PULSE_DURATION)
-	return tween
+	fill.color = WoundVisuals.HEALTH_BAR_COLORS.get(tier, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_HEALTHY])
+	badge.visible = tier != WoundVisuals.TIER_HEALTHY
+	badge.text = WoundVisuals.WOUND_BADGE_GLYPHS.get(tier, "")
+	return WoundVisuals.apply_pulse(fill, tier == WoundVisuals.TIER_CRITICAL, existing_tween)
