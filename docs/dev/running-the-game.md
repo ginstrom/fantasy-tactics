@@ -31,6 +31,7 @@ manual testing, and capture a screenshot of every known scene/UI state.
 |---|---|---|
 | `make: godot: Command not found` | `godot` isn't on `PATH` | Install Godot 4.7.1 and confirm with `godot --version` |
 | Window opens then immediately closes | A script failed to compile | Run `make editor` instead and check the Output/Debugger panel for the error |
+| Music, SFX, or Master volume/mute controls have no audible or logged effect | `project.godot`'s `[audio]` section (`buses/default_bus_layout="res://default_bus_layout.tres"`) is missing or wrong, so `AudioServer` never registers the Music/SFX buses `AudioManager` expects | Confirm the `[audio]` section in `project.godot` points at `res://default_bus_layout.tres`, then run `godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_project_audio_contract.gd -gexit` — it reads `project.godot` and the layout resource directly and fails if either is wrong. Also check the Output panel at startup for `AudioManager: required audio bus '...' is missing from AudioServer` (emitted by `AudioManager.validate_buses()` in `_ready()`) naming the specific missing bus |
 
 ## Jump to a specific scene or state (debug menu)
 

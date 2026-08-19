@@ -166,3 +166,75 @@ func test_stop_music_clears_the_current_track() -> void:
 	AudioManager.stop_music(0.0)
 
 	assert_eq(AudioManager.current_music_track_id, "")
+
+
+## --- Task 2: Bus Validation (docs/plans/2026-08-19-core-loop-verification-
+## remediation/03-audio-bus-contract.md) ---------------------------------------
+
+func test_validate_buses_reports_every_missing_bus_name_and_emits_an_actionable_error() -> void:
+	# "NotARealBus"/"AlsoNotReal" are provably absent -- no default_bus_layout.tres
+	# entry or engine built-in bus is ever named this -- so this proves the
+	# helper actually detects a genuinely missing bus, unlike a check against
+	# today's real BUS_NAMES, which already all exist and would pass
+	# vacuously even if the detection logic were broken.
+	var missing := AudioManager.validate_buses(["Master", "NotARealBus", "AlsoNotReal"])
+
+	assert_eq(missing, ["NotARealBus", "AlsoNotReal"], "must report every missing bus, not just the first")
+	assert_push_error("NotARealBus")
+	assert_push_error("AlsoNotReal")
+
+
+func test_validate_buses_reports_nothing_missing_and_does_not_error_for_a_bus_that_exists() -> void:
+	var missing := AudioManager.validate_buses(["Master"])
+
+	assert_eq(missing, [])
+
+
+func test_validate_buses_with_the_real_bus_names_reports_nothing_missing() -> void:
+	# Exercises the exact call _ready() makes on startup (BUS_NAMES against
+	# the live AudioServer). Passes only because project.godot's
+	# [audio] buses/default_bus_layout and default_bus_layout.tres both
+	# correctly declare Master/Music/SFX -- the same regression
+	# test_project_audio_contract.gd guards structurally by reading
+	# project.godot itself.
+	assert_eq(AudioManager.validate_buses(AudioManager.BUS_NAMES), [])
+
+
+## --- Task 3: Independent Bus Controls (docs/plans/2026-08-19-core-loop-
+## verification-remediation/03-audio-bus-contract.md) --------------------------
+
+func test_muting_music_leaves_sfx_unmuted() -> void:
+	# Assert both buses actually resolved to real AudioServer indices first --
+	# without this, a silently-missing bus would make the mute calls below
+	# no-op (_apply_bus_mute()'s `if idx == -1: return`) and the assertions
+	# past that point would pass vacuously instead of proving independence.
+	assert_ne(AudioServer.get_bus_index("Music"), -1, "Music bus must exist for this test to be meaningful")
+	assert_ne(AudioServer.get_bus_index("SFX"), -1, "SFX bus must exist for this test to be meaningful")
+
+	AudioManager.set_bus_mute("Music", true)
+
+	assert_true(AudioManager.is_bus_muted("Music"))
+	assert_false(AudioManager.is_bus_muted("SFX"), "Muting Music must not mute SFX")
+	assert_false(AudioServer.is_bus_mute(AudioServer.get_bus_index("SFX")))
+
+
+func test_muting_sfx_leaves_music_unmuted() -> void:
+	assert_ne(AudioServer.get_bus_index("Music"), -1, "Music bus must exist for this test to be meaningful")
+	assert_ne(AudioServer.get_bus_index("SFX"), -1, "SFX bus must exist for this test to be meaningful")
+
+	AudioManager.set_bus_mute("SFX", true)
+
+	assert_true(AudioManager.is_bus_muted("SFX"))
+	assert_false(AudioManager.is_bus_muted("Music"), "Muting SFX must not mute Music")
+	assert_false(AudioServer.is_bus_mute(AudioServer.get_bus_index("Music")))
+
+
+func test_setting_music_volume_does_not_change_sfx_volume() -> void:
+	assert_ne(AudioServer.get_bus_index("Music"), -1, "Music bus must exist for this test to be meaningful")
+	assert_ne(AudioServer.get_bus_index("SFX"), -1, "SFX bus must exist for this test to be meaningful")
+
+	AudioManager.set_bus_volume("SFX", 1.0)
+	AudioManager.set_bus_volume("Music", 0.2)
+
+	assert_almost_eq(AudioManager.get_bus_volume("Music"), 0.2, 0.01)
+	assert_almost_eq(AudioManager.get_bus_volume("SFX"), 1.0, 0.01, "Changing Music volume must not affect SFX volume")

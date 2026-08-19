@@ -62,6 +62,8 @@ var _music_tween: Tween
 
 
 func _ready() -> void:
+	validate_buses(BUS_NAMES)
+
 	for i in range(SFX_PLAYER_POOL_SIZE):
 		var player := AudioStreamPlayer.new()
 		player.bus = "SFX"
@@ -184,6 +186,33 @@ func is_bus_muted(bus_name: String) -> bool:
 	if idx == -1:
 		return false
 	return AudioServer.is_bus_mute(idx)
+
+
+## Startup diagnostic (docs/plans/2026-08-19-core-loop-verification-
+## remediation/03-audio-bus-contract.md Task 2): reports every name in
+## `bus_names` that AudioServer has no bus for, and -- unlike
+## _apply_bus_volume()/_apply_bus_mute()'s existing `if idx == -1: return`,
+## which silently no-ops -- emits one actionable push_error per missing
+## entry so a broken bus layout is loud at startup instead of "volume/mute
+## sliders just do nothing". _ready() calls this with BUS_NAMES.
+##
+## Takes an explicit bus-name list rather than always reading BUS_NAMES so a
+## test can prove this catches a genuinely-missing bus by name (e.g. a name
+## that is deliberately not registered) without mutating the live
+## AudioServer bus list every other test in this file shares.
+##
+## Never creates a bus itself: default_bus_layout.tres, wired via
+## project.godot's [audio] buses/default_bus_layout, remains the single
+## source of truth for what buses exist -- this only diagnoses and reports.
+func validate_buses(bus_names: Array[String]) -> Array[String]:
+	var missing: Array[String] = []
+	for bus_name in bus_names:
+		if AudioServer.get_bus_index(bus_name) == -1:
+			missing.append(bus_name)
+			push_error(
+				"AudioManager: required audio bus '%s' is missing from AudioServer -- check project.godot's [audio] buses/default_bus_layout and default_bus_layout.tres" % bus_name
+			)
+	return missing
 
 
 func _apply_bus_volume(bus_name: String, volume_linear: float) -> void:
