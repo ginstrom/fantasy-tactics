@@ -4,6 +4,7 @@ extends CanvasLayer
 @onready var load_button: Button = $Center/VBox/LoadButton
 @onready var status_label: Label = $Center/VBox/StatusLabel
 @onready var load_confirm_dialog: PanelContainer = $LoadConfirmDialog
+@onready var audio_settings: Control = $AudioSettings
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func refresh() -> void:
 	load_button.disabled = not GameManager.has_valid_save()
 	status_label.visible = false
 	load_confirm_dialog.visible = false
+	audio_settings.visible = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -35,6 +37,17 @@ func _on_return_pressed() -> void:
 
 func _on_world_map_pressed() -> void:
 	GameManager.go_to_world_map_from_game_menu()
+
+
+## Toggles the embedded Audio Settings panel (see scenes/ui/audio_settings.tscn)
+## open/closed rather than routing to a separate scene -- every control
+## reachable here drives AudioManager directly, never the session state or
+## the filesystem, so there is nothing about it that needs GameManager's
+## own routing.
+func _on_audio_pressed() -> void:
+	audio_settings.visible = not audio_settings.visible
+	if audio_settings.visible:
+		audio_settings.refresh()
 
 
 func _on_save_pressed() -> void:

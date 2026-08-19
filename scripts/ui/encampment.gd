@@ -72,6 +72,7 @@ func _ready() -> void:
 	first_party_message.text = tr("encampment.first_party.message")
 	first_party_create_button.text = tr("encampment.first_party.create")
 	first_party_dismiss_button.text = tr("encampment.first_party.dismiss")
+	AudioManager.play_music("music_encampment")
 	refresh()
 
 

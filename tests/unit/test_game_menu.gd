@@ -3,6 +3,11 @@ extends GutTest
 const GameMenuScene := preload("res://scenes/ui/game_menu.tscn")
 const SaveRepositoryScript := preload("res://scripts/save/save_repository.gd")
 const TEST_SAVE_PATH := "user://test_game_menu_campaign.json"
+## The Audio Settings tests below call AudioManager.set_bus_volume()/
+## set_bus_mute(), which persist to disk -- point that write at a throwaway
+## path for this file's whole run, mirroring TEST_SAVE_PATH's own reasoning
+## just above, so no test run ever touches the real audio-settings.json.
+const TEST_AUDIO_SETTINGS_PATH := "user://test_game_menu_audio_settings.json"
 
 
 func _escape_event() -> InputEventAction:
@@ -16,6 +21,8 @@ func before_each() -> void:
 	GameManager.save_repository = SaveRepositoryScript.new(TEST_SAVE_PATH)
 	GameManager.close_game_menu()
 	GameSession.reset()
+	AudioManager.settings_path = TEST_AUDIO_SETTINGS_PATH
+	AudioManager.reset()
 
 
 func after_each() -> void:
@@ -24,6 +31,10 @@ func after_each() -> void:
 		DirAccess.remove_absolute(TEST_SAVE_PATH)
 	GameManager.close_game_menu()
 	GameSession.reset()
+	AudioManager.reset()
+	AudioManager.settings_path = AudioManager.DEFAULT_SETTINGS_PATH
+	if FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH):
+		DirAccess.remove_absolute(TEST_AUDIO_SETTINGS_PATH)
 
 
 func test_load_is_disabled_without_a_saved_game() -> void:
@@ -277,3 +288,108 @@ func test_game_menu_source_never_touches_the_filesystem_repository_or_game_sessi
 # Quit is intentionally not click-tested here: GameManager.quit_game() calls
 # get_tree().quit(), which would terminate the test run. Its disabled state
 # is covered by test_return_world_map_and_quit_are_always_enabled() above.
+
+
+## --- Audio Settings (Task 4, docs/plans/2026-08-18-core-loop-and-engagement/
+## 08-audio-system-and-soundscape.md) --- the panel is embedded directly in
+## this scene (scenes/ui/audio_settings.tscn, instanced as the "AudioSettings"
+## node) and toggled by the Audio button, mirroring LoadConfirmDialog's own
+## show/hide pattern. Its sliders/mute toggles drive AudioManager directly
+## (see scripts/ui/audio_settings.gd) -- these tests only prove the Game
+## Menu's own wiring (button toggles the panel; the panel's controls really
+## do move AudioManager's bus state) rather than re-testing AudioManager
+## itself (see tests/unit/test_audio_manager.gd for that).
+
+func test_audio_settings_panel_is_hidden_until_the_audio_button_is_pressed() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	assert_false(menu.get_node("AudioSettings").visible)
+
+
+func test_pressing_the_audio_button_shows_the_audio_settings_panel() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	assert_true(menu.get_node("AudioSettings").visible)
+
+
+func test_pressing_the_audio_button_again_hides_the_panel() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	assert_false(menu.get_node("AudioSettings").visible)
+
+
+func test_refresh_hides_the_audio_settings_panel_after_it_was_shown() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	assert_true(menu.get_node("AudioSettings").visible, "Sanity check: Audio should show the panel")
+
+	menu.refresh()
+
+	assert_false(menu.get_node("AudioSettings").visible)
+
+
+func test_moving_the_master_slider_in_the_game_menu_adjusts_the_audio_manager_bus() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/MasterRow/MasterSlider")
+
+	slider.value = 0.4
+
+	assert_almost_eq(AudioManager.get_bus_volume("Master"), 0.4, 0.01)
+
+
+func test_moving_the_music_slider_in_the_game_menu_adjusts_the_audio_manager_bus() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/MusicRow/MusicSlider")
+
+	slider.value = 0.7
+
+	assert_almost_eq(AudioManager.get_bus_volume("Music"), 0.7, 0.01)
+
+
+func test_moving_the_sfx_slider_in_the_game_menu_adjusts_the_audio_manager_bus() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/SFXRow/SFXSlider")
+
+	slider.value = 0.1
+
+	assert_almost_eq(AudioManager.get_bus_volume("SFX"), 0.1, 0.01)
+
+
+func test_toggling_the_master_mute_button_in_the_game_menu_mutes_the_audio_manager_bus() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var mute_button: CheckButton = menu.get_node("AudioSettings/VBox/MasterRow/MasterMuteButton")
+
+	mute_button.button_pressed = true
+
+	assert_true(AudioManager.is_bus_muted("Master"))
+
+
+func test_opening_the_audio_panel_shows_the_audio_managers_current_bus_state() -> void:
+	AudioManager.set_bus_volume("SFX", 0.25)
+	AudioManager.set_bus_mute("Music", true)
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	var sfx_slider: HSlider = menu.get_node("AudioSettings/VBox/SFXRow/SFXSlider")
+	var music_mute_button: CheckButton = menu.get_node("AudioSettings/VBox/MusicRow/MusicMuteButton")
+	assert_almost_eq(sfx_slider.value, 0.25, 0.01)
+	assert_true(music_mute_button.button_pressed)

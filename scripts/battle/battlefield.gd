@@ -3,6 +3,12 @@ extends Node2D
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 const SIDE_NAME_KEYS := {0: "battle.side.player", 1: "battle.side.enemy"}
 const ENEMY_TURN_BEAT_SECONDS := 0.5
+## GameSession.CAMPAIGN_OBJECTIVES' final-boss node id (see encampment.gd's
+## own CAMPAIGN_OBJECTIVES dict for the same literal) -- no dedicated
+## GameSession constant exists for it (unlike GOBLIN_CAMP_ID/ORC_OUTPOST_ID/
+## RUINED_FORTRESS_ID), so it is named here the same way encampment.gd
+## already references it directly.
+const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 
 @onready var hint: Label = %Hint
 @onready var status: Label = %Status
@@ -86,6 +92,7 @@ func _ready() -> void:
 	# changed event (unlike round_label/action_points_label, which do change
 	# every turn -- see _on_board_changed()).
 	battle_title_label.text = tr("battle.title") % tr(_current_expedition().name_key)
+	AudioManager.play_music(_battle_music_track_id())
 	grid.enemy_defeated.connect(_award_kill_xp)
 	grid.unit_focus_changed.connect(_on_unit_focus_changed)
 	grid.action_mode_changed.connect(_on_action_mode_changed)
@@ -356,6 +363,7 @@ func _show_battle_result(victory: bool) -> void:
 	_battle_resolved = true
 	_set_enemy_turn_in_progress(true)
 	status.text = _victory_message() if victory else tr("battle.result.defeat")
+	AudioManager.play_music("music_victory" if victory else "music_defeat")
 
 
 func _victory_message() -> String:
@@ -372,6 +380,18 @@ func _current_expedition() -> Dictionary:
 	if encounter_id == "":
 		encounter_id = GameSession.GOBLIN_CAMP_ID
 	return GameSession.get_expedition(encounter_id)
+
+
+## The Ogre boss fight gets its own climactic loop; every other battle uses
+## the shared tactical-combat track. Reads GameSession.selected_encounter
+## directly (not _current_expedition(), which resolves through get_expedition()
+## and loses the raw id) with the same empty-selection fallback as
+## _current_expedition() above.
+func _battle_music_track_id() -> String:
+	var encounter_id: String = GameSession.selected_encounter
+	if encounter_id == "":
+		encounter_id = GameSession.GOBLIN_CAMP_ID
+	return "music_boss" if encounter_id == BOSS_ENCOUNTER_ID else "music_battle"
 
 
 func _apply_battle_outcome(victory: bool) -> void:

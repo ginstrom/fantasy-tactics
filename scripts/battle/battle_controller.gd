@@ -760,6 +760,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
+		AudioManager.play_sfx("sfx_unit_death")
 		units.erase(target)
 		# A defeated unit is erased from `units` immediately (freeing its tile
 		# for movement/pathing -- see get_unit_at()'s blocking check, and
@@ -806,6 +807,7 @@ func try_retreat() -> Array[Dictionary]:
 	if input_locked or active_side != Side.PLAYER:
 		return []
 
+	AudioManager.play_sfx("sfx_retreat_horn")
 	var results: Array[Dictionary] = []
 	for unit in units.duplicate():
 		if unit.side != Side.PLAYER or not unit.is_alive():
@@ -995,6 +997,7 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 			selected_unit.mp_remaining -= SPELL_MP_COST
 			last_targeting_failure = {}
 			last_attack_result = {"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target}
+			AudioManager.play_sfx("sfx_spell_bless")
 			return true
 		_:
 			return false
@@ -1430,14 +1433,40 @@ func _floating_text_anchor(unit) -> Vector2:
 	return Vector2(unit.grid_position) * TILE_SIZE + Vector2(TILE_SIZE / 2.0, TILE_SIZE * 0.1)
 
 
+## Combat-feedback type (FloatingTextScript.TYPE_*) -> matching SFX catalog
+## id (docs/plans/2026-08-18-core-loop-and-engagement/
+## 08-audio-system-and-soundscape.md's Sound Effects Catalog). Keyed here
+## rather than duplicated at every _spawn_combat_text() call site, since
+## every combat-feedback event already funnels through that one function.
+const COMBAT_TEXT_SFX_IDS := {
+	FloatingTextScript.TYPE_DAMAGE: "sfx_hit_impact",
+	FloatingTextScript.TYPE_CRITICAL: "sfx_crit_impact",
+	FloatingTextScript.TYPE_MISS: "sfx_miss",
+	FloatingTextScript.TYPE_HEAL: "sfx_spell_heal",
+	FloatingTextScript.TYPE_BLOCKED: "sfx_guard_block",
+}
+
+
 ## Presentation-layer entry point for every combat-feedback event (Technical
 ## Design §2). Always emits combat_text_spawned -- tests build a bare
 ## BattleController via .new() and assert on the signal alone -- and, only
 ## when actually running inside a scene tree (mirrors _draw_units()'s own
 ## is_inside_tree() guard), also drives a pooled FloatingText instance so the
 ## real battlefield shows the animation.
+##
+## The matching SFX (see COMBAT_TEXT_SFX_IDS) plays unconditionally right
+## alongside combat_text_spawned.emit() -- both statements run every time,
+## regardless of tree state or AudioManager's own mute state (muting only
+## silences AudioServer's bus output; it never skips the play_sfx() call
+## itself). That is what keeps the audio and visual/log feedback paths
+## structurally independent: muting one can never suppress the other, since
+## neither is conditioned on the other (see tests/unit/test_battlefield.gd's
+## mute-parity coverage).
 func _spawn_combat_text(pos: Vector2, text: String, type: String) -> void:
 	combat_text_spawned.emit(pos, text, type)
+	var sfx_id: String = COMBAT_TEXT_SFX_IDS.get(type, "")
+	if sfx_id != "":
+		AudioManager.play_sfx(sfx_id)
 	if not is_inside_tree():
 		return
 	_acquire_floating_text().play(pos, text, type)

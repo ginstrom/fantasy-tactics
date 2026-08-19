@@ -19,10 +19,12 @@ var _original_effective_hit_chance_cap: float = -1.0
 
 func before_each() -> void:
 	GameSession.reset()
+	AudioManager.reset()
 
 
 func after_each() -> void:
 	GameSession.reset_injectable_rolls()
+	AudioManager.reset()
 	if _original_effective_hit_chance_cap >= 0.0:
 		GameSession.EFFECTIVE_HIT_CHANCE_CAP = _original_effective_hit_chance_cap
 		_original_effective_hit_chance_cap = -1.0
@@ -3384,3 +3386,86 @@ func test_casting_heal_spawns_green_heal_text_over_the_target() -> void:
 	assert_signal_emitted_with_parameters(
 		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.heal") % 8, "heal"]
 	)
+
+
+## --- Sound Effect Triggers (Task 2, docs/plans/2026-08-18-core-loop-and-
+## engagement/08-audio-system-and-soundscape.md) --- every combat-feedback
+## event that spawns floating text also plays a matching SFX via the same
+## _spawn_combat_text() entry point (see COMBAT_TEXT_SFX_IDS); unit death is
+## its own hook right where try_attack_selected_unit() detects it. A bare
+## (non-tree) controller is sufficient here too -- AudioManager is a real
+## autoload, reachable regardless of whether the controller itself is
+## inside a scene tree.
+
+func test_a_landed_hit_plays_the_hit_impact_sfx() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 2
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(AudioManager.last_sfx_id, "sfx_hit_impact")
+
+
+func test_a_critical_hit_plays_the_crit_impact_sfx() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(AudioManager.last_sfx_id, "sfx_crit_impact")
+
+
+func test_a_missed_attack_plays_the_miss_sfx() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2, 0.5)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(AudioManager.last_sfx_id, "sfx_miss")
+
+
+func test_casting_heal_plays_the_spell_heal_sfx() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+	controller.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+
+	assert_true(controller.try_cast_spell("heal", ally.grid_position))
+
+	assert_eq(AudioManager.last_sfx_id, "sfx_spell_heal")
+
+
+func test_a_kill_plays_the_unit_death_sfx() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 100, 100)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 1)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.defeated)
+	assert_eq(AudioManager.last_sfx_id, "sfx_unit_death")

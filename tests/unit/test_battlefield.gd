@@ -4,6 +4,17 @@ const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
 const PortraitPanelScript := preload("res://scripts/battle/portrait_panel.gd")
+const TEST_AUDIO_SETTINGS_PATH := "user://test_battlefield_audio_settings.json"
+
+
+## The mute-parity tests below call AudioManager.set_bus_mute(), which
+## persists to disk (see AudioManager's own doc comment on why this is a
+## standalone user:// file, not CampaignSnapshot) -- point that write at a
+## throwaway path for this file's whole run, the same way test_game_menu.gd
+## points GameManager.save_repository at a throwaway save path, so no test
+## run ever touches the real audio-settings.json on the machine running it.
+func before_each() -> void:
+	AudioManager.settings_path = TEST_AUDIO_SETTINGS_PATH
 
 
 func after_each() -> void:
@@ -12,6 +23,10 @@ func after_each() -> void:
 	GameSession.reset_injectable_rolls()
 	GameSession.loot_gold_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	GameSession.loot_gear_roll = func() -> float: return randf()
+	AudioManager.reset()
+	AudioManager.settings_path = AudioManager.DEFAULT_SETTINGS_PATH
+	if FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH):
+		DirAccess.remove_absolute(TEST_AUDIO_SETTINGS_PATH)
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
@@ -504,6 +519,64 @@ func test_a_critical_hit_appends_a_critical_log_line_with_amplified_damage() -> 
 		# critical_damage_multiplier).
 		tr("battle.log.critical_hit") % [units.warrior.display_name, units.goblin.display_name, 6]
 	)
+
+
+## --- Mute Parity (Task 5, docs/plans/2026-08-18-core-loop-and-engagement/
+## 08-audio-system-and-soundscape.md) --- proves the audio and visual/log
+## feedback paths are structurally independent, not merely coincidentally
+## both working: battle_controller.gd's _spawn_combat_text() calls
+## combat_text_spawned.emit() and AudioManager.play_sfx() as two
+## unconditional, back-to-back statements (neither gated on the other, and
+## neither gated on AudioManager's mute state -- see that function's own
+## doc comment). Muting Master (which also silences the SFX bus it sends
+## to) must never suppress the combat log line or the floating-text signal.
+
+func test_combat_log_and_floating_text_still_fire_when_the_master_bus_is_muted() -> void:
+	GameSession.reset()
+	AudioManager.set_bus_mute("Master", true)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 3
+	watch_signals(battlefield.grid)
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_true(AudioManager.is_bus_muted("Master"), "Sanity check: the bus must actually be muted for this proof")
+	assert_eq(battlefield.log_list.get_child_count(), 1, "The combat log must still record the hit while muted")
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.hit") % [units.warrior.display_name, units.goblin.display_name, 3]
+	)
+	assert_signal_emitted(battlefield.grid, "combat_text_spawned", "Floating text must still fire while muted")
+	# The SFX call itself is still made (structurally proving audio isn't
+	# what visual feedback depends on) -- AudioServer, not this call site,
+	# is what silences it.
+	assert_eq(AudioManager.last_sfx_id, "sfx_hit_impact")
+
+
+func test_combat_log_and_floating_text_still_fire_when_every_bus_is_muted() -> void:
+	GameSession.reset()
+	AudioManager.set_bus_mute("Master", true)
+	AudioManager.set_bus_mute("Music", true)
+	AudioManager.set_bus_mute("SFX", true)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.99  # force a miss
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1, "A miss must still be logged while every bus is muted")
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.miss") % [units.warrior.display_name, units.goblin.display_name]
+	)
+	assert_eq(AudioManager.last_sfx_id, "sfx_miss")
 
 
 ## --- Flanking combat log presentation (docs/plans/2026-08-18-critical-hits-
@@ -1102,6 +1175,51 @@ func test_show_battle_result_shows_the_defeat_message_and_locks_input() -> void:
 
 	assert_eq(battlefield.status.text, tr("battle.result.defeat"))
 	assert_true(battlefield._battle_resolved)
+
+
+## --- Music State Transitions (Task 3, docs/plans/2026-08-18-core-loop-and-
+## engagement/08-audio-system-and-soundscape.md) --- entering a battle scene
+## requests the tactical combat track (or the boss track for the Ogre fight);
+## resolving the battle requests victory/defeat music. AudioManager.play_music()
+## itself is exercised directly in tests/unit/test_audio_manager.gd -- these
+## only prove Battlefield calls it with the right track id at the right time.
+
+func test_entering_a_battle_requests_the_tactical_combat_music() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+
+	add_child_autofree(battlefield)
+
+	assert_true(AudioManager.is_music_playing("music_battle"))
+
+
+func test_entering_the_ogre_boss_battle_requests_the_boss_music() -> void:
+	GameSession.reset()
+	GameSession.selected_encounter = "obj_boss_borderlands_ogre"
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+
+	add_child_autofree(battlefield)
+
+	assert_true(AudioManager.is_music_playing("music_boss"))
+
+
+func test_a_won_battle_requests_the_victory_music() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._show_battle_result(true)
+
+	assert_true(AudioManager.is_music_playing("music_victory"))
+
+
+func test_a_lost_battle_requests_the_defeat_music() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	battlefield._show_battle_result(false)
+
+	assert_true(AudioManager.is_music_playing("music_defeat"))
 
 
 func test_apply_battle_outcome_true_completes_the_encounter() -> void:

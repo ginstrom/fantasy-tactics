@@ -71,6 +71,7 @@ var hovered_encounter_id: String = ""
 
 
 func _ready() -> void:
+	AudioManager.play_music("music_world_map")
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	party_position = GameSession.get_deployed_party_position()
 	information_panel.party_selected.connect(_on_information_panel_party_selected)

@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/game_menu.gd" id="1_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/audio_settings.tscn" id="2_audio_settings"]
 
 [node name="GameMenu" type="CanvasLayer"]
 layer = 100
@@ -35,6 +36,10 @@ text = "menu.return"
 layout_mode = 2
 text = "menu.world_map"
 
+[node name="AudioButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "menu.audio"
+
 [node name="SaveButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 text = "menu.save"
@@ -52,6 +57,9 @@ layout_mode = 2
 text = ""
 visible = false
 horizontal_alignment = 1
+
+[node name="AudioSettings" parent="." instance=ExtResource("2_audio_settings")]
+visible = false
 
 [node name="LoadConfirmDialog" type="PanelContainer" parent="."]
 visible = false
@@ -93,6 +101,7 @@ text = "menu.load_confirm_load"
 
 [connection signal="pressed" from="Center/VBox/ReturnButton" to="." method="_on_return_pressed"]
 [connection signal="pressed" from="Center/VBox/WorldMapButton" to="." method="_on_world_map_pressed"]
+[connection signal="pressed" from="Center/VBox/AudioButton" to="." method="_on_audio_pressed"]
 [connection signal="pressed" from="Center/VBox/SaveButton" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="Center/VBox/LoadButton" to="." method="_on_load_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
