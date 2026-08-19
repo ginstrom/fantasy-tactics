@@ -1950,25 +1950,25 @@ func get_expedition(encounter_id: String) -> Dictionary:
 
 
 ## Scout strategic reconnaissance (docs/plans/2026-08-18-core-loop-and-
-## engagement/04-cleric-class-and-scout-reconnaissance.md). Danger tier is
-## always disclosed (it already renders as marker stars on the World Map --
-## see world_map.gd's _get_difficulty_stars()); enemy_types/enemy_count are
-## revealed only when party_id's own deployed party contains a Scout AND
-## stands within Manhattan distance 3 (_grid_distance) of the encounter's
-## position. Today's encounter model resolves to exactly one enemy species
-## per active instance (see STAR_ENEMY_COMPOSITIONS/_resolve_enemy_
-## composition), so enemy_types is a single-element array, not a fabricated
-## multi-species breakdown. Never includes reward/loot or in-battle
-## (battlefield-grid) positions -- only what's already visible as this
-## encounter's world-map marker plus, when revealed, its composition.
-## Returns {} for an unknown party or encounter id.
+## engagement/04-cleric-class-and-scout-reconnaissance.md). Per index.md's
+## locked decision, an encounter discloses NOTHING beyond its bare location
+## until party_id's own deployed party contains a Scout AND stands within
+## Manhattan distance 3 (_grid_distance) of the encounter's position -- at
+## that point both danger_tier AND enemy_types/enemy_count become visible
+## together (rewards and battlefield placement are never revealed, at any
+## range). Today's encounter model resolves to exactly one enemy species per
+## active instance (see STAR_ENEMY_COMPOSITIONS/_resolve_enemy_composition),
+## so enemy_types is a single-element array, not a fabricated multi-species
+## breakdown. Returns {} for an unknown party or encounter id. When has_intel
+## is false, danger_tier is 0 -- a value no real expedition difficulty ever
+## takes (difficulties start at 1) -- meaning "not yet known", not "tier
+## zero"; callers must gate on has_intel before rendering danger_tier.
 func get_party_scouting_intel(party_id: String, encounter_id: String) -> Dictionary:
 	var party := get_party(party_id)
 	var expedition := get_expedition(encounter_id)
 	if party.is_empty() or expedition.is_empty():
 		return {}
 
-	var danger_tier: int = int(expedition.get("difficulty", 1))
 	var has_scout := false
 	for member_id in party.member_ids:
 		var member := get_adventurer(str(member_id))
@@ -1988,14 +1988,14 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 			"has_intel": true,
 			"enemy_types": enemy_types,
 			"enemy_count": int(enemy.get("count", 0)),
-			"danger_tier": danger_tier,
+			"danger_tier": int(expedition.get("difficulty", 1)),
 		}
 
 	return {
 		"has_intel": false,
 		"enemy_types": [] as Array[String],
 		"enemy_count": 0,
-		"danger_tier": danger_tier,
+		"danger_tier": 0,
 	}
 
 

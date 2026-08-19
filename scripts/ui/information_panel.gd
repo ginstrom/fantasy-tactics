@@ -145,12 +145,13 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 
 ## Shows the permanent rows plus a World Map encounter's Scout intel (see
 ## GameSession.get_party_scouting_intel(), docs/plans/2026-08-18-core-loop-
-## and-engagement/04-cleric-class-and-scout-reconnaissance.md). The danger
-## tier is always shown -- it's the same information already public as the
-## marker's own star label -- but the enemy composition row only appears
-## once get_party_scouting_intel() reports has_intel (a deployed party with a
-## Scout within range). Never shows reward/loot or in-battle positions,
-## matching that method's own contract. An unknown party or encounter id
+## and-engagement/04-cleric-class-and-scout-reconnaissance.md). Per index.md's
+## locked decision, BOTH the danger-tier row and the enemy-composition row
+## only appear once get_party_scouting_intel() reports has_intel (a deployed
+## party with a Scout within range) -- an encounter outside Scout range shows
+## neither, matching World Map's own marker (see world_map.gd's
+## _draw_markers(), which gates its star label the same way). Never shows
+## reward/loot or in-battle positions. An unknown party or encounter id
 ## clears the section safely, same as the other refresh_*() methods.
 func refresh_encounter(party_id: String, encounter_id: String) -> void:
 	_refresh_permanent_rows()
@@ -159,7 +160,7 @@ func refresh_encounter(party_id: String, encounter_id: String) -> void:
 	_clear_recruitment_section()
 
 	var intel := GameSession.get_party_scouting_intel(party_id, encounter_id)
-	if intel.is_empty():
+	if intel.is_empty() or not bool(intel.has_intel):
 		_clear_encounter_section()
 		return
 
@@ -168,12 +169,9 @@ func refresh_encounter(party_id: String, encounter_id: String) -> void:
 	encounter_danger_label.text = tr("information.encounter_danger") % stars
 	encounter_danger_label.visible = true
 
-	if bool(intel.has_intel):
-		var enemy_type: String = String(intel.enemy_types[0]) if not intel.enemy_types.is_empty() else ""
-		encounter_enemies_label.text = tr("information.encounter_enemies") % [enemy_type, int(intel.enemy_count)]
-		encounter_enemies_label.visible = true
-	else:
-		encounter_enemies_label.visible = false
+	var enemy_type: String = String(intel.enemy_types[0]) if not intel.enemy_types.is_empty() else ""
+	encounter_enemies_label.text = tr("information.encounter_enemies") % [enemy_type, int(intel.enemy_count)]
+	encounter_enemies_label.visible = true
 
 
 ## Candidates are resolved fresh from GameSession.get_recruitment_candidates()

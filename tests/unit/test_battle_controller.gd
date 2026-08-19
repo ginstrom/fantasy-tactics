@@ -745,6 +745,54 @@ func test_a_unit_without_the_spell_cannot_cast_it() -> void:
 	assert_eq(ally.health, 4)
 
 
+## MP is the "3 per battle, no mid-battle refresh" budget (see Unit.mp_max /
+## end_turn() excluding mp_remaining from its per-round reset). This is the
+## spell-casting analogue of test_unaffordable_attack_preserves_action_points_
+## and_combat_state below, confirming try_cast_spell()'s guard clause
+## actually enforces that budget rather than the budget existing unchecked.
+func test_spell_cast_is_rejected_when_mp_is_exhausted() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 0
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(
+		controller.try_cast_spell("heal", ally.grid_position),
+		"0 MP remaining must reject the cast -- SPELL_MP_COST is 1"
+	)
+	assert_eq(caster.action_points_remaining, 6, "A rejected cast must not spend Action Points")
+	assert_eq(caster.mp_remaining, 0, "A rejected cast must not go negative or otherwise change MP")
+	assert_eq(ally.health, 4, "A rejected cast must not heal the target")
+	assert_eq(controller.last_attack_result, {})
+
+
+func test_spell_cast_is_rejected_when_action_points_are_insufficient() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.action_points_remaining = 2
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(
+		controller.try_cast_spell("heal", ally.grid_position),
+		"2 AP remaining must reject the cast -- SPELL_ACTION_POINT_COST is 3"
+	)
+	assert_eq(caster.action_points_remaining, 2, "A rejected cast must not spend the remaining Action Points")
+	assert_eq(caster.mp_remaining, 3, "A rejected cast must not spend MP")
+	assert_eq(ally.health, 4, "A rejected cast must not heal the target")
+	assert_eq(controller.last_attack_result, {})
+
+
 func test_end_turn_resets_ap_but_never_mp() -> void:
 	var controller := _make_controller(6, 6)
 	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)

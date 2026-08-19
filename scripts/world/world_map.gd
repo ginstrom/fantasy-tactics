@@ -163,6 +163,18 @@ func _get_difficulty_stars(difficulty: int) -> String:
 	return "★".repeat(clamped)
 
 
+## Per index.md's locked decision, an encounter marker's difficulty stars are
+## gated behind Scout reconnaissance exactly like enemy composition -- both
+## are withheld until the deployed party contains a Scout within Manhattan
+## distance 3 of this encounter (see GameSession.get_party_scouting_intel()).
+## Returns "" (no stars drawn) when that intel hasn't been earned yet.
+func _get_marker_star_text(encounter_id: String) -> String:
+	var intel := GameSession.get_party_scouting_intel(GameSession.selected_party_id, encounter_id)
+	if intel.is_empty() or not bool(intel.has_intel):
+		return ""
+	return _get_difficulty_stars(int(intel.danger_tier))
+
+
 func build_route(from: Vector2i, destination: Vector2i) -> Array[Vector2i]:
 	if not grid.is_in_bounds(from) or not grid.is_in_bounds(destination):
 		return []
@@ -370,7 +382,7 @@ func _draw_markers() -> void:
 		marker_container.add_child(encounter)
 
 		var label := Label.new()
-		label.text = _get_difficulty_stars(record.difficulty)
+		label.text = _get_marker_star_text(record.id)
 		var label_y := maxf(record.position.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
 		label.position = Vector2(record.position.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE

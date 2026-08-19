@@ -792,21 +792,23 @@ func test_hovering_an_encounter_tile_with_a_scout_in_range_reveals_composition()
 		panel.get_node("Content/EncounterEnemies").text,
 		tr("information.encounter_enemies") % [tr("battle.enemy.goblin"), 1]
 	)
+	assert_false(panel.get_node("Content/EncounterDanger").text.contains("gold"), "Never reveals rewards")
 
 
-func test_hovering_an_encounter_tile_without_scout_intel_shows_only_the_danger_tier() -> void:
+func test_hovering_an_encounter_tile_without_scout_intel_reveals_nothing() -> void:
+	# Per index.md's locked decision, the danger tier is gated exactly like
+	# composition -- a party with no Scout in range sees neither.
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	var panel: Control = world_map.get_node("%InformationPanel")
 
 	world_map._update_hovered_encounter(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 
-	assert_true(panel.get_node("Content/EncounterDanger").visible)
 	assert_false(
-		panel.get_node("Content/EncounterEnemies").visible,
-		"No Scout in range means only the already-public danger tier is shown"
+		panel.get_node("Content/EncounterDanger").visible,
+		"No Scout in range means the danger tier is withheld too, not just composition"
 	)
-	assert_false(panel.get_node("Content/EncounterDanger").text.contains("gold"), "Never reveals rewards")
+	assert_false(panel.get_node("Content/EncounterEnemies").visible)
 
 
 func test_hovering_away_from_an_encounter_restores_the_default_panel() -> void:
@@ -1183,6 +1185,18 @@ func _find_route_label(world_map: Node2D) -> Label:
 
 func test_encounter_labels_show_only_stars_for_difficulty() -> void:
 	# Task 2: Goblin Camp (difficulty 1) shows ★, Orc Outpost (difficulty 2) shows ★★
+	# -- gated behind Scout reconnaissance (index.md's locked decision), so
+	# this deploys a Scout centered between both encounters: (4, 2) is
+	# Manhattan distance 2 from Goblin Camp (4, 4) and distance 2 from Orc
+	# Outpost (4, 0), putting both within the required distance-3 range.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_deployed_party_position(Vector2i(4, 2))
 	_append_orc_outpost_instance()
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
@@ -1199,8 +1213,52 @@ func test_encounter_labels_show_only_stars_for_difficulty() -> void:
 	assert_eq(orc_label.text, "★★", "Orc Outpost (difficulty 2) should show two stars")
 
 
+func test_encounter_labels_show_no_stars_without_a_scout_in_range() -> void:
+	# Finding: fog-of-war must hide the difficulty stars too, not just enemy
+	# composition -- before_each() deploys a warrior-only party (no Scout), so
+	# the default marker label must render no stars at all.
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var goblin_label := _find_expedition_label_by_position(world_map, goblin_record.position)
+
+	assert_not_null(goblin_label, "Goblin Camp label should still exist as a node")
+	assert_eq(goblin_label.text, "", "No Scout in range means the difficulty stars are withheld")
+
+
+func test_encounter_labels_show_stars_once_a_scout_is_within_range() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	GameSession.set_deployed_party_position(goblin_camp.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_label := _find_expedition_label_by_position(world_map, goblin_camp.position)
+
+	assert_not_null(goblin_label)
+	assert_eq(goblin_label.text, "★", "A Scout within range reveals the difficulty stars")
+
+
 func test_encounter_labels_do_not_include_names_danger_or_reward() -> void:
-	# Task 2: No "Goblin", "Orc", "danger", or "gold" in label text
+	# Task 2: No "Goblin", "Orc", "danger", or "gold" in label text. Deploys a
+	# Scout in range of both markers (see test_encounter_labels_show_only_
+	# stars_for_difficulty for the (4, 2) distance math) so the labels are
+	# non-empty star strings here, not vacuously-passing empty ones.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_deployed_party_position(Vector2i(4, 2))
 	_append_orc_outpost_instance()
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)

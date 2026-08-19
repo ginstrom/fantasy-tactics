@@ -3195,7 +3195,7 @@ func test_get_party_scouting_intel_hides_composition_without_a_scout() -> void:
 	assert_false(intel.has_intel, "No Scout in the party means no detailed composition")
 	assert_eq(intel.enemy_types, [])
 	assert_eq(intel.enemy_count, 0)
-	assert_eq(intel.danger_tier, 1, "Danger tier is always disclosed")
+	assert_eq(intel.danger_tier, 0, "Danger tier is withheld too -- only the bare location is public")
 
 
 func test_get_party_scouting_intel_hides_composition_when_the_scout_is_four_or_more_squares_away() -> void:
@@ -3215,6 +3215,7 @@ func test_get_party_scouting_intel_hides_composition_when_the_scout_is_four_or_m
 	)
 
 	assert_false(intel.has_intel, "A Scout four squares away is still out of reconnaissance range")
+	assert_eq(intel.danger_tier, 0, "Out-of-range still withholds the danger tier, not just composition")
 
 
 func test_get_party_scouting_intel_returns_empty_for_an_unknown_party_or_encounter() -> void:
