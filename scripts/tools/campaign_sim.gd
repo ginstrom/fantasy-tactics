@@ -74,6 +74,19 @@ const FIELDABLE_CLASSES: Array[String] = ["warrior", "scout", "cleric"]
 ## stops happening. Seeds 4, 9, 10, 12, and 14 are the first five winning
 ## seeds in the post-fix sweep, chosen in ascending order rather than
 ## cherry-picked for any other property.
+##
+## HISTORICAL CONTEXT, READ BEFORE CITING: the "78/80", "seeds 3 and 25",
+## and "first five winning seeds in the post-fix sweep" figures above were
+## measured BEFORE docs/plans/2026-08-19-core-loop-verification-remediation/
+## made Cleric fieldable and changed recruitment/assignment priority (both
+## of which affect every seed's outcome) -- they describe the sweep this
+## five-seed set was originally drawn from, not a claim still verified true
+## of the current code. What IS still true and hand-verified today (see
+## test_run_campaign_reaches_victory_on_the_representative_seed_set()): these
+## five seeds still resolve to victory under the current bot/gear/recruit/
+## upgrade policy. A fresh 80-seed sweep has not been re-run post-Cleric, so
+## the exact current pass count/fail set is unknown -- do not repeat the old
+## numbers as if they still hold.
 const REPRESENTATIVE_VICTORY_SEEDS: Array[int] = [4, 9, 10, 12, 14]
 
 ## Safety caps -- generous enough that a genuinely winnable seed always
@@ -233,13 +246,7 @@ func _refill_party(telemetry: Dictionary = {}) -> void:
 		return
 	var capacity: int = GameSession.get_max_party_size()
 
-	for adventurer in GameSession.get_available_adventurers():
-		party = GameSession.get_selected_party()
-		if party.member_ids.size() >= capacity:
-			break
-		if not _is_fieldable(adventurer) or String(adventurer.id) in party.member_ids:
-			continue
-		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
+	_assign_owned_fieldable_members(capacity)
 
 	party = GameSession.get_selected_party()
 	while party.member_ids.size() < capacity and GameSession.adventurers.size() < GameSession.get_roster_cap():
@@ -255,6 +262,63 @@ func _refill_party(telemetry: Dictionary = {}) -> void:
 
 	if not telemetry.is_empty():
 		_record_full_triad(telemetry)
+
+
+## Assigns already-owned, available (unassigned) fieldable adventurers to the
+## party up to `capacity`, preferring -- for each newly opened slot -- an
+## available member whose class the party doesn't yet field (see _missing_
+## fieldable_classes()) over an available member whose class is already
+## represented. Mirrors the same missing-class-first policy _next_
+## recruitment_candidate() already applies to purchases (see this file's own
+## header comment): before this fix, this loop had no such preference and
+## simply walked GameSession.get_available_adventurers() in roster order, so
+## a leftover starting-roster Warrior could fill a newly opened slot (e.g.
+## from a Guild Hall upgrade) ahead of an already-owned, unassigned Scout or
+## Cleric. (Representative seed 12 still never fields a Cleric even with
+## this fix, for an unrelated reason: its RNG stream never rolls an
+## affordable Cleric recruitment offer in the first place -- see
+## REPRESENTATIVE_VICTORY_SEEDS' own doc comment and this fix's report.)
+## `excluded` tracks candidate ids that failed to assign this call (e.g. the
+## party isn't currently encamped -- see _next_owned_fieldable_member()) so a
+## candidate GameSession.assign_adventurer_to_selected_party() keeps
+## rejecting can never be retried forever: each iteration either grows the
+## party or permanently excludes a candidate, so this always terminates
+## within the roster's own finite size, exactly like the old plain for-loop
+## over GameSession.get_available_adventurers() this replaced (which simply
+## moved on to the next adventurer whenever an assign call failed).
+func _assign_owned_fieldable_members(capacity: int) -> void:
+	var excluded := {}
+	var party := GameSession.get_selected_party()
+	while party.member_ids.size() < capacity:
+		var pick := _next_owned_fieldable_member(excluded)
+		if pick == "":
+			break
+		if not GameSession.assign_adventurer_to_selected_party(pick):
+			excluded[pick] = true
+			continue
+		party = GameSession.get_selected_party()
+
+
+## The available (unassigned), fieldable adventurer _assign_owned_fieldable_
+## members() assigns next (skipping any id already in `excluded`): the first
+## (roster order) available member of a class the party doesn't yet field, if
+## one exists, otherwise the first available fieldable member overall (which
+## may duplicate a class already present) -- the same missing-class-first /
+## duplicate-fallback shape _next_recruitment_candidate() uses for purchases.
+func _next_owned_fieldable_member(excluded: Dictionary = {}) -> String:
+	var missing := _missing_fieldable_classes()
+	if not missing.is_empty():
+		for adventurer in GameSession.get_available_adventurers():
+			if excluded.has(String(adventurer.id)):
+				continue
+			if _is_fieldable(adventurer) and String(adventurer.get("class", "")) in missing:
+				return String(adventurer.id)
+	for adventurer in GameSession.get_available_adventurers():
+		if excluded.has(String(adventurer.id)):
+			continue
+		if _is_fieldable(adventurer):
+			return String(adventurer.id)
+	return ""
 
 
 func _is_fieldable(adventurer: Dictionary) -> bool:

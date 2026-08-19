@@ -44,12 +44,17 @@ static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 	var level_curve_counts := {}
 	var upgrade_turn_sums := {}
 	var upgrade_turn_counts := {}
+	var total_spell_casts := 0
+	var runs_with_full_triad := 0
 
 	for record in records:
 		if bool(record.get("victory", false)):
 			victories += 1
 		else:
 			failed_seeds.append(record.get("seed", -1))
+		total_spell_casts += int(record.get("spell_casts", 0))
+		if bool(record.get("fielded_full_triad", false)):
+			runs_with_full_triad += 1
 		world_turns_total += int(record.get("world_turns", 0))
 		battles_fought_total += int(record.get("battles_fought", 0))
 		battles_won_total += int(record.get("battles_won", 0))
@@ -103,6 +108,15 @@ static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 		},
 		"mean_party_level_curve": level_curve_avg,
 		"mean_upgrade_progression_turns": upgrade_turn_avg,
+		# Cleric-loop coverage (docs/plans/2026-08-19-core-loop-verification-
+		# remediation/01-cleric-scenario-and-campaign-sim.md): how many of
+		# these runs ever fielded the full Warrior/Scout/Cleric triad
+		# together (CampaignSim._record_full_triad()), and how many total
+		# spell casts (Heal/Bless) happened across all of them -- surfaced
+		# here so `make campaign-sim` evidence actually reports on whether
+		# the Cleric loop happened, not just whether the campaign was won.
+		"runs_with_full_triad": runs_with_full_triad,
+		"total_spell_casts": total_spell_casts,
 	}
 
 
@@ -134,9 +148,18 @@ static func format_summary(report: Dictionary) -> String:
 			"  Sample victory rate: %d/%d (%.0f%%)"
 			% [victories, runs, float(report.get("victory_rate", 0.0)) * 100.0]
 		)
-	else:
+	elif mode == MODE_REPRESENTATIVE:
 		lines.append("  Representative seeds: %s" % str(seeds))
 		lines.append("  Representative seeds: %d/%d victories" % [victories, runs])
+	else:
+		# Explicit fallback, not a silent "anything not sweep is
+		# Representative" -- an unrecognized/empty mode string must never
+		# be mislabeled as the hand-verified representative set.
+		lines.append("  Unrecognized mode '%s' -- seeds: %s  %d/%d victories" % [mode, str(seeds), victories, runs])
+	lines.append(
+		"  Full triad fielded: %d/%d runs  Total spell casts: %d"
+		% [int(report.get("runs_with_full_triad", 0)), runs, int(report.get("total_spell_casts", 0))]
+	)
 	var failed_seeds: Array = report.get("failed_seeds", [])
 	if not failed_seeds.is_empty():
 		lines.append("  Failed seeds: %s" % str(failed_seeds))

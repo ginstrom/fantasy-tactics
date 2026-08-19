@@ -14,6 +14,18 @@ extends SceneTree
 const CAMPAIGN_SIM_SCRIPT := "res://scripts/tools/campaign_sim.gd"
 const CAMPAIGN_SIM_METRICS_SCRIPT := "res://scripts/tools/campaign_sim_metrics.gd"
 
+# Compile-time preload (not the load()-by-path CAMPAIGN_SIM_METRICS_SCRIPT
+# string _run() uses) is safe here specifically because campaign_sim_
+# metrics.gd never references an autoload -- unlike campaign_sim.gd, whose
+# own top-level preload _run()'s comment explains would fail to compile
+# before autoloads (GameConfig, GameManager, GameSession) are registered.
+# MODE_REPRESENTATIVE/MODE_SWEEP are owned by campaign_sim_metrics.gd (see
+# its own header comment); referenced here rather than re-declared so the
+# two files can never drift on what the mode strings are.
+const CampaignSimMetricsScript := preload("res://scripts/tools/campaign_sim_metrics.gd")
+const MODE_REPRESENTATIVE := CampaignSimMetricsScript.MODE_REPRESENTATIVE
+const MODE_SWEEP := CampaignSimMetricsScript.MODE_SWEEP
+
 const DEFAULT_SEED := 42
 const DEFAULT_RUNS := 10
 const DEFAULT_REPORT_PATH := "user://campaign_sim_report.json"
@@ -21,9 +33,6 @@ const SEED_ARG_PREFIX := "--seed="
 const RUNS_ARG_PREFIX := "--runs="
 const SEEDS_ARG_PREFIX := "--seeds="
 const REPORT_ARG_PREFIX := "--report="
-
-const MODE_REPRESENTATIVE := "representative"
-const MODE_SWEEP := "sweep"
 
 
 func _initialize() -> void:
@@ -46,7 +55,13 @@ func _run() -> void:
 
 	var resolved := resolve_options(OS.get_cmdline_user_args(), sim_script.REPRESENTATIVE_VICTORY_SEEDS)
 	if not resolved.ok:
-		push_error("[campaign_sim] %s" % resolved.error)
+		# resolved.error is a Dictionary ({code, message} for a rejected
+		# mixed-mode call, {code, argument} for an invalid argument) -- print
+		# its message/argument text, not the raw Dictionary (which would
+		# stringify as `{ "code": ..., "message": ... }`, contradicting the
+		# bare-message symptom docs/dev/running-the-game.md documents).
+		var error: Dictionary = resolved.error
+		push_error("[campaign_sim] %s" % str(error.get("message", error.get("argument", error))))
 		quit(1)
 		return
 

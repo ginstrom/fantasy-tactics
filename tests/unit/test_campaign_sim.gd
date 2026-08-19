@@ -75,9 +75,22 @@ func test_run_campaign_is_fully_deterministic_for_a_fixed_seed() -> void:
 ## policy alone, deterministically. A regression that breaks the campaign's
 ## completability (a balance change, a policy bug) fails loudly here rather
 ## than only showing up as a lower make campaign-sim victory rate.
+## Review Finding 3 (second part): the plan's actual evidence set --
+## REPRESENTATIVE_VICTORY_SEEDS, what `make campaign-sim` actually runs --
+## must itself prove the Cleric loop happens, not only the separate,
+## un-exercised CLERIC_TRIAD_SEED (42) test below. At least one representative
+## seed fielding the triad and casting a spell is enough to prove the
+## mechanism works end to end on real evidence-set seeds; not every seed is
+## expected to (seed 12 is a known, reported exception -- see this file's own
+## review report -- its RNG stream never rolls an affordable Cleric
+## recruitment offer at all, a different cause than the missing-class
+## slot-assignment bug Finding 2 fixed).
 func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
+	var any_triad_fielded := false
+	var any_spell_cast := false
 	for seed in CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS:
 		GameSession.reset()
+		GameSession.reset_injectable_rolls()
 		var sim := CampaignSimScript.new()
 		var record := sim.run_campaign(seed)
 		assert_true(
@@ -87,6 +100,19 @@ func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
 		)
 		assert_eq(record.reason, "victory")
 		assert_true(GameSession.is_campaign_completed)
+		if bool(record.fielded_full_triad):
+			any_triad_fielded = true
+		if int(record.spell_casts) > 0:
+			any_spell_cast = true
+
+	assert_true(
+		any_triad_fielded,
+		"At least one representative seed must field the full Warrior/Scout/Cleric triad -- otherwise the evidence set proves nothing about the Cleric loop"
+	)
+	assert_true(
+		any_spell_cast,
+		"At least one representative seed must record a Cleric spell cast -- otherwise the evidence set proves nothing about the Cleric loop"
+	)
 
 
 ## --- Review Finding 1 fix: XP splits across the pre-death roster -----------
@@ -183,6 +209,59 @@ func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -
 			"The surviving tank's XP gain must equal total_xp (%.1f) split across the pre-death roster (2 members) == %.1f -- "
 			+ "a regression to the old (award-after-permadeath) ordering would instead award the full %.1f to the sole survivor"
 		) % [expected_total_xp, expected_share, expected_total_xp]
+	)
+
+
+## --- Review Finding 2 fix: existing-roster assignment also prefers a
+## missing class, not just new recruitment purchases -------------------------
+
+## Reproduces the exact composition gap Finding 2 identified: a fresh
+## GameSession.reset() always seeds 4 starting Warriors (STARTING_ROSTER_SIZE),
+## so after 3 of them fill the Guild Hall level-1 3-slot party cap, the 4th
+## starting Warrior sits unassigned in the roster alongside any Scout/Cleric
+## also recruited-but-unassigned. Before this fix, _refill_party()'s phase-1
+## "assign already-owned fieldable adventurers" loop had no missing-class
+## preference and walked GameSession.get_available_adventurers() in roster
+## (array) order, so a Guild Hall upgrade to a 4th slot got filled by that
+## leftover 4th Warrior -- never giving the missing-class preference
+## (_missing_fieldable_classes(), already used for new recruitment purchases)
+## a chance to seat the roster's own unassigned Scout before a duplicate
+## Warrior. This was suspected (not confirmed) to be why representative seed
+## 12 never fields a Cleric; verifying after the fix showed seed 12's actual
+## cause is unrelated (its RNG stream never rolls an affordable Cleric
+## recruitment offer at all -- see REPRESENTATIVE_VICTORY_SEEDS' doc comment
+## and this fix's report) -- this fix is still correct and necessary on its
+## own terms (a real composition-gap bug, reproduced directly below), it
+## just isn't what was gating seed 12 specifically.
+func test_refill_party_prefers_an_already_owned_missing_class_member_over_a_duplicate_warrior() -> void:
+	GameSession.reset()
+	GameSession.reset_injectable_rolls()
+	GameSession.create_party()
+
+	var warrior_ids: Array = []
+	for adventurer in GameSession.adventurers:
+		warrior_ids.append(String(adventurer.id))
+	GameSession.adventurers.append(GameSession.get_default_scout(GameSession._new_instance_id(), "Scout Test"))
+	var scout_id := String(GameSession.adventurers[GameSession.adventurers.size() - 1].id)
+
+	for i in 3:
+		GameSession.assign_adventurer_to_selected_party(warrior_ids[i])
+	assert_eq(GameSession.get_selected_party().member_ids.size(), 3, "Setup: party must start full at the Guild Hall level-1 cap")
+
+	# Simulate a Guild Hall upgrade opening a 4th slot, without spending gold.
+	GameSession.guild_hall_level = 2
+
+	var sim := CampaignSimScript.new()
+	sim._refill_party()
+
+	var member_ids: Array = GameSession.get_selected_party().member_ids
+	assert_true(
+		scout_id in member_ids,
+		"The newly opened 4th slot must go to the roster's already-owned missing-class Scout, not a duplicate Warrior"
+	)
+	assert_false(
+		String(warrior_ids[3]) in member_ids,
+		"The leftover 4th starting Warrior must not fill a slot ahead of an already-owned missing-class member"
 	)
 
 
@@ -302,6 +381,61 @@ func test_metric_output_labels_representative_mode_by_name_not_an_unqualified_vi
 	assert_false(summary.contains("Victories:"), "The old unqualified 'Victories:' label must be gone")
 	assert_false(summary.contains("Sample victory rate"), "Representative mode must not use the sweep-mode label")
 	assert_true(summary.contains("Mean world turns"))
+
+
+## Review Finding 1: Step 1's Cleric telemetry (fielded_full_triad,
+## spell_casts) must actually reach aggregate()'s report dict and format_
+## summary()'s printed output -- previously it was recorded per-run by
+## CampaignSim but silently dropped once campaign_sim_main.gd discarded
+## individual records after aggregating, so `make campaign-sim` gave zero
+## visibility into whether the Cleric loop ever actually happened.
+func test_metrics_aggregate_reports_cleric_triad_and_spell_cast_totals() -> void:
+	var sim := CampaignSimScript.new()
+	var seeds: Array[int] = CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS
+	var records: Array = []
+	for seed in seeds:
+		GameSession.reset()
+		GameSession.reset_injectable_rolls()
+		records.append(sim.run_campaign(seed))
+
+	var expected_spell_casts := 0
+	var expected_triad_runs := 0
+	for record in records:
+		expected_spell_casts += int(record.spell_casts)
+		if bool(record.fielded_full_triad):
+			expected_triad_runs += 1
+
+	var report := CampaignSimMetricsScript.aggregate(records, "representative", seeds)
+
+	assert_eq(int(report.get("total_spell_casts", -1)), expected_spell_casts, "aggregate() must sum spell_casts across records")
+	assert_eq(
+		int(report.get("runs_with_full_triad", -1)), expected_triad_runs,
+		"aggregate() must count how many records have fielded_full_triad == true"
+	)
+
+	var summary := CampaignSimMetricsScript.format_summary(report)
+	assert_true(
+		summary.contains("Full triad fielded: %d/%d runs" % [expected_triad_runs, records.size()]),
+		"format_summary() must print the full-triad run count"
+	)
+	assert_true(
+		summary.contains("Total spell casts: %d" % expected_spell_casts),
+		"format_summary() must print the total spell-cast count"
+	)
+
+
+## Review Finding 1 (folded-in cleanup): format_summary()'s mode branch was
+## an unguarded `else` that silently labeled anything not MODE_SWEEP as
+## "Representative", including an unrecognized/empty mode string. It must
+## instead explicitly check MODE_REPRESENTATIVE and fall back safely (never
+## silently mislabeling) for anything else.
+func test_metric_output_does_not_silently_mislabel_an_unrecognized_mode_as_representative() -> void:
+	var report := CampaignSimMetricsScript.aggregate([], "bogus_mode", [])
+
+	var summary := CampaignSimMetricsScript.format_summary(report)
+
+	assert_false(summary.contains("Representative seeds:"), "An unrecognized mode must not be silently labeled Representative")
+	assert_false(summary.contains("Sweep seeds:"), "An unrecognized mode must not be silently labeled Sweep either")
 
 
 ## Sweep mode is an arbitrary numeric sample, never evidence of universal
