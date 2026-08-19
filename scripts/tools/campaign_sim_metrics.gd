@@ -8,10 +8,23 @@ extends RefCounted
 ## 06-campaign-simulation-and-balance-harness.md's technical design calls
 ## for: mean turns to victory, gold velocity, upgrade-progression turns, and
 ## party level curve.
+##
+## Mode-aware, self-describing evidence (docs/plans/2026-08-19-core-loop-
+## verification-remediation/02-representative-seed-command.md): the caller
+## (campaign_sim_main.gd, which parsed the CLI args) tells aggregate() and
+## format_summary() whether `records` came from MODE_REPRESENTATIVE (an
+## explicit, named seed list) or MODE_SWEEP (an arbitrary contiguous numeric
+## sample) so the report can never mislabel one as the other -- this module
+## does not re-derive the mode from the seed values itself.
+
+const MODE_REPRESENTATIVE := "representative"
+const MODE_SWEEP := "sweep"
 
 
 ## records: an Array of CampaignSim.run_campaign() result Dictionaries.
-static func aggregate(records: Array) -> Dictionary:
+## mode: MODE_REPRESENTATIVE or MODE_SWEEP -- see this file's header comment.
+## seeds: the exact ordered seed list `records` was produced from.
+static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 	var runs := records.size()
 	var victories := 0
 	var failed_seeds: Array = []
@@ -68,6 +81,8 @@ static func aggregate(records: Array) -> Dictionary:
 		upgrade_turn_avg[key] = float(upgrade_turn_sums[key]) / float(upgrade_turn_counts[key])
 
 	return {
+		"mode": mode,
+		"seeds": seeds,
 		"runs": runs,
 		"victories": victories,
 		"victory_rate": float(victories) / float(maxi(1, runs)),
@@ -96,15 +111,32 @@ static func to_json(report: Dictionary) -> String:
 
 
 ## A short, human-readable multi-line report -- what `make campaign-sim`
-## prints to the terminal (see campaign_sim_main.gd).
+## prints to the terminal (see campaign_sim_main.gd). Mode-aware: never
+## prints an unqualified "Victories: N (X%)" claim -- representative mode
+## names its exact seed list and reports "Representative seeds: N/N
+## victories"; sweep mode identifies its contiguous seed range and reports
+## "Sample victory rate", making clear it is an arbitrary sample, not
+## evidence of universal completability.
 static func format_summary(report: Dictionary) -> String:
 	var lines: Array[String] = []
 	lines.append("Campaign Simulation Summary")
 	lines.append("  Runs: %d" % int(report.get("runs", 0)))
-	lines.append(
-		"  Victories: %d/%d (%.0f%%)"
-		% [int(report.get("victories", 0)), int(report.get("runs", 0)), float(report.get("victory_rate", 0.0)) * 100.0]
-	)
+	var mode: String = String(report.get("mode", ""))
+	var seeds: Array = report.get("seeds", [])
+	var victories := int(report.get("victories", 0))
+	var runs := int(report.get("runs", 0))
+	if mode == MODE_SWEEP:
+		if seeds.is_empty():
+			lines.append("  Sweep seeds: (none)")
+		else:
+			lines.append("  Sweep seeds: %s-%s (%d runs)" % [str(seeds[0]), str(seeds[seeds.size() - 1]), runs])
+		lines.append(
+			"  Sample victory rate: %d/%d (%.0f%%)"
+			% [victories, runs, float(report.get("victory_rate", 0.0)) * 100.0]
+		)
+	else:
+		lines.append("  Representative seeds: %s" % str(seeds))
+		lines.append("  Representative seeds: %d/%d victories" % [victories, runs])
 	var failed_seeds: Array = report.get("failed_seeds", [])
 	if not failed_seeds.is_empty():
 		lines.append("  Failed seeds: %s" % str(failed_seeds))

@@ -279,6 +279,71 @@ correctness testing (see [testing.md](testing.md) for that).
 |---|---|---|
 | `A line's outcome is "stalemate"` | The bot couldn't reach or defeat every enemy within the round cap | Rare for the shipped encounters under normal balance values; if it happens consistently after a balance change (`config/game_config.json`), the change likely made a fight unwinnable by the greedy bot policy — not necessarily a bug, but worth a second look |
 
+## Run full headless campaigns
+
+Plays entire campaigns start-to-Final-Boss with no human input --
+`CampaignSim` drives recruitment, upgrades, gear, travel, and combat through
+the same public `GameSession`/`BattleController`/`BattleBot` APIs the
+headless battle simulator uses, one full campaign per seed. Useful for
+campaign-level balance telemetry (gold velocity, level curve, upgrade
+pacing) and for guarding the game's core completability. There are two
+modes, and their evidence is intentionally labelled differently -- see
+Verification below.
+
+### Steps
+
+- **Representative mode** (the default -- what `make campaign-sim` runs
+  with no arguments): runs exactly the explicit, named seed list
+  `CampaignSim.REPRESENTATIVE_VICTORY_SEEDS` (`4, 9, 10, 12, 14`), a
+  small, hand-verified set every one of which is confirmed to reach
+  Final Boss victory under the current bot/gear/upgrade policy.
+  ```
+  make campaign-sim
+  ```
+- **Sweep mode**: runs an arbitrary contiguous numeric sample of
+  `CAMPAIGN_RUNS` seeds starting at `CAMPAIGN_SEED`, useful for probing
+  a wider range but never a claim that the campaign is completable on
+  every seed.
+  ```
+  CAMPAIGN_SEED=1 CAMPAIGN_RUNS=10 make campaign-sim-sweep
+  ```
+- Either mode also accepts `--report=` (via the underlying `godot -s`
+  invocation) to change the JSON report's output path; representative mode
+  additionally accepts an explicit `--seeds=4,9,10,12,14`-style list in
+  place of the default. `--seeds=` cannot be combined with
+  `CAMPAIGN_SEED`/`CAMPAIGN_RUNS` (sweep mode) -- the CLI rejects mixing
+  the two rather than silently picking one.
+
+### Verification
+
+- The terminal prints one `[campaign_sim] i/N seed=<seed> -> <reason>
+  (world_turns=..., battles=.../... won, wipes=...)` line per run, then a
+  summary. **No unqualified "Victories: N (X%)" claim is ever printed** --
+  the summary always names which mode produced the number:
+  - Representative mode prints the exact seed list and
+    `Representative seeds: 5/5 victories` -- a completability guarantee for
+    that specific, named set, not a percentage extrapolated from an
+    arbitrary sample.
+  - Sweep mode prints its contiguous seed range (e.g. `Sweep seeds:
+    1-10 (10 runs)`) and calls its percentage `Sample victory rate` --
+    a labelled sample, never evidence that the campaign is completable on
+    every seed.
+  - Both modes list `Failed seeds` when any run didn't reach victory.
+- The terminal ends with `[campaign_sim] done: N campaigns logged, report
+  written to <path>` (default `user://campaign_sim_report.json`, i.e.
+  `find ~/.local/share/godot -name campaign_sim_report.json` on Linux). The
+  JSON report includes `mode`, `seeds`, and `failed_seeds` fields alongside
+  the existing aggregate telemetry (`victory_rate`, `mean_world_turns`,
+  `gold`, `mean_party_level_curve`, `mean_upgrade_progression_turns`, ...).
+  Generated reports are local evidence and must not be committed.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `[campaign_sim] --seeds= cannot be combined with --seed=/--runs=` (or the CLI errors on an unrecognized argument) | Mixing representative-mode's `--seeds=` with sweep-mode's `--seed=`/`--runs=`, or a typoed flag | Use `make campaign-sim` (optionally with `--seeds=`) for representative mode, or `make campaign-sim-sweep` (`CAMPAIGN_SEED=`/`CAMPAIGN_RUNS=`) for sweep mode -- not both at once |
+| A representative-mode run reports fewer than 5/5 victories | A change to bot policy, recruitment, upgrades, or the underlying game balance broke a previously-guaranteed seed | Treat as a regression, not noise -- `test_campaign_sim.gd`'s `test_run_campaign_reaches_victory_on_the_representative_seed_set()` should already be failing in `make check`; bisect the change rather than re-running |
+
 ## Run reproducible battle scenarios
 
 `make simulate` remains the scene-driven smoke client. For repeatable, scene-free policy experiments, run a declared scenario instead:

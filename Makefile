@@ -6,17 +6,18 @@ OUTPUT_DIR ?=
 CAMPAIGN_SEED ?= 42
 CAMPAIGN_RUNS ?= 10
 
-.PHONY: help editor play test check screenshots simulate scenario campaign-sim
+.PHONY: help editor play test check screenshots simulate scenario campaign-sim campaign-sim-sweep
 
 help:
-	@echo "make editor       Open the Godot editor"
-	@echo "make play         Run the project"
-	@echo "make test         Run automated tests"
-	@echo "make check        Run the current validation suite"
-	@echo "make screenshots  Capture a screenshot of every scene/state into ./screenshots"
-	@echo "make simulate     Play N headless battles and log outcomes (RUNS=20 make simulate)"
-	@echo "make scenario     Run a deterministic scenario (SCENARIO=... SEED=1 ITERATIONS=20)"
-	@echo "make campaign-sim Run N headless full campaigns and report balance telemetry (CAMPAIGN_SEED=42 CAMPAIGN_RUNS=10)"
+	@echo "make editor             Open the Godot editor"
+	@echo "make play               Run the project"
+	@echo "make test               Run automated tests"
+	@echo "make check              Run the current validation suite"
+	@echo "make screenshots        Capture a screenshot of every scene/state into ./screenshots"
+	@echo "make simulate           Play N headless battles and log outcomes (RUNS=20 make simulate)"
+	@echo "make scenario           Run a deterministic scenario (SCENARIO=... SEED=1 ITERATIONS=20)"
+	@echo "make campaign-sim       Run the documented representative campaign seed set (4, 9, 10, 12, 14) and report balance telemetry"
+	@echo "make campaign-sim-sweep Run N headless full campaigns over an arbitrary numeric seed sweep -- a labelled sample, not evidence of universal completability (CAMPAIGN_SEED=42 CAMPAIGN_RUNS=10)"
 
 editor:
 	godot --editor project.godot
@@ -43,4 +44,7 @@ scenario:
 	godot --headless -s scripts/tools/battle_scenarios/scenario_runner_main.gd -- --scenario=$(SCENARIO) --seed=$(SEED) --iterations=$(ITERATIONS) --output-dir=$(OUTPUT_DIR)
 
 campaign-sim:
+	godot --headless -s scripts/tools/campaign_sim_main.gd --
+
+campaign-sim-sweep:
 	godot --headless -s scripts/tools/campaign_sim_main.gd -- --seed=$(CAMPAIGN_SEED) --runs=$(CAMPAIGN_RUNS)

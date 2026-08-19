@@ -8,31 +8,14 @@ extends GutTest
 const CampaignSimScript := preload("res://scripts/tools/campaign_sim.gd")
 const CampaignSimMetricsScript := preload("res://scripts/tools/campaign_sim_metrics.gd")
 
-## The representative seed set CampaignSim's own bot/gear/upgrade policy is
-## verified (below) to carry all the way to Final Boss victory. Per the step
-## doc's own task-list wording ("reach victory on an explicitly listed
-## representative seed set ... report failures for every other seed; do not
-## claim a universal completion percentage from ten arbitrary samples"), this
-## is a deliberately small, hand-verified set -- not a claim that every seed
-## outside it fails, only that these are the ones this suite locks a victory
-## guarantee to.
-##
-## A wider sweep (seeds 1-80, re-run after the Step 6 review's fix addendum
-## -- see this step's report for the full table) shows the campaign is
-## completable on nearly every seed (78/80 in that range; only seeds 3 and
-## 25 fail). That's a sharp rise from the original report's 60-65%, and not
-## from the two review findings' reorderings alone: fixing them surfaced a
-## third, previously-undiscovered bug in the same code -- _fight_objective()'s
-## `kill_xp` accumulator was a GDScript lambda closure over a plain float,
-## which GDScript captures BY VALUE, so every battle's kill XP was silently
-## discarded and only clear_xp was ever actually awarded (see the report's
-## fix addendum for the full explanation and fix). Restoring the missing
-## kill XP raises the leveling pace enough that the pre-Boss repeated-wipe
-## spiral this suite originally locked seeds 1/2/5/7 out of essentially
-## stops happening. Seeds 4, 9, 10, 12, and 14 are the first five winning
-## seeds in the post-fix sweep, chosen in ascending order rather than
-## cherry-picked for any other property.
-const REPRESENTATIVE_VICTORY_SEEDS: Array[int] = [4, 9, 10, 12, 14]
+## The representative seed set lives on CampaignSim itself now (CampaignSim.
+## REPRESENTATIVE_VICTORY_SEEDS) -- see that constant's own doc comment for
+## the full historical context (the post-fix sweep it was derived from, and
+## the kill_xp lambda-capture-by-value bug that fix uncovered). Tests below
+## read that single production-owned copy rather than keeping a second one
+## here, so the CLI (campaign_sim_main.gd), the metrics/label layer
+## (campaign_sim_metrics.gd), and this suite can never drift apart on what
+## "representative" means.
 
 
 func before_each() -> void:
@@ -93,7 +76,7 @@ func test_run_campaign_is_fully_deterministic_for_a_fixed_seed() -> void:
 ## completability (a balance change, a policy bug) fails loudly here rather
 ## than only showing up as a lower make campaign-sim victory rate.
 func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
-	for seed in REPRESENTATIVE_VICTORY_SEEDS:
+	for seed in CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS:
 		GameSession.reset()
 		var sim := CampaignSimScript.new()
 		var record := sim.run_campaign(seed)
@@ -266,12 +249,13 @@ func test_telemetry_records_accurate_battle_counts_gold_income_and_level_curves(
 
 func test_metrics_aggregate_reports_victory_rate_and_failed_seeds_across_runs() -> void:
 	var sim := CampaignSimScript.new()
+	var seeds: Array[int] = [1, 2]
 	var records: Array = []
-	for seed in [1, 2]:
+	for seed in seeds:
 		GameSession.reset()
 		records.append(sim.run_campaign(seed))
 
-	var report := CampaignSimMetricsScript.aggregate(records)
+	var report := CampaignSimMetricsScript.aggregate(records, "sweep", seeds)
 
 	assert_eq(report.runs, 2)
 	assert_eq(report.victories, 2)
@@ -280,19 +264,67 @@ func test_metrics_aggregate_reports_victory_rate_and_failed_seeds_across_runs() 
 	assert_gt(report.mean_world_turns, 0.0)
 	assert_has(report, "mean_party_level_curve")
 	assert_has(report, "gold")
+	assert_eq(report.mode, "sweep")
+	assert_eq(report.seeds, seeds)
 
 
-func test_metric_output_generates_formatted_json_and_summary_report() -> void:
+## Locks in the mode-aware, self-describing evidence requirement (docs/plans/
+## 2026-08-19-core-loop-verification-remediation/
+## 02-representative-seed-command.md, Task 2): representative-mode evidence
+## must name its exact seed list and never print an unqualified "Victories:"
+## claim -- it must say "Representative seeds: N/N victories" instead.
+func test_metric_output_labels_representative_mode_by_name_not_an_unqualified_victory_claim() -> void:
 	var sim := CampaignSimScript.new()
-	var report := CampaignSimMetricsScript.aggregate([sim.run_campaign(42)])
+	var seeds: Array[int] = CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS
+	var records: Array = []
+	for seed in seeds:
+		GameSession.reset()
+		records.append(sim.run_campaign(seed))
+
+	var report := CampaignSimMetricsScript.aggregate(records, "representative", seeds)
 
 	var json_text := CampaignSimMetricsScript.to_json(report)
 	var parsed = JSON.parse_string(json_text)
 	assert_not_null(parsed, "to_json() output must be valid, parseable JSON")
 	assert_true(parsed is Dictionary)
-	assert_eq(int(parsed.runs), 1)
+	assert_eq(int(parsed.runs), seeds.size())
+	assert_eq(String(parsed.mode), "representative")
+	assert_eq(int(parsed.seeds.size()), seeds.size())
+	assert_true(parsed.has("failed_seeds"))
 
 	var summary := CampaignSimMetricsScript.format_summary(report)
 	assert_true(summary.begins_with("Campaign Simulation Summary"))
-	assert_true(summary.contains("Victories:"))
+	assert_true(summary.contains("Representative seeds: %s" % str(seeds)), "Summary must name the exact seed list")
+	assert_true(
+		summary.contains("Representative seeds: %d/%d victories" % [report.victories, report.runs]),
+		"Summary must label its result as representative-set victories, not an unqualified rate"
+	)
+	assert_false(summary.contains("Victories:"), "The old unqualified 'Victories:' label must be gone")
+	assert_false(summary.contains("Sample victory rate"), "Representative mode must not use the sweep-mode label")
 	assert_true(summary.contains("Mean world turns"))
+
+
+## Sweep mode is an arbitrary numeric sample, never evidence of universal
+## completability -- its percentage must be labelled "Sample victory rate"
+## and its seed range must be visible, not disguised as the representative
+## set.
+func test_metric_output_labels_sweep_mode_as_a_sample_not_a_universal_claim() -> void:
+	var sim := CampaignSimScript.new()
+	var seeds: Array[int] = [100, 101, 102]
+	var records: Array = []
+	for seed in seeds:
+		GameSession.reset()
+		records.append(sim.run_campaign(seed))
+
+	var report := CampaignSimMetricsScript.aggregate(records, "sweep", seeds)
+
+	var json_text := CampaignSimMetricsScript.to_json(report)
+	var parsed = JSON.parse_string(json_text)
+	assert_eq(String(parsed.mode), "sweep")
+	assert_true(parsed.has("seeds"))
+	assert_true(parsed.has("failed_seeds"))
+
+	var summary := CampaignSimMetricsScript.format_summary(report)
+	assert_true(summary.contains("Sweep seeds: 100-102"), "Summary must identify the contiguous sweep range")
+	assert_true(summary.contains("Sample victory rate:"), "Summary must label the percentage as a sample, not a universal rate")
+	assert_false(summary.contains("Representative seeds:"), "Sweep mode must not claim to be the representative set")

@@ -44,6 +44,38 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 ## file's own header comment).
 const FIELDABLE_CLASSES: Array[String] = ["warrior", "scout", "cleric"]
 
+## The representative seed set this simulator's own bot/gear/upgrade policy
+## is verified (see test_campaign_sim.gd's
+## test_run_campaign_reaches_victory_on_the_representative_seed_set()) to
+## carry all the way to Final Boss victory. Per docs/plans/2026-08-19-core-
+## loop-verification-remediation/02-representative-seed-command.md ("reach
+## victory on an explicitly listed representative seed set ... report
+## failures for every other seed; do not claim a universal completion
+## percentage from ten arbitrary samples"), this is a deliberately small,
+## hand-verified set -- not a claim that every seed outside it fails, only
+## that these are the ones a victory guarantee is locked to. This is the
+## single production-owned copy: campaign_sim_main.gd (the `make
+## campaign-sim` CLI), campaign_sim_metrics.gd, and the test suite all read
+## this constant rather than keeping independent copies of the same five
+## numbers.
+##
+## A wider sweep (seeds 1-80, re-run after a prior review's fix addendum --
+## see that step's report for the full table) shows the campaign is
+## completable on nearly every seed (78/80 in that range; only seeds 3 and
+## 25 fail). That's a sharp rise from an earlier report's 60-65%, and not
+## from reordering findings alone: fixing them surfaced a third,
+## previously-undiscovered bug in this same code -- _fight_objective()'s
+## `kill_xp` accumulator was a GDScript lambda closure over a plain float,
+## which GDScript captures BY VALUE, so every battle's kill XP was silently
+## discarded and only clear_xp was ever actually awarded (see that report's
+## fix addendum for the full explanation and fix). Restoring the missing
+## kill XP raises the leveling pace enough that the pre-Boss repeated-wipe
+## spiral this suite originally locked seeds 1/2/5/7 out of essentially
+## stops happening. Seeds 4, 9, 10, 12, and 14 are the first five winning
+## seeds in the post-fix sweep, chosen in ascending order rather than
+## cherry-picked for any other property.
+const REPRESENTATIVE_VICTORY_SEEDS: Array[int] = [4, 9, 10, 12, 14]
+
 ## Safety caps -- generous enough that a genuinely winnable seed always
 ## resolves, tight enough that a soft-locked or stuck run still terminates
 ## instead of hanging a batch of simulations.
