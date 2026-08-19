@@ -17,16 +17,22 @@ const CampaignSimMetricsScript := preload("res://scripts/tools/campaign_sim_metr
 ## outside it fails, only that these are the ones this suite locks a victory
 ## guarantee to.
 ##
-## A wider sweep (seeds 1-40, run manually while building this suite; see
-## this step's report for the full table) shows the campaign is completable
-## but not on every seed: a bit under two-thirds of that range wins cleanly
-## in exactly 51 world turns with zero party wipes, and the rest fall into a
-## repeated-wipe spiral around objective 10-11 (a genuine balance finding
-## for a later tuning pass, not a bug in the simulator itself -- see the
-## step report's "Design decisions" section). Seeds 1, 2, 4, 5, and 7 are
-## the first five of that winning majority, chosen in ascending order rather
-## than cherry-picked for any other property.
-const REPRESENTATIVE_VICTORY_SEEDS: Array[int] = [1, 2, 4, 5, 7]
+## A wider sweep (seeds 1-80, re-run after the Step 6 review's fix addendum
+## -- see this step's report for the full table) shows the campaign is
+## completable on nearly every seed (78/80 in that range; only seeds 3 and
+## 25 fail). That's a sharp rise from the original report's 60-65%, and not
+## from the two review findings' reorderings alone: fixing them surfaced a
+## third, previously-undiscovered bug in the same code -- _fight_objective()'s
+## `kill_xp` accumulator was a GDScript lambda closure over a plain float,
+## which GDScript captures BY VALUE, so every battle's kill XP was silently
+## discarded and only clear_xp was ever actually awarded (see the report's
+## fix addendum for the full explanation and fix). Restoring the missing
+## kill XP raises the leveling pace enough that the pre-Boss repeated-wipe
+## spiral this suite originally locked seeds 1/2/5/7 out of essentially
+## stops happening. Seeds 4, 9, 10, 12, and 14 are the first five winning
+## seeds in the post-fix sweep, chosen in ascending order rather than
+## cherry-picked for any other property.
+const REPRESENTATIVE_VICTORY_SEEDS: Array[int] = [4, 9, 10, 12, 14]
 
 
 func before_each() -> void:
@@ -98,6 +104,103 @@ func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
 		)
 		assert_eq(record.reason, "victory")
 		assert_true(GameSession.is_campaign_completed)
+
+
+## --- Review Finding 1 fix: XP splits across the pre-death roster -----------
+
+## award_party_xp() divides evenly across GameSession's party.member_ids at
+## the instant it's called, so it must run BEFORE _persist_battle_state()
+## resolves permadeath -- matching battlefield.gd's real ordering exactly
+## (_apply_battle_outcome()'s _award_clear_xp() always runs before
+## _finish_victory()'s _persist_battle_aftermath(); see battlefield.gd:377-
+## 392,502-503) -- or a battle with partial player casualties inflates each
+## survivor's per-capita XP share above what real play would produce.
+## Subclasses CampaignSim to override only the two private scenario-building
+## hooks (_build_player_units()/_build_enemy_units()) with a fixed, engineered
+## matchup -- one full-health, level-6 "tank" and one 1-HP "fragile" ally
+## planted adjacent to a single orc_bruiser -- so the enemy's own greedy
+## nearest-target AI (_take_enemy_unit_actions()'s _nearest_living_unit(),
+## Manhattan-distance) is virtually guaranteed to kill the fragile ally on
+## its first landed hit (the fragile ally sits at Manhattan distance 1 from
+## the enemy's default start; the tank starts distance 10 away) while the
+## tank alone finishes the enemy off over the remaining rounds. Everything
+## else -- _fight_objective() itself, _persist_battle_state(),
+## _run_battle_to_resolution() -- is the real, unmodified production path.
+class _FragileCasualtyCampaignSim extends CampaignSimScript:
+	var tank_id: String = ""
+	var fragile_id: String = ""
+
+	func _build_player_units() -> Array:
+		return [
+			_unit_spec(tank_id, {}),
+			_unit_spec(fragile_id, {
+				# vitality(10) * level(1) + (-9) == 1 HP (see _build_player_
+				# unit()'s max_health formula).
+				"modifiers": {"max_health": -9},
+				# Chebyshev/8-neighbor-adjacent (melee attack range) to the
+				# enemy's own default start position (5,5) -- see
+				# BattleControllerScript.ENEMY_START_POSITIONS[0] -- and
+				# Manhattan distance 1, far closer than the tank's default
+				# (0,0) start (Manhattan distance 10), so
+				# _nearest_living_unit() always prefers this unit as the
+				# enemy's target while it's alive.
+				"position": {"x": 4, "y": 5},
+			}),
+		]
+
+	func _unit_spec(member_id: String, extra: Dictionary) -> Dictionary:
+		var adventurer := GameSession.get_adventurer(member_id)
+		var spec := {
+			"id": member_id,
+			"template_id": String(adventurer.get("class", "warrior")),
+			"weapon_id": String(adventurer.equipment.get("weapon", GameSession.DEFAULT_WEAPON_ID)),
+			"armor_id": String(adventurer.equipment.get("armor", GameSession.DEFAULT_ARMOR_ID)),
+			"level": int(adventurer.get("level", 1)),
+		}
+		spec.merge(extra)
+		return spec
+
+	func _build_enemy_units(_expedition: Dictionary) -> Array:
+		return [{"id": "enemy_0", "template_id": "orc_bruiser"}]
+
+
+func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -> void:
+	GameSession.create_party()
+	var tank_id := String(GameSession.adventurers[0].id)
+	var fragile_id := String(GameSession.adventurers[1].id)
+	GameSession.assign_adventurer_to_selected_party(tank_id)
+	GameSession.assign_adventurer_to_selected_party(fragile_id)
+	for adventurer in GameSession.adventurers:
+		if String(adventurer.id) == tank_id:
+			adventurer.level = 6
+
+	var sim := _FragileCasualtyCampaignSim.new()
+	sim.sim_seed = 4242
+	sim.tank_id = tank_id
+	sim.fragile_id = fragile_id
+	var telemetry := sim._new_telemetry(4242)
+
+	var xp_before: float = float(GameSession.get_adventurer(tank_id).progression.xp)
+	var outcome := sim._fight_objective(GameSession.GOBLIN_CAMP_ID, telemetry)
+
+	assert_eq(
+		outcome, "victory",
+		"The engineered matchup (full-health level-6 tank + 1-HP fragile ally vs. one orc_bruiser) must resolve as a win"
+	)
+	assert_eq(telemetry.unit_deaths, 1, "Exactly the 1-HP fragile ally must have died -- this is the partial-casualty case Finding 1 covers")
+	assert_true(GameSession.get_adventurer(fragile_id).is_empty(), "The dead member must be gone from the roster (permadeath)")
+	assert_false(GameSession.get_adventurer(tank_id).is_empty(), "The tank must have survived")
+
+	var expected_total_xp := float(GameSession.ORC_BRUISER_ENEMY_STATS.kill_xp) + float(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).clear_xp)
+	var expected_share := expected_total_xp / 2.0  # split across BOTH pre-death members, not just the 1 survivor
+	var xp_after: float = float(GameSession.get_adventurer(tank_id).progression.xp)
+	assert_almost_eq(
+		xp_after - xp_before, expected_share, 0.01,
+		(
+			"The surviving tank's XP gain must equal total_xp (%.1f) split across the pre-death roster (2 members) == %.1f -- "
+			+ "a regression to the old (award-after-permadeath) ordering would instead award the full %.1f to the sole survivor"
+		) % [expected_total_xp, expected_share, expected_total_xp]
+	)
 
 
 ## --- Task 2: metrics collection and verification ---------------------------

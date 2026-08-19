@@ -142,8 +142,8 @@ func _new_telemetry(seed: int) -> Dictionary:
 
 func _run_encampment_phase(telemetry: Dictionary) -> void:
 	_refill_party(telemetry)
-	_equip_best_gear(telemetry)
 	_purchase_affordable_upgrades(telemetry)
+	_equip_best_gear(telemetry)
 	_refill_party(telemetry)
 	_wait_for_ready_party(telemetry)
 	_purchase_affordable_upgrades(telemetry)
@@ -425,31 +425,51 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
 	var battle_seed := ScenarioContractScript.derive_iteration_seed(sim_seed, encounter_id, telemetry.battles_fought)
 	var controller: Node2D = BattleStateFactoryScript.build(scenario, battle_seed)
 
-	var kill_xp := 0.0
-	var on_enemy_defeated := func(unit) -> void: kill_xp += float(unit.kill_xp)
+	# Boxed in a single-element array, not a plain float, because a GDScript
+	# lambda captures an outer local variable BY VALUE (a snapshot at lambda-
+	# creation time) -- mutating it inside the lambda would silently leave
+	# the outer `kill_xp` read below always 0.0, never actually accumulating
+	# any kill XP (found while verifying the Finding 1 fix: total_xp was
+	# always exactly clear_xp, with every battle's kill XP silently dropped).
+	# _wire_deterministic_rolls()'s own `minted := [0]` uses the identical
+	# array-box idiom for the same reason.
+	var kill_xp := [0.0]
+	var on_enemy_defeated := func(unit) -> void: kill_xp[0] += float(unit.kill_xp)
 	controller.enemy_defeated.connect(on_enemy_defeated)
 
 	var outcome := _run_battle_to_resolution(controller)
 
 	telemetry.battles_fought += 1
-	var dead_ids := _persist_battle_state(controller)
-	telemetry.unit_deaths += dead_ids.size()
 
 	match outcome:
 		"victory":
+			# Mirrors battlefield.gd's real ordering exactly: kill XP accrues
+			# progressively during the battle (via enemy_defeated above) and
+			# clear XP is awarded in _apply_battle_outcome() -- both always
+			# BEFORE _finish_victory()'s _persist_battle_aftermath() resolves
+			# permadeath (see battlefield.gd:377-392,502-503). award_party_xp()
+			# divides evenly across the party's CURRENT member_ids, so XP must
+			# be awarded while any member who died this battle is still on
+			# the roster, or survivors get an inflated per-capita share.
 			telemetry.battles_won += 1
-			var total_xp := kill_xp + float(expedition.get("clear_xp", 0))
+			var total_xp: float = float(kill_xp[0]) + float(expedition.get("clear_xp", 0))
 			var leveled_up := GameSession.award_party_xp(GameSession.selected_party_id, total_xp)
+			var dead_ids := _persist_battle_state(controller)
+			telemetry.unit_deaths += dead_ids.size()
 			_resolve_pending_perks(leveled_up)
 			GameSession.complete_current_encounter()
 			GameSession.merge_battle_loot_into_party()
 		"defeat":
+			var dead_ids := _persist_battle_state(controller)
+			telemetry.unit_deaths += dead_ids.size()
 			var lost: int = GameSession.gold + GameSession.pending_reward + GameSession.battle_reward
 			GameSession.abandon_current_encounter()
 			GameSession.resolve_party_wipe()
 			telemetry.gold_lost_wipes += lost
 			telemetry.party_wipes += 1
 		_:
+			var dead_ids := _persist_battle_state(controller)
+			telemetry.unit_deaths += dead_ids.size()
 			telemetry.stalemates += 1
 			GameSession.abandon_current_encounter()
 			GameSession.discard_battle_loot()
