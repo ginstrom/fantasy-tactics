@@ -170,3 +170,40 @@ func test_start_menu_load_path_is_not_gated_by_any_confirmation_dialog() -> void
 
 	assert_false(source.contains("Dialog"), "Start Menu's Continue/Load must never be gated by a confirmation dialog")
 	assert_false(source.contains("confirm"), "Start Menu's Continue/Load must never be gated by a confirmation step")
+
+
+## --- Audio Settings (Task 4 follow-up, docs/plans/2026-08-18-core-loop-and-
+## engagement/08-audio-system-and-soundscape.md's Technical Design §5 also
+## calls for Title Menu access, not just the in-battle/pause Game Menu -- see
+## task-1-report.md's Finding 3b fix notes) --- the panel is the same
+## reusable scene embedded in game_menu.tscn (scenes/ui/audio_settings.tscn,
+## instanced here as the "AudioSettings" node), toggled by an Audio button
+## the same way game_menu.gd's own _on_audio_pressed() does. These tests only
+## prove the Title Menu opens/closes it correctly, mirroring
+## test_game_menu.gd's equivalent coverage -- AudioManager itself is already
+## covered in tests/unit/test_audio_manager.gd.
+
+func test_audio_settings_panel_is_hidden_until_the_audio_button_is_pressed_on_the_title_menu() -> void:
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("AudioSettings").visible)
+
+
+func test_pressing_the_audio_button_shows_the_audio_settings_panel_on_the_title_menu() -> void:
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	screen.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	assert_true(screen.get_node("AudioSettings").visible)
+
+
+func test_pressing_the_audio_button_again_hides_the_panel_on_the_title_menu() -> void:
+	var screen: Control = StartMenuScene.instantiate()
+	add_child_autofree(screen)
+
+	screen.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	screen.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+
+	assert_false(screen.get_node("AudioSettings").visible)

@@ -45,6 +45,13 @@ var last_sfx_id: String = ""
 var last_sfx_pitch_scale: float = 1.0
 var current_music_track_id: String = ""
 
+## Observability for tests: total number of play_sfx() calls since the last
+## reset() -- lets a test prove a sound played *exactly once* rather than
+## only "was eventually played" (see tests/unit/test_game_menu.gd's
+## drag-does-not-spam-the-preview-click coverage, added alongside the
+## drag_ended debounce in scripts/ui/audio_settings.gd).
+var sfx_play_count: int = 0
+
 var _warned_missing_assets: Dictionary = {}
 
 var _sfx_players: Array[AudioStreamPlayer] = []
@@ -119,14 +126,28 @@ func reset() -> void:
 	current_music_track_id = ""
 	last_sfx_id = ""
 	last_sfx_pitch_scale = 1.0
+	sfx_play_count = 0
 	_warned_missing_assets.clear()
 
 
 ## --- Bus volume/mute -------------------------------------------------------
 
 func set_bus_volume(bus_name: String, volume_linear: float) -> void:
-	_apply_bus_volume(bus_name, clampf(volume_linear, 0.0, 1.0))
+	set_bus_volume_live(bus_name, volume_linear)
 	_save_settings()
+
+
+## Applies a bus volume change to the live AudioServer only -- does not
+## persist to disk. UI callers whose input fires on every continuous tick
+## (e.g. an HSlider's value_changed while being dragged -- see
+## scripts/ui/audio_settings.gd) call this instead of set_bus_volume() so
+## dragging stays instantly responsive without spamming a disk write per
+## tick; the caller is responsible for calling save_settings() once the
+## drag/adjustment completes. set_bus_volume() itself (used by every other,
+## non-continuous caller: tests, mute toggles' sibling volume state, etc.)
+## still applies-and-saves atomically, unchanged.
+func set_bus_volume_live(bus_name: String, volume_linear: float) -> void:
+	_apply_bus_volume(bus_name, clampf(volume_linear, 0.0, 1.0))
 
 
 ## Reads back through AudioServer (db_to_linear(get_bus_volume_db())) rather
@@ -188,6 +209,7 @@ func _apply_bus_mute(bus_name: String, muted: bool) -> void:
 func play_sfx(sfx_id: String, pitch_jitter: float = 0.05) -> void:
 	var stream := _load_stream(SFX_DIR, sfx_id)
 	last_sfx_id = sfx_id
+	sfx_play_count += 1
 	if stream == null:
 		return
 	var player := _acquire_sfx_player()

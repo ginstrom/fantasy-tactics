@@ -10,6 +10,7 @@ func before_each() -> void:
 func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.create_party_on_open = false
+	AudioManager.reset()
 
 
 
@@ -18,6 +19,21 @@ func test_encampment_contains_the_camp_nav() -> void:
 	add_child_autofree(screen)
 
 	assert_not_null(screen.get_node("Body/CampNav"))
+
+
+## Task 3: Music State Transitions (docs/plans/2026-08-18-core-loop-and-
+## engagement/08-audio-system-and-soundscape.md) -- entering the Encampment
+## requests its own track (scripts/ui/encampment.gd's _ready()).
+## AudioManager.play_music() itself is exercised directly in
+## tests/unit/test_audio_manager.gd -- this only proves Encampment calls it
+## with the right track id, mirroring test_battlefield.gd's equivalent
+## coverage for Battle/Victory/Defeat (Finding 3a, task-1-report.md).
+func test_entering_the_encampment_requests_the_encampment_music() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+
+	add_child_autofree(screen)
+
+	assert_true(AudioManager.is_music_playing("music_encampment"))
 
 
 func test_the_old_depart_and_manage_party_controls_are_absent() -> void:

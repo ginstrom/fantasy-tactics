@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/start_menu.gd" id="1_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/audio_settings.tscn" id="2_audio_settings"]
 
 [node name="StartMenu" type="Control"]
 layout_mode = 3
@@ -40,6 +41,10 @@ text = "menu.new_game"
 layout_mode = 2
 text = "menu.load"
 
+[node name="AudioButton" type="Button" parent="Center/VBox"]
+layout_mode = 2
+text = "menu.audio"
+
 [node name="QuitButton" type="Button" parent="Center/VBox"]
 layout_mode = 2
 text = "menu.quit"
@@ -66,9 +71,13 @@ layout_mode = 2
 disabled = true
 text = "menu.begin"
 
+[node name="AudioSettings" parent="." instance=ExtResource("2_audio_settings")]
+visible = false
+
 [connection signal="pressed" from="Center/VBox/ContinueButton" to="." method="_on_continue_pressed"]
 [connection signal="pressed" from="Center/VBox/NewGameButton" to="." method="_on_new_game_pressed"]
 [connection signal="pressed" from="Center/VBox/LoadButton" to="." method="_on_load_pressed"]
+[connection signal="pressed" from="Center/VBox/AudioButton" to="." method="_on_audio_pressed"]
 [connection signal="pressed" from="Center/VBox/QuitButton" to="." method="_on_quit_pressed"]
 [connection signal="text_changed" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_changed"]
 [connection signal="text_submitted" from="Center/VBox/NameEntry/NameInput" to="." method="_on_name_input_text_submitted"]

@@ -97,9 +97,15 @@ layout_mode = 2
 text = "ui.back"
 
 [connection signal="value_changed" from="VBox/MasterRow/MasterSlider" to="." method="_on_master_slider_value_changed"]
+[connection signal="drag_started" from="VBox/MasterRow/MasterSlider" to="." method="_on_master_slider_drag_started"]
+[connection signal="drag_ended" from="VBox/MasterRow/MasterSlider" to="." method="_on_master_slider_drag_ended"]
 [connection signal="toggled" from="VBox/MasterRow/MasterMuteButton" to="." method="_on_master_mute_toggled"]
 [connection signal="value_changed" from="VBox/MusicRow/MusicSlider" to="." method="_on_music_slider_value_changed"]
+[connection signal="drag_started" from="VBox/MusicRow/MusicSlider" to="." method="_on_music_slider_drag_started"]
+[connection signal="drag_ended" from="VBox/MusicRow/MusicSlider" to="." method="_on_music_slider_drag_ended"]
 [connection signal="toggled" from="VBox/MusicRow/MusicMuteButton" to="." method="_on_music_mute_toggled"]
 [connection signal="value_changed" from="VBox/SFXRow/SFXSlider" to="." method="_on_sfx_slider_value_changed"]
+[connection signal="drag_started" from="VBox/SFXRow/SFXSlider" to="." method="_on_sfx_slider_drag_started"]
+[connection signal="drag_ended" from="VBox/SFXRow/SFXSlider" to="." method="_on_sfx_slider_drag_ended"]
 [connection signal="toggled" from="VBox/SFXRow/SFXMuteButton" to="." method="_on_sfx_mute_toggled"]
 [connection signal="pressed" from="VBox/CloseButton" to="." method="_on_close_pressed"]

@@ -17,6 +17,21 @@ extends PanelContainer
 @onready var sfx_slider: HSlider = $VBox/SFXRow/SFXSlider
 @onready var sfx_mute_button: CheckButton = $VBox/SFXRow/SFXMuteButton
 
+## True while one of the three sliders above is being actively mouse-dragged
+## (set by that slider's own drag_started/drag_ended signals, connected in
+## audio_settings.tscn). A Slider's value_changed signal fires continuously
+## on every tick of a drag -- applying live audio on every tick is correct
+## and stays on value_changed unconditionally below, but persisting to disk
+## (AudioManager.save_settings()) and, for the SFX slider, spam-playing its
+## preview click on every one of those ticks is not (see task-1-report.md's
+## Finding 1/2 fix notes). Gating "not currently dragging" lets a plain click
+## or a keyboard nudge -- neither of which raises drag_started/drag_ended --
+## still persist/preview immediately as a single discrete change, while an
+## actual mouse drag defers both exactly once, to drag_ended. Shared across
+## all three sliders rather than per-slider: only one can be mouse-dragged by
+## the user at a time.
+var _dragging := false
+
 
 func _ready() -> void:
 	refresh()
@@ -32,7 +47,18 @@ func refresh() -> void:
 
 
 func _on_master_slider_value_changed(value: float) -> void:
-	AudioManager.set_bus_volume("Master", value)
+	AudioManager.set_bus_volume_live("Master", value)
+	if not _dragging:
+		AudioManager.save_settings()
+
+
+func _on_master_slider_drag_started() -> void:
+	_dragging = true
+
+
+func _on_master_slider_drag_ended(_value_changed: bool) -> void:
+	_dragging = false
+	AudioManager.save_settings()
 
 
 func _on_master_mute_toggled(pressed: bool) -> void:
@@ -40,7 +66,18 @@ func _on_master_mute_toggled(pressed: bool) -> void:
 
 
 func _on_music_slider_value_changed(value: float) -> void:
-	AudioManager.set_bus_volume("Music", value)
+	AudioManager.set_bus_volume_live("Music", value)
+	if not _dragging:
+		AudioManager.save_settings()
+
+
+func _on_music_slider_drag_started() -> void:
+	_dragging = true
+
+
+func _on_music_slider_drag_ended(_value_changed: bool) -> void:
+	_dragging = false
+	AudioManager.save_settings()
 
 
 func _on_music_mute_toggled(pressed: bool) -> void:
@@ -49,9 +86,25 @@ func _on_music_mute_toggled(pressed: bool) -> void:
 
 ## SFX slider changes also play a preview click so the player can hear the
 ## level they just set (see the step doc's manual-verification script:
-## "Move SFX slider and confirm button click sound adjusts in volume").
+## "Move SFX slider and confirm button click sound adjusts in volume") --
+## but only once per discrete change, not on every continuous-drag tick: a
+## plain click or keyboard nudge previews immediately here, while a mouse
+## drag defers the preview to _on_sfx_slider_drag_ended() below, exactly
+## once per drag.
 func _on_sfx_slider_value_changed(value: float) -> void:
-	AudioManager.set_bus_volume("SFX", value)
+	AudioManager.set_bus_volume_live("SFX", value)
+	if not _dragging:
+		AudioManager.save_settings()
+		AudioManager.play_sfx("sfx_ui_click")
+
+
+func _on_sfx_slider_drag_started() -> void:
+	_dragging = true
+
+
+func _on_sfx_slider_drag_ended(_value_changed: bool) -> void:
+	_dragging = false
+	AudioManager.save_settings()
 	AudioManager.play_sfx("sfx_ui_click")
 
 

@@ -393,3 +393,79 @@ func test_opening_the_audio_panel_shows_the_audio_managers_current_bus_state() -
 	var music_mute_button: CheckButton = menu.get_node("AudioSettings/VBox/MusicRow/MusicMuteButton")
 	assert_almost_eq(sfx_slider.value, 0.25, 0.01)
 	assert_true(music_mute_button.button_pressed)
+
+
+## Finding 1 (task-1-report.md fix notes): a Slider's value_changed signal
+## fires on every tick of a mouse drag, not just on release. Before this fix,
+## scripts/ui/audio_settings.gd's slider handlers called
+## AudioManager.set_bus_volume(), which persists to disk on every single one
+## of those ticks -- dragging a slider spammed dozens of disk writes per
+## second. This proves the fix: mid-drag value_changed ticks apply live
+## (AudioServer updates instantly -- proven by get_bus_volume() below) but do
+## NOT touch disk; only drag_ended's single call to
+## AudioManager.save_settings() does, and it persists the final value.
+func test_dragging_a_slider_in_the_game_menu_does_not_persist_until_the_drag_ends() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/MasterRow/MasterSlider")
+	if FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH):
+		DirAccess.remove_absolute(TEST_AUDIO_SETTINGS_PATH)
+
+	slider.emit_signal("drag_started")
+	slider.value = 0.2
+	slider.value = 0.35
+	slider.value = 0.6
+	assert_almost_eq(AudioManager.get_bus_volume("Master"), 0.6, 0.01, "Live audio must still update instantly while dragging")
+	assert_false(FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH), "Dragging must not write to disk on every tick")
+
+	slider.emit_signal("drag_ended", true)
+
+	assert_true(FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH), "Ending the drag must persist exactly once")
+	# Prove what actually landed on disk, not just that a write happened.
+	AudioManager.reset()
+	AudioManager.load_settings()
+	assert_almost_eq(AudioManager.get_bus_volume("Master"), 0.6, 0.01, "The final dragged value must be what was persisted")
+
+
+## Finding 2 (task-1-report.md fix notes): the SFX slider's value_changed
+## handler used to call AudioManager.play_sfx("sfx_ui_click") unconditionally,
+## so dragging spam-played the click sound many times per second. This proves
+## the fix using the same drag_started/drag_ended debounce as Finding 1:
+## mid-drag ticks must not preview at all; drag_ended must preview exactly
+## once.
+func test_dragging_the_sfx_slider_in_the_game_menu_does_not_spam_play_the_preview_click() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/SFXRow/SFXSlider")
+
+	slider.emit_signal("drag_started")
+	slider.value = 0.3
+	slider.value = 0.5
+	slider.value = 0.7
+	assert_eq(AudioManager.sfx_play_count, 0, "Dragging must not spam-play the preview click")
+
+	slider.emit_signal("drag_ended", true)
+
+	assert_eq(AudioManager.sfx_play_count, 1, "Ending the drag must play the preview exactly once")
+
+
+## A plain (non-drag) value change -- e.g. a keyboard nudge, or a script
+## directly setting .value the way GUT's own tests above do -- never raises
+## drag_started/drag_ended at all, so it must still persist/preview
+## immediately as a single discrete change rather than waiting for a drag
+## that will never end.
+func test_a_non_drag_slider_change_in_the_game_menu_still_persists_and_previews_immediately() -> void:
+	var menu: CanvasLayer = GameMenuScene.instantiate()
+	add_child_autofree(menu)
+	menu.get_node("Center/VBox/AudioButton").emit_signal("pressed")
+	var slider: HSlider = menu.get_node("AudioSettings/VBox/SFXRow/SFXSlider")
+	if FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH):
+		DirAccess.remove_absolute(TEST_AUDIO_SETTINGS_PATH)
+
+	slider.value = 0.45
+
+	assert_almost_eq(AudioManager.get_bus_volume("SFX"), 0.45, 0.01)
+	assert_eq(AudioManager.sfx_play_count, 1, "A discrete, non-drag change must still preview immediately")
+	assert_true(FileAccess.file_exists(TEST_AUDIO_SETTINGS_PATH), "A discrete, non-drag change must still persist immediately")

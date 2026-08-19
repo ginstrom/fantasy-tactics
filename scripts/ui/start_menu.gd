@@ -8,6 +8,7 @@ extends Control
 @onready var name_input: LineEdit = $Center/VBox/NameEntry/NameInput
 @onready var random_button: Button = $Center/VBox/NameEntry/RandomButton
 @onready var begin_button: Button = $Center/VBox/NameEntry/BeginButton
+@onready var audio_settings: Control = $AudioSettings
 
 const PLAYER_NAME_CHOICES := ["The Black Company", "Company of Saints"]
 
@@ -50,6 +51,18 @@ func _on_random_button_pressed() -> void:
 
 func _on_load_pressed() -> void:
 	GameManager.go_to_loaded_campaign()
+
+
+## Toggles the same embedded Audio Settings panel game_menu.gd's own
+## _on_audio_pressed() uses (see scenes/ui/audio_settings.tscn) -- reusing
+## the one self-contained scene rather than duplicating it, so Audio Settings
+## is reachable both from the Title Menu (here, before any campaign exists)
+## and from the in-battle/pause Game Menu (Technical Design §5 calls for
+## both entry points).
+func _on_audio_pressed() -> void:
+	audio_settings.visible = not audio_settings.visible
+	if audio_settings.visible:
+		audio_settings.refresh()
 
 
 func _on_begin_pressed() -> void:

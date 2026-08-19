@@ -15,6 +15,7 @@ func after_each() -> void:
 	GameManager.close_game_menu()
 	GameManager.route_context_id = ""
 	GameSession.reset_injectable_rolls()
+	AudioManager.reset()
 
 
 func _deploy_warrior_party() -> void:
@@ -28,6 +29,24 @@ func _make_world_map() -> Node2D:
 	world_map.grid = GridScript.new(WorldMapScript.GRID_WIDTH, WorldMapScript.GRID_HEIGHT)
 	autofree(world_map)
 	return world_map
+
+
+## Task 3: Music State Transitions (docs/plans/2026-08-18-core-loop-and-
+## engagement/08-audio-system-and-soundscape.md) -- entering the World Map
+## requests its own track (scripts/world/world_map.gd's _ready()).
+## AudioManager.play_music() itself is exercised directly in
+## tests/unit/test_audio_manager.gd -- this only proves World Map calls it
+## with the right track id, mirroring test_battlefield.gd's equivalent
+## coverage for Battle/Victory/Defeat (Finding 3a, task-1-report.md). Uses
+## the real packed scene (WorldMapScene.instantiate()), not the bare
+## _make_world_map() helper above, since the music request lives in _ready()
+## and _make_world_map() never adds the node to the tree.
+func test_entering_the_world_map_requests_the_world_map_music() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+
+	add_child_autofree(world_map)
+
+	assert_true(AudioManager.is_music_playing("music_world_map"))
 
 
 func test_party_moves_to_an_adjacent_tile() -> void:
