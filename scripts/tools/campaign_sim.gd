@@ -10,16 +10,18 @@ extends RefCounted
 ## 5's config/campaign_scenarios.json fixtures already establish. Never
 ## touches battlefield.gd, a .tscn, or any UI script.
 ##
-## Fielding scope: ScenarioContract.KNOWN_PLAYER_TEMPLATES (see that file)
-## only recognizes "warrior"/"scout" -- the scene-free battle path has no
-## spellcasting/MP hydration for Cleric (see BattleStateFactory._build_
-## player_unit(), which never sets spells/mp_max/mp_remaining the way the
-## real BattleController._ready() does for a scene battle), and Step 5's own
-## campaign_scenarios.json fixtures never field one either. CampaignSim
-## follows that same established convention: only Warrior/Scout roster
-## members are assigned to the deployed party and fielded into combat.
-## Extending ScenarioContract/BattleStateFactory for Cleric spellcasting is
-## out of this step's scope.
+## Fielding scope: FIELDABLE_CLASSES covers all three root classes -- Warrior,
+## Scout, and Cleric (see docs/plans/2026-08-19-core-loop-verification-
+## remediation/01-cleric-scenario-and-campaign-sim.md). ScenarioContract.
+## KNOWN_PLAYER_TEMPLATES and BattleStateFactory._build_player_unit() both
+## hydrate a Cleric's spells/mp_max/mp_remaining from GameSession.CLASS_
+## DEFINITIONS the same way the real BattleController._ready() does for a
+## scene battle, so a fielded Cleric can actually cast Heal/Bless through the
+## real ScenarioContract -> BattleStateFactory -> BattleBot pipeline.
+## _refill_party() prioritizes recruiting one of each missing FIELDABLE_
+## CLASSES member before spending gold on a duplicate, so a representative
+## run fields Warrior/Scout/Cleric together rather than only ever doubling up
+## on whichever class happens to be cheapest.
 ##
 ## Travel simplification: GameSession.enter_encounter() never gates on
 ## world_position (see its own body) and deploy_party()/return_deployed_
@@ -38,9 +40,9 @@ const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/sc
 const BattleBotScript := preload("res://scripts/tools/battle_bot.gd")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 
-## The only two classes the scene-free battle path can field (see this file's
-## own header comment).
-const FIELDABLE_CLASSES: Array[String] = ["warrior", "scout"]
+## The three root classes the scene-free battle path can field (see this
+## file's own header comment).
+const FIELDABLE_CLASSES: Array[String] = ["warrior", "scout", "cleric"]
 
 ## Safety caps -- generous enough that a genuinely winnable seed always
 ## resolves, tight enough that a soft-locked or stuck run still terminates
@@ -135,6 +137,20 @@ func _new_telemetry(seed: int) -> Dictionary:
 		"upgrade_progression_turns": {},
 		"party_level_curve": {},
 		"final_average_level": 0.0,
+		# Set true the first time the party simultaneously contains one
+		# member of every FIELDABLE_CLASSES entry (see _record_full_triad())
+		# -- proof a representative run actually fields the full Warrior/
+		# Scout/Cleric triad together, not just that a Cleric was recruited
+		# at some unrelated point. full_triad_party_size records the party
+		# size at that moment (3 at the Guild Hall level-1 party cap, before
+		# any Guild Hall upgrade).
+		"fielded_full_triad": false,
+		"full_triad_party_size": 0,
+		# Total BattleBot spell casts (Heal/Bless) across every battle this
+		# run fought, derived from the "spell"-typed action records
+		# BattleBot.take_player_turn() returns (see _run_battle_to_
+		# resolution()) -- never a separate hand-counted mechanism.
+		"spell_casts": 0,
 	}
 
 
@@ -170,12 +186,15 @@ func _wait_for_ready_party(telemetry: Dictionary) -> void:
 		_refill_party(telemetry)
 
 
-## Assigns every already-owned, unassigned Warrior/Scout to the party (up to
-## its Guild Hall-gated size cap), then spends gold on the cheapest
-## affordable Warrior/Scout recruitment offers while the roster still has
-## room. Cleric offers are left on the board untouched -- see this file's
-## header comment on fielding scope. `telemetry` is optional so callers that
-## only care about party membership (e.g. a unit test) can omit it.
+## Assigns every already-owned, unassigned Warrior/Scout/Cleric to the party
+## (up to its Guild Hall-gated size cap), then spends gold on affordable
+## Warrior/Scout/Cleric recruitment offers while the roster still has room --
+## preferring the cheapest offer for a class the party doesn't yet field over
+## a cheaper duplicate of a class it already has (see _next_recruitment_
+## candidate()), so a representative run fields all three classes together
+## rather than only ever doubling up on whichever offer happens to be
+## cheapest. `telemetry` is optional so callers that only care about party
+## membership (e.g. a unit test) can omit it.
 func _refill_party(telemetry: Dictionary = {}) -> void:
 	var party := GameSession.get_selected_party()
 	if party.is_empty():
@@ -192,15 +211,18 @@ func _refill_party(telemetry: Dictionary = {}) -> void:
 
 	party = GameSession.get_selected_party()
 	while party.member_ids.size() < capacity and GameSession.adventurers.size() < GameSession.get_roster_cap():
-		var candidate := _cheapest_affordable_fieldable_candidate()
+		var candidate := _next_recruitment_candidate()
 		if candidate.is_empty():
-			return
+			break
 		var before: int = GameSession.gold
 		if not GameSession.purchase_recruit_for_party(String(candidate.id), party.id):
-			return
+			break
 		if not telemetry.is_empty():
 			telemetry.gold_spent_recruits += before - GameSession.gold
 		party = GameSession.get_selected_party()
+
+	if not telemetry.is_empty():
+		_record_full_triad(telemetry)
 
 
 func _is_fieldable(adventurer: Dictionary) -> bool:
@@ -216,16 +238,68 @@ func _fieldable_member_ids() -> Array:
 	return ids
 
 
+## The recruit _refill_party() actually purchases next: the cheapest
+## affordable offer for a FIELDABLE_CLASSES entry the party doesn't yet
+## field, if one exists and is affordable, otherwise the overall cheapest
+## affordable fieldable offer (which may duplicate a class already present).
+func _next_recruitment_candidate() -> Dictionary:
+	var missing := _missing_fieldable_classes()
+	if not missing.is_empty():
+		var priority_candidate := _cheapest_affordable_fieldable_candidate_of_classes(missing)
+		if not priority_candidate.is_empty():
+			return priority_candidate
+	return _cheapest_affordable_fieldable_candidate()
+
+
+## FIELDABLE_CLASSES entries with no current party member of that class.
+func _missing_fieldable_classes() -> Array:
+	var present := {}
+	for member_id in GameSession.get_selected_party().get("member_ids", []):
+		var adventurer := GameSession.get_adventurer(member_id)
+		if not adventurer.is_empty():
+			present[String(adventurer.get("class", ""))] = true
+	var missing: Array = []
+	for class_id in FIELDABLE_CLASSES:
+		if not present.has(class_id):
+			missing.append(class_id)
+	return missing
+
+
 func _cheapest_affordable_fieldable_candidate() -> Dictionary:
+	return _cheapest_affordable_fieldable_candidate_of_classes(FIELDABLE_CLASSES)
+
+
+func _cheapest_affordable_fieldable_candidate_of_classes(classes: Array) -> Dictionary:
 	var best := {}
 	for candidate in GameSession.get_recruitment_candidates():
 		if not _is_fieldable(candidate):
+			continue
+		if not (String(candidate.get("class", "")) in classes):
 			continue
 		if int(candidate.cost) > GameSession.gold:
 			continue
 		if best.is_empty() or int(candidate.cost) < int(best.cost):
 			best = candidate
 	return best
+
+
+## Marks telemetry.fielded_full_triad the first time the party simultaneously
+## contains a member of every FIELDABLE_CLASSES entry -- see _new_telemetry()
+## and the header comment's fielding-scope note. A no-op once already
+## recorded (telemetry only ever records the first occurrence).
+func _record_full_triad(telemetry: Dictionary) -> void:
+	if telemetry.get("fielded_full_triad", false):
+		return
+	var present := {}
+	for member_id in GameSession.get_selected_party().get("member_ids", []):
+		var adventurer := GameSession.get_adventurer(member_id)
+		if not adventurer.is_empty():
+			present[String(adventurer.get("class", ""))] = true
+	for class_id in FIELDABLE_CLASSES:
+		if not present.has(class_id):
+			return
+	telemetry.fielded_full_triad = true
+	telemetry.full_triad_party_size = GameSession.get_selected_party().get("member_ids", []).size()
 
 
 ## Building purchase priority mirrors the technical design's own macro-loop
@@ -437,7 +511,7 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
 	var on_enemy_defeated := func(unit) -> void: kill_xp[0] += float(unit.kill_xp)
 	controller.enemy_defeated.connect(on_enemy_defeated)
 
-	var outcome := _run_battle_to_resolution(controller)
+	var outcome := _run_battle_to_resolution(controller, telemetry)
 
 	telemetry.battles_fought += 1
 
@@ -482,12 +556,20 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
 ## run_enemy_turn/end_turn cadence as test_battle_controller.gd's
 ## _run_to_resolution()) until one side is eliminated or MAX_BATTLE_ROUNDS is
 ## hit ("stalemate" -- the same third outcome battle_sim.gd already reports
-## for a bot that cannot resolve a fight in time).
-func _run_battle_to_resolution(controller: Node2D) -> String:
+## for a bot that cannot resolve a fight in time). Tallies telemetry.
+## spell_casts from the "spell"-typed action records BattleBot.take_player_
+## turn() returns for a Cleric (or any other spell-capable class) fielded
+## this battle -- `telemetry` is optional, mirroring every other telemetry
+## parameter in this file.
+func _run_battle_to_resolution(controller: Node2D, telemetry: Dictionary = {}) -> String:
 	var rounds := 0
 	while rounds < MAX_BATTLE_ROUNDS:
 		rounds += 1
-		BattleBotScript.take_player_turn(controller)
+		var player_steps: Array = BattleBotScript.take_player_turn(controller)
+		if not telemetry.is_empty():
+			for step in player_steps:
+				if String(step.get("type", "")) == "spell":
+					telemetry.spell_casts += 1
 		controller.end_turn()
 		if controller.is_battle_lost():
 			return "defeat"

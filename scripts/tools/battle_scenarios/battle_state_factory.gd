@@ -62,6 +62,11 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	controller.hit_roll = func() -> float: return rng.randf()
 	controller.crit_roll = func() -> float: return rng.randf()
 	controller.damage_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
+	# Heal's healing amount (see battle_controller.gd's try_cast_spell()) must
+	# draw from this same per-iteration seeded source, or a Cleric's Heal
+	# rolls would silently fall back to Godot's global, unseeded RNG and
+	# break reproducibility for any scenario that fields one.
+	controller.healing_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
 
 	var units: Array = []
 	var player_adventurer_ids: Array[String] = []
@@ -181,6 +186,21 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	)
 	unit.display_name = String(spec.id)
 	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "right")))
+
+	# Mirrors BattleController's own runtime hydration (see that file's
+	# _build_player_units()-equivalent code, ~lines 245-255): a class whose
+	# CLASS_DEFINITIONS entry declares spells (Cleric today) gets those
+	# spells and its class's mp_max, full at battle start; every other class
+	# keeps unit.gd's field defaults (spells == [], mp_max == 0, mp_remaining
+	# == 0). Reuses the same class_def already resolved above rather than
+	# looking template_id back up through GameSession.get_adventurer(), since
+	# this factory builds from a scenario spec, not a live adventurer record.
+	var spell_ids: Array = class_def.get("spells", [])
+	if not spell_ids.is_empty():
+		unit.spells = spell_ids.duplicate()
+		unit.mp_max = int(class_def.get("mp_max", 0))
+		unit.mp_remaining = unit.mp_max
+
 	return unit
 
 

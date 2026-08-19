@@ -31,6 +31,8 @@ static func _take_unit_actions(controller, unit) -> Array:
 	var guard: int = int(unit.max_action_points) + 1
 	while unit.action_points_remaining > 0 and guard > 0:
 		guard -= 1
+		if _try_cast_priority_spell(controller, unit, steps):
+			continue
 		var target = _nearest_living_enemy(controller, unit.grid_position)
 		if target == null:
 			break
@@ -47,6 +49,82 @@ static func _take_unit_actions(controller, unit) -> Array:
 		break
 
 	return steps
+
+
+## Deterministic Cleric spell priority, driven entirely through the public
+## try_cast_spell() API (never direct health/status/AP/MP mutation): Heal the
+## lowest-health living ally that isn't at full health, otherwise Bless the
+## highest-max-damage living ally not already blessed. Returns true and
+## appends the resulting controller.last_attack_result to `steps` only on a
+## successful cast; false whenever `unit` has no spells, lacks the AP/MP to
+## cast one, has no eligible target, or try_cast_spell() itself rejects the
+## attempt (e.g. out of range) — the caller falls through to its normal
+## movement/attack behavior for this action-loop iteration rather than
+## retrying forever.
+static func _try_cast_priority_spell(controller, unit, steps: Array) -> bool:
+	if unit.spells.is_empty():
+		return false
+	if (
+		unit.action_points_remaining < BattleControllerScript.SPELL_ACTION_POINT_COST
+		or unit.mp_remaining < BattleControllerScript.SPELL_MP_COST
+	):
+		return false
+
+	var spell_id := ""
+	var candidate = null
+	if unit.spells.has("heal"):
+		candidate = _lowest_health_injured_ally(controller, unit)
+		if candidate != null:
+			spell_id = "heal"
+	if candidate == null and unit.spells.has("bless"):
+		candidate = _highest_damage_unblessed_ally(controller, unit)
+		if candidate != null:
+			spell_id = "bless"
+	if candidate == null:
+		return false
+
+	if controller.try_cast_spell(spell_id, candidate.grid_position):
+		steps.append(controller.last_attack_result)
+		return true
+	return false
+
+
+## Lowest-health living ally (same side as `caster`, including the caster
+## itself) that is not already at full health, tied breaking by reading
+## order for a deterministic pick.
+static func _lowest_health_injured_ally(controller, caster):
+	var best = null
+	for candidate in controller.units:
+		if candidate.side != caster.side or not candidate.is_alive():
+			continue
+		if candidate.health >= candidate.max_health:
+			continue
+		if (
+			best == null
+			or candidate.health < best.health
+			or (candidate.health == best.health and _reading_order_is_earlier(candidate.grid_position, best.grid_position))
+		):
+			best = candidate
+	return best
+
+
+## Highest-max-damage living ally (same side as `caster`, including the
+## caster itself) not already carrying BLESSED_STATUS_ID, tie broken by
+## reading order for a deterministic pick.
+static func _highest_damage_unblessed_ally(controller, caster):
+	var best = null
+	for candidate in controller.units:
+		if candidate.side != caster.side or not candidate.is_alive():
+			continue
+		if controller.has_status(candidate, BattleControllerScript.BLESSED_STATUS_ID):
+			continue
+		if (
+			best == null
+			or candidate.damage_max > best.damage_max
+			or (candidate.damage_max == best.damage_max and _reading_order_is_earlier(candidate.grid_position, best.grid_position))
+		):
+			best = candidate
+	return best
 
 
 ## Mirror of BattleController._nearest_living_unit(), aimed at ENEMY instead of

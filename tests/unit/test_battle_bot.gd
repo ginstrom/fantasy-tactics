@@ -134,6 +134,99 @@ func test_take_player_turn_updates_facing_on_move_and_on_attack() -> void:
 	assert_eq(player.facing, Vector2i.RIGHT, "Attacking a target directly to the east must face the attacker east")
 
 
+## --- Cleric spell priority (docs/plans/2026-08-19-core-loop-verification-
+## remediation/01-cleric-scenario-and-campaign-sim.md, Task 3): before
+## falling back to movement/attack, a caster with spells and sufficient
+## AP/MP prefers Heal on a wounded ally, otherwise Bless on an eligible
+## unblessed ally. Driven entirely through the public try_cast_spell() API
+## (never direct health/status/AP/MP mutation) -- mirrors the existing
+## move/attack tests' style of asserting on the returned steps and the
+## acting unit's own post-turn state.
+
+func test_casts_heal_on_a_wounded_ally_before_moving_or_attacking() -> void:
+	var controller := _make_controller(6, 6)
+	var caster := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 1, 6, 1.0)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var wounded_ally := UnitScript.new(Vector2i(2, 3), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 1, 6, 1.0)
+	wounded_ally.health = 4
+	controller.units = [caster, wounded_ally]
+	controller.healing_roll = func(_min_value: int, _max_value: int) -> int: return 5
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(steps.size(), 1, "Only the caster acts -- the wounded ally has no spells and no enemy exists to move toward/attack")
+	assert_eq(steps[0].type, "spell")
+	assert_eq(steps[0].spell_id, "heal")
+	assert_eq(steps[0].caster, caster)
+	assert_eq(steps[0].target, wounded_ally)
+	assert_eq(caster.action_points_remaining, 0, "Casting a spell spends the full 3 AP cost")
+	assert_eq(caster.mp_remaining, 2, "Casting a spell spends the 1 MP cost")
+	assert_eq(wounded_ally.health, 9, "The ally's health increases by the (mocked) healing roll")
+
+
+func test_casts_bless_on_the_highest_damage_eligible_ally_when_no_one_is_wounded() -> void:
+	var controller := _make_controller(6, 6)
+	var caster := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 1, 2, 1.0)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var strong_ally := UnitScript.new(Vector2i(2, 3), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 5, 9, 1.0)
+	controller.units = [caster, strong_ally]
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(steps.size(), 1, "Only the caster acts -- the ally has no spells and no enemy exists to move toward/attack")
+	assert_eq(steps[0].type, "spell")
+	assert_eq(steps[0].spell_id, "bless")
+	assert_eq(steps[0].caster, caster)
+	assert_eq(steps[0].target, strong_ally, "strong_ally has the higher damage_max, so it is the Bless priority target")
+	assert_eq(caster.action_points_remaining, 0, "Casting a spell spends the full 3 AP cost")
+	assert_eq(caster.mp_remaining, 2, "Casting a spell spends the 1 MP cost")
+	assert_true(controller.has_status(strong_ally, BattleControllerScript.BLESSED_STATUS_ID))
+
+
+func test_heal_priority_wins_over_bless_when_both_are_available() -> void:
+	var controller := _make_controller(6, 6)
+	var caster := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 1, 2, 1.0)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var wounded_ally := UnitScript.new(Vector2i(2, 3), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 1, 6, 1.0)
+	wounded_ally.health = 4
+	var unblessed_ally := UnitScript.new(Vector2i(3, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 12, 5, 9, 1.0)
+	controller.units = [caster, wounded_ally, unblessed_ally]
+	controller.healing_roll = func(_min_value: int, _max_value: int) -> int: return 5
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(steps.size(), 1)
+	assert_eq(steps[0].spell_id, "heal", "A wounded ally always takes priority over Bless")
+	assert_eq(steps[0].target, wounded_ally)
+	assert_false(controller.has_status(unblessed_ally, BattleControllerScript.BLESSED_STATUS_ID), "Bless was never attempted this turn")
+
+
+## A caster with insufficient AP/MP, or with no eligible spell target, must
+## fall through to the existing movement/attack behavior rather than looping
+## forever re-attempting a spell it cannot cast.
+func test_falls_back_to_movement_when_no_spell_is_castable() -> void:
+	var controller := _make_controller(6, 6)
+	var caster := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 12, 1, 2, 1.0)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 0
+	caster.mp_remaining = 0
+	var enemy := UnitScript.new(Vector2i(2, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3)
+	controller.units = [caster, enemy]
+	controller.hit_roll = func() -> float: return 0.0
+
+	var steps: Array = BattleBot.take_player_turn(controller)
+
+	assert_eq(steps.size(), 2, "No MP for a spell: the caster falls back to move-then-attack")
+	assert_eq(steps[0].type, "move")
+	assert_eq(steps[1].type, "attack")
+
+
 ## BattleController._best_move_toward() seeds has_candidate := false, so the
 ## first legal move is accepted unconditionally and the unit always relocates
 ## when any legal move exists — even one that does not close the gap. The bot

@@ -203,6 +203,52 @@ func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -
 	)
 
 
+## --- Task 4: full Warrior/Scout/Cleric triad -------------------------------
+## FIELDABLE_CLASSES now covers all three root classes (see campaign_sim.gd),
+## and _refill_party() prioritizes recruiting one of each missing class
+## before duplicates. This seed is hand-verified (a 60-seed sweep via a
+## throwaway probe script, all landing on record.victory == true) to build a
+## Temple, recruit a Cleric, field all three classes together, and actually
+## cast at least one Cleric spell (Heal/Bless) via BattleBot during combat --
+## not merely to recruit a Cleric and never use it.
+##
+## NOTE on party size at first-triad: _purchase_affordable_upgrades()'s
+## unmodified priority order (Guild Hall upgrade before Temple, per its own
+## doc comment quoting the technical design verbatim) means gold routes to
+## Guild Hall upgrades well before a Temple gets built in nearly every run --
+## across the same 60-seed sweep, the party had already grown past the
+## initial 3-slot Guild-Hall-level-1 cap in 56 of the 58 seeds where the
+## triad formed at all (most commonly landing at the level-3 cap of 5, one
+## outlier at 4; only seed 39 stayed at 3). So "fields the triad at the
+## three-slot cap" the way a hand-played early game might is not what this
+## unmodified, out-of-scope-to-reorder upgrade-purchase policy actually
+## produces -- this is flagged as a concern rather than forced by reordering
+## that unrelated priority list. full_triad_party_size is still recorded and
+## asserted to be a sane value (>= 3, the floor of get_max_party_size()).
+const CLERIC_TRIAD_SEED := 42
+
+
+func test_run_campaign_fields_the_full_triad_and_records_a_cleric_spell_cast() -> void:
+	var sim := CampaignSimScript.new()
+
+	var record := sim.run_campaign(CLERIC_TRIAD_SEED)
+
+	assert_true(
+		record.fielded_full_triad,
+		"The party must contain one Warrior, one Scout, and one Cleric together at some point in the run"
+	)
+	assert_true(
+		int(record.full_triad_party_size) >= 3,
+		"The triad can only form once the party has at least 3 slots (the Guild Hall level-1 floor)"
+	)
+	assert_gt(record.spell_casts, 0, "At least one Cleric spell (Heal/Bless) must be cast via BattleBot during the run")
+
+	GameSession.reset()
+	GameSession.reset_injectable_rolls()
+	var second := CampaignSimScript.new().run_campaign(CLERIC_TRIAD_SEED)
+	assert_eq(record, second, "Identical seeds must still produce byte-identical telemetry with Cleric fielded")
+
+
 ## --- Task 2: metrics collection and verification ---------------------------
 
 func test_telemetry_records_accurate_battle_counts_gold_income_and_level_curves() -> void:

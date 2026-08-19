@@ -202,6 +202,45 @@ func test_build_applies_a_higher_level_players_max_health_bonus() -> void:
 	assert_eq(hero.max_health, 30)
 
 
+## --- Cleric spells/MP hydration -----------------------------------------------
+## Mirrors battle_controller.gd's own runtime hydration (see that file's
+## _build_player_units()-equivalent code, ~lines 245-255): a class whose
+## GameSession.CLASS_DEFINITIONS entry declares "spells" gets those spells
+## and its class's mp_max/mp_remaining; a non-spell class (warrior/scout)
+## keeps the field defaults declared in unit.gd (spells == [], mp_max == 0,
+## mp_remaining == 0).
+
+func test_build_hydrates_cleric_spells_and_mp_from_the_class_definition() -> void:
+	var scenario := _normalized({
+		"scenario_id": "cleric_hydration",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var healer = controller.get_unit_at(Vector2i(0, 0))
+	var cleric_def: Dictionary = GameSession.CLASS_DEFINITIONS.cleric
+
+	assert_eq(healer.spells, cleric_def.spells)
+	assert_eq(healer.mp_max, int(cleric_def.mp_max))
+	assert_eq(healer.mp_max, 3)
+	assert_eq(healer.mp_remaining, healer.mp_max)
+	assert_eq(healer.max_health, cleric_def.base_stats.max_health)
+
+
+func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
+	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+
+	assert_eq(hero.spells, [])
+	assert_eq(hero.mp_max, 0)
+	assert_eq(hero.mp_remaining, 0)
+
+
 ## --- Explicit modifiers affect only the constructed unit ---------------------
 
 func test_build_applies_explicit_player_modifiers_on_top_of_the_baseline() -> void:
@@ -312,6 +351,25 @@ func test_build_seeds_crit_roll_deterministically_from_the_iteration_seed() -> v
 
 	for _i in 5:
 		assert_eq(controller_a.crit_roll.call(), controller_b.crit_roll.call())
+
+
+## Heal (see battle_controller.gd's try_cast_spell()) rolls its healing
+## amount via controller.healing_roll, which must be seeded from the same
+## per-iteration RandomNumberGenerator as hit_roll/crit_roll/damage_roll --
+## otherwise a Cleric's Heal amount (and any Heal-vs-Bless priority decision
+## a wounded ally's resulting health crosses) would draw from Godot's global,
+## unseeded RNG, breaking CampaignSim's "100% reproducible from sim_seed
+## alone" contract for any run that fields a Cleric.
+func test_build_seeds_healing_roll_deterministically_from_the_iteration_seed() -> void:
+	var scenario := _one_v_one_scenario()
+
+	var controller_a: Node2D = BattleStateFactory.build(scenario, 12345)
+	var controller_b: Node2D = BattleStateFactory.build(scenario, 12345)
+	autofree(controller_a)
+	autofree(controller_b)
+
+	for _i in 5:
+		assert_eq(controller_a.healing_roll.call(2, 8), controller_b.healing_roll.call(2, 8))
 
 
 func test_build_seeds_hit_roll_differently_for_different_iteration_seeds() -> void:

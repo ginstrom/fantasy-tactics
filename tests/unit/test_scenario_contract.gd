@@ -213,6 +213,24 @@ func test_validate_rejects_non_positive_iterations() -> void:
 	assert_true(_has_error_with_prefix(errors, "invalid_limit"), "Expected an invalid_limit error, got: %s" % [errors])
 
 
+## Cleric is a real, fieldable player template (see GameSession.CLASS_
+## DEFINITIONS.cleric) -- normalization must preserve it verbatim and
+## validate() must accept it, the same as warrior/scout.
+func test_validate_accepts_a_cleric_player_scenario() -> void:
+	var raw := {
+		"scenario_id": "cleric_vs_goblin",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+
+	assert_eq(scenario.player.units[0].template_id, "cleric")
+
+	var errors := ScenarioContract.validate(scenario)
+	assert_eq(errors, [], "A normalized Cleric player scenario should have no validation errors")
+
+
 func test_validate_rejects_an_unknown_player_template() -> void:
 	var raw := _minimal_raw_scenario()
 	raw.player = {"template_id": "not_a_real_template", "count": 1}
