@@ -1637,11 +1637,23 @@ func can_build_temple() -> bool:
 	return temple_level == 0 and gold >= TEMPLE_BUILD_COST
 
 
+## Guarantees a real, immediately recruitable Cleric offer the moment the
+## Temple is built -- a one-time grant distinct from cleric_offer_roll's
+## ongoing 25% chance on later recruitment-vacancy refills (see that
+## Callable's doc comment). Reuses _advance_recruitment_vacancies()'s
+## established overflow policy: evict the oldest (FIFO head) offer first
+## when the pool is already at get_recruitment_offer_cap(), otherwise just
+## append.
 func build_temple() -> bool:
 	if not can_build_temple():
 		return false
 	gold -= TEMPLE_BUILD_COST
 	temple_level = 1
+	if recruitment_candidates.size() >= get_recruitment_offer_cap():
+		recruitment_candidates.remove_at(0)
+	var offer := _make_overflow_recruitment_offer("cleric")
+	offer["cost"] = 10
+	recruitment_candidates.append(offer)
 	return true
 
 

@@ -3036,6 +3036,50 @@ func test_build_temple_fails_once_already_built() -> void:
 	assert_eq(session.temple_level, 1)
 
 
+## Building the Temple must immediately guarantee a recruitable Cleric
+## offer -- a one-time grant at construction, not the ongoing probabilistic
+## cleric_offer_roll refill (see build_temple()'s doc comment).
+func test_build_temple_immediately_adds_a_cleric_recruitment_offer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = session.TEMPLE_BUILD_COST
+
+	assert_true(session.build_temple())
+
+	var has_cleric_offer := false
+	for candidate in session.recruitment_candidates:
+		if candidate["class"] == "cleric":
+			has_cleric_offer = true
+			break
+	assert_true(has_cleric_offer, "Building the Temple should guarantee a recruitable Cleric offer")
+
+
+## When the offer pool is already at cap, the guaranteed Cleric offer must
+## evict the oldest (FIFO head) offer, matching the overflow policy already
+## established by _advance_recruitment_vacancies().
+func test_build_temple_evicts_oldest_offer_when_pool_is_at_cap() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.gold = session.TEMPLE_BUILD_COST
+	assert_eq(session.recruitment_candidates.size(), session.get_recruitment_offer_cap(),
+		"Precondition: a fresh campaign seeds the offer pool to its cap")
+	var oldest_offer_id: String = session.recruitment_candidates[0]["id"]
+
+	assert_true(session.build_temple())
+
+	assert_eq(session.recruitment_candidates.size(), session.get_recruitment_offer_cap(),
+		"The pool stays at cap -- the guaranteed offer evicts rather than overflows it")
+	var still_has_oldest := false
+	var has_cleric_offer := false
+	for candidate in session.recruitment_candidates:
+		if candidate["id"] == oldest_offer_id:
+			still_has_oldest = true
+		if candidate["class"] == "cleric":
+			has_cleric_offer = true
+	assert_false(still_has_oldest, "The oldest pre-existing offer should have been evicted")
+	assert_true(has_cleric_offer)
+
+
 ## Minimal Cleric stub (see CLASS_DEFINITIONS.cleric's own doc comment): base
 ## stats in the same family as warrior/scout, no MP/Heal/Bless fields --
 ## those are Step 4's job.
