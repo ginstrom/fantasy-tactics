@@ -1246,6 +1246,35 @@ func test_encounter_labels_show_stars_once_a_scout_is_within_range() -> void:
 	assert_eq(goblin_label.text, "★", "A Scout within range reveals the difficulty stars")
 
 
+## Step 5 (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md): once intel is earned, the
+## rendered star count tracks GameSession.get_threat_stars()' dynamic 1-5
+## rating -- rising with world turns elapsed on top of the encounter's own
+## base difficulty -- not a value frozen at the encounter's base difficulty
+## forever.
+func test_encounter_labels_render_dynamic_threat_stars_as_world_turns_elapse() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	GameSession.set_deployed_party_position(goblin_camp.position)
+	GameSession.world_turn = 1 + GameSession.THREAT_TURN_INTERVAL
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_label := _find_expedition_label_by_position(world_map, goblin_camp.position)
+
+	assert_not_null(goblin_label)
+	assert_eq(
+		goblin_label.text, "★★",
+		"One threat interval elapsed should render one extra star beyond the base difficulty"
+	)
+
+
 func test_encounter_labels_do_not_include_names_danger_or_reward() -> void:
 	# Task 2: No "Goblin", "Orc", "danger", or "gold" in label text. Deploys a
 	# Scout in range of both markers (see test_encounter_labels_show_only_

@@ -43,6 +43,10 @@ var completed_objectives: Array[String] = []
 var unlocked_authored_encounters: Array[String] = ["obj_tier1_1_goblin_outpost"]
 var is_campaign_completed: bool = false
 var is_free_play_active: bool = false
+# Lifetime casualty count (see GameSession.total_casualties' own doc
+# comment). Added after version one shipped -- an old payload normalizes to
+# 0 rather than rejecting, same as temple_level below.
+var total_casualties: int = 0
 var completed_encounters: Array[String] = []
 var active_encounters: Array[Dictionary] = []
 var encounter_vacancies: Array[Dictionary] = []
@@ -106,6 +110,7 @@ func to_dictionary() -> Dictionary:
 		"unlocked_authored_encounters": unlocked_authored_encounters.duplicate(true),
 		"is_campaign_completed": is_campaign_completed,
 		"is_free_play_active": is_free_play_active,
+		"total_casualties": total_casualties,
 		"completed_encounters": completed_encounters.duplicate(true),
 		"active_encounters": _encounters_to_dictionary(active_encounters),
 		"encounter_vacancies": encounter_vacancies.duplicate(true),
@@ -239,6 +244,12 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if not data.get(scalar_key) is int:
 			return _invalid("%s is not an int" % scalar_key)
 		normalized[scalar_key] = int(data[scalar_key])
+
+	# Added after version one shipped, so existing snapshots normalize to a
+	# harmless zero casualty count.
+	if data.has("total_casualties") and not data.total_casualties is int:
+		return _invalid("total_casualties is not an int")
+	normalized["total_casualties"] = int(data.get("total_casualties", 0))
 
 	# Added after version one shipped, so existing snapshots normalize to the
 	# harmless unbuilt state while new saves retain the Temple's real level.

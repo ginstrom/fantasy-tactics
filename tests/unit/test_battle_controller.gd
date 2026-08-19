@@ -4,6 +4,9 @@ const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
 const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
+const BattleStateFactory := preload("res://scripts/tools/battle_scenarios/battle_state_factory.gd")
+const ScenarioContract := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
+const BattleBot := preload("res://scripts/tools/battle_bot.gd")
 
 ## Sentinel (an impossible hit-chance cap) rather than -1.0 alone would also
 ## work, but any negative value signals "no test currently owns a lowered
@@ -3110,5 +3113,128 @@ func test_try_retreat_only_rolls_for_living_player_units() -> void:
 
 	assert_eq(results.size(), 1, "Only the living unit produces a result")
 	assert_eq(roll_log.size(), 1, "A dead unit must not consume a roll")
+
+
+## --- Step 5: Final Boss (Ogre) ----------------------------------------------
+## (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md)
+
+
+## The Ogre encounter hydrates through the real production path (Battle-
+## Controller._ready() reading GameSession.selected_encounter, same as
+## test_ready_fields_up_to_eight_enemies_when_the_encounter_has_that_many())
+## and fields exactly one Ogre unit whose stats match OGRE_ENEMY_STATS
+## exactly -- no bespoke ability, cleave, or phase field exists anywhere on
+## Unit, so "spells is empty" is the only assertion needed to prove it
+## resolves through only standard monster action resolution.
+func test_ogre_encounter_fields_exactly_one_ogre_via_standard_resolution() -> void:
+	GameSession.selected_encounter = "obj_boss_borderlands_ogre"
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var enemy_units: Array = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.ENEMY:
+			enemy_units.append(unit)
+
+	assert_eq(enemy_units.size(), 1, "The Ogre encounter fields exactly one boss unit")
+	var ogre = enemy_units[0]
+	assert_eq(ogre.max_health, GameSession.OGRE_ENEMY_STATS.max_health)
+	assert_eq(ogre.damage_min, GameSession.OGRE_ENEMY_STATS.damage_min)
+	assert_eq(ogre.damage_max, GameSession.OGRE_ENEMY_STATS.damage_max)
+	assert_eq(ogre.hit_chance, GameSession.OGRE_ENEMY_STATS.hit_chance)
+	assert_eq(ogre.defense, GameSession.OGRE_ENEMY_STATS.defense)
+	assert_eq(ogre.resistance, GameSession.OGRE_ENEMY_STATS.resistance)
+	assert_eq(ogre.spells, [] as Array, "The Ogre has no bespoke spells/abilities -- only standard monster action resolution")
+
+
+## Builds a bare ScenarioContract fixture (default-geared, default-armed
+## level-1 Warriors -- the exact calibration baseline docs/designs/
+## monster-manual.md's own table uses) via BattleStateFactory, seeds it
+## deterministically, and drives a full multi-round fight using the same
+## BattleBot/run_enemy_turn()/end_turn() loop battle_sim.gd and test_battle_
+## bot.gd already use for headless simulation.
+func _build_four_warriors_vs_ogre_controller(root_seed: int) -> Node2D:
+	var scenario := ScenarioContract.normalize({
+		"scenario_id": "ogre_benchmark",
+		"board": {"width": 6, "height": 6},
+		"player": {"template_id": "warrior", "count": 4},
+		"enemy": {"units": [{"id": "ogre", "template_id": "ogre", "position": {"x": 5, "y": 5}}]},
+		"rules": {"round_limit": 40},
+		"randomness": {"root_seed": root_seed, "iterations": 1},
+	})
+	var seed := ScenarioContract.derive_iteration_seed(root_seed, scenario.scenario_id, 0)
+	return BattleStateFactory.build(scenario, seed)
+
+
+## Runs full rounds (player turn, then enemy turn) until one side is wiped
+## or MAX_ROUNDS is hit, returning the round count actually taken.
+func _run_to_resolution(controller: Node2D, max_rounds: int) -> int:
+	var rounds := 0
+	while not controller.is_battle_won() and not controller.is_battle_lost() and rounds < max_rounds:
+		rounds += 1
+		BattleBot.take_player_turn(controller)
+		controller.end_turn()
+		if controller.is_battle_lost():
+			break
+		controller.run_enemy_turn()
+		controller.end_turn()
+	return rounds
+
+
+## Derivation (see OGRE_ENEMY_STATS' own doc comment): a level-1 Warrior's
+## default gear gives ~1.62 expected damage per landed swing against the
+## Ogre's defense/resistance, and the Ogre's own attack deals ~3.44 expected
+## damage per landed swing against a 10-HP Warrior -- a multi-round fight
+## that is winnable but genuinely dangerous for four fresh Warriors, not a
+## one-round curbstomp in either direction. Several independent seeds are
+## checked so the power band is evidence about the tuning, not one lucky
+## roll sequence.
+func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band() -> void:
+	for root_seed in [1001, 2002, 3003, 4004, 5005]:
+		var controller := _build_four_warriors_vs_ogre_controller(root_seed)
+		autofree(controller)
+
+		var rounds := _run_to_resolution(controller, 40)
+
+		assert_true(
+			controller.is_battle_won() or controller.is_battle_lost(),
+			"seed %d: the benchmark must resolve, not stalemate at the round cap" % root_seed
+		)
+		assert_true(
+			rounds >= 2,
+			"seed %d: the Ogre must survive at least one full round -- not a one-round curbstomp (took %d rounds)" % [root_seed, rounds]
+		)
+		assert_true(
+			rounds <= 20,
+			"seed %d: four Warriors must not need an implausibly long slog to resolve the fight (took %d rounds)" % [root_seed, rounds]
+		)
+
+
+## Defeating the final boss must complete its authored objective -- flipping
+## campaign victory -- exactly once, even if this were somehow reached
+## again (it cannot be, in real play, since a completed authored encounter
+## never reopens -- see can_enter_encounter()).
+func test_defeating_the_ogre_triggers_campaign_victory_once() -> void:
+	GameSession.unlocked_authored_encounters.assign(GameSession.CAMPAIGN_OBJECTIVES.keys())
+	GameSession.completed_objectives.assign(GameSession.CAMPAIGN_OBJECTIVES.keys())
+	GameSession.completed_objectives.erase("obj_boss_borderlands_ogre")
+	GameSession.campaign_objective_id = "obj_boss_borderlands_ogre"
+	GameSession.selected_encounter = "obj_boss_borderlands_ogre"
+	watch_signals(GameSession)
+
+	GameSession.complete_current_encounter()
+
+	assert_signal_emit_count(GameSession, "campaign_victory", 1)
+	assert_true(GameSession.is_campaign_completed)
+	assert_true(GameSession.is_free_play_active)
+
+	# A repeated call (selected_encounter is already cleared, matching the
+	# real post-victory state) must never emit a second time.
+	GameSession.selected_encounter = "obj_boss_borderlands_ogre"
+	GameSession.complete_current_encounter()
+
+	assert_signal_emit_count(GameSession, "campaign_victory", 1)
 
 

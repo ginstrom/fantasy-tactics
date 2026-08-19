@@ -27,6 +27,7 @@ const STORES_SCENE := "res://scenes/ui/stores.tscn"
 const TRADING_POST_SCENE := "res://scenes/ui/trading_post.tscn"
 const ASSIGN_EQUIPMENT_SCENE := "res://scenes/ui/assign_equipment.tscn"
 const BATTLE_RESULT_SCENE := "res://scenes/ui/battle_result.tscn"
+const VICTORY_SCREEN_SCENE := "res://scenes/ui/victory_screen.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
@@ -343,6 +344,17 @@ func go_to_battle_result(summary: Dictionary) -> Error:
 	_clear_detail_context()
 	battle_result_summary = summary
 	return _change_scene(BATTLE_RESULT_SCENE)
+
+
+## Routes to the dedicated Campaign Victory screen (see Battlefield.
+## _finish_victory()'s just_won_campaign branch). Unlike go_to_battle_
+## result(), no transient summary payload is needed: every stat the screen
+## shows is durable GameSession state by the time this is called (see
+## GameSession.get_campaign_victory_summary()), read directly rather than
+## snapshotted here.
+func go_to_victory_screen() -> Error:
+	_clear_detail_context()
+	return _change_scene(VICTORY_SCREEN_SCENE)
 
 
 ## The pre-Roster entry path: unit_details_origin is always cleared here, so

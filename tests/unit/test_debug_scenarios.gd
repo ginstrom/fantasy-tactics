@@ -153,6 +153,7 @@ func test_scenarios_are_in_the_established_display_order() -> void:
 		"orc_outpost",
 		"ruined_fortress",
 		"stocked_stores",
+		"preboss_encounter",
 	])
 
 
@@ -464,6 +465,24 @@ func test_every_shipped_active_encounter_enemy_has_a_valid_loot_id() -> void:
 	for scenario in DebugScenarios.get_all_scenarios():
 		var active_encounters: Array = scenario.campaign_snapshot.get("active_encounters", [])
 		for encounter in active_encounters:
+			# An authored node's active-encounter instance (see the "Jump to
+			# Pre-Boss Encounter" scenario, config/debug_scenarios.json) declares
+			# the mixed-unit "enemies" array (docs/plans/2026-08-18-core-loop-
+			# and-engagement/05-authored-encounters-and-final-boss.md) instead of
+			# the legacy single "enemy" record every sandbox scenario still uses
+			# -- every group's own enemy must still declare a valid loot_id.
+			if encounter.has("enemies"):
+				for group in encounter.enemies:
+					var group_enemy: Dictionary = group.get("enemy", {})
+					var group_loot_id: String = group_enemy.get("loot_id", "")
+					assert_true(
+						GameSession.ENEMY_LOOT_TABLES.has(group_loot_id),
+						(
+							"scenario %s's %s encounter enemy group must declare a loot_id present in ENEMY_LOOT_TABLES, got '%s'"
+							% [scenario.id, encounter.get("template_id", "?"), group_loot_id]
+						)
+					)
+				continue
 			var enemy: Dictionary = encounter.get("enemy", {})
 			var loot_id: String = enemy.get("loot_id", "")
 			assert_true(

@@ -6,6 +6,16 @@ extends Node
 ## set_campaign_victory()) so a UI component (e.g. CampaignObjectiveBanner)
 ## can refresh itself without polling.
 signal campaign_progress_changed
+## Emitted exactly once per campaign -- the moment set_campaign_victory()
+## first flips is_campaign_completed/is_free_play_active true. Its early-
+## return guard is what keeps this to a single emission even if complete_
+## campaign_objective() is ever called again for the final node (already
+## a no-op past the first call -- see is_objective_completed()'s guard).
+## Battlefield routes to the Campaign Victory screen off the same is_
+## campaign_completed flip (see _finish_victory()), not this signal
+## directly, but it exists as the single unambiguous "the campaign was
+## just won" event for any other listener/test.
+signal campaign_victory
 
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
@@ -219,6 +229,166 @@ const EXPEDITIONS: Dictionary = {
 			"count": 4,
 		},
 	},
+	# The twelve authored campaign-ladder nodes below (docs/plans/2026-08-18-
+	# core-loop-and-engagement/05-authored-encounters-and-final-boss.md).
+	# Each key is exactly one of CAMPAIGN_OBJECTIVES' own keys -- that step's
+	# own doc comment names it "sole owner of every objective id and
+	# encounter id," so these keys and each entry's "encounter_id" (mirrored
+	# by CAMPAIGN_OBJECTIVES' own field of the same name) are never
+	# renamed/renumbered here. Every entry sets "is_authored" (read by
+	# is_authored_encounter()/can_enter_encounter()/complete_current_
+	# encounter()) and an ordered "enemies" array -- {"enemy": <*_ENEMY_
+	# STATS const>, "count": n} groups, expanded in declaration order by
+	# BattleController._build_enemy_specs() -- instead of the legacy single
+	# "enemy" + "count" template the three sandbox expeditions above still
+	# use; the two shapes coexist rather than the new one overloading the
+	# old one. "difficulty" doubles as get_threat_stars()'s base star and
+	# mirrors CAMPAIGN_OBJECTIVES' own "tier" (pre-boss nodes are tier 4,
+	# the final boss is tier 5, both one star higher than tier 3's 3 stars).
+	"obj_tier1_1_goblin_outpost": {
+		"position": Vector2i(2, 2),
+		"name_key": "expedition.obj_tier1_1_goblin_outpost.name",
+		"danger_key": "expedition.danger.low",
+		"difficulty": 1,
+		"clear_xp": 15,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": GOBLIN_ENEMY_STATS, "count": 1},
+			{"enemy": KOBOLD_ENEMY_STATS, "count": 2},
+		],
+	},
+	"obj_tier1_2_kobold_warren": {
+		"position": Vector2i(2, 4),
+		"name_key": "expedition.obj_tier1_2_kobold_warren.name",
+		"danger_key": "expedition.danger.low",
+		"difficulty": 1,
+		"clear_xp": 18,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": KOBOLD_ENEMY_STATS, "count": 4},
+			{"enemy": KOBOLD_SLINGER_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_tier1_3_goblin_warcamp": {
+		"position": Vector2i(4, 2),
+		"name_key": "expedition.obj_tier1_3_goblin_warcamp.name",
+		"danger_key": "expedition.danger.low",
+		"difficulty": 1,
+		"clear_xp": 20,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": GOBLIN_ENEMY_STATS, "count": 2},
+			{"enemy": GOBLIN_ARCHER_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_tier2_1_orc_outpost": {
+		"position": Vector2i(1, 1),
+		"name_key": "expedition.obj_tier2_1_orc_outpost.name",
+		"danger_key": "expedition.danger.high",
+		"difficulty": 2,
+		"clear_xp": 30,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": ORC_BRUISER_ENEMY_STATS, "count": 1},
+			{"enemy": GOBLIN_ARCHER_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_tier2_2_orc_warband": {
+		"position": Vector2i(5, 1),
+		"name_key": "expedition.obj_tier2_2_orc_warband.name",
+		"danger_key": "expedition.danger.high",
+		"difficulty": 2,
+		"clear_xp": 35,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": ORC_BRUISER_ENEMY_STATS, "count": 2},
+		],
+	},
+	"obj_tier2_3_brute_stronghold": {
+		"position": Vector2i(1, 5),
+		"name_key": "expedition.obj_tier2_3_brute_stronghold.name",
+		"danger_key": "expedition.danger.high",
+		"difficulty": 2,
+		"clear_xp": 40,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": ORC_BRUISER_ENEMY_STATS, "count": 2},
+			{"enemy": GOBLIN_ARCHER_ENEMY_STATS, "count": 2},
+		],
+	},
+	"obj_tier3_1_hobgoblin_command": {
+		"position": Vector2i(0, 0),
+		"name_key": "expedition.obj_tier3_1_hobgoblin_command.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 3,
+		"clear_xp": 55,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": HOBGOBLIN_ELITE_ENEMY_STATS, "count": 1},
+			{"enemy": KOBOLD_SLINGER_ENEMY_STATS, "count": 2},
+		],
+	},
+	"obj_tier3_2_mixed_forces_ambush": {
+		"position": Vector2i(6, 0),
+		"name_key": "expedition.obj_tier3_2_mixed_forces_ambush.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 3,
+		"clear_xp": 60,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": HOBGOBLIN_ELITE_ENEMY_STATS, "count": 1},
+			{"enemy": ORC_BRUISER_ENEMY_STATS, "count": 1},
+			{"enemy": GOBLIN_SHAMAN_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_tier3_3_ruined_fortress": {
+		"position": Vector2i(0, 6),
+		"name_key": "expedition.obj_tier3_3_ruined_fortress.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 3,
+		"clear_xp": 65,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": HOBGOBLIN_ELITE_ENEMY_STATS, "count": 2},
+			{"enemy": ORC_BRUISER_ENEMY_STATS, "count": 2},
+		],
+	},
+	"obj_preboss_1_borderlands_vanguard": {
+		"position": Vector2i(6, 2),
+		"name_key": "expedition.obj_preboss_1_borderlands_vanguard.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 4,
+		"clear_xp": 90,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": HOBGOBLIN_ELITE_ENEMY_STATS, "count": 2},
+			{"enemy": GOBLIN_ARCHER_ENEMY_STATS, "count": 2},
+			{"enemy": KOBOLD_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_preboss_2_borderlands_stronghold": {
+		"position": Vector2i(6, 4),
+		"name_key": "expedition.obj_preboss_2_borderlands_stronghold.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 4,
+		"clear_xp": 100,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": HOBGOBLIN_CHAMPION_ENEMY_STATS, "count": 3},
+			{"enemy": ORC_WARLORD_ENEMY_STATS, "count": 1},
+		],
+	},
+	"obj_boss_borderlands_ogre": {
+		"position": Vector2i(6, 6),
+		"name_key": "expedition.obj_boss_borderlands_ogre.name",
+		"danger_key": "expedition.danger.extreme",
+		"difficulty": 5,
+		"clear_xp": 200,
+		"is_authored": true,
+		"enemies": [
+			{"enemy": OGRE_ENEMY_STATS, "count": 1},
+		],
+	},
 }
 const GOBLIN_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.goblin",
@@ -272,6 +442,143 @@ const HOBGOBLIN_ENEMY_STATS: Dictionary = {
 	"hit_chance": 0.6,
 	"kill_xp": 20,
 	"loot_id": "hobgoblin",
+}
+# The remaining stat blocks below back the 12-node authored campaign ladder
+# (see EXPEDITIONS' "obj_*" entries and docs/plans/2026-08-18-core-loop-and-
+# engagement/05-authored-encounters-and-final-boss.md). Where the plan's
+# named monster is functionally identical to an existing const under a more
+# flavorful name -- "Goblin Skirmisher" and "Kobold Swarmer" -- the existing
+# GOBLIN_ENEMY_STATS/KOBOLD_ENEMY_STATS consts are reused directly rather
+# than duplicated. Every monster below is a genuinely new variant and gets
+# its own const, following GOBLIN_ARCHER_ENEMY_STATS' ranged-unit field set
+# (damage_min/damage_max/move_range/attack_min_range/attack_max_range/role)
+# for the two ranged additions, and adding "defense"/"resistance" (read by
+# BattleController._build_enemy_specs() same as a player's armor -- see
+# EXPEDITIONS' own WEAPONS/ARMORS doc comment for what each stat does) for
+# the four armored/elite melee additions. Every entry still resolves through
+# only the shared, standard monster action-resolution path -- none of these
+# (including the Ogre) declares a bespoke ability, cleave, or phase.
+const KOBOLD_SLINGER_ENEMY_STATS: Dictionary = {
+	"id": "kobold_slinger",
+	"tier": 1,
+	"name_key": "battle.enemy.kobold_slinger",
+	"attack_name_key": "battle.enemy.kobold_slinger.attack",
+	"max_health": 5,
+	"attack_damage": 1,
+	"damage_min": 1,
+	"damage_max": 3,
+	"hit_chance": 0.35,
+	"move_range": 3,
+	"attack_min_range": 1,
+	"attack_max_range": 3,
+	"kill_xp": 4,
+	"role": "ranged_skirmisher",
+	"loot_id": "kobold",
+}
+const GOBLIN_SHAMAN_ENEMY_STATS: Dictionary = {
+	"id": "goblin_shaman",
+	"tier": 3,
+	"name_key": "battle.enemy.goblin_shaman",
+	"attack_name_key": "battle.enemy.goblin_shaman.attack",
+	"max_health": 9,
+	"attack_damage": 2,
+	"damage_min": 2,
+	"damage_max": 5,
+	"hit_chance": 0.45,
+	"move_range": 3,
+	"attack_min_range": 1,
+	"attack_max_range": 3,
+	"kill_xp": 8,
+	"role": "ranged_support",
+	"loot_id": "goblin",
+}
+const ORC_BRUISER_ENEMY_STATS: Dictionary = {
+	"id": "orc_bruiser",
+	"tier": 2,
+	"name_key": "battle.enemy.orc_bruiser",
+	"attack_name_key": "battle.enemy.orc_bruiser.attack",
+	"max_health": 28,
+	"attack_damage": 4,
+	"hit_chance": 0.5,
+	"defense": 10,
+	"resistance": 15,
+	"kill_xp": 12,
+	"role": "armored_bruiser",
+	"loot_id": "orc",
+}
+const HOBGOBLIN_ELITE_ENEMY_STATS: Dictionary = {
+	"id": "hobgoblin_elite",
+	"tier": 3,
+	"name_key": "battle.enemy.hobgoblin_elite",
+	"attack_name_key": "battle.enemy.hobgoblin_elite.attack",
+	"max_health": 38,
+	"attack_damage": 5,
+	"hit_chance": 0.6,
+	"defense": 5,
+	"resistance": 10,
+	"kill_xp": 24,
+	"role": "elite",
+	"loot_id": "hobgoblin",
+}
+const HOBGOBLIN_CHAMPION_ENEMY_STATS: Dictionary = {
+	"id": "hobgoblin_champion",
+	"tier": 4,
+	"name_key": "battle.enemy.hobgoblin_champion",
+	"attack_name_key": "battle.enemy.hobgoblin_champion.attack",
+	"max_health": 46,
+	"attack_damage": 6,
+	"hit_chance": 0.62,
+	"defense": 8,
+	"resistance": 15,
+	"kill_xp": 30,
+	"role": "elite",
+	"loot_id": "hobgoblin",
+}
+const ORC_WARLORD_ENEMY_STATS: Dictionary = {
+	"id": "orc_warlord",
+	"tier": 4,
+	"name_key": "battle.enemy.orc_warlord",
+	"attack_name_key": "battle.enemy.orc_warlord.attack",
+	"max_health": 50,
+	"attack_damage": 7,
+	"hit_chance": 0.55,
+	"defense": 12,
+	"resistance": 20,
+	"kill_xp": 35,
+	"role": "armored_bruiser",
+	"loot_id": "orc",
+}
+## Final boss (see the plan doc's "Tune its ordinary HP, hit chance, damage,
+## guard, and resistance against a deterministic benchmark of approximately
+## four level-1 Warriors" requirement). Derivation: a level-1 Warrior's
+## default Iron Longsword (1-8, mean 4.5) and Leather Armor (10 defense, 10%
+## resistance) against these numbers gives effective_hit_chance = 0.60 -
+## 0.15 = 0.45 and mean post-resistance damage = 4.5 * 0.80 = 3.6, i.e. an
+## expected ~1.62 damage per Warrior swing -- roughly HP/1.62 swings to
+## fell it. The reverse check (Ogre vs. a Warrior's 10 defense/10%
+## resistance) gives effective_hit_chance = 0.55 - 0.10 = 0.45 and mean
+## post-resistance damage = 8.5 * 0.90 = 7.65, i.e. ~3.44 expected damage
+## per Ogre swing against a 10-HP level-1 Warrior -- lethal in two or three
+## landed hits, same "genuinely dangerous alone, beatable in numbers" curve
+## the Monster Manual's Hobgoblin row already establishes one tier down.
+## See test_battle_controller.gd's seeded four-Warrior benchmark for the
+## resulting multi-round power-band evidence; Step 6's simulation/balance
+## harness owns any further tuning.
+const OGRE_ENEMY_STATS: Dictionary = {
+	"id": "ogre",
+	"tier": 5,
+	"name_key": "battle.enemy.ogre",
+	"attack_name_key": "battle.enemy.ogre.attack",
+	"max_health": 90,
+	"attack_damage": 8,
+	"damage_min": 5,
+	"damage_max": 12,
+	"hit_chance": 0.55,
+	"defense": 15,
+	"resistance": 20,
+	"kill_xp": 150,
+	"role": "boss",
+	"loot_id": "ogre",
 }
 # Star tier -> possible enemy compositions for an active instance at that
 # tier (see docs/plans/campaign-loop-follow-up.md's battle balancing
@@ -424,6 +731,10 @@ const ENEMY_LOOT_TABLES: Dictionary = {
 	"goblin": {"gold_min": 1, "gold_max": 6, "gold_multiplier": 1, "mana_crystal_tier": 1, "gear_item_id": "shortsword_iron"},
 	"orc": {"gold_min": 1, "gold_max": 5, "gold_multiplier": 2, "mana_crystal_tier": 2, "gear_item_id": "longsword_iron"},
 	"hobgoblin": {"gold_min": 1, "gold_max": 4, "gold_multiplier": 3, "mana_crystal_tier": 2, "gear_item_id": "two_handed_sword_iron"},
+	# Final boss loot (see OGRE_ENEMY_STATS): the best fixed drop rate/value
+	# in the table, gated behind a fight that only ever happens once per
+	# campaign.
+	"ogre": {"gold_min": 20, "gold_max": 40, "gold_multiplier": 5, "mana_crystal_tier": 2, "gear_item_id": "two_handed_sword_steel"},
 }
 const MANA_CRYSTAL_VALUES: Dictionary = {1: 5, 2: 15}
 const GEAR_DROP_CHANCE := 0.25
@@ -755,6 +1066,13 @@ var completed_objectives: Array[String] = []
 var unlocked_authored_encounters: Array[String] = ["obj_tier1_1_goblin_outpost"]
 var is_campaign_completed: bool = false
 var is_free_play_active: bool = false
+# Lifetime count of permanently-removed adventurers (see resolve_battle_
+# deaths(), the only place this increments), read by get_campaign_victory_
+# summary() for the Campaign Victory screen's casualties stat. Covers both
+# an ordinary mid-battle kill and a full party wipe alike -- a wipe reports
+# its deaths through the exact same resolve_battle_deaths() call as any
+# other battle-ending kill (see Battlefield._persist_battle_aftermath()).
+var total_casualties: int = 0
 
 var completed_encounters: Array[String] = []
 # Active encounter INSTANCES (not the template pool — see EXPEDITIONS). Each
@@ -890,6 +1208,7 @@ func reset() -> void:
 	unlocked_authored_encounters = ["obj_tier1_1_goblin_outpost"]
 	is_campaign_completed = false
 	is_free_play_active = false
+	total_casualties = 0
 	completed_encounters = []
 	active_encounters = [
 		_make_encounter_instance(GOBLIN_CAMP_ID, GOBLIN_CAMP_ID, EXPEDITIONS[GOBLIN_CAMP_ID].position),
@@ -1395,10 +1714,37 @@ func _resolve_enemy_composition(difficulty: int) -> Dictionary:
 	return enemy
 
 
+## True for exactly the twelve authored campaign-ladder node ids -- the
+## CAMPAIGN_OBJECTIVES keys, which double as their own EXPEDITIONS key and
+## encounter id (see CAMPAIGN_OBJECTIVES' own doc comment). False for every
+## sandbox template id (goblin_camp/orc_outpost/ruined_fortress) and every
+## active-encounter instance id derived from one of them.
+func is_authored_encounter(encounter_id: String) -> bool:
+	return CAMPAIGN_OBJECTIVES.has(encounter_id)
+
+
+## Gates enter_encounter(): a sandbox id is always enterable (matching prior
+## behavior), but an authored id must be both currently unlocked and not
+## already cleared -- authored objectives never respawn or reopen (see
+## docs/designs/campaign-loop.md's "Objectives, gates, and encounter
+## threat" contract).
+func can_enter_encounter(encounter_id: String) -> bool:
+	if not is_authored_encounter(encounter_id):
+		return true
+	return unlocked_authored_encounters.has(encounter_id) and not completed_encounters.has(encounter_id)
+
+
 func enter_encounter(encounter_id: String) -> void:
+	if not can_enter_encounter(encounter_id):
+		return
 	selected_encounter = encounter_id
 	var instance_index := _get_active_encounter_index(encounter_id)
-	if instance_index != -1:
+	# An authored node's active-encounter instance (see the debug menu's
+	# "Jump to Pre-Boss Encounter" scenario) carries its own fixed formation
+	# -- it must never be overwritten by the sandbox star-tier reroll below,
+	# which only applies to a goblin_camp/orc_outpost/ruined_fortress-derived
+	# instance.
+	if instance_index != -1 and not is_authored_encounter(encounter_id):
 		active_encounters[instance_index].enemy = _resolve_enemy_composition(
 			active_encounters[instance_index].difficulty
 		)
@@ -1419,9 +1765,25 @@ func complete_current_encounter() -> void:
 	var expedition := get_expedition(selected_encounter)
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
-		_roll_and_queue_loot(expedition.get("enemy", {}))
+		# Mixed-formation authored nodes (see EXPEDITIONS' "enemies" field)
+		# roll loot once per group, each with its own count merged in, rather
+		# than the legacy single "enemy" + "count" template's one call.
+		if expedition.has("enemies"):
+			for group in expedition.enemies:
+				var enemy_with_count: Dictionary = group.get("enemy", {}).duplicate(true)
+				enemy_with_count["count"] = int(group.get("count", 1))
+				_roll_and_queue_loot(enemy_with_count)
+		else:
+			_roll_and_queue_loot(expedition.get("enemy", {}))
 		battle_reward += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
 		_clear_active_encounter(selected_encounter)
+		# An authored node's own encounter_id is exactly its CAMPAIGN_
+		# OBJECTIVES key (see that catalog's own doc comment) -- clearing it
+		# also completes the matching campaign objective, unlocking the next
+		# node (or, for the final boss, recording campaign victory -- see
+		# complete_campaign_objective()/set_campaign_victory()).
+		if is_authored_encounter(selected_encounter):
+			complete_campaign_objective(selected_encounter)
 	selected_encounter = ""
 
 
@@ -1491,6 +1853,27 @@ func set_campaign_victory() -> void:
 	is_campaign_completed = true
 	is_free_play_active = true
 	campaign_progress_changed.emit()
+	campaign_victory.emit()
+
+
+## Read once by the Campaign Victory screen (see scripts/ui/victory_screen.gd)
+## right after set_campaign_victory() flips is_campaign_completed -- every
+## value here is a plain durable-state read, never itself mutated. "Upgrades
+## completed" sums every building's level above its unbuilt/base floor:
+## Guild Hall and Shop start at level 1, so their contribution is level - 1;
+## Temple/Blacksmith/Alchemy Workshop/Runic Workshop start at 0 (unbuilt), so
+## their own level already is their upgrade count.
+func get_campaign_victory_summary() -> Dictionary:
+	return {
+		"world_turns": world_turn,
+		"battles_won": completed_encounters.size(),
+		"casualties": total_casualties,
+		"gold_banked": gold,
+		"upgrades_completed": (
+			(guild_hall_level - 1) + temple_level + blacksmith_level
+			+ alchemy_workshop_level + runic_workshop_level + (shop_level - 1)
+		),
+	}
 
 
 ## Adds every count in source into dest in place -- both id/tier -> count
@@ -1961,6 +2344,23 @@ func get_expedition(encounter_id: String) -> Dictionary:
 	return EXPEDITIONS[encounter_id].duplicate(true)
 
 
+## Every THREAT_TURN_INTERVAL world turns elapsed adds one star on top of an
+## encounter's own base "difficulty", clamped to the 1-5 range World Map
+## markers render (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md). A tunable constant, not
+## GameConfig-backed like the balance vars above it in this file -- Step 6's
+## simulation/balance harness is the step that revisits its exact value.
+## Returns 1 for an unknown encounter id, matching get_expedition()'s own
+## "difficulty" fallback.
+const THREAT_TURN_INTERVAL := 15
+
+
+func get_threat_stars(encounter_id: String) -> int:
+	var expedition := get_expedition(encounter_id)
+	var base_difficulty: int = int(expedition.get("difficulty", 1))
+	return clampi(base_difficulty + int(world_turn / THREAT_TURN_INTERVAL), 1, 5)
+
+
 ## Scout strategic reconnaissance (docs/plans/2026-08-18-core-loop-and-
 ## engagement/04-cleric-class-and-scout-reconnaissance.md). Per index.md's
 ## locked decision, an encounter discloses NOTHING beyond its bare location
@@ -1994,12 +2394,25 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 	)
 
 	if has_scout and within_range:
-		var enemy: Dictionary = expedition.get("enemy", {})
-		var enemy_types: Array[String] = [tr(str(enemy.get("name_key", "")))]
+		var enemy_types: Array[String] = []
+		var enemy_count := 0
+		# Authored nodes (see EXPEDITIONS' "enemies" field) can field more
+		# than one species; every group's own name_key is reported and their
+		# counts summed, instead of the legacy single "enemy" + "count"
+		# template's one-species read below.
+		if expedition.has("enemies"):
+			for group in expedition.enemies:
+				var stats: Dictionary = group.get("enemy", {})
+				enemy_types.append(tr(str(stats.get("name_key", ""))))
+				enemy_count += int(group.get("count", 1))
+		else:
+			var enemy: Dictionary = expedition.get("enemy", {})
+			enemy_types.append(tr(str(enemy.get("name_key", ""))))
+			enemy_count = int(enemy.get("count", 0))
 		return {
 			"has_intel": true,
 			"enemy_types": enemy_types,
-			"enemy_count": int(enemy.get("count", 0)),
+			"enemy_count": enemy_count,
 			"danger_tier": int(expedition.get("difficulty", 1)),
 		}
 
@@ -2833,6 +3246,7 @@ func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
 		for party_index in parties.size():
 			parties[party_index].member_ids.erase(adventurer_id)
 		adventurers.remove_at(_get_adventurer_index(adventurer_id))
+	total_casualties += dead_ids.size()
 	return dead_ids
 
 
@@ -2990,6 +3404,7 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.unlocked_authored_encounters = unlocked_authored_encounters.duplicate(true)
 	snapshot.is_campaign_completed = is_campaign_completed
 	snapshot.is_free_play_active = is_free_play_active
+	snapshot.total_casualties = total_casualties
 	snapshot.completed_encounters = completed_encounters.duplicate(true)
 	snapshot.active_encounters = active_encounters.duplicate(true)
 	snapshot.encounter_vacancies = encounter_vacancies.duplicate(true)
@@ -3070,6 +3485,7 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	unlocked_authored_encounters = snapshot.unlocked_authored_encounters.duplicate(true)
 	is_campaign_completed = snapshot.is_campaign_completed
 	is_free_play_active = snapshot.is_free_play_active
+	total_casualties = snapshot.total_casualties
 	completed_encounters = snapshot.completed_encounters.duplicate(true)
 	active_encounters = snapshot.active_encounters.duplicate(true)
 	encounter_vacancies = snapshot.encounter_vacancies.duplicate(true)

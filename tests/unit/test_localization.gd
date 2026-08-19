@@ -304,6 +304,34 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("campaign.obj.tier1_1.reward"), "50 Gold, Iron Weapon")
 	assert_eq(tr("campaign.free_play.active_label"), "Free Play Mode Active")
 
+	# Step 5 (docs/plans/2026-08-18-core-loop-and-engagement/
+	# 05-authored-encounters-and-final-boss.md): encounter names, boss
+	# titles, and victory text for the 12-battle authored ladder.
+	assert_eq(tr("battle.enemy.goblin_archer"), "Goblin Archer")
+	assert_eq(tr("battle.enemy.kobold_slinger"), "Kobold Slinger")
+	assert_eq(tr("battle.enemy.goblin_shaman"), "Goblin Shaman")
+	assert_eq(tr("battle.enemy.orc_bruiser"), "Orc Bruiser")
+	assert_eq(tr("battle.enemy.hobgoblin_elite"), "Hobgoblin Elite")
+	assert_eq(tr("battle.enemy.hobgoblin_champion"), "Hobgoblin Champion")
+	assert_eq(tr("battle.enemy.orc_warlord"), "Orc Warlord")
+	assert_eq(tr("battle.enemy.ogre"), "Ogre")
+	assert_eq(tr("expedition.obj_tier1_1_goblin_outpost.name"), "Goblin Outpost")
+	assert_eq(tr("expedition.obj_preboss_1_borderlands_vanguard.name"), "The Gatehouse")
+	assert_eq(tr("expedition.obj_preboss_2_borderlands_stronghold.name"), "Honor Guard")
+	assert_eq(tr("expedition.obj_boss_borderlands_ogre.name"), "The Ogre's Lair")
+	assert_eq(tr("campaign.obj.preboss_2.title"), "Defeat the Honor Guard")
+	assert_eq(tr("campaign.obj.boss.title"), "Defeat the Borderlands Ogre")
+	assert_eq(tr("campaign.obj.boss.desc"), "Defeat the Ogre and win the campaign.")
+	assert_eq(tr("campaign.obj.boss.reward"), "Campaign Victory")
+	assert_eq(tr("victory.title"), "Campaign Victory!")
+	assert_eq(tr("victory.stat.turns") % 10, "World Turns Elapsed: 10")
+	assert_eq(tr("victory.stat.battles_won") % 12, "Battles Won: 12")
+	assert_eq(tr("victory.stat.casualties") % 0, "Casualties: 0")
+	assert_eq(tr("victory.stat.gold_banked") % 500, "Gold Banked: 500")
+	assert_eq(tr("victory.stat.upgrades") % 3, "Encampment Upgrades: 3")
+	assert_eq(tr("victory.continue_free_play"), "Continue in Free Play")
+	assert_eq(tr("debug.preboss_encounter"), "Jump to Pre-Boss Encounter")
+
 
 func test_start_menu_uses_translation_keys_not_literal_copy() -> void:
 	var start_menu: Control = StartMenuScene.instantiate()

@@ -1,0 +1,145 @@
+{
+  "manifest_version": 1,
+  "scenarios": [
+    {
+      "objective_id": "obj_tier1_1_goblin_outpost",
+      "contract": {
+        "scenario_id": "campaign_obj_tier1_1_goblin_outpost",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 1, "weapon_id": "longsword_iron", "armor_id": "leather_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 1, "weapon_id": "longsword_iron", "armor_id": "leather_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 1, "weapon_id": "shortbow_iron", "armor_id": "leather_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "goblin_1", "template_id": "goblin"},
+            {"id": "kobold_1", "template_id": "kobold"},
+            {"id": "kobold_2", "template_id": "kobold"}
+          ]
+        },
+        "randomness": {"root_seed": 51101, "iterations": 1}
+      }
+    },
+    {
+      "objective_id": "obj_tier2_1_orc_outpost",
+      "contract": {
+        "scenario_id": "campaign_obj_tier2_1_orc_outpost",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 3, "weapon_id": "longsword_steel", "armor_id": "chainmail_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 3, "weapon_id": "longsword_steel", "armor_id": "chainmail_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 3, "weapon_id": "shortbow_steel", "armor_id": "chainmail_armor"},
+            {"id": "warrior_3", "template_id": "warrior", "level": 3, "weapon_id": "longsword_steel", "armor_id": "chainmail_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "orc_bruiser_1", "template_id": "orc_bruiser"},
+            {"id": "goblin_archer_1", "template_id": "goblin_archer"}
+          ]
+        },
+        "randomness": {"root_seed": 52101, "iterations": 1}
+      }
+    },
+    {
+      "objective_id": "obj_tier3_1_hobgoblin_command",
+      "contract": {
+        "scenario_id": "campaign_obj_tier3_1_hobgoblin_command",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 5, "weapon_id": "longsword_steel", "armor_id": "split_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 5, "weapon_id": "longsword_steel", "armor_id": "split_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 5, "weapon_id": "longbow_steel", "armor_id": "split_armor"},
+            {"id": "warrior_3", "template_id": "warrior", "level": 5, "weapon_id": "longsword_steel", "armor_id": "split_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "hobgoblin_elite_1", "template_id": "hobgoblin_elite"},
+            {"id": "kobold_slinger_1", "template_id": "kobold_slinger"},
+            {"id": "kobold_slinger_2", "template_id": "kobold_slinger"}
+          ]
+        },
+        "randomness": {"root_seed": 53101, "iterations": 1}
+      }
+    },
+    {
+      "objective_id": "obj_preboss_1_borderlands_vanguard",
+      "contract": {
+        "scenario_id": "campaign_obj_preboss_1_borderlands_vanguard",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 6, "weapon_id": "longbow_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_3", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_4", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "hobgoblin_elite_1", "template_id": "hobgoblin_elite"},
+            {"id": "hobgoblin_elite_2", "template_id": "hobgoblin_elite"},
+            {"id": "goblin_archer_1", "template_id": "goblin_archer"},
+            {"id": "goblin_archer_2", "template_id": "goblin_archer"},
+            {"id": "kobold_1", "template_id": "kobold"}
+          ]
+        },
+        "randomness": {"root_seed": 54101, "iterations": 1}
+      }
+    },
+    {
+      "objective_id": "obj_preboss_2_borderlands_stronghold",
+      "contract": {
+        "scenario_id": "campaign_obj_preboss_2_borderlands_stronghold",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 6, "weapon_id": "longbow_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_3", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"},
+            {"id": "warrior_4", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "platemail_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "hobgoblin_champion_1", "template_id": "hobgoblin_champion"},
+            {"id": "hobgoblin_champion_2", "template_id": "hobgoblin_champion"},
+            {"id": "hobgoblin_champion_3", "template_id": "hobgoblin_champion"},
+            {"id": "orc_warlord_1", "template_id": "orc_warlord"}
+          ]
+        },
+        "randomness": {"root_seed": 54201, "iterations": 1}
+      }
+    },
+    {
+      "objective_id": "obj_boss_borderlands_ogre",
+      "contract": {
+        "scenario_id": "campaign_obj_boss_borderlands_ogre",
+        "board": {"width": 6, "height": 6},
+        "player": {
+          "units": [
+            {"id": "warrior_1", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "full_plate_armor"},
+            {"id": "warrior_2", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "full_plate_armor"},
+            {"id": "scout_1", "template_id": "scout", "level": 6, "weapon_id": "longbow_steel", "armor_id": "full_plate_armor"},
+            {"id": "warrior_3", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "full_plate_armor"},
+            {"id": "warrior_4", "template_id": "warrior", "level": 6, "weapon_id": "two_handed_sword_steel", "armor_id": "full_plate_armor"}
+          ]
+        },
+        "enemy": {
+          "units": [
+            {"id": "ogre_1", "template_id": "ogre"}
+          ]
+        },
+        "randomness": {"root_seed": 55101, "iterations": 1}
+      }
+    }
+  ]
+}

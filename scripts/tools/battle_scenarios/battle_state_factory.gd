@@ -113,6 +113,24 @@ static func _read_enemy_template_stats(template_id: String) -> Dictionary:
 			return GameSession.KOBOLD_ENEMY_STATS
 		"hobgoblin":
 			return GameSession.HOBGOBLIN_ENEMY_STATS
+		# Authored-ladder additions (see docs/plans/2026-08-18-core-loop-and-
+		# engagement/05-authored-encounters-and-final-boss.md).
+		"goblin_archer":
+			return GameSession.GOBLIN_ARCHER_ENEMY_STATS
+		"goblin_shaman":
+			return GameSession.GOBLIN_SHAMAN_ENEMY_STATS
+		"kobold_slinger":
+			return GameSession.KOBOLD_SLINGER_ENEMY_STATS
+		"orc_bruiser":
+			return GameSession.ORC_BRUISER_ENEMY_STATS
+		"hobgoblin_elite":
+			return GameSession.HOBGOBLIN_ELITE_ENEMY_STATS
+		"hobgoblin_champion":
+			return GameSession.HOBGOBLIN_CHAMPION_ENEMY_STATS
+		"orc_warlord":
+			return GameSession.ORC_WARLORD_ENEMY_STATS
+		"ogre":
+			return GameSession.OGRE_ENEMY_STATS
 		_:
 			return {}
 
@@ -176,12 +194,25 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	var modifiers: Dictionary = spec.get("modifiers", {})
 
 	var max_health: int = int(base.get("max_health", 0)) + int(modifiers.get("max_health", 0))
-	var attack_damage: int = int(base.get("attack_damage", 0))
-	var damage_min: int = attack_damage + int(modifiers.get("damage_min", 0))
-	var damage_max: int = attack_damage + int(modifiers.get("damage_max", 0))
+	# A ranged template (see GOBLIN_ARCHER_ENEMY_STATS/KOBOLD_SLINGER_ENEMY_
+	# STATS/GOBLIN_SHAMAN_ENEMY_STATS/OGRE_ENEMY_STATS) authors its own
+	# damage_min/damage_max range directly; a fixed-damage melee template
+	# only authors "attack_damage", falling back to it for both ends of the
+	# range -- the same fallback BattleController._ready() applies for a
+	# live battle (see its own damage_min/damage_max reads).
+	var base_damage_min: int = int(base.get("damage_min", int(base.get("attack_damage", 0))))
+	var base_damage_max: int = int(base.get("damage_max", int(base.get("attack_damage", 0))))
+	var damage_min: int = base_damage_min + int(modifiers.get("damage_min", 0))
+	var damage_max: int = base_damage_max + int(modifiers.get("damage_max", 0))
 	var hit_chance: float = clampf(float(base.get("hit_chance", 0.0)) + float(modifiers.get("hit_chance", 0.0)), 0.0, 1.0)
-	var defense: int = int(modifiers.get("defense", 0))
-	var resistance: int = int(modifiers.get("resistance", 0))
+	# An armored/elite template (see ORC_BRUISER_ENEMY_STATS/HOBGOBLIN_ELITE_
+	# ENEMY_STATS/HOBGOBLIN_CHAMPION_ENEMY_STATS/ORC_WARLORD_ENEMY_STATS/
+	# OGRE_ENEMY_STATS) authors its own defense/resistance directly, same
+	# additive-modifier-on-top-of-base pattern as max_health/hit_chance
+	# above -- an enemy with none (every original species) keeps the prior
+	# modifiers-only behavior since base.get(...) then defaults to 0.
+	var defense: int = int(base.get("defense", 0)) + int(modifiers.get("defense", 0))
+	var resistance: int = int(base.get("resistance", 0)) + int(modifiers.get("resistance", 0))
 	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
 	var kill_xp: int = int(base.get("kill_xp", 0))
 
@@ -191,6 +222,8 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 		action_points, max_health, damage_min, damage_max, hit_chance,
 		TranslationServer.translate(base.get("attack_name_key", "")), "", defense, resistance, kill_xp
 	)
+	unit.attack_min_range = int(base.get("attack_min_range", 1))
+	unit.attack_max_range = int(base.get("attack_max_range", 1))
 	unit.display_name = String(spec.id)
 	unit.enemy_type_name = TranslationServer.translate(base.get("name_key", ""))
 	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "left")))

@@ -185,7 +185,7 @@ var defeated_player_health_by_id: Dictionary = {}
 func _ready() -> void:
 	add_to_group(GROUP)
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
-	var enemy_stats := _get_enemy_stats()
+	var expedition := _get_expedition_for_battle()
 	_player_adventurer_ids = _get_player_adventurer_ids()
 	units = []
 	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
@@ -226,18 +226,22 @@ func _ready() -> void:
 			player_unit.mp_remaining = player_unit.mp_max
 		player_unit.facing = Vector2i.RIGHT
 		units.append(player_unit)
-	var enemy_count: int = enemy_stats.get("count", 1)
-	var enemy_type_name: String = tr(enemy_stats.name_key)
-	for index in mini(enemy_count, ENEMY_START_POSITIONS.size()):
+	var enemy_specs: Array[Dictionary] = _build_enemy_specs(expedition)
+	var enemy_type_counts: Dictionary = {}
+	for index in mini(enemy_specs.size(), ENEMY_START_POSITIONS.size()):
+		var enemy_stats: Dictionary = enemy_specs[index]
 		var enemy_unit := UnitScript.new(
 			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, BASE_ACTION_POINTS,
 			enemy_stats.max_health, enemy_stats.get("damage_min", int(enemy_stats.get("attack_damage", 1))),
 			enemy_stats.get("damage_max", int(enemy_stats.get("attack_damage", 1))), enemy_stats.hit_chance,
-			tr(enemy_stats.attack_name_key), "", 0, 0, enemy_stats.get("kill_xp", 0)
+			tr(enemy_stats.attack_name_key), "",
+			int(enemy_stats.get("defense", 0)), int(enemy_stats.get("resistance", 0)), enemy_stats.get("kill_xp", 0)
 		)
 		enemy_unit.attack_min_range = int(enemy_stats.get("attack_min_range", 1))
 		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
-		enemy_unit.display_name = "%s %d" % [enemy_type_name, index + 1]
+		var enemy_type_name: String = tr(enemy_stats.name_key)
+		enemy_type_counts[enemy_type_name] = int(enemy_type_counts.get(enemy_type_name, 0)) + 1
+		enemy_unit.display_name = "%s %d" % [enemy_type_name, enemy_type_counts[enemy_type_name]]
 		enemy_unit.enemy_type_name = enemy_type_name
 		enemy_unit.facing = Vector2i.LEFT
 		units.append(enemy_unit)
@@ -261,13 +265,37 @@ func _ready() -> void:
 	_update_highlights()
 
 
-func _get_enemy_stats() -> Dictionary:
+func _get_expedition_for_battle() -> Dictionary:
 	var expedition: Dictionary = GameSession.get_expedition(GameSession.selected_encounter)
 	if expedition.is_empty():
 		# Scene-isolated tests instantiate the battlefield with no selected encounter;
 		# fall back to the Goblin Camp enemy so those scenarios keep working.
 		expedition = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
-	return expedition.enemy
+	return expedition
+
+
+## Flattens an expedition's enemy composition into one ordered stat block per
+## fielded unit, in formation order. Authored campaign nodes (see GameSession.
+## EXPEDITIONS' "obj_*" entries) declare an ordered mixed-unit "enemies"
+## array -- {"enemy": <*_ENEMY_STATS>, "count": n} groups, expanded here in
+## declaration order. The three original sandbox expeditions (and any
+## resolved STAR_ENEMY_COMPOSITIONS active instance) still declare the
+## legacy single "enemy" + "count" template instead; both shapes coexist on
+## EXPEDITIONS rather than the mixed-formation schema overloading the legacy
+## one (see docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md).
+func _build_enemy_specs(expedition: Dictionary) -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	if expedition.has("enemies"):
+		for group in expedition.enemies:
+			var stats: Dictionary = group.get("enemy", {})
+			for _i in int(group.get("count", 1)):
+				specs.append(stats)
+	else:
+		var enemy_stats: Dictionary = expedition.get("enemy", {})
+		for _i in int(enemy_stats.get("count", 1)):
+			specs.append(enemy_stats)
+	return specs
 
 
 ## One player Unit is fielded per party member (see the campaign progression

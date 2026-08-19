@@ -1087,6 +1087,30 @@ func test_battle_result_summary_starts_empty() -> void:
 	assert_eq(GameManager.battle_result_summary, {})
 
 
+## --- Step 5: Campaign Victory routing ---------------------------------------
+## (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md)
+
+
+func test_go_to_victory_screen_changes_scene_successfully() -> void:
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	assert_eq(manager.go_to_victory_screen(), OK)
+
+
+## Defeating the final boss is the one victory Battlefield._finish_victory()
+## routes to the dedicated Campaign Victory screen instead of the ordinary
+## battle-result summary -- detected by diffing GameSession.is_campaign_
+## completed around GameSession.complete_current_encounter() (see that
+## method's own doc comment), not by hardcoding the boss's encounter id.
+func test_defeating_final_boss_routes_to_the_victory_screen() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/battle/battlefield.gd")
+
+	assert_string_contains(source, "GameManager.go_to_victory_screen()")
+	assert_string_contains(source, "just_won_campaign")
+
+
 ## --- Save/load wrappers (Step 2 -- see docs/plans/2026-08-10-initial- ------
 ## --- campaign-and-automation/02-atomic-save-repository.md). These tests ---
 ## --- only prove GameManager delegates to an injectable SaveRepository ----

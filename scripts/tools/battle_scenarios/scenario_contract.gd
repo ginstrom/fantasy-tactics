@@ -56,7 +56,15 @@ const DEFAULT_ENEMY_POLICY := "current_enemy_policy"
 # GameSession's named *_ENEMY_STATS consts (see battle_state_factory.gd's
 # read-only helpers, which resolve these same names to live stat data).
 const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout"]
-const KNOWN_ENEMY_TEMPLATES: Array[String] = ["goblin", "orc", "kobold", "hobgoblin"]
+# The four original species plus the authored-ladder additions (see
+# GameSession's *_ENEMY_STATS consts and docs/plans/2026-08-18-core-loop-
+# and-engagement/05-authored-encounters-and-final-boss.md) -- every name here
+# must resolve in BattleStateFactory._read_enemy_template_stats().
+const KNOWN_ENEMY_TEMPLATES: Array[String] = [
+	"goblin", "orc", "kobold", "hobgoblin",
+	"goblin_archer", "goblin_shaman", "kobold_slinger", "orc_bruiser",
+	"hobgoblin_elite", "hobgoblin_champion", "orc_warlord", "ogre",
+]
 
 # JSON-safe facing values a unit record may declare (see _normalize_side()'s
 # per-side default and facing_from_string(), which BattleStateFactory uses to

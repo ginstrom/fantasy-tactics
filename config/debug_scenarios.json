@@ -193,6 +193,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -552,6 +553,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -911,6 +913,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
@@ -1270,6 +1273,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -1647,6 +1651,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2022,6 +2027,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2399,6 +2405,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -2869,6 +2876,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -3332,6 +3340,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [
@@ -3713,6 +3722,7 @@
         "has_trading_post": true,
         "is_campaign_completed": false,
         "is_free_play_active": false,
+        "total_casualties": 0,
         "mana_crystals": {
           "1": 2
         },
@@ -3899,6 +3909,425 @@
         "scene": "stores"
       },
       "name_key": "debug.stocked_stores"
+    },
+    {
+      "campaign_snapshot": {
+        "active_encounters": [
+          {
+            "position": {
+              "x": 6,
+              "y": 2
+            },
+            "name_key": "expedition.obj_preboss_1_borderlands_vanguard.name",
+            "danger_key": "expedition.danger.extreme",
+            "difficulty": 4,
+            "clear_xp": 90,
+            "is_authored": true,
+            "enemies": [
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.hobgoblin_elite",
+                  "attack_name_key": "battle.enemy.hobgoblin_elite.attack",
+                  "max_health": 38,
+                  "attack_damage": 5,
+                  "hit_chance": 0.6,
+                  "defense": 5,
+                  "resistance": 10,
+                  "kill_xp": 24,
+                  "role": "elite",
+                  "loot_id": "hobgoblin",
+                  "id": "hobgoblin_elite",
+                  "tier": 3
+                },
+                "count": 2
+              },
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.goblin_archer",
+                  "attack_name_key": "battle.enemy.goblin_archer.attack",
+                  "max_health": 10,
+                  "attack_damage": 1,
+                  "damage_min": 1,
+                  "damage_max": 4,
+                  "hit_chance": 0.4,
+                  "move_range": 3,
+                  "attack_min_range": 1,
+                  "attack_max_range": 3,
+                  "kill_xp": 6,
+                  "role": "ranged_skirmisher",
+                  "loot_id": "goblin",
+                  "id": "goblin_archer",
+                  "tier": 2
+                },
+                "count": 2
+              },
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.kobold",
+                  "attack_name_key": "battle.enemy.kobold.attack",
+                  "max_health": 6,
+                  "attack_damage": 1,
+                  "hit_chance": 0.25,
+                  "kill_xp": 3,
+                  "loot_id": "kobold"
+                },
+                "count": 1
+              }
+            ],
+            "id": "obj_preboss_1_borderlands_vanguard",
+            "template_id": "obj_preboss_1_borderlands_vanguard"
+          },
+          {
+            "position": {
+              "x": 6,
+              "y": 4
+            },
+            "name_key": "expedition.obj_preboss_2_borderlands_stronghold.name",
+            "danger_key": "expedition.danger.extreme",
+            "difficulty": 4,
+            "clear_xp": 100,
+            "is_authored": true,
+            "enemies": [
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.hobgoblin_champion",
+                  "attack_name_key": "battle.enemy.hobgoblin_champion.attack",
+                  "max_health": 46,
+                  "attack_damage": 6,
+                  "hit_chance": 0.62,
+                  "defense": 8,
+                  "resistance": 15,
+                  "kill_xp": 30,
+                  "role": "elite",
+                  "loot_id": "hobgoblin",
+                  "id": "hobgoblin_champion",
+                  "tier": 4
+                },
+                "count": 3
+              },
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.orc_warlord",
+                  "attack_name_key": "battle.enemy.orc_warlord.attack",
+                  "max_health": 50,
+                  "attack_damage": 7,
+                  "hit_chance": 0.55,
+                  "defense": 12,
+                  "resistance": 20,
+                  "kill_xp": 35,
+                  "role": "armored_bruiser",
+                  "loot_id": "orc",
+                  "id": "orc_warlord",
+                  "tier": 4
+                },
+                "count": 1
+              }
+            ],
+            "id": "obj_preboss_2_borderlands_stronghold",
+            "template_id": "obj_preboss_2_borderlands_stronghold"
+          },
+          {
+            "position": {
+              "x": 6,
+              "y": 6
+            },
+            "name_key": "expedition.obj_boss_borderlands_ogre.name",
+            "danger_key": "expedition.danger.extreme",
+            "difficulty": 5,
+            "clear_xp": 200,
+            "is_authored": true,
+            "enemies": [
+              {
+                "enemy": {
+                  "name_key": "battle.enemy.ogre",
+                  "attack_name_key": "battle.enemy.ogre.attack",
+                  "max_health": 90,
+                  "attack_damage": 8,
+                  "damage_min": 5,
+                  "damage_max": 12,
+                  "hit_chance": 0.55,
+                  "defense": 15,
+                  "resistance": 20,
+                  "kill_xp": 150,
+                  "role": "boss",
+                  "loot_id": "ogre",
+                  "id": "ogre",
+                  "tier": 5
+                },
+                "count": 1
+              }
+            ],
+            "id": "obj_boss_borderlands_ogre",
+            "template_id": "obj_boss_borderlands_ogre"
+          }
+        ],
+        "adventurers": [
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "platemail_armor",
+              "armor_inventory": [
+                "platemail_armor"
+              ],
+              "weapon": "two_handed_sword_steel",
+              "weapon_inventory": [
+                "two_handed_sword_steel"
+              ]
+            },
+            "health": 46,
+            "id": "pb_warrior_1",
+            "level": 6,
+            "name": "Warrior",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 15,
+              "max_health": 46,
+              "melee": 84,
+              "might": 10,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "platemail_armor",
+              "armor_inventory": [
+                "platemail_armor"
+              ],
+              "weapon": "two_handed_sword_steel",
+              "weapon_inventory": [
+                "two_handed_sword_steel"
+              ]
+            },
+            "health": 46,
+            "id": "pb_warrior_2",
+            "level": 6,
+            "name": "Warrior 2",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 15,
+              "max_health": 46,
+              "melee": 84,
+              "might": 10,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "scout",
+            "equipment": {
+              "armor": "platemail_armor",
+              "armor_inventory": [
+                "platemail_armor"
+              ],
+              "weapon": "longbow_steel",
+              "weapon_inventory": [
+                "longbow_steel"
+              ]
+            },
+            "health": 42,
+            "id": "pb_scout_1",
+            "level": 6,
+            "name": "Scout",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 10,
+              "max_health": 42,
+              "melee": 65,
+              "might": 6,
+              "missile": 90,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "warrior",
+            "equipment": {
+              "armor": "platemail_armor",
+              "armor_inventory": [
+                "platemail_armor"
+              ],
+              "weapon": "two_handed_sword_steel",
+              "weapon_inventory": [
+                "two_handed_sword_steel"
+              ]
+            },
+            "health": 46,
+            "id": "pb_warrior_3",
+            "level": 6,
+            "name": "Warrior 3",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 15,
+              "max_health": 46,
+              "melee": 84,
+              "might": 10,
+              "missile": 60,
+              "move_range": 3,
+              "vitality": 10
+            }
+          },
+          {
+            "availability_status": "available",
+            "class": "cleric",
+            "equipment": {
+              "armor": "platemail_armor",
+              "armor_inventory": [
+                "platemail_armor"
+              ],
+              "weapon": "mace_iron",
+              "weapon_inventory": [
+                "mace_iron"
+              ]
+            },
+            "health": 48,
+            "id": "pb_cleric_1",
+            "level": 6,
+            "name": "Cleric",
+            "progression": {
+              "perks": [],
+              "xp": 0.0
+            },
+            "stats": {
+              "guard": 20,
+              "max_health": 48,
+              "melee": 55,
+              "might": 4,
+              "missile": 35,
+              "move_range": 3,
+              "vitality": 10
+            }
+          }
+        ],
+        "alchemy_craft_job": {},
+        "alchemy_workshop_level": 1,
+        "banked_gear": {},
+        "banked_item_instance_ids": [],
+        "battle_gear": {},
+        "battle_mana_crystals": {},
+        "battle_reward": 0,
+        "blacksmith_craft_job": {},
+        "blacksmith_level": 2,
+        "blacksmith_sharpening_job": {},
+        "campaign_objective_id": "obj_preboss_1_borderlands_vanguard",
+        "completed_encounters": [
+          "obj_tier1_1_goblin_outpost",
+          "obj_tier1_2_kobold_warren",
+          "obj_tier1_3_goblin_warcamp",
+          "obj_tier2_1_orc_outpost",
+          "obj_tier2_2_orc_warband",
+          "obj_tier2_3_brute_stronghold",
+          "obj_tier3_1_hobgoblin_command",
+          "obj_tier3_2_mixed_forces_ambush",
+          "obj_tier3_3_ruined_fortress"
+        ],
+        "completed_objectives": [
+          "obj_tier1_1_goblin_outpost",
+          "obj_tier1_2_kobold_warren",
+          "obj_tier1_3_goblin_warcamp",
+          "obj_tier2_1_orc_outpost",
+          "obj_tier2_2_orc_warband",
+          "obj_tier2_3_brute_stronghold",
+          "obj_tier3_1_hobgoblin_command",
+          "obj_tier3_2_mixed_forces_ambush",
+          "obj_tier3_3_ruined_fortress"
+        ],
+        "encounter_vacancies": [],
+        "gold": 800,
+        "guild_hall_level": 3,
+        "temple_level": 1,
+        "has_trading_post": true,
+        "is_campaign_completed": false,
+        "is_free_play_active": false,
+        "total_casualties": 0,
+        "mana_crystals": {
+          "1": 4,
+          "2": 4
+        },
+        "owned_item_instances": {},
+        "parties": [
+          {
+            "deployed": true,
+            "id": "party_001",
+            "location_id": "starting_settlement",
+            "member_ids": [
+              "pb_warrior_1",
+              "pb_warrior_2",
+              "pb_scout_1",
+              "pb_warrior_3",
+              "pb_cleric_1"
+            ],
+            "metadata": {},
+            "movement_spent": false,
+            "name": "Party 1",
+            "progression": {},
+            "travel_route": [],
+            "world_position": {
+              "x": 6,
+              "y": 2
+            }
+          }
+        ],
+        "pending_gear": {},
+        "pending_mana_crystals": {},
+        "pending_reward": 0,
+        "player_name": "Player",
+        "recruitment_candidates": [],
+        "recruitment_vacancies": [],
+        "runic_craft_job": {},
+        "runic_workshop_level": 1,
+        "selected_encounter": "",
+        "selected_party_id": "party_001",
+        "shop_gold": 200,
+        "shop_level": 3,
+        "tutorial_progress": {},
+        "unlocked_authored_encounters": [
+          "obj_tier1_1_goblin_outpost",
+          "obj_tier1_2_kobold_warren",
+          "obj_tier1_3_goblin_warcamp",
+          "obj_tier2_1_orc_outpost",
+          "obj_tier2_2_orc_warband",
+          "obj_tier2_3_brute_stronghold",
+          "obj_tier3_1_hobgoblin_command",
+          "obj_tier3_2_mixed_forces_ambush",
+          "obj_tier3_3_ruined_fortress",
+          "obj_preboss_1_borderlands_vanguard",
+          "obj_preboss_2_borderlands_stronghold",
+          "obj_boss_borderlands_ogre"
+        ],
+        "used_encounter_template_ids": [
+          "goblin_camp",
+          "orc_outpost"
+        ],
+        "version": 2,
+        "world_turn": 60
+      },
+      "category": "Battle",
+      "description": "Campaign progress advanced through Tier 3; party standing on the Pre-Boss Vanguard encounter tile. All three remaining battles (both Pre-Boss encounters and the Ogre) are pre-unlocked and placed on the World Map so the full pre-boss-to-victory flow can be played through manually.",
+      "id": "preboss_encounter",
+      "launch": {
+        "scene": "world_map"
+      },
+      "name_key": "debug.preboss_encounter"
     }
   ]
 }

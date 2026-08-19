@@ -248,6 +248,152 @@ func test_set_campaign_victory_atomically_flags_victory_and_free_play() -> void:
 	assert_signal_emitted(session, "campaign_progress_changed")
 
 
+## --- Step 5: Authored 12-battle encounter ladder ---------------------------
+## (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md)
+
+
+## Every CAMPAIGN_OBJECTIVES id must resolve to a real EXPEDITIONS entry
+## (its own "encounter_id" mirrors its key -- see that catalog's own doc
+## comment), and every such entry must be marked authored, carry a distinct
+## world-map position, a positive clear_xp reward, and an ordered mixed-unit
+## "enemies" composition (never the legacy single "enemy" + "count" template
+## the three sandbox expeditions still use) whose total fielded unit count
+## fits the battlefield's eight enemy start positions.
+func test_every_campaign_objective_resolves_to_an_authored_expedition_with_a_valid_composition() -> void:
+	var seen_positions: Dictionary = {}
+	for id in GameSessionScript.CAMPAIGN_OBJECTIVES.keys():
+		var objective: Dictionary = GameSessionScript.CAMPAIGN_OBJECTIVES[id]
+		assert_eq(objective.encounter_id, id, "%s's encounter_id must mirror its own catalog key" % id)
+		assert_true(GameSessionScript.EXPEDITIONS.has(id), "%s must have a matching EXPEDITIONS entry" % id)
+
+		var expedition: Dictionary = GameSessionScript.EXPEDITIONS[id]
+		assert_true(expedition.get("is_authored", false), "%s's expedition must be marked authored" % id)
+		assert_false(expedition.has("enemy"), "%s must use the mixed 'enemies' formation, not the legacy 'enemy' template" % id)
+		assert_true(expedition.has("enemies"), "%s must declare an ordered 'enemies' formation" % id)
+		assert_gt(int(expedition.get("clear_xp", 0)), 0, "%s must reward positive clear XP" % id)
+
+		var position: Vector2i = expedition.position
+		assert_false(seen_positions.has(position), "%s's world-map position %s collides with another node" % [id, position])
+		seen_positions[position] = id
+
+		var total_units := 0
+		for group in expedition.enemies:
+			assert_true(group.has("enemy") and group.enemy is Dictionary and not group.enemy.is_empty(), "%s has an empty enemy group" % id)
+			assert_gt(int(group.get("count", 0)), 0, "%s has a non-positive enemy group count" % id)
+			total_units += int(group.count)
+		assert_true(total_units > 0 and total_units <= 8, "%s fields %d units, outside the 1-8 supported range" % [id, total_units])
+
+
+## Cross-checks the plan doc's own composition table (see the step's
+## Technical Design section) against the live data, by monster count per
+## node -- proof the catalog was actually filled in with the intended
+## fight, not just structurally valid placeholder data.
+func test_authored_encounter_compositions_match_the_plan_doc() -> void:
+	var expected_counts := {
+		"obj_tier1_1_goblin_outpost": 3,
+		"obj_tier1_2_kobold_warren": 5,
+		"obj_tier1_3_goblin_warcamp": 3,
+		"obj_tier2_1_orc_outpost": 2,
+		"obj_tier2_2_orc_warband": 2,
+		"obj_tier2_3_brute_stronghold": 4,
+		"obj_tier3_1_hobgoblin_command": 3,
+		"obj_tier3_2_mixed_forces_ambush": 3,
+		"obj_tier3_3_ruined_fortress": 4,
+		"obj_preboss_1_borderlands_vanguard": 5,
+		"obj_preboss_2_borderlands_stronghold": 4,
+		"obj_boss_borderlands_ogre": 1,
+	}
+	for id in expected_counts:
+		var expedition: Dictionary = GameSessionScript.EXPEDITIONS[id]
+		var total_units := 0
+		for group in expedition.enemies:
+			total_units += int(group.count)
+		assert_eq(total_units, expected_counts[id], "%s should field %d total enemies" % [id, expected_counts[id]])
+
+	assert_eq(GameSessionScript.EXPEDITIONS["obj_boss_borderlands_ogre"].enemies[0].enemy, GameSessionScript.OGRE_ENEMY_STATS)
+
+
+## can_enter_encounter()/enter_encounter() gate authored nodes: only the
+## currently-unlocked node (never a locked later one, and never one already
+## cleared) can ever become selected_encounter. Sandbox expedition ids
+## remain unrestricted, matching prior behavior.
+func test_only_the_currently_unlocked_authored_node_can_spawn() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_true(session.can_enter_encounter("obj_tier1_1_goblin_outpost"))
+	assert_false(session.can_enter_encounter("obj_tier1_2_kobold_warren"), "A not-yet-unlocked node must not be enterable")
+	assert_true(session.can_enter_encounter(GameSessionScript.GOBLIN_CAMP_ID), "Sandbox templates remain unrestricted")
+
+	session.enter_encounter("obj_tier1_2_kobold_warren")
+	assert_eq(session.selected_encounter, "", "Entering a locked authored node must not select it")
+
+	session.enter_encounter("obj_tier1_1_goblin_outpost")
+	assert_eq(session.selected_encounter, "obj_tier1_1_goblin_outpost")
+
+	session.complete_current_encounter()
+	assert_true(session.completed_objectives.has("obj_tier1_1_goblin_outpost"))
+	assert_true(session.unlocked_authored_encounters.has("obj_tier1_2_kobold_warren"))
+
+	session.enter_encounter("obj_tier1_1_goblin_outpost")
+	assert_eq(session.selected_encounter, "", "A cleared authored node must never reopen")
+
+	session.enter_encounter("obj_tier1_2_kobold_warren")
+	assert_eq(session.selected_encounter, "obj_tier1_2_kobold_warren", "The newly-unlocked node must now be enterable")
+
+
+## Completing an authored node's encounter must complete its matching
+## campaign objective (same id -- see CAMPAIGN_OBJECTIVES' own doc comment),
+## and clearing the entire ladder must land exactly on campaign victory.
+func test_completing_every_authored_encounter_in_order_wins_the_campaign() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	watch_signals(session)
+
+	var chain: Array = []
+	var id: String = "obj_tier1_1_goblin_outpost"
+	while id != "":
+		chain.append(id)
+		id = GameSessionScript.CAMPAIGN_OBJECTIVES[id].next_objective_id
+
+	assert_eq(chain.size(), 12, "The full prerequisite chain from Tier 1-1 to the Final Boss is twelve nodes")
+
+	for objective_id in chain:
+		assert_eq(session.selected_encounter, "")
+		session.enter_encounter(objective_id)
+		assert_eq(session.selected_encounter, objective_id, "%s should be enterable once unlocked" % objective_id)
+		session.complete_current_encounter()
+		assert_true(session.is_objective_completed(objective_id))
+
+	assert_true(session.is_campaign_completed)
+	assert_true(session.is_free_play_active)
+	assert_signal_emitted(session, "campaign_victory")
+
+
+## --- Step 5: dynamic 1-5 star threat pacing ---------------------------------
+
+
+func test_threat_stars_start_at_the_encounters_base_difficulty() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 1)
+	assert_eq(session.get_threat_stars(GameSessionScript.ORC_OUTPOST_ID), 2)
+	assert_eq(session.get_threat_stars("obj_boss_borderlands_ogre"), 5)
+
+
+func test_threat_stars_rise_with_world_turns_and_clamp_at_five() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.world_turn = 1 + GameSessionScript.THREAT_TURN_INTERVAL
+	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 2, "One interval elapsed adds exactly one star")
+
+	session.world_turn = 1 + GameSessionScript.THREAT_TURN_INTERVAL * 20
+	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 5, "Threat stars never exceed five")
+
+
 func test_public_ui_eligibility_queries_report_current_state_without_mutating_it() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

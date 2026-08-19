@@ -368,3 +368,96 @@ func test_try_move_and_try_attack_work_directly_on_a_factory_built_controller() 
 	var attacked: bool = controller.try_attack_selected_unit(Vector2i(1, 2))
 
 	assert_true(attacked)
+
+
+## --- Step 5: authored campaign ladder fixtures ------------------------------
+## (docs/plans/2026-08-18-core-loop-and-engagement/
+## 05-authored-encounters-and-final-boss.md's task-list item 1: one
+## ScenarioContract fixture per tier, both pre-boss nodes, and the Ogre,
+## each hydrated through BattleStateFactory with its own recorded seed.)
+
+const CAMPAIGN_SCENARIOS_PATH := "res://config/campaign_scenarios.json"
+
+
+func _load_campaign_scenarios() -> Array:
+	var file := FileAccess.open(CAMPAIGN_SCENARIOS_PATH, FileAccess.READ)
+	assert_not_null(file, "%s must exist" % CAMPAIGN_SCENARIOS_PATH)
+	var json := JSON.new()
+	assert_eq(json.parse(file.get_as_text()), OK, "%s must be valid JSON" % CAMPAIGN_SCENARIOS_PATH)
+	assert_true(json.data is Dictionary and (json.data as Dictionary).get("scenarios") is Array)
+	return (json.data as Dictionary).scenarios
+
+
+## Every fixture covers a distinct authored node id -- one per tier (using
+## that tier's first node as the representative), both pre-boss nodes, and
+## the Ogre -- six in total.
+func test_campaign_scenarios_fixture_covers_one_node_per_tier_both_preboss_nodes_and_the_ogre() -> void:
+	var scenarios := _load_campaign_scenarios()
+	var objective_ids: Array = []
+	for entry in scenarios:
+		objective_ids.append(String(entry.objective_id))
+
+	assert_eq(objective_ids.size(), 6)
+	for expected_id in [
+		"obj_tier1_1_goblin_outpost", "obj_tier2_1_orc_outpost", "obj_tier3_1_hobgoblin_command",
+		"obj_preboss_1_borderlands_vanguard", "obj_preboss_2_borderlands_stronghold", "obj_boss_borderlands_ogre",
+	]:
+		assert_true(objective_ids.has(expected_id), "campaign_scenarios.json must cover %s" % expected_id)
+
+
+## Every fixture normalizes/validates cleanly and hydrates through
+## BattleStateFactory.build() into a controller fielding exactly the
+## fixture's own declared unit counts; each fixture's own recorded seed
+## (GameSession.CAMPAIGN_OBJECTIVES id + ScenarioContract.derive_iteration_
+## seed()) reproduces identically on every call, proving the fixture is a
+## reproducible, deterministic regression scenario rather than a one-off.
+func test_every_campaign_scenario_fixture_hydrates_through_battle_state_factory() -> void:
+	for entry in _load_campaign_scenarios():
+		var raw_contract: Dictionary = entry.contract
+		var scenario := ScenarioContract.normalize(raw_contract)
+		var errors := ScenarioContract.validate(scenario)
+		assert_eq(errors, [] as Array[String], "%s's fixture must validate cleanly" % entry.objective_id)
+
+		var root_seed: int = scenario.randomness.root_seed
+		var seed_a := ScenarioContract.derive_iteration_seed(root_seed, scenario.scenario_id, 0)
+		var seed_b := ScenarioContract.derive_iteration_seed(root_seed, scenario.scenario_id, 0)
+		assert_eq(seed_a, seed_b, "%s's derived iteration seed must be deterministic" % entry.objective_id)
+
+		var controller: Node2D = BattleStateFactory.build(scenario, seed_a)
+		autofree(controller)
+
+		var expected_player_count: int = scenario.player.units.size()
+		var expected_enemy_count: int = scenario.enemy.units.size()
+		var player_units := 0
+		var enemy_units := 0
+		for unit in controller.units:
+			if unit.side == BattleControllerScript.Side.PLAYER:
+				player_units += 1
+			else:
+				enemy_units += 1
+		assert_eq(player_units, expected_player_count, "%s should field its declared player count" % entry.objective_id)
+		assert_eq(enemy_units, expected_enemy_count, "%s should field its declared enemy count" % entry.objective_id)
+		assert_true(controller.is_battle_won() or enemy_units > 0)
+
+
+## The Ogre fixture specifically must hydrate with the boss's real tuned
+## stats -- proof the JSON fixture actually names the "ogre" template rather
+## than a placeholder.
+func test_ogre_campaign_scenario_fixture_hydrates_the_tuned_ogre_stats() -> void:
+	for entry in _load_campaign_scenarios():
+		if String(entry.objective_id) != "obj_boss_borderlands_ogre":
+			continue
+		var scenario := ScenarioContract.normalize(entry.contract)
+		var controller: Node2D = BattleStateFactory.build(scenario, 1)
+		autofree(controller)
+
+		var ogre = null
+		for unit in controller.units:
+			if unit.side == BattleControllerScript.Side.ENEMY:
+				ogre = unit
+		assert_not_null(ogre)
+		assert_eq(ogre.max_health, GameSession.OGRE_ENEMY_STATS.max_health)
+		assert_eq(ogre.defense, GameSession.OGRE_ENEMY_STATS.defense)
+		assert_eq(ogre.resistance, GameSession.OGRE_ENEMY_STATS.resistance)
+		return
+	fail_test("obj_boss_borderlands_ogre fixture not found")

@@ -366,7 +366,7 @@ func _victory_message() -> String:
 
 ## Scene-isolated tests instantiate the battlefield with no selected
 ## encounter; fall back to the Goblin Camp, matching
-## BattleController._get_enemy_stats()'s fallback.
+## BattleController._get_expedition_for_battle()'s fallback.
 func _current_expedition() -> Dictionary:
 	var encounter_id: String = GameSession.selected_encounter
 	if encounter_id == "":
@@ -491,9 +491,19 @@ func _on_level_up_queue_drained() -> void:
 ## (still used by scripts/tools/screenshot_tour.gd to skip straight to the
 ## World Map), which also routes through go_to_world_map() and so also
 ## merges correctly.
+##
+## Defeating the final boss is the one victory that does NOT land on the
+## ordinary battle-result summary: complete_current_encounter() completing
+## the boss's own authored objective flips GameSession.is_campaign_completed
+## true (see complete_campaign_objective()/set_campaign_victory()) --
+## detected here by diffing the flag around that call, rather than this
+## scene hardcoding the boss's encounter id -- and routes to the dedicated
+## Campaign Victory screen instead.
 func _finish_victory() -> void:
 	_persist_battle_aftermath()
+	var was_campaign_completed := GameSession.is_campaign_completed
 	GameSession.complete_current_encounter()
+	var just_won_campaign: bool = GameSession.is_campaign_completed and not was_campaign_completed
 
 	var party := GameSession.get_party(GameSession.selected_party_id)
 	var summary := {
@@ -508,6 +518,9 @@ func _finish_victory() -> void:
 		"loot_mana_crystal_counts": GameSession.battle_mana_crystals.duplicate(),
 		"loot_gear_counts": GameSession.battle_gear.duplicate(),
 	}
+	if just_won_campaign:
+		GameManager.go_to_victory_screen()
+		return
 	GameManager.go_to_battle_result(summary)
 
 

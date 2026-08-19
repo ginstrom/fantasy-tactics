@@ -158,8 +158,10 @@ func _expedition_id_at(pos: Vector2i) -> String:
 
 
 func _get_difficulty_stars(difficulty: int) -> String:
-	# Clamp difficulty to 1-4 range and return star string
-	var clamped := clampi(difficulty, 1, 4)
+	# Clamp difficulty to the 1-5 range GameSession.get_threat_stars() itself
+	# clamps to (see that function's own doc comment) and return a star
+	# string.
+	var clamped := clampi(difficulty, 1, 5)
 	return "★".repeat(clamped)
 
 
@@ -167,12 +169,18 @@ func _get_difficulty_stars(difficulty: int) -> String:
 ## gated behind Scout reconnaissance exactly like enemy composition -- both
 ## are withheld until the deployed party contains a Scout within Manhattan
 ## distance 3 of this encounter (see GameSession.get_party_scouting_intel()).
-## Returns "" (no stars drawn) when that intel hasn't been earned yet.
+## Returns "" (no stars drawn) when that intel hasn't been earned yet. Once
+## intel is earned, the rendered star count is GameSession.get_threat_
+## stars()' dynamic 1-5 rating (docs/plans/2026-08-18-core-loop-and-
+## engagement/05-authored-encounters-and-final-boss.md) -- which rises with
+## world turns elapsed on top of the encounter's own base difficulty -- not
+## the static intel.danger_tier value (still used elsewhere, e.g. to decide
+## whether intel has been earned at all).
 func _get_marker_star_text(encounter_id: String) -> String:
 	var intel := GameSession.get_party_scouting_intel(GameSession.selected_party_id, encounter_id)
 	if intel.is_empty() or not bool(intel.has_intel):
 		return ""
-	return _get_difficulty_stars(int(intel.danger_tier))
+	return _get_difficulty_stars(GameSession.get_threat_stars(encounter_id))
 
 
 func build_route(from: Vector2i, destination: Vector2i) -> Array[Vector2i]:
