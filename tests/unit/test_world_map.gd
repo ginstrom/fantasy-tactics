@@ -1465,3 +1465,48 @@ func test_world_map_campaign_objective_banner_updates_immediately_when_the_objec
 	GameSession.complete_campaign_objective("obj_tier1_1_goblin_outpost")
 
 	assert_eq(title_label.text, tr("campaign.obj.tier1_2.title"))
+
+
+## --- Scouting Overlay High-Contrast Palette (Technical Design §4,
+## docs/plans/2026-08-18-core-loop-and-engagement/
+## 07-visual-perspective-and-tactical-polish.md) ---
+## Presentation only: the reveal gating itself (Scout within Manhattan
+## distance 3) is already covered above by test_encounter_labels_show_*, so
+## these only assert on the label's color treatment once revealed/withheld.
+
+func test_encounter_label_uses_the_high_contrast_palette_once_revealed() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	GameSession.set_deployed_party_position(goblin_camp.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var label := _find_expedition_label_by_position(world_map, goblin_camp.position)
+
+	assert_eq(label.text, "★")
+	assert_true(label.has_theme_color_override("font_color"), "A revealed star count must render in the high-contrast palette")
+	assert_eq(label.get_theme_color("font_color"), WorldMapScript.STAR_LABEL_COLOR)
+	assert_true(label.has_theme_color_override("font_outline_color"))
+	assert_eq(label.get_theme_color("font_outline_color"), WorldMapScript.STAR_LABEL_OUTLINE_COLOR)
+
+
+## No Scout in range (before_each() deploys a warrior-only party) --
+## test_encounter_labels_show_no_stars_without_a_scout_in_range already
+## proves the text stays empty; this proves the empty label also stays in
+## the theme's default color rather than drawing an eye-catching outline
+## around nothing.
+func test_encounter_label_stays_in_the_default_palette_when_unrevealed() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	var goblin_record: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var label := _find_expedition_label_by_position(world_map, goblin_record.position)
+
+	assert_eq(label.text, "")
+	assert_false(label.has_theme_color_override("font_color"))

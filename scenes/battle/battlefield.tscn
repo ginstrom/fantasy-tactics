@@ -17,7 +17,11 @@ script = ExtResource("2_battle")
 
 [node name="Highlights" type="Node2D" parent="Grid"]
 
+[node name="Shadows" type="Node2D" parent="Grid"]
+
 [node name="Units" type="Node2D" parent="Grid"]
+
+[node name="FloatingTexts" type="Node2D" parent="Grid"]
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
@@ -119,6 +123,24 @@ visible = false
 layout_mode = 2
 visible = false
 
+[node name="HealthBar" type="Control" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+custom_minimum_size = Vector2(180, 10)
+
+[node name="Background" type="ColorRect" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection/HealthBar"]
+layout_mode = 0
+size = Vector2(180, 10)
+color = Color(0.15, 0.15, 0.15, 0.8)
+
+[node name="Fill" type="ColorRect" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection/HealthBar"]
+layout_mode = 0
+size = Vector2(180, 10)
+color = Color(0.3, 0.8, 0.3, 1)
+
+[node name="WoundBadge" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+visible = false
+
 [node name="WoundLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
@@ -146,6 +168,24 @@ visible = false
 
 [node name="HpLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2
+
+[node name="HealthBar" type="Control" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+custom_minimum_size = Vector2(180, 10)
+
+[node name="Background" type="ColorRect" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection/HealthBar"]
+layout_mode = 0
+size = Vector2(180, 10)
+color = Color(0.15, 0.15, 0.15, 0.8)
+
+[node name="Fill" type="ColorRect" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection/HealthBar"]
+layout_mode = 0
+size = Vector2(180, 10)
+color = Color(0.3, 0.8, 0.3, 1)
+
+[node name="WoundBadge" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
 
 [node name="ApLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2

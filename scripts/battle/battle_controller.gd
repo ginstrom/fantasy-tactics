@@ -31,9 +31,21 @@ signal action_mode_changed(mode)
 ## log each outcome, persist aftermath, and hand routing off to
 ## GameManager.retreat_from_battle().
 signal retreat_resolved(results: Array[Dictionary])
+## Presentation-layer hook (Technical Design §2, docs/plans/2026-08-18-
+## core-loop-and-engagement/07-visual-perspective-and-tactical-polish.md):
+## fires once per floating-combat-text event with the Grid-local pixel
+## position (see TILE_SIZE-scaled anchors below) it should appear over, the
+## already-formatted display string, and one of FloatingTextScript's TYPE_*
+## ids. Purely informational -- no gameplay state depends on it -- so tests
+## can assert on it directly without needing a running scene tree, and
+## _spawn_combat_text() still emits it even from a bare (non-tree)
+## BattleController the way every other signal in this file does.
+signal combat_text_spawned(pos: Vector2, text: String, type: String)
 
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
+const FloatingTextScript := preload("res://scripts/battle/floating_text.gd")
+const FloatingTextScene := preload("res://scenes/battle/floating_text.tscn")
 
 const GRID_WIDTH := 6
 const GRID_HEIGHT := 6
@@ -60,6 +72,17 @@ const MOVE_AND_ATTACK_TARGET_COLOR := Color(1.0, 0.65, 0.1, 0.65)
 ## unit color.
 const FACING_INDICATOR_COLOR := Color(1, 1, 1, 0.85)
 const FACING_INDICATOR_SIZE := 12.0
+## Ground shadow placeholder (Technical Design §1: "ground shadows, baseline
+## anchors, and depth ordering" stand in for a true isometric transform,
+## which this step explicitly must not adopt) -- a flattened dark rect
+## anchored to each tile's bottom edge so a unit reads as standing "on" the
+## ground plane rather than floating centered in its cell.
+const SHADOW_COLOR := Color(0, 0, 0, 0.35)
+## Pooled floating-combat-text cap (Technical Design §2) -- this game's
+## turn-based combat never lands more than a couple of hits in the same
+## frame, so a small fixed pool comfortably covers every real burst without
+## growing unbounded.
+const FLOATING_TEXT_POOL_SIZE := 10
 
 enum Side { PLAYER, ENEMY }
 ## CONTEXTUAL is the opening and reset mode (see _select_unit()): an empty
@@ -176,10 +199,16 @@ var last_targeting_failure: Dictionary = {}
 ## by adventurer id, independent of `units` -- see _persist_battle_
 ## aftermath(), which reads both.
 var defeated_player_health_by_id: Dictionary = {}
+## Pool of FloatingText instances reused across combat events (see
+## _acquire_floating_text()) rather than instantiating/freeing a fresh node
+## per hit -- populated lazily, capped at FLOATING_TEXT_POOL_SIZE.
+var _floating_text_pool: Array = []
 
 @onready var tile_container: Node2D = $Tiles
+@onready var shadow_container: Node2D = $Shadows
 @onready var unit_container: Node2D = $Units
 @onready var highlight_container: Node2D = $Highlights
+@onready var floating_text_container: Node2D = $FloatingTexts
 
 
 func _ready() -> void:
@@ -719,6 +748,16 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		if has_status(selected_unit, BLESSED_STATUS_ID):
 			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
 		target.take_damage(damage)
+		if is_critical:
+			_spawn_combat_text(
+				_floating_text_anchor(target), tr("battle.floating.critical") % damage, FloatingTextScript.TYPE_CRITICAL
+			)
+		else:
+			_spawn_combat_text(
+				_floating_text_anchor(target), tr("battle.floating.damage") % damage, FloatingTextScript.TYPE_DAMAGE
+			)
+	else:
+		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
 		units.erase(target)
@@ -885,6 +924,9 @@ func try_use_selected_potion(potion_id: String) -> bool:
 	selected_unit.health = mini(selected_unit.max_health, selected_unit.health + healed)
 	selected_unit.action_points_remaining -= ITEM_ACTION_POINT_COST
 	last_attack_result = {"type": "potion", "potion_id": potion_id, "unit": selected_unit, "healing": healed}
+	_spawn_combat_text(
+		_floating_text_anchor(selected_unit), tr("battle.floating.heal") % healed, FloatingTextScript.TYPE_HEAL
+	)
 	return true
 
 
@@ -941,6 +983,9 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 			last_attack_result = {
 				"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target, "healing": healed,
 			}
+			_spawn_combat_text(
+				_floating_text_anchor(target), tr("battle.floating.heal") % healed, FloatingTextScript.TYPE_HEAL
+			)
 			return true
 		"bless":
 			if has_status(target, BLESSED_STATUS_ID):
@@ -1327,9 +1372,32 @@ func _draw_units() -> void:
 		return
 	for child in unit_container.get_children():
 		child.queue_free()
+	for child in shadow_container.get_children():
+		child.queue_free()
 
 	var margin := TILE_SIZE * 0.15
-	for unit in units:
+	# Depth ordering (Technical Design §1): painter's-algorithm sort by row
+	# so a unit nearer the "camera" (larger grid_position.y) draws over one
+	# farther away, the cheapest way to make overlapping/adjacent sprites
+	# read as occupying a 3/4 top-down space -- test_draw_units_attaches_a_
+	# facing_indicator_positioned_toward_each_units_facing only asserts on
+	# the unordered *set* of bodies (matched back to a unit by grid
+	# position), never on child index, so reordering the draw list here is
+	# safe.
+	var sorted_units: Array = units.duplicate()
+	sorted_units.sort_custom(func(a, b): return a.grid_position.y < b.grid_position.y)
+	for unit in sorted_units:
+		var shadow_size := Vector2(TILE_SIZE * 0.6, TILE_SIZE * 0.22)
+		var shadow := ColorRect.new()
+		shadow.size = shadow_size
+		shadow.position = (
+			Vector2(unit.grid_position) * TILE_SIZE
+			+ Vector2(TILE_SIZE / 2.0 - shadow_size.x / 2.0, TILE_SIZE - shadow_size.y - TILE_SIZE * 0.05)
+		)
+		shadow.color = SHADOW_COLOR
+		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		shadow_container.add_child(shadow)
+
 		var body := ColorRect.new()
 		body.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
 		body.position = Vector2(unit.grid_position) * TILE_SIZE + Vector2(margin, margin)
@@ -1353,6 +1421,43 @@ func _add_facing_indicator(body: ColorRect, unit) -> void:
 	var edge_offset: float = body.size.x / 2.0 - FACING_INDICATOR_SIZE
 	indicator.position = center + Vector2(unit.facing) * edge_offset
 	body.add_child(indicator)
+
+
+## Grid-local pixel anchor for a unit's floating combat text -- centered
+## horizontally over its tile, near the top edge so the text rises up and
+## away from the unit body rather than starting on top of it.
+func _floating_text_anchor(unit) -> Vector2:
+	return Vector2(unit.grid_position) * TILE_SIZE + Vector2(TILE_SIZE / 2.0, TILE_SIZE * 0.1)
+
+
+## Presentation-layer entry point for every combat-feedback event (Technical
+## Design §2). Always emits combat_text_spawned -- tests build a bare
+## BattleController via .new() and assert on the signal alone -- and, only
+## when actually running inside a scene tree (mirrors _draw_units()'s own
+## is_inside_tree() guard), also drives a pooled FloatingText instance so the
+## real battlefield shows the animation.
+func _spawn_combat_text(pos: Vector2, text: String, type: String) -> void:
+	combat_text_spawned.emit(pos, text, type)
+	if not is_inside_tree():
+		return
+	_acquire_floating_text().play(pos, text, type)
+
+
+## Reuses the first inactive pooled instance; grows the pool up to
+## FLOATING_TEXT_POOL_SIZE when every existing instance is still animating;
+## beyond that cap, steals the oldest entry rather than growing unbounded --
+## this game's turn-based combat never lands enough simultaneous hits to
+## exhaust a pool of this size in practice.
+func _acquire_floating_text():
+	for candidate in _floating_text_pool:
+		if not candidate.is_active:
+			return candidate
+	if _floating_text_pool.size() < FLOATING_TEXT_POOL_SIZE:
+		var instance = FloatingTextScene.instantiate()
+		floating_text_container.add_child(instance)
+		_floating_text_pool.append(instance)
+		return instance
+	return _floating_text_pool[0]
 
 
 ## Full-tile overlay used for every highlight_container fill (movement tiers,

@@ -53,6 +53,75 @@ layout_mode = 2
 text = "encampment.title"
 horizontal_alignment = 1
 
+[node name="BuildingCards" type="HBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="GuildHallCard" type="PanelContainer" parent="Body/Center/VBox/BuildingCards"]
+layout_mode = 2
+
+[node name="GuildHallBox" type="VBoxContainer" parent="Body/Center/VBox/BuildingCards/GuildHallCard"]
+layout_mode = 2
+
+[node name="GuildHallArt" type="ColorRect" parent="Body/Center/VBox/BuildingCards/GuildHallCard/GuildHallBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(72, 40)
+
+[node name="GuildHallName" type="Label" parent="Body/Center/VBox/BuildingCards/GuildHallCard/GuildHallBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="GuildHallLevel" type="Label" parent="Body/Center/VBox/BuildingCards/GuildHallCard/GuildHallBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="TempleCard" type="PanelContainer" parent="Body/Center/VBox/BuildingCards"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TempleBox" type="VBoxContainer" parent="Body/Center/VBox/BuildingCards/TempleCard"]
+layout_mode = 2
+
+[node name="TempleArt" type="ColorRect" parent="Body/Center/VBox/BuildingCards/TempleCard/TempleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(72, 40)
+
+[node name="TempleName" type="Label" parent="Body/Center/VBox/BuildingCards/TempleCard/TempleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="TempleLevel" type="Label" parent="Body/Center/VBox/BuildingCards/TempleCard/TempleBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="ShopCard" type="PanelContainer" parent="Body/Center/VBox/BuildingCards"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ShopBox" type="VBoxContainer" parent="Body/Center/VBox/BuildingCards/ShopCard"]
+layout_mode = 2
+
+[node name="ShopArt" type="ColorRect" parent="Body/Center/VBox/BuildingCards/ShopCard/ShopBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(72, 40)
+
+[node name="ShopName" type="Label" parent="Body/Center/VBox/BuildingCards/ShopCard/ShopBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="ShopLevel" type="Label" parent="Body/Center/VBox/BuildingCards/ShopCard/ShopBox"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
 [node name="PopulationLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "encampment.population"

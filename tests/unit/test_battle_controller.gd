@@ -3274,3 +3274,113 @@ func test_defeating_the_ogre_triggers_campaign_victory_once() -> void:
 	assert_signal_emit_count(GameSession, "campaign_victory", 1)
 
 
+
+
+## --- Floating Combat Text (Technical Design §2, docs/plans/2026-08-18-
+## core-loop-and-engagement/07-visual-perspective-and-tactical-polish.md) ---
+## combat_text_spawned is asserted directly against a bare (non-tree)
+## controller, the same _make_controller() pattern every other test in this
+## file uses -- _spawn_combat_text() emits the signal unconditionally and
+## only additionally drives a pooled FloatingText node when is_inside_tree()
+## (see battle_controller.gd's own doc comment on that guard), so a bare
+## controller is sufficient to prove the presentation hook fires with the
+## right position/text/type.
+
+func test_a_landed_hit_spawns_red_damage_text_over_the_defender() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 2
+	watch_signals(controller)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	var expected_pos: Vector2 = controller._floating_text_anchor(defender)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned",
+		[expected_pos, tr("battle.floating.damage") % controller.last_attack_result.damage, "damage"]
+	)
+
+
+func test_a_critical_hit_spawns_golden_crit_text() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 0.0
+	watch_signals(controller)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.critical)
+	var expected_pos: Vector2 = controller._floating_text_anchor(defender)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned",
+		[expected_pos, tr("battle.floating.critical") % controller.last_attack_result.damage, "critical"]
+	)
+
+
+func test_a_missed_attack_spawns_gray_miss_text() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 3, 2, 2, 0.5)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99
+	watch_signals(controller)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.get("hit", true))
+	var expected_pos: Vector2 = controller._floating_text_anchor(defender)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.miss"), "miss"]
+	)
+
+
+func test_using_a_healing_potion_spawns_green_heal_text_over_the_user() -> void:
+	GameSession.banked_gear = {"healing_potion": 1}
+	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
+	var controller := _make_controller(4, 4)
+	var holder = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 1, 1, 1.0, "Sword", GameSession.WARRIOR_ID
+	)
+	holder.health = 4
+	controller.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+	controller.units = [holder]
+	controller.selected_unit = holder
+	watch_signals(controller)
+
+	assert_true(controller.try_use_selected_potion("healing_potion"))
+
+	var expected_pos: Vector2 = controller._floating_text_anchor(holder)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.heal") % 6, "heal"]
+	)
+
+
+func test_casting_heal_spawns_green_heal_text_over_the_target() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	ally.health = 4
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+	controller.healing_roll = func(_minimum: int, maximum: int) -> int: return maximum
+	watch_signals(controller)
+
+	assert_true(controller.try_cast_spell("heal", ally.grid_position))
+
+	var expected_pos: Vector2 = controller._floating_text_anchor(ally)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.heal") % 8, "heal"]
+	)

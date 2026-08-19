@@ -172,3 +172,86 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+## --- Building Card Visual States (Technical Design §5, docs/plans/
+## 2026-08-18-core-loop-and-engagement/
+## 07-visual-perspective-and-tactical-polish.md) --- purely presentational:
+## these tests never assert on what a building's level unlocks (already
+## covered by test_guild_hall.gd/test_temple.gd/test_stores.gd), only on how
+## its card looks at that level.
+
+func test_guild_hall_card_shows_tier_one_art_and_name_at_the_default_level() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_eq(screen.get_node("%GuildHallArt").color, screen.GUILD_HALL_TIER_COLORS[1])
+	assert_eq(screen.get_node("%GuildHallName").text, tr("encampment.building.guild_hall.tier1"))
+	assert_eq(screen.get_node("%GuildHallLevel").text, tr("encampment.building.level") % 1)
+
+
+func test_guild_hall_card_updates_to_tier_two_art_and_name_after_refresh() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	GameSession.guild_hall_level = 2
+	screen.refresh()
+
+	assert_eq(screen.get_node("%GuildHallArt").color, screen.GUILD_HALL_TIER_COLORS[2])
+	assert_eq(screen.get_node("%GuildHallName").text, tr("encampment.building.guild_hall.tier2"))
+	assert_eq(screen.get_node("%GuildHallLevel").text, tr("encampment.building.level") % 2)
+
+
+func test_guild_hall_card_updates_to_tier_three_art_and_name_after_refresh() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	GameSession.guild_hall_level = 3
+	screen.refresh()
+
+	assert_eq(screen.get_node("%GuildHallArt").color, screen.GUILD_HALL_TIER_COLORS[3])
+	assert_eq(screen.get_node("%GuildHallName").text, tr("encampment.building.guild_hall.tier3"))
+
+
+func test_temple_card_is_hidden_until_the_temple_is_built() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("%TempleCard").visible)
+
+
+func test_temple_card_shows_tier_one_art_and_name_once_built() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	GameSession.temple_level = 1
+	screen.refresh()
+
+	assert_true(screen.get_node("%TempleCard").visible)
+	assert_eq(screen.get_node("%TempleArt").color, screen.TEMPLE_TIER_COLORS[1])
+	assert_eq(screen.get_node("%TempleName").text, tr("encampment.building.temple.tier1"))
+	assert_eq(screen.get_node("%TempleLevel").text, tr("encampment.building.level") % 1)
+
+
+func test_shop_card_shows_tier_one_art_and_name_at_the_default_level() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_true(screen.get_node("%ShopCard").visible)
+	assert_eq(screen.get_node("%ShopArt").color, screen.SHOP_TIER_COLORS[1])
+	assert_eq(screen.get_node("%ShopName").text, tr("encampment.building.shop.tier1"))
+
+
+func test_shop_card_updates_through_every_tier_after_refresh() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	GameSession.shop_level = 2
+	screen.refresh()
+	assert_eq(screen.get_node("%ShopArt").color, screen.SHOP_TIER_COLORS[2])
+	assert_eq(screen.get_node("%ShopName").text, tr("encampment.building.shop.tier2"))
+
+	GameSession.shop_level = 3
+	screen.refresh()
+	assert_eq(screen.get_node("%ShopArt").color, screen.SHOP_TIER_COLORS[3])
+	assert_eq(screen.get_node("%ShopName").text, tr("encampment.building.shop.tier3"))

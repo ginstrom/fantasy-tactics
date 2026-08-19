@@ -26,6 +26,19 @@ const ROUTE_SEGMENT_COLOR := Color(0.9, 0.9, 0.3, 0.6)
 const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
 const HOVER_ROUTE_SEGMENT_COLOR := Color(0.4, 0.9, 0.9, 0.5)
 const HOVER_ROUTE_TARGET_COLOR := Color(0.4, 0.9, 0.9, 0.8)
+## World Map Fog & Strategic Scouting Visuals (Technical Design §4,
+## docs/plans/2026-08-18-core-loop-and-engagement/
+## 07-visual-perspective-and-tactical-polish.md): once a Scout has earned
+## the star-count reveal (_get_marker_star_text() below), render it in a
+## high-contrast gold with a dark outline so it stays sharp/legible over the
+## marker/tile art -- purely a presentation change, layered on top of the
+## same reveal gating GameSession.get_party_scouting_intel() already
+## enforces (see that function's own doc comment); it changes nothing about
+## when or what is revealed.
+const STAR_LABEL_COLOR := Color(1.0, 0.85, 0.2)
+const STAR_LABEL_OUTLINE_COLOR := Color(0.1, 0.08, 0.02)
+const STAR_LABEL_OUTLINE_SIZE := 4
+const STAR_LABEL_FONT_SIZE := 18
 
 # Expedition labels sit above their marker by default. This floor keeps a
 # label on grid row 0 (or any row close enough to the top) from rendering
@@ -422,6 +435,15 @@ func _draw_expedition_marker(encounter_id: String, tile_pos: Vector2i, margin: f
 	var label_y := maxf(tile_pos.y * TILE_SIZE - TILE_SIZE * 0.6, EXPEDITION_LABEL_MIN_Y)
 	label.position = Vector2(tile_pos.x * TILE_SIZE + TILE_SIZE * 0.1, label_y)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# High-contrast palette (Technical Design §4): only applied once Scout
+	# intel has actually revealed a star count -- an empty (unrevealed)
+	# label stays in the theme's default color rather than drawing an
+	# eye-catching gold outline around nothing.
+	if label.text != "":
+		label.add_theme_color_override("font_color", STAR_LABEL_COLOR)
+		label.add_theme_color_override("font_outline_color", STAR_LABEL_OUTLINE_COLOR)
+		label.add_theme_constant_override("outline_size", STAR_LABEL_OUTLINE_SIZE)
+		label.add_theme_font_size_override("font_size", STAR_LABEL_FONT_SIZE)
 	marker_container.add_child(label)
 
 
