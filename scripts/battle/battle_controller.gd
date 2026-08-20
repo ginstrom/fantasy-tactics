@@ -51,8 +51,6 @@ const GRID_WIDTH := 6
 const GRID_HEIGHT := 6
 const TILE_SIZE := 64
 
-const TILE_COLOR_LIGHT := Color(0.24, 0.24, 0.28)
-const TILE_COLOR_DARK := Color(0.18, 0.18, 0.21)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
 ## Move-and-attack (green) tier: reachable tiles that still leave enough AP
 ## for a basic attack after moving there. Supersedes the old single-tier
@@ -247,6 +245,10 @@ func _ready() -> void:
 		# definition lists (only Cleric today) rather than a hardcoded class
 		# id check, so a future spellcasting class needs no change here.
 		var class_id: String = str(GameSession.get_adventurer(adventurer_id).get("class", ""))
+		# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+		# 02-battlefield-sprites.md): presentation-only SpriteCatalog lookup
+		# key -- see Unit.visual_key's own doc comment.
+		player_unit.visual_key = "player_%s" % class_id
 		var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, {})
 		var spell_ids: Array = class_def.get("spells", [])
 		if not spell_ids.is_empty():
@@ -268,6 +270,11 @@ func _ready() -> void:
 		)
 		enemy_unit.attack_min_range = int(enemy_stats.get("attack_min_range", 1))
 		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
+		# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+		# 02-battlefield-sprites.md): presentation-only SpriteCatalog lookup
+		# key, derived from untranslated raw data only -- see
+		# _visual_family_for_enemy() and Unit.visual_key's own doc comment.
+		enemy_unit.visual_key = "enemy_%s" % _visual_family_for_enemy(enemy_stats)
 		var enemy_type_name: String = tr(enemy_stats.name_key)
 		enemy_type_counts[enemy_type_name] = int(enemy_type_counts.get(enemy_type_name, 0)) + 1
 		enemy_unit.display_name = "%s %d" % [enemy_type_name, enemy_type_counts[enemy_type_name]]
@@ -325,6 +332,31 @@ func _build_enemy_specs(expedition: Dictionary) -> Array[Dictionary]:
 		for _i in int(enemy_stats.get("count", 1)):
 			specs.append(enemy_stats)
 	return specs
+
+
+## Presentation-only SpriteCatalog family for one enemy stat block (docs/
+## plans/2026-08-20-placeholder-sprites/02-battlefield-sprites.md). "id" is
+## preferred when present, since it is already the most specific raw
+## identifier (e.g. "goblin_archer", "hobgoblin_elite"); "loot_id" is the
+## fallback for every *_ENEMY_STATS const, which always carries one even when
+## it has no "id" (see e.g. GOBLIN_ENEMY_STATS). The three original sandbox
+## expeditions' inline "enemy" specs (EXPEDITIONS' "goblin_camp"/
+## "orc_outpost"/"ruined_fortress" entries) carry neither, so "name_key" --
+## an untranslated i18n key like "battle.enemy.kobold", never
+## enemy_type_name, which is already tr()-translated -- is the final
+## fallback, read from its last "." segment. Every one of these raw strings
+## already has the shape "<family>" or "<family>_<variant>", so splitting on
+## the first "_" recovers one of the catalog's five bare families
+## ("goblin"/"kobold"/"orc"/"hobgoblin"/"ogre") from any of the three.
+func _visual_family_for_enemy(enemy_stats: Dictionary) -> String:
+	var raw_family: String = str(enemy_stats.get("id", ""))
+	if raw_family == "":
+		raw_family = str(enemy_stats.get("loot_id", ""))
+	if raw_family == "":
+		var name_key := str(enemy_stats.get("name_key", ""))
+		var segments: PackedStringArray = name_key.split(".")
+		raw_family = segments[-1] if not segments.is_empty() else ""
+	return raw_family.split("_")[0]
 
 
 ## One player Unit is fielded per party member (see the campaign progression
@@ -1353,17 +1385,24 @@ func _to_grid_position(local_pos: Vector2) -> Vector2i:
 	return Vector2i(floori(local_pos.x / TILE_SIZE), floori(local_pos.y / TILE_SIZE))
 
 
+## Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+## 02-battlefield-sprites.md): each ground tile is a catalog-backed Sprite2D
+## at an unchanged Vector2(x, y) * TILE_SIZE position -- `centered = false`
+## keeps that position meaning the tile's top-left corner, exactly like the
+## ColorRect it replaces, rather than requiring every position here to be
+## recomputed to a tile-center anchor. Kenney's 16px ground art at the
+## required integral 4x scale exactly fills one 64px TILE_SIZE cell.
 func _draw_tiles() -> void:
 	for child in tile_container.get_children():
 		child.queue_free()
 
 	for y in grid.height:
 		for x in grid.width:
-			var tile := ColorRect.new()
-			tile.size = Vector2(TILE_SIZE, TILE_SIZE)
+			var tile := Sprite2D.new()
+			tile.texture = SpriteCatalog.get_tile_texture((x + y) % 2 == 0)
+			tile.centered = false
+			tile.scale = Vector2(4, 4)
 			tile.position = Vector2(x, y) * TILE_SIZE
-			tile.color = TILE_COLOR_LIGHT if (x + y) % 2 == 0 else TILE_COLOR_DARK
-			tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			tile_container.add_child(tile)
 
 
@@ -1378,52 +1417,75 @@ func _draw_units() -> void:
 	for child in shadow_container.get_children():
 		child.queue_free()
 
-	var margin := TILE_SIZE * 0.15
 	# Depth ordering (Technical Design §1): painter's-algorithm sort by row
 	# so a unit nearer the "camera" (larger grid_position.y) draws over one
 	# farther away, the cheapest way to make overlapping/adjacent sprites
 	# read as occupying a 3/4 top-down space -- test_draw_units_attaches_a_
 	# facing_indicator_positioned_toward_each_units_facing only asserts on
-	# the unordered *set* of bodies (matched back to a unit by grid
-	# position), never on child index, so reordering the draw list here is
-	# safe.
+	# the unordered *set* of sprites/indicators (matched back to a unit by
+	# grid position), never on child index, so reordering the draw list here
+	# is safe.
 	var sorted_units: Array = units.duplicate()
 	sorted_units.sort_custom(func(a, b): return a.grid_position.y < b.grid_position.y)
 	for unit in sorted_units:
+		var tile_origin: Vector2 = Vector2(unit.grid_position) * TILE_SIZE
 		var shadow_size := Vector2(TILE_SIZE * 0.6, TILE_SIZE * 0.22)
 		var shadow := ColorRect.new()
 		shadow.size = shadow_size
 		shadow.position = (
-			Vector2(unit.grid_position) * TILE_SIZE
-			+ Vector2(TILE_SIZE / 2.0 - shadow_size.x / 2.0, TILE_SIZE - shadow_size.y - TILE_SIZE * 0.05)
+			tile_origin + Vector2(TILE_SIZE / 2.0 - shadow_size.x / 2.0, TILE_SIZE - shadow_size.y - TILE_SIZE * 0.05)
 		)
 		shadow.color = SHADOW_COLOR
 		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		shadow_container.add_child(shadow)
 
-		var body := ColorRect.new()
-		body.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
-		body.position = Vector2(unit.grid_position) * TILE_SIZE + Vector2(margin, margin)
-		body.color = unit.color
-		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		unit_container.add_child(body)
-		_add_facing_indicator(body, unit)
+		# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+		# 02-battlefield-sprites.md): a catalog-backed Sprite2D at the
+		# required integral 4x nearest-neighbor scale, horizontally centered
+		# on the tile and bottom-anchored so its feet meet the shadow's own
+		# bottom edge (the shadow's existing baseline, computed the same way
+		# above) regardless of each source sprite's actual pixel height.
+		var sprite := Sprite2D.new()
+		sprite.name = "UnitSprite"
+		sprite.texture = SpriteCatalog.get_unit_texture(unit.visual_key)
+		sprite.scale = Vector2(4, 4)
+		var shadow_baseline: float = shadow.position.y + shadow_size.y
+		sprite.position = Vector2(
+			tile_origin.x + TILE_SIZE / 2.0, shadow_baseline - (sprite.texture.get_height() * sprite.scale.y) / 2.0
+		)
+		unit_container.add_child(sprite)
+		_add_facing_indicator(tile_origin, unit)
 
 
-## A small high-contrast square offset from the unit body's center toward the
-## edge unit.facing points at -- the board's only visible cue for a unit's
-## orientation, which Steps 2/3 of this plan (critical hits, flanking) reason
-## about for attack geometry.
-func _add_facing_indicator(body: ColorRect, unit) -> void:
+## A small high-contrast square offset from the unit's own tile center toward
+## the edge unit.facing points at -- the board's only visible cue for a
+## unit's orientation, which Steps 2/3 of this plan (critical hits, flanking)
+## reason about for attack geometry. A unit_container sibling of the sprite
+## above (added after it, so it always draws on top) rather than a child of
+## it: a Sprite2D's own `scale` (see above) would otherwise multiply this
+## indicator's fixed 12x12 size and position right along with it, the same
+## way it would any other child, which is not what a fixed-size overlay cue
+## wants. tile_origin + TILE_SIZE / 2.0 (i.e. the tile's own center) is
+## algebraically identical to this indicator's previous body-relative anchor
+## (tile_origin + margin + body_size / 2.0, and margin + body_size / 2.0 ==
+## TILE_SIZE / 2.0 for the fixed 0.15 * TILE_SIZE margin the old ColorRect
+## body used), so this keeps the exact same on-screen placement.
+func _add_facing_indicator(tile_origin: Vector2, unit) -> void:
 	var indicator := ColorRect.new()
 	indicator.name = "FacingIndicator"
 	indicator.size = Vector2(FACING_INDICATOR_SIZE, FACING_INDICATOR_SIZE)
 	indicator.color = FACING_INDICATOR_COLOR
 	indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var center: Vector2 = body.size / 2.0 - indicator.size / 2.0
-	var edge_offset: float = body.size.x / 2.0 - FACING_INDICATOR_SIZE
-	indicator.position = center + Vector2(unit.facing) * edge_offset
-	body.add_child(indicator)
+	var tile_center: Vector2 = tile_origin + Vector2(TILE_SIZE, TILE_SIZE) / 2.0
+	var body_half_size: float = TILE_SIZE / 2.0 - TILE_SIZE * 0.15
+	var edge_offset: float = body_half_size - FACING_INDICATOR_SIZE
+	indicator.position = tile_center - indicator.size / 2.0 + Vector2(unit.facing) * edge_offset
+	# force_readable_name=true: every unit's indicator shares the literal
+	# name "FacingIndicator" (kept as a stable, greppable identity for tests
+	# and debugging), so Godot's default uniqueness handling would otherwise
+	# silently rewrite every collision to an opaque "@ColorRect@123" engine
+	# id instead of a readable "FacingIndicator2" suffix.
+	unit_container.add_child(indicator, true)
 
 
 ## Grid-local pixel anchor for a unit's floating combat text -- centered

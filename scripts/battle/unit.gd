@@ -77,6 +77,14 @@ var facing: Vector2i = Vector2i.RIGHT
 var spells: Array = []
 var mp_max: int = 0
 var mp_remaining: int = 0
+# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+# 02-battlefield-sprites.md): the SpriteCatalog lookup key BattleController
+# hydrates in _ready() -- "player_<class-id>" for a player unit,
+# "enemy_<family>" for an enemy unit -- and _draw_units() reads to pick the
+# unit's Sprite2D texture. Presentation-only, exactly like `color` above it:
+# never derive action legality, saved state, simulation output, or RNG from
+# it, and never serialize it.
+var visual_key := ""
 
 
 func _init(

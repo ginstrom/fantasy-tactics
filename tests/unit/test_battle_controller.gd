@@ -300,6 +300,15 @@ func test_run_enemy_turn_updates_facing_on_move_and_on_attack() -> void:
 
 ## --- Visual facing indicator -------------------------------------------------
 
+## Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+## 02-battlefield-sprites.md) replaced the old flat-color "body" ColorRect
+## with a catalog-backed Sprite2D; the FacingIndicator is no longer nested
+## under it (a Sprite2D's own `scale` would otherwise blow up a nested
+## child's size/position too -- see _add_facing_indicator()'s doc comment),
+## so it is instead a direct unit_container sibling positioned in tile-space.
+## This test keeps the original per-direction geometry assertions, just
+## re-expressed against that tile-space anchor instead of a sibling body's
+## local `.size`.
 func test_draw_units_attaches_a_facing_indicator_positioned_toward_each_units_facing() -> void:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
@@ -324,22 +333,40 @@ func test_draw_units_attaches_a_facing_indicator_positioned_toward_each_units_fa
 
 	controller._draw_units()
 
-	var bodies: Array = controller.unit_container.get_children()
-	assert_eq(bodies.size(), 4, "One body per unit")
-	for body in bodies:
-		var indicator: Node = body.get_node_or_null("FacingIndicator")
-		assert_not_null(indicator, "Every unit body must carry a FacingIndicator child")
-		var center: Vector2 = body.size / 2.0
-		var grid_pos := Vector2i(body.position / BattleControllerScript.TILE_SIZE)
+	var sprites: Array = []
+	var indicators: Array = []
+	for child in controller.unit_container.get_children():
+		if child is Sprite2D:
+			sprites.append(child)
+		# Godot auto-suffixes sibling nodes that share a literal name (every
+		# FacingIndicator here is a unit_container sibling -- see
+		# _add_facing_indicator()'s doc comment), so match the stable prefix
+		# rather than the exact name.
+		elif str(child.name).begins_with("FacingIndicator"):
+			indicators.append(child)
+	assert_eq(sprites.size(), 4, "One sprite per unit")
+	assert_eq(indicators.size(), 4, "One FacingIndicator per unit")
+	for indicator in indicators:
+		var indicator_center: Vector2 = indicator.position + indicator.size / 2.0
+		var grid_pos := Vector2i(floori(indicator_center.x / BattleControllerScript.TILE_SIZE), floori(indicator_center.y / BattleControllerScript.TILE_SIZE))
+		var tile_center: Vector2 = (
+			Vector2(grid_pos) * BattleControllerScript.TILE_SIZE + Vector2(BattleControllerScript.TILE_SIZE, BattleControllerScript.TILE_SIZE) / 2.0
+		)
 		match grid_pos:
 			Vector2i(0, 0):
-				assert_true(indicator.position.x > center.x, "RIGHT facing offsets the indicator toward the right edge")
+				assert_true(
+					indicator_center.x > tile_center.x, "RIGHT facing offsets the indicator toward the right edge"
+				)
 			Vector2i(1, 0):
-				assert_true(indicator.position.y > center.y, "DOWN facing offsets the indicator toward the bottom edge")
+				assert_true(
+					indicator_center.y > tile_center.y, "DOWN facing offsets the indicator toward the bottom edge"
+				)
 			Vector2i(2, 0):
-				assert_true(indicator.position.x < center.x, "LEFT facing offsets the indicator toward the left edge")
+				assert_true(
+					indicator_center.x < tile_center.x, "LEFT facing offsets the indicator toward the left edge"
+				)
 			Vector2i(3, 0):
-				assert_true(indicator.position.y < center.y, "UP facing offsets the indicator toward the top edge")
+				assert_true(indicator_center.y < tile_center.y, "UP facing offsets the indicator toward the top edge")
 
 
 func test_sharpened_weapon_adds_one_raw_damage_before_resistance() -> void:
@@ -1342,6 +1369,81 @@ func test_ready_assigns_stable_indexed_display_names_to_same_type_enemies() -> v
 			assert_eq(unit.enemy_type_name, "Kobold")
 	names.sort()
 	assert_eq(names, ["Kobold 1", "Kobold 2", "Kobold 3"])
+
+
+## --- Presentation: visual_key hydration (docs/plans/2026-08-20-placeholder-sprites/02-battlefield-sprites.md) ---
+## visual_key is presentation-only (see Unit.visual_key's doc comment): these
+## tests only check the string BattleController assigns, never anything that
+## could affect action legality, saved state, simulation output, or RNG.
+
+func test_ready_assigns_player_visual_keys_from_each_adventurers_class_id() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_eq(controller._get_unit_by_adventurer_id(GameSession.WARRIOR_ID).visual_key, "player_warrior")
+	assert_eq(controller._get_unit_by_adventurer_id("cleric_test").visual_key, "player_cleric")
+	assert_eq(controller._get_unit_by_adventurer_id("scout_test").visual_key, "player_scout")
+
+
+## The Goblin Camp's own legacy sandbox expedition (see EXPEDITIONS'
+## "goblin_camp" entry) carries no "id" and no "loot_id" on its inline
+## "enemy" spec -- only "name_key": "battle.enemy.goblin". Hydration must
+## still resolve a correct family from that untranslated key rather than
+## leaving every such enemy on the catalog's generic goblin fallback by
+## accident, so this specifically exercises the name_key fallback path.
+func test_ready_assigns_enemy_visual_key_for_the_goblin_camps_untagged_enemy_spec() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+
+	assert_eq(goblin.visual_key, "enemy_goblin")
+
+
+## The Ruined Fortress's inline "enemy" spec is the same untagged shape as
+## the Goblin Camp's, but for a different family (Kobold) -- this is the
+## regression case that would render every Ruined Fortress enemy as a
+## Goblin if hydration only ever consulted "id"/"loot_id".
+func test_ready_assigns_enemy_visual_key_for_the_ruined_fortresss_untagged_kobold_spec() -> void:
+	GameSession.enter_encounter(GameSession.RUINED_FORTRESS_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var kobold = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+
+	assert_eq(kobold.visual_key, "enemy_kobold")
+
+
+## Direct coverage of the private family-normalization helper (BattleController.
+## _visual_family_for_enemy()) across every raw-data shape it must handle:
+## a tagged variant "id" (normalized down to its bare family), a bare
+## "loot_id" with no "id", and the name_key-only fallback the two tests above
+## already exercise end-to-end.
+func test_visual_family_for_enemy_normalizes_every_raw_data_shape_to_a_catalog_family() -> void:
+	var controller := _make_controller(6, 6)
+
+	assert_eq(
+		controller._visual_family_for_enemy({"id": "hobgoblin_elite", "loot_id": "hobgoblin"}), "hobgoblin",
+		"A tagged variant id must normalize down to its bare family"
+	)
+	assert_eq(
+		controller._visual_family_for_enemy({"id": "ogre"}), "ogre", "An id with no variant suffix is already a family"
+	)
+	assert_eq(
+		controller._visual_family_for_enemy({"loot_id": "orc"}), "orc", "loot_id is used whenever id is absent"
+	)
+	assert_eq(
+		controller._visual_family_for_enemy({"name_key": "battle.enemy.kobold"}), "kobold",
+		"name_key (untranslated) is the final fallback when neither id nor loot_id is present"
+	)
 
 
 func test_attack_hits_and_deals_damage_when_the_roll_is_below_hit_chance() -> void:
