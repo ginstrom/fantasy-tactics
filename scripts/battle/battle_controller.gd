@@ -1457,15 +1457,18 @@ func _draw_units() -> void:
 		# lands on a fractional pixel (tile_origin.y + 60.8) -- round() only
 		# the sprite's own Y here (never the shadow, which this plan does not
 		# ask to change) so every unit sprite still lands on a whole pixel.
-		# round() rather than floor()/ceil() keeps the sprite as close as
-		# possible to the true baseline in either direction, so the
-		# sub-pixel "feet in shadow" read stays the closest achievable match
-		# rather than being biased consistently up or down.
+		# shadow_size.y (TILE_SIZE * 0.22 = 14.08) is a fixed non-integer and
+		# the subtracted half-extent above is always an integer, so
+		# shadow_baseline's fractional remainder is always exactly .8 --
+		# round() always rounds this same .8 up, every tile, every unit; it
+		# is not choosing between "up" or "down" case by case. It exists so
+		# the sprite still lands on a whole pixel instead of a sub-pixel
+		# offset, per this plan's "no fractional placement" invariant.
 		sprite.position = Vector2(
 			tile_origin.x + TILE_SIZE / 2.0,
 			round(shadow_baseline - (sprite.texture.get_height() * sprite.scale.y) / 2.0)
 		)
-		unit_container.add_child(sprite)
+		unit_container.add_child(sprite, true)
 		_add_facing_indicator(tile_origin, unit)
 
 

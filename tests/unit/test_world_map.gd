@@ -1156,17 +1156,10 @@ func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> voi
 	)
 
 
-func _markers_include_color(world_map: Node2D, color: Color) -> bool:
-	for marker in world_map.get_node("Board/Markers").get_children():
-		if marker is ColorRect and marker.color == color:
-			return true
-	return false
-
-
 ## docs/plans/2026-08-20-placeholder-sprites/03-world-map-sprites-and-
 ## acceptance.md: the deployed party's marker is now a catalog-backed
-## Sprite2D, not a ColorRect, so _markers_include_color() above can never
-## find it -- this is its Sprite2D equivalent.
+## Sprite2D, not a ColorRect, so a ColorRect-color-based marker lookup can
+## never find it -- this is its Sprite2D equivalent.
 func _markers_include_party_sprite(world_map: Node2D) -> bool:
 	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is Sprite2D and marker.texture == SpriteCatalog.get_unit_texture("world_party"):

@@ -508,11 +508,13 @@ func _draw_markers() -> void:
 	var tile_origin: Vector2 = Vector2(party_position) * TILE_SIZE
 	# Integral nearest-neighbor placement (this plan's own invariant -- see
 	# docs/plans/2026-08-20-placeholder-sprites/index.md's "no filtering or
-	# fractional placement" line): round() the computed Y even though the
-	# current 16px-tall art divides out evenly, so a future differently-sized
-	# world_party texture can never silently reintroduce a fractional pixel
-	# here the way battle_controller.gd's own shadow-baseline math once did
-	# (see that file's _draw_units() for the bug this discipline caught).
+	# fractional placement" line): at scale.y = 4, texture.get_height() *
+	# scale.y / 2.0 is 2 * height, which is an integer for any integer
+	# texture height, so this round() is a permanent no-op given integral
+	# source art and an even 4x scale factor -- not a guard against any
+	# particular future art size. It is kept only for consistency with the
+	# equivalent (and load-bearing) rounding in battle_controller.gd's
+	# _draw_units(), where the shadow-baseline math is not integral.
 	party_sprite.position = Vector2(
 		tile_origin.x + TILE_SIZE / 2.0,
 		round(tile_origin.y + TILE_SIZE - (party_sprite.texture.get_height() * party_sprite.scale.y) / 2.0)
