@@ -42,16 +42,29 @@ character's idle animation), chosen for a clear, distinct silhouette at
 the same source frame (`knight_blue`) — one file is the World Map party
 marker, the other is the Battlefield warrior unit.
 
+Four of the nine source frames (`player_scout`, `player_cleric`,
+`enemy_goblin`, `enemy_hobgoblin`) ship in the pack on a canvas larger than
+their actual silhouette — e.g. `barbarian_idle_01.png` is an 20x20 PNG file,
+but only a 12x13 region of it is non-transparent. A final review caught
+that this padding made those four sprites 18-22px wide by this catalog's
+own file dimensions, violating the plan's 16px/4x-integral-scale invariant
+and rendering 4-12px wider than the 64px cell in-game. Fixed by cropping
+each to its true opaque bounding box with ImageMagick's `-trim` (which by
+definition only removes fully-transparent border rows/columns, so it
+cannot cut into visible silhouette detail) before committing. The "Original
+path in pack" column below still names the untrimmed upstream file; the
+SHA-256 is of this repo's trimmed copy, not the pack's own file.
+
 | Target file | Original path in pack | SHA-256 |
 | --- | --- | --- |
 | `microfantasy/world_party.png` | `characters/knight_blue/knight_blue_idle_01.png` | `e3ff5ed414afc8a90a96db2885a0f025d029a16176893918371b212276ec7922` |
 | `microfantasy/player_warrior.png` | `characters/knight_blue/knight_blue_idle_01.png` | `e3ff5ed414afc8a90a96db2885a0f025d029a16176893918371b212276ec7922` |
-| `microfantasy/player_scout.png` | `characters/barbarian/barbarian_idle_01.png` | `977c27709dd49abc44355f2bc94c8ecb939d0353e1f2d894cf1543251d293539` |
-| `microfantasy/player_cleric.png` | `characters/wizard/wizard_idle_01.png` | `cd177c8e48fe51600fa9e0c41b970d5f4bf95a24928e1404130baf2029514228` |
-| `microfantasy/enemy_goblin.png` | `characters/dwarf/dwarf_idle_01.png` | `10842e10ebd62a0166b5421f96cc9927686767c12c9f596f6f58876bf5c40a46` |
+| `microfantasy/player_scout.png` | `characters/barbarian/barbarian_idle_01.png` (trimmed to its 12x13 opaque bounding box, see note above) | `a484b9be87e5d20f84e622f7bed50673a19c5189cb944089a6b794eb3bf78840` |
+| `microfantasy/player_cleric.png` | `characters/wizard/wizard_idle_01.png` (trimmed to its 11x14 opaque bounding box, see note above) | `b289d0f9a90d07787e95913b54e14a03b1fe16d7664d6a3e97d8d0f3b950a152` |
+| `microfantasy/enemy_goblin.png` | `characters/dwarf/dwarf_idle_01.png` (trimmed to its 10x9 opaque bounding box, see note above) | `65b120b5b663dc3a055c78a3f6ba18dab27a570672985d5bc0604e46f4935786` |
 | `microfantasy/enemy_kobold.png` | `characters/lizard/lizard_idle_01.png` | `164278da73d8cb7e10dba5bd7528d8483216dc14d7b37bbabc92a2a07ea4fd4e` |
 | `microfantasy/enemy_orc.png` | `characters/mooseman/mooseman_idle_01.png` | `702e53e59827f8419d519185cab749a851b140a8e22a019254ea05badcbfc560` |
-| `microfantasy/enemy_hobgoblin.png` | `characters/guard/guard_idle_01.png` | `92bef71a68883fc8b3fa3094cc3ef5015d64574d160f2d5229c88b06a4f17277` |
+| `microfantasy/enemy_hobgoblin.png` | `characters/guard/guard_idle_01.png` (trimmed to its 10x14 opaque bounding box, see note above) | `9887329ac884cedf0262a66b47404c0099f6c9b78e35b817077ad6b41451cffa` |
 | `microfantasy/enemy_ogre.png` | `characters/troll/troll_idle_01.png` | `a6bf86b2ce6e5707bc6471f99cd285b4e5b55619231ad32e3ba70fc8b119b914` |
 
 ## Scope note
