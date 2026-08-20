@@ -1450,8 +1450,20 @@ func _draw_units() -> void:
 		sprite.texture = SpriteCatalog.get_unit_texture(unit.visual_key)
 		sprite.scale = Vector2(4, 4)
 		var shadow_baseline: float = shadow.position.y + shadow_size.y
+		# Integral nearest-neighbor placement (this plan's own invariant --
+		# see docs/plans/2026-08-20-placeholder-sprites/index.md's "no
+		# filtering or fractional placement" line): shadow_size.y is
+		# TILE_SIZE * 0.22, a non-integer, so shadow_baseline itself always
+		# lands on a fractional pixel (tile_origin.y + 60.8) -- round() only
+		# the sprite's own Y here (never the shadow, which this plan does not
+		# ask to change) so every unit sprite still lands on a whole pixel.
+		# round() rather than floor()/ceil() keeps the sprite as close as
+		# possible to the true baseline in either direction, so the
+		# sub-pixel "feet in shadow" read stays the closest achievable match
+		# rather than being biased consistently up or down.
 		sprite.position = Vector2(
-			tile_origin.x + TILE_SIZE / 2.0, shadow_baseline - (sprite.texture.get_height() * sprite.scale.y) / 2.0
+			tile_origin.x + TILE_SIZE / 2.0,
+			round(shadow_baseline - (sprite.texture.get_height() * sprite.scale.y) / 2.0)
 		)
 		unit_container.add_child(sprite)
 		_add_facing_indicator(tile_origin, unit)

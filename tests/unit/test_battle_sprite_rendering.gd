@@ -63,13 +63,30 @@ func test_draw_units_creates_one_catalog_backed_sprite_per_living_unit_at_the_re
 		assert_eq(
 			sprite.scale, Vector2(4, 4), "Unit sprites must use the required integral 4x nearest-neighbor scale"
 		)
+		# No fractional placement (plan invariant): both axes must land on a
+		# whole pixel for every unit, not just the one hand-computed tile in
+		# test_draw_units_bottom_anchors_the_sprite_to_its_shadow_baseline_at_
+		# an_integer_pixel below.
+		assert_eq(sprite.position, sprite.position.round(), "Sprite position must be pixel-integral on both axes")
 	var player_sprite: Sprite2D = sprites[0] if sprites[0].texture == SpriteCatalog.get_unit_texture("player_warrior") else sprites[1]
 	var enemy_sprite: Sprite2D = sprites[1] if player_sprite == sprites[0] else sprites[0]
 	assert_eq(player_sprite.texture, SpriteCatalog.get_unit_texture("player_warrior"))
 	assert_eq(enemy_sprite.texture, SpriteCatalog.get_unit_texture("enemy_kobold"))
 
 
-func test_draw_units_bottom_anchors_the_sprite_to_its_shadow_baseline() -> void:
+## Integral placement (docs/plans/2026-08-20-placeholder-sprites/index.md:
+## "Use only integral nearest-neighbor scale... No filtering or fractional
+## placement"). shadow_size.y is TILE_SIZE * 0.22 -- a non-integer -- so the
+## shadow's own bottom edge (and therefore the raw, pre-round baseline the
+## sprite anchors to) always lands on a fractional pixel; asserting the
+## sprite merely matches that fractional baseline exactly would be
+## tautological and could never catch a fractional sprite position. This
+## instead asserts the sprite's Y actually lands on a whole pixel, pins the
+## exact expected integer for one known tile/texture pair (so a future
+## regression in the rounding math itself is still caught, not just
+## "any" integer), and only checks proximity-to-baseline with a tolerance
+## that accounts for the up-to-half-pixel rounding remainder.
+func test_draw_units_bottom_anchors_the_sprite_to_its_shadow_baseline_at_an_integer_pixel() -> void:
 	var controller := _instantiate_bare_battlefield()
 	var unit := UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	unit.visual_key = "player_warrior"
@@ -80,11 +97,21 @@ func test_draw_units_bottom_anchors_the_sprite_to_its_shadow_baseline() -> void:
 	var sprites: Array = _sprite_children(controller.unit_container)
 	assert_eq(sprites.size(), 1)
 	var sprite: Sprite2D = sprites[0]
+	assert_eq(
+		sprite.position.y, round(sprite.position.y),
+		"The sprite's Y position must land on an integer pixel -- no fractional placement"
+	)
+	# player_warrior is 16px tall; tile (2, 2) puts the shadow baseline at
+	# tile_origin.y + TILE_SIZE - TILE_SIZE * 0.05 = 128 + 60.8 = 188.8, so
+	# the sprite's pre-round center is 188.8 - (16 * 4) / 2 = 156.8, which
+	# rounds to 157.
+	assert_eq(sprite.position.y, 157.0, "Exact expected integer Y for this known tile/texture pair")
 	var shadow: ColorRect = controller.shadow_container.get_child(0)
 	var shadow_baseline: float = shadow.position.y + shadow.size.y
 	var sprite_bottom: float = sprite.position.y + (sprite.texture.get_height() * sprite.scale.y) / 2.0
 	assert_almost_eq(
-		sprite_bottom, shadow_baseline, 0.01, "The sprite's bottom edge must meet the existing shadow baseline"
+		sprite_bottom, shadow_baseline, 0.5,
+		"The sprite's (now-integral) bottom edge must still land within half a pixel of the shadow baseline"
 	)
 	assert_almost_eq(
 		sprite.position.x, Vector2(unit.grid_position).x * BattleControllerScript.TILE_SIZE + BattleControllerScript.TILE_SIZE / 2.0,
