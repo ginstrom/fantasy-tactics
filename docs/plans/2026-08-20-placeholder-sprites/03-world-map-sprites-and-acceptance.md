@@ -40,7 +40,8 @@ Confirm Steps 1–2 are merged; do not stage unrelated changes.
 2. Confirm red:
 
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map.gd,test_world_map_sprite_rendering.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map_sprite_rendering.gd -gexit
    ```
 
    Expected: failures because World Map tiles/party marker remain `ColorRect`s;
@@ -54,7 +55,8 @@ Confirm Steps 1–2 are merged; do not stage unrelated changes.
 4. Confirm green and capture evidence:
 
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map.gd,test_world_map_sprite_rendering.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_world_map_sprite_rendering.gd -gexit
    godot --headless --path . --editor --quit
    make check
    git diff --check

@@ -47,7 +47,8 @@ Confirm the Step 1 catalog/assets exist; leave unrelated modifications alone.
 2. Confirm red:
 
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_controller.gd,test_battle_sprite_rendering.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_controller.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_sprite_rendering.gd -gexit
    ```
 
    Expected: failures identify missing visual keys and texture-backed nodes;
@@ -67,7 +68,8 @@ Confirm the Step 1 catalog/assets exist; leave unrelated modifications alone.
 5. Confirm green:
 
    ```bash
-   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_controller.gd,test_battle_sprite_rendering.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_controller.gd -gexit
+   godot --headless -s addons/gut/gut_cmdln.gd -gselect=test_battle_sprite_rendering.gd -gexit
    godot --headless --path . --editor --quit
    make check
    git diff --check
