@@ -44,7 +44,7 @@ marker, the other is the Battlefield warrior unit.
 
 Four of the nine source frames (`player_scout`, `player_cleric`,
 `enemy_goblin`, `enemy_hobgoblin`) ship in the pack on a canvas larger than
-their actual silhouette — e.g. `barbarian_idle_01.png` is an 20x20 PNG file,
+their actual silhouette — e.g. `barbarian_idle_01.png` is a 20x20 PNG file,
 but only a 12x13 region of it is non-transparent. A final review caught
 that this padding made those four sprites 18-22px wide by this catalog's
 own file dimensions, violating the plan's 16px/4x-integral-scale invariant
