@@ -15,9 +15,6 @@ const SETTLEMENT_ID := "starting_settlement"
 const SETTLEMENT_POSITION := Vector2i(3, 3)
 const PARTY_START := SETTLEMENT_POSITION
 
-const TILE_COLOR_LIGHT := Color(0.2, 0.3, 0.2)
-const TILE_COLOR_DARK := Color(0.15, 0.22, 0.15)
-const PARTY_COLOR := Color(0.3, 0.5, 0.9)
 const SETTLEMENT_COLOR := Color(0.5, 0.7, 0.4)
 const ENCOUNTER_COLOR := Color(0.9, 0.6, 0.2)
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
@@ -404,17 +401,26 @@ func _to_grid_position(local_pos: Vector2) -> Vector2i:
 	return Vector2i(floori(local_pos.x / TILE_SIZE), floori(local_pos.y / TILE_SIZE))
 
 
+## Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+## 03-world-map-sprites-and-acceptance.md): each ground tile is a
+## catalog-backed Sprite2D at an unchanged Vector2(x, y) * TILE_SIZE
+## position -- `centered = false` keeps that position meaning the tile's
+## top-left corner exactly as the ColorRect it replaces did, so nothing else
+## in this file (route/highlight/marker placement, _to_grid_position()) needs
+## to be recomputed. Kenney's 16px ground art at the required integral 4x
+## scale exactly fills one 64px TILE_SIZE cell. Mirrors battle_controller.gd's
+## own _draw_tiles() (Step 2 of this plan) for the identical reason.
 func _draw_tiles() -> void:
 	for child in tile_container.get_children():
 		child.queue_free()
 
 	for y in grid.height:
 		for x in grid.width:
-			var tile := ColorRect.new()
-			tile.size = Vector2(TILE_SIZE, TILE_SIZE)
+			var tile := Sprite2D.new()
+			tile.texture = SpriteCatalog.get_tile_texture((x + y) % 2 == 0)
+			tile.centered = false
+			tile.scale = Vector2(4, 4)
 			tile.position = Vector2(x, y) * TILE_SIZE
-			tile.color = TILE_COLOR_LIGHT if (x + y) % 2 == 0 else TILE_COLOR_DARK
-			tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			tile_container.add_child(tile)
 
 
@@ -485,12 +491,33 @@ func _draw_markers() -> void:
 	if not GameSession.has_deployed_party():
 		return
 
-	var party := ColorRect.new()
-	party.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(margin, margin) * 2
-	party.position = Vector2(party_position) * TILE_SIZE + Vector2(margin, margin)
-	party.color = PARTY_COLOR
-	party.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	marker_container.add_child(party)
+	# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
+	# 03-world-map-sprites-and-acceptance.md): a catalog-backed Sprite2D at
+	# the required integral 4x nearest-neighbor scale, horizontally centered
+	# on the party's tile and bottom-anchored so its feet meet the tile's own
+	# bottom edge -- there is no separate shadow layer on the World Map (only
+	# the Battlefield has one), so the tile's bottom edge is the baseline
+	# itself, unlike battle_controller.gd's shadow-relative anchor. A
+	# Sprite2D carries no Control mouse_filter at all, so -- unlike the
+	# ColorRect it replaces -- it can never intercept a click; it is
+	# inherently non-interactive.
+	var party_sprite := Sprite2D.new()
+	party_sprite.name = "PartySprite"
+	party_sprite.texture = SpriteCatalog.get_unit_texture("world_party")
+	party_sprite.scale = Vector2(4, 4)
+	var tile_origin: Vector2 = Vector2(party_position) * TILE_SIZE
+	# Integral nearest-neighbor placement (this plan's own invariant -- see
+	# docs/plans/2026-08-20-placeholder-sprites/index.md's "no filtering or
+	# fractional placement" line): round() the computed Y even though the
+	# current 16px-tall art divides out evenly, so a future differently-sized
+	# world_party texture can never silently reintroduce a fractional pixel
+	# here the way battle_controller.gd's own shadow-baseline math once did
+	# (see that file's _draw_units() for the bug this discipline caught).
+	party_sprite.position = Vector2(
+		tile_origin.x + TILE_SIZE / 2.0,
+		round(tile_origin.y + TILE_SIZE - (party_sprite.texture.get_height() * party_sprite.scale.y) / 2.0)
+	)
+	marker_container.add_child(party_sprite)
 
 
 func _draw_routes() -> void:

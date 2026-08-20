@@ -191,6 +191,36 @@ func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline()
 	)
 
 
+## docs/plans/2026-08-20-placeholder-sprites/03-world-map-sprites-and-
+## acceptance.md regression: tiles and the party marker are now Sprite2D
+## nodes rather than ColorRects. A Sprite2D carries no Control mouse_filter
+## at all, so unlike the tests above -- which specifically exercise the
+## HUD's mouse_filter=IGNORE Controls not swallowing a click -- this proves
+## the sprite conversion itself introduced no new interception: a real,
+## pushed click landing on the party's own cell (the settlement, at the
+## default deployed position) must still reach _unhandled_input and select
+## the party exactly as it did when the cell body was a ColorRect.
+func test_a_party_cell_click_still_selects_the_party_now_that_tiles_and_the_marker_are_sprites() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_false(world_map.party_selected)
+
+	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = party_pixel_center
+
+	if get_tree().current_scene != null:
+		get_tree().unload_current_scene()
+	world_map.get_viewport().push_input(click_event, true)
+
+	assert_true(
+		world_map.party_selected,
+		"a click on the party's cell must still select it now that the tile and marker underneath are Sprite2D nodes"
+	)
+
+
 func test_clicking_the_selected_party_marker_again_deselects_it() -> void:
 	var world_map := _make_world_map()
 	world_map.party_position = Vector2i(1, 0)
@@ -648,7 +678,7 @@ func test_world_map_renders_a_party_deployed_via_the_deploy_party_action() -> vo
 
 	assert_true(GameSession.has_deployed_party())
 	assert_eq(world_map.party_position, GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
-	assert_true(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
+	assert_true(_markers_include_party_sprite(world_map))
 
 	world_map._handle_tile_click(world_map.party_position)
 
@@ -670,7 +700,7 @@ func test_world_map_does_not_draw_party_marker_when_no_party_is_deployed() -> vo
 	# settlement ColorRect.
 	var expected_marker_count := (GameSession.get_active_encounters().size() + 1) * 2 + 1
 	assert_eq(world_map.get_node("Board/Markers").get_child_count(), expected_marker_count)
-	assert_false(_markers_include_color(world_map, WorldMapScript.PARTY_COLOR))
+	assert_false(_markers_include_party_sprite(world_map))
 
 
 func test_clicking_the_settlement_without_a_deployed_party_returns_to_encampment() -> void:
@@ -1129,6 +1159,17 @@ func test_world_map_redraws_a_refilled_encounter_after_enough_end_turns() -> voi
 func _markers_include_color(world_map: Node2D, color: Color) -> bool:
 	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is ColorRect and marker.color == color:
+			return true
+	return false
+
+
+## docs/plans/2026-08-20-placeholder-sprites/03-world-map-sprites-and-
+## acceptance.md: the deployed party's marker is now a catalog-backed
+## Sprite2D, not a ColorRect, so _markers_include_color() above can never
+## find it -- this is its Sprite2D equivalent.
+func _markers_include_party_sprite(world_map: Node2D) -> bool:
+	for marker in world_map.get_node("Board/Markers").get_children():
+		if marker is Sprite2D and marker.texture == SpriteCatalog.get_unit_texture("world_party"):
 			return true
 	return false
 
