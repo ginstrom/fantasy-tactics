@@ -29,16 +29,20 @@ automatic-skill progression model:
 | Baseline | max_health | melee | guard | resistance | movement range | attack |
 |---|---:|---:|---:|---:|---:|---|
 | Level 1 Warrior | 10 | 60 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
-| Level 2 Warrior, unspent points | 20 | 60 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
-| Level 2 Warrior, all 10 points in Accuracy | 20 | 70 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
+| Level 2 Warrior, automatic skills | 20 | 63–64 (mean 63.5) | 11–12 (mean 11.5) | 10% | 3 | Iron Longsword, 1–8 + might 3–4 (mean gain 3.5) |
 
-The current campaign awards level 2 at 20 XP and grants 10 skill points; it does
-not force a player to spend them. Both level-2 rows are therefore valid current
-test baselines. When automatic class-owned skills replace manual spending, this
-table must be recalibrated from the Warrior's declared automatic progression;
-the manual-Accuracy row must be removed rather than retained as a player
-choice. These tables assume flat, open terrain and no healing, perks, party
-allies, or upgraded equipment.
+The current campaign awards level 2 at 20 XP. Automatic class-owned skills
+(`CLASS_DEFINITIONS.warrior.skills`) replace manual point spending: melee,
+guard, and might each roll their tier's gain range independently
+(melee/might "med" 3–4, guard "low" 1–2), and `max_health` is
+`vitality × level` (10 × 2 = 20). The row above uses each roll's mean for a
+single reproducible comparison baseline; guard also includes the starting
+leather armor's +10. Might now adds to every raw damage roll (mean 4.5 + mean
+3.5 = mean 8.0 per hit), which the retired manual-Accuracy-only row never
+modeled — automatic Might is why the level-2 matchups below are
+substantially stronger than the old comparison table. These tables assume
+flat, open terrain and no healing, perks, party allies, or upgraded
+equipment.
 
 For rough review, use expected damage per attack (hit chance multiplied by post-Resistance damage) and expected player attacks to defeat. These are comparison tools, not an auto-balance rule: movement, terrain, enemy count, and player choices can deliberately change an encounter's difficulty.
 
@@ -56,6 +60,19 @@ Monsters possess all the same tactical attributes as adventurer units, though at
 | `kill_xp`, `loot_id` | Campaign reward contract. |
 | `role` | Human-readable encounter purpose, such as swarm, skirmisher, bruiser, or elite. |
 
+### Stage 2 locked values (2026-08-21)
+
+Recalibrated Level-2 Warrior matchups under automatic skills (mean melee
+63.5%, mean guard 11.5, mean raw damage 8.0 — see the baseline row above),
+replacing the deprecated manual-Accuracy comparison:
+
+| Monster | Level-2 automatic-skill Warrior expected attacks to defeat | Expected damage to Warrior per monster attack |
+|---|---:|---:|
+| Kobold | 1.2 | 0.14 |
+| Goblin | 2.6 | 0.37 |
+| Orc | 4.3 | 1.16 |
+| Hobgoblin | 5.9 | 1.94 |
+
 ## Initial roster — preserve shipped values
 
 The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0`, `spellcasting: 0`, `magic_resistance: 0`, and `action_points: 6`. Attack hit chances map to `melee` (or `missile` for ranged monsters). Its attack damage stays exactly as the current game: documented as a fixed natural/weapon range. This prevents a schema migration from being a stealth rebalance.
@@ -71,10 +88,10 @@ The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0
 
 | Monster | Level-1 Warrior expected attacks to defeat | Expected damage to L1 Warrior per monster attack | Interpretation | Level-2 expectation |
 |---|---:|---:|---|---|
-| Kobold | 2.2 | 0.15 | Individually weak; threatening as a 4–8-unit swarm. | A swarm remains a positioning test, not a solo duel. |
-| Goblin | 4.8 | 0.40 | Introductory solo enemy; player-favoured but not free. | Reliably cleared alone. |
-| Orc | 8.1 | 1.20 | Near-even solo bruiser for a fresh Warrior. | Current manual-Accuracy investment makes this more favourable; recalibrate for automatic skills. |
-| Hobgoblin | 11.1 | 2.00 | Elite; defeats an unprepared level-1 Warrior in a straight duel. | Dangerous solo target; intended for a formed party or better gear. |
+| Kobold | 2.2 | 0.15 | Individually weak; threatening as a 4–8-unit swarm. | A swarm remains a positioning test, not a solo duel; automatic Might makes a level-2 Warrior nearly one-round it solo (1.2 attacks, see the Stage 2 locked table above). |
+| Goblin | 4.8 | 0.40 | Introductory solo enemy; player-favoured but not free. | Reliably cleared alone (2.6 attacks). |
+| Orc | 8.1 | 1.20 | Near-even solo bruiser for a fresh Warrior. | Automatic Might makes this clearly favourable for a level-2 Warrior (4.3 attacks vs. 8.1 at level 1). |
+| Hobgoblin | 11.1 | 2.00 | Elite; defeats an unprepared level-1 Warrior in a straight duel. | Dangerous solo target; intended for a formed party or better gear (5.9 attacks at level 2, still elite-tier). |
 
 Expected attacks to defeat use the Warrior's 60% Accuracy and 4.5 mean
 Longsword damage. Expected incoming damage applies the Warrior's 10 Guard and

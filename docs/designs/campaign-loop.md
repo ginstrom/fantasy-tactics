@@ -72,14 +72,36 @@ Map Turn: a moving deployed adventurer recovers **1 HP and 2 MP**; a stationary
 deployed adventurer recovers **2 HP and 4 MP**; and an adventurer at the
 Encampment recovers **3 HP and 6 MP**, plus **1 HP for each Temple tier**. Thus
 an Encampment with a tier-2 Temple restores 5 HP and 6 MP per turn. Recovery
-cannot exceed the adventurer's maximum HP or MP.
+cannot exceed the adventurer's maximum HP or MP. Only a class with an MP-backed
+resource (Cleric) recovers MP; an adventurer with no `mp_max` always recovers
+0 MP, which is a no-op, not an error. These rates live in
+`config/game_config.json`'s `healing` section
+(`moving_rate`/`resting_rate`/`encamped_rate` for HP,
+`moving_mp_rate`/`resting_mp_rate`/`encamped_mp_rate` for MP,
+`temple_hp_bonus_per_tier` for the Temple bonus) and supersede the previous
+flat, Temple-blind `encamped_rate` of 4.
+
+Cleric current MP is durable adventurer state, not a battle-local reset: a
+battle start hydrates the battle unit's MP from the adventurer's durable
+current/max MP (not always full), and battle aftermath writes the surviving
+Cleric's remaining MP back, clamped to `cleric.mp_max` (3, `config/
+game_config.json`). A dead adventurer owns no persisted MP record, the same
+as HP. A save with no `mp_current` field migrates it to full (`mp_current =
+mp_max`) on load.
 
 A Healer is a deliberate recovery accelerator. The Healer's details view must
-offer **Heal party member**: it targets a member of that Healer's deployed
-party, or an adventurer at the Encampment when the Healer is encamped, and
-spends the Healer's available MP to restore HP. Exact MP cost and HP restored
-are deferred balance data. A future mana-recovery potion joins the healing
-potion line to speed MP recovery.
+offer **Heal party member**: it targets a living member of that Healer's
+deployed party, or a living adventurer at the Encampment when the Healer is
+encamped, and spends the Healer's available MP to restore HP. The locked
+values (`config/game_config.json`'s `cleric` section) match the existing
+battle-local Heal spell exactly: **1 MP cost**, **2–8 HP restored** (random,
+capped at the target's max HP). The action is a no-op — no MP spent, no HP
+changed — when the Healer lacks 1 MP, the target is already at full HP, the
+target is dead, or the target isn't a legal target (wrong party, or an
+Encampment adventurer while the Healer is still deployed); the UI disables
+the button and states the reason rather than allowing a failed attempt. A
+future mana-recovery potion joins the healing potion line to speed MP
+recovery.
 
 Passing a World Map Turn is a legal, intentional recovery action, not a free
 pause: it advances every stated world-turn system, including jobs, vacancies,
@@ -131,9 +153,11 @@ The following are intentionally not implementation contracts yet:
   System](intelligence.md). Their multi-party and time-escalation portions
   remain deferred from the first campaign implementation.
 - **Cleric and Temple scope (D7):** the recovery and details-view healing
-  contract above is locked. A targeted in-battle heal and temporary protection
-  remain the proposed first slice; final spell costs, HP values, targeting, and
-  broader Temple effects remain to be decided.
+  contract above is locked, including exact MP cost, HP range, and targeting
+  for the details-view heal. A targeted in-battle heal and temporary
+  protection remain the proposed first slice; broader Temple effects beyond
+  the HP recovery bonus above (e.g. a second Temple tier) remain to be
+  decided.
 - **Final encounter and free-play presentation (D8):** victory is required,
   but the final composition, reward presentation, and free-play details remain
   to be decided.

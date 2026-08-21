@@ -124,6 +124,38 @@ The first implementation slice must define, in class data, each applicable skill
 
 **Future:** perks can alter raw damage before Resistance, grant penetration, add movement, or introduce an active ability only with the supporting combat primitive. A perk description alone does not enable a mechanic.
 
+### Stage 2 locked perk set (2026-08-21)
+
+The first shipped perk trees are deliberately small: exactly two perks per
+class, each expressible through an already-supported primitive, no
+prerequisites, choose-once (no stacking). Values live in
+`config/game_config.json`'s `progression` section.
+
+| Class | Perk id | Display name | Effect |
+|---|---|---|---|
+| Warrior | `warrior_juggernaut` | Juggernaut | +15% max HP (`warrior_juggernaut_hp_percent`) |
+| Warrior | `warrior_bulwark` | Bulwark | +10 Guard (`warrior_bulwark_guard`) |
+| Scout | `scout_quickdraw` | Quickdraw | +1 Action Point (`scout_quickdraw_action_points`) |
+| Scout | `scout_keen_eyes` | Keen Eyes | +1 Scout intel detection range, 3→4 tiles (`scout_keen_eyes_intel_range_bonus`) |
+| Cleric | `cleric_meditation` | Meditation | +1 Heal/Bless spell range, 3→4 tiles (`cleric_meditation_spell_range_bonus`) |
+| Cleric | `cleric_devout` | Devout | +10% max HP (`cleric_devout_hp_percent`) |
+
+Selection behavior: at a pending slot, the eligible options are the
+adventurer's class's perks not yet chosen. A perk already chosen is never
+offered again, and an unchosen perk remains available at a later slot.
+`progression.perk_tree_size` (2) caps how many pending slots an adventurer
+can ever earn — once both of a class's perks are chosen,
+`is_perk_choice_pending()` returns false permanently, so no slot ever goes
+unresolved and the Level Up screen never needs an empty-tree state. A future
+slice that adds a third class perk raises `perk_tree_size` to match.
+
+The legacy universal `bonus_move` perk (+1 AP, any class) is retired from
+new choices but not migrated: an adventurer who already holds it keeps its
+effect exactly as before. Only Scouts have a class-owned AP perk going
+forward (`scout_quickdraw`); Warriors and Clerics who hold a legacy
+`bonus_move` simply keep that one perk's effect alongside their two
+class-owned choices.
+
 ### Generic perk themes
 
 - **Might:** Rage increases raw melee damage; Strong Back waits for inventory weight.
@@ -142,8 +174,9 @@ The first implementation slice must define, in class data, each applicable skill
 - **Mage / Battle Mage:** elemental attacks, temporary Guard, and enchanted weapon penetration.
 - **Cleric / Healer:** healing, defensive buffs, curses, and paralysis. A
   Healer's details view can spend MP to heal a deployed party member or an
-  adventurer at the Encampment; its exact heal amount and MP cost are deferred
-  balance data.
+  adventurer at the Encampment; see [Borderlands Campaign
+  Loop](campaign-loop.md#encampment-progression-and-economy-floor) for the
+  locked heal amount and MP cost.
 - **Cleric / Paladin:** Temple-gated recruitment, holy melee, and boons.
 - **Scout / Ranger:** scouting, pre-battle enemy information, and Hunter's Mark. The first Ranger slice must make scouting information useful before adding its deeper perk tree.
 - **Scout / Rogue (Deferred):** luck-based critical perks and loot benefits;

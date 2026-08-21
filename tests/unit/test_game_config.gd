@@ -67,6 +67,43 @@ func test_loads_temple_build_cost_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_int("temple", "build_cost", -1), 100)
 
 
+## Step 1 of docs/plans/2026-08-21-stage-2-party-readiness: the locked Stage
+## 2 perk-effect magnitudes (see docs/designs/class-system.md's "Stage 2
+## locked perk set").
+func test_loads_stage_2_perk_magnitudes_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("progression", "perk_tree_size", -1), 2)
+	assert_eq(GameConfig.get_int("progression", "warrior_juggernaut_hp_percent", -1), 15)
+	assert_eq(GameConfig.get_int("progression", "warrior_bulwark_guard", -1), 10)
+	assert_eq(GameConfig.get_int("progression", "scout_quickdraw_action_points", -1), 1)
+	assert_eq(GameConfig.get_int("progression", "scout_keen_eyes_intel_range_bonus", -1), 1)
+	assert_eq(GameConfig.get_int("progression", "cleric_meditation_spell_range_bonus", -1), 1)
+	assert_eq(GameConfig.get_int("progression", "cleric_devout_hp_percent", -1), 10)
+
+
+## Step 1 of docs/plans/2026-08-21-stage-2-party-readiness: durable Cleric MP
+## and capped HP/MP natural recovery, split by mode, plus the Temple HP bonus
+## (see docs/designs/campaign-loop.md's natural-recovery paragraph). Replaces
+## the flat, Temple-blind encamped_rate.
+func test_loads_stage_2_recovery_rates_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("healing", "moving_rate", -1), 1)
+	assert_eq(GameConfig.get_int("healing", "resting_rate", -1), 2)
+	assert_eq(GameConfig.get_int("healing", "encamped_rate", -1), 3)
+	assert_eq(GameConfig.get_int("healing", "moving_mp_rate", -1), 2)
+	assert_eq(GameConfig.get_int("healing", "resting_mp_rate", -1), 4)
+	assert_eq(GameConfig.get_int("healing", "encamped_mp_rate", -1), 6)
+	assert_eq(GameConfig.get_int("healing", "temple_hp_bonus_per_tier", -1), 1)
+
+
+## Step 1 of docs/plans/2026-08-21-stage-2-party-readiness: durable Cleric max
+## MP and the details-view "Heal party member" MP cost/HP range (see
+## docs/designs/campaign-loop.md's Healer paragraph).
+func test_loads_stage_2_cleric_config_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("cleric", "mp_max", -1), 3)
+	assert_eq(GameConfig.get_int("cleric", "details_heal_mp_cost", -1), 1)
+	assert_eq(GameConfig.get_int("cleric", "details_heal_min", -1), 2)
+	assert_eq(GameConfig.get_int("cleric", "details_heal_max", -1), 8)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

@@ -22,11 +22,22 @@ const DEFAULTS: Dictionary = {
 	},
 	"progression": {
 		"perk_level_interval": 3,
+		"perk_tree_size": 2,
+		"warrior_juggernaut_hp_percent": 15,
+		"warrior_bulwark_guard": 10,
+		"scout_quickdraw_action_points": 1,
+		"scout_keen_eyes_intel_range_bonus": 1,
+		"cleric_meditation_spell_range_bonus": 1,
+		"cleric_devout_hp_percent": 10,
 	},
 	"healing": {
-		"encamped_rate": 4,
+		"encamped_rate": 3,
 		"resting_rate": 2,
 		"moving_rate": 1,
+		"encamped_mp_rate": 6,
+		"resting_mp_rate": 4,
+		"moving_mp_rate": 2,
+		"temple_hp_bonus_per_tier": 1,
 	},
 	"guild_hall": {
 		"level_1_party_cap": 3,
@@ -58,6 +69,12 @@ const DEFAULTS: Dictionary = {
 	},
 	"temple": {
 		"build_cost": 100,
+	},
+	"cleric": {
+		"mp_max": 3,
+		"details_heal_mp_cost": 1,
+		"details_heal_min": 2,
+		"details_heal_max": 8,
 	},
 }
 
