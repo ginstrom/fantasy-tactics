@@ -738,3 +738,132 @@ func test_the_legacy_bonus_move_perk_id_still_validates_for_any_class() -> void:
 
 	assert_true(result.ok, result.error)
 	assert_eq(result.snapshot.adventurers[0].progression.perks, ["bonus_move"])
+
+
+## Durable Cleric MP (docs/plans/2026-08-21-stage-2-party-readiness/
+## 03-persistent-mp-temple-and-details-healing.md): "mp_current" round-trips
+## like health, a missing field migrates to full, and an invalid shape/range
+## rejects the whole import atomically -- the same two-pass normalize-then-
+## validate pattern the perks tests above exercise for progression.perks.
+
+func test_a_clerics_current_and_max_mp_round_trip() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12, "mp_current": 1,
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	var adv: Dictionary = result.snapshot.adventurers[0]
+	assert_eq(adv.mp_current, 1)
+	assert_eq(GameSession.CLASS_DEFINITIONS.cleric.mp_max, 3, "max MP is the class's fixed mp_max, not a stored field")
+
+
+## Same round trip through the real production import path.
+func test_import_campaign_snapshot_preserves_a_clerics_current_mp() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12, "mp_current": 2,
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+	data.selected_party_id = ""
+	data.parties = []
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_current_mp("cleric_001"), 2)
+
+
+## docs/designs/campaign-loop.md: "A save with no mp_current field migrates
+## it to full."
+func test_a_cleric_record_missing_mp_current_migrates_to_full_mp() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12,
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].mp_current, 3, "Missing mp_current migrates to full (mp_max)")
+
+
+## A Warrior/Scout record never gains a synthesized "mp_current" field --
+## only a class that actually carries an mp_max (Cleric today) does.
+func test_a_warrior_record_never_gains_a_synthesized_mp_current_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	for adv in result.snapshot.adventurers:
+		assert_false((adv as Dictionary).has("mp_current"), "A class-less/Warrior record must never gain mp_current")
+
+
+func test_rejects_a_non_int_mp_current_without_mutating_the_existing_session() -> void:
+	GameSession.reset()
+	var starting_adventurers: Array = GameSession.adventurers.duplicate(true)
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12, "mp_current": "two",
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+	data.selected_party_id = ""
+	data.parties = []
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_false(result.ok, "A non-int mp_current must reject the whole import")
+	assert_eq(GameSession.adventurers, starting_adventurers, "A rejected import must never mutate the live session")
+
+
+func test_rejects_an_out_of_range_mp_current_without_mutating_the_existing_session() -> void:
+	GameSession.reset()
+	var starting_adventurers: Array = GameSession.adventurers.duplicate(true)
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12, "mp_current": 999,
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+	data.selected_party_id = ""
+	data.parties = []
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_false(result.ok, "An mp_current above the class's mp_max must reject the whole import")
+	assert_eq(GameSession.adventurers, starting_adventurers, "A rejected import must never mutate the live session")
+
+
+func test_rejects_a_negative_mp_current() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 1, "health": 12, "mp_current": -1,
+			"stats": {"melee": 45, "guard": 10, "might": 1, "spellcasting": 55, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})

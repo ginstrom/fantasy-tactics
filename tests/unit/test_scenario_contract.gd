@@ -231,6 +231,72 @@ func test_validate_accepts_a_cleric_player_scenario() -> void:
 	assert_eq(errors, [], "A normalized Cleric player scenario should have no validation errors")
 
 
+## --- Explicit optional MP field (docs/plans/2026-08-21-stage-2-party-
+## readiness/03-persistent-mp-temple-and-details-healing.md): deterministic
+## scenarios never rely on ambient GameSession session state, so a scenario
+## that wants a Cleric to start battle short on MP says so explicitly rather
+## than mutating a live adventurer record first. -1 (never a real MP value)
+## marks "not specified" -- see BattleStateFactory._build_player_unit(),
+## which then hydrates full MP, matching the field's absence in every earlier
+## scenario. ---
+
+func test_normalize_defaults_mp_current_to_the_not_specified_sentinel() -> void:
+	var scenario := ScenarioContract.normalize(_minimal_raw_scenario())
+
+	assert_eq(scenario.player.units[0].mp_current, -1)
+
+
+func test_normalize_preserves_an_explicit_unit_mp_current() -> void:
+	var raw := {
+		"scenario_id": "explicit_mp",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}, "mp_current": 1}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+
+	assert_eq(scenario.player.units[0].mp_current, 1)
+
+
+func test_validate_accepts_an_explicit_mp_current_within_the_templates_mp_max() -> void:
+	var raw := {
+		"scenario_id": "explicit_mp_ok",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}, "mp_current": 3}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_eq(errors, [], "An mp_current at the Cleric's own mp_max (3) is in range")
+
+
+func test_validate_rejects_an_mp_current_above_the_templates_mp_max() -> void:
+	var raw := {
+		"scenario_id": "explicit_mp_too_high",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}, "mp_current": 4}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "invalid_limit"), "Expected an invalid_limit error, got: %s" % [errors])
+
+
+func test_validate_rejects_a_negative_mp_current_other_than_the_sentinel() -> void:
+	var raw := {
+		"scenario_id": "explicit_mp_negative",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}, "mp_current": -2}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "invalid_limit"), "Expected an invalid_limit error, got: %s" % [errors])
+
+
 func test_validate_rejects_an_unknown_player_template() -> void:
 	var raw := _minimal_raw_scenario()
 	raw.player = {"template_id": "not_a_real_template", "count": 1}

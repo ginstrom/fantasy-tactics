@@ -3879,6 +3879,328 @@ func test_leveling_up_a_cleric_grows_health_melee_guard_and_spellcasting() -> vo
 	assert_eq(leveled.stats.might, 3, "might tier low max gain (+2)")
 
 
+## --- Durable Cleric MP, Temple-aware recovery, and campaign healing (Step 3
+## of docs/plans/2026-08-21-stage-2-party-readiness) ---
+## docs/designs/campaign-loop.md's "Cleric current MP is durable adventurer
+## state" paragraph locks: mp_max=3, moving/resting/encamped HP rates
+## 1/2/3, moving/resting/encamped MP rates 2/4/6, +1 HP/turn per Temple
+## tier (MP never gets a Temple bonus), and the details-view heal
+## (1 MP cost, 2-8 HP, matching the battle Heal spell exactly).
+
+func test_get_default_cleric_starts_at_full_current_and_max_mp() -> void:
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+
+	assert_eq(cleric.mp_current, 3)
+	assert_eq(GameSession.CLASS_DEFINITIONS.cleric.mp_max, 3)
+
+
+func test_warrior_and_scout_carry_no_mp_resource() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.get_default_warrior().has("mp_current"), "A Warrior record carries no mp_current field")
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	assert_false(scout.has("mp_current"), "A Scout record carries no mp_current field")
+
+	assert_eq(session.get_effective_max_mp("warrior_001"), 0)
+	assert_eq(session.get_current_mp("warrior_001"), 0)
+
+
+func test_get_current_mp_and_set_adventurer_mp_no_op_for_an_unknown_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_eq(session.get_effective_max_mp("no_such_id"), 0)
+	assert_eq(session.get_current_mp("no_such_id"), 0)
+	assert_false(session.set_adventurer_mp("no_such_id", 5))
+
+
+## A Cleric's MP never exceeds its class mp_max, and a set below zero clamps
+## to zero rather than going negative -- 0 is a legitimate resting value for
+## MP, unlike health's floor of 1.
+func test_set_adventurer_mp_clamps_to_the_zero_to_max_mp_range() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.adventurers.append(session.get_default_cleric("cleric_test", "Test Cleric"))
+
+	assert_true(session.set_adventurer_mp("cleric_test", 999))
+	assert_eq(session.get_current_mp("cleric_test"), 3)
+
+	assert_true(session.set_adventurer_mp("cleric_test", -999))
+	assert_eq(session.get_current_mp("cleric_test"), 0)
+
+
+## Natural recovery (docs/designs/campaign-loop.md): a moving deployed
+## adventurer recovers 1 HP/2 MP, a stationary deployed adventurer recovers
+## 2 HP/4 MP, and an Encampment adventurer recovers 3 HP/6 MP. A Warrior in
+## the same party recovers HP identically but never gains an mp_current
+## field, since its class carries no MP resource at all.
+func test_end_world_turn_applies_the_approved_hp_and_mp_recovery_rates_by_deployment_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.HEAL_RATE_ENCAMPED = 3
+	session.HEAL_RATE_RESTING = 2
+	session.HEAL_RATE_MOVING = 1
+	session.MP_RATE_ENCAMPED = 6
+	session.MP_RATE_RESTING = 4
+	session.MP_RATE_MOVING = 2
+	session.TEMPLE_HP_BONUS_PER_TIER = 1
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+
+	# Encamped (not deployed, Temple unbuilt): HP +3, MP +6.
+	session.set_adventurer_health("warrior_001", 2)
+	session.set_adventurer_mp("cleric_test", 0)
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 5, "Encamped HP recovery is 3")
+	assert_eq(session.get_current_mp("cleric_test"), 3, "Encamped MP recovery is 6, capped at mp_max 3")
+	assert_false(session.get_adventurer("warrior_001").has("mp_current"), "A Warrior never gains an mp_current field")
+
+	# Deployed, resting (movement_spent false): HP +2, MP +4.
+	session.depart_selected_party()
+	session.set_adventurer_health("warrior_001", 2)
+	session.set_adventurer_mp("cleric_test", 0)
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 4, "Deployed resting HP recovery is 2")
+	assert_eq(session.get_current_mp("cleric_test"), 3, "Deployed resting MP recovery is 4, capped at mp_max 3")
+
+	# Deployed, moving: HP +1, MP +2.
+	session.set_adventurer_health("warrior_001", 2)
+	session.set_adventurer_mp("cleric_test", 0)
+	session.parties[0].movement_spent = true
+	session.end_world_turn()
+	assert_eq(session.get_current_health("warrior_001"), 3, "Deployed moving HP recovery is 1")
+	assert_eq(session.get_current_mp("cleric_test"), 2, "Deployed moving MP recovery is 2")
+
+
+## Each Temple tier adds +1 HP/turn to Encampment recovery only -- deployed
+## recovery (moving or resting) never sees the bonus, and MP recovery never
+## sees it at all, built or not (docs/designs/campaign-loop.md: "it does not
+## change MP recovery").
+func test_temple_bonus_only_applies_to_encamped_hp_recovery() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.HEAL_RATE_ENCAMPED = 3
+	session.MP_RATE_ENCAMPED = 1
+	session.TEMPLE_HP_BONUS_PER_TIER = 1
+	session.temple_level = 1
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.set_adventurer_health("warrior_001", 1)
+	session.set_adventurer_mp("cleric_test", 0)
+
+	session.end_world_turn()
+
+	assert_eq(session.get_current_health("warrior_001"), 5, "Encamped HP recovery (3) plus the built Temple's +1 bonus")
+	assert_eq(session.get_current_mp("cleric_test"), 1, "MP recovery (1) is untouched by the Temple bonus")
+
+
+## Recovery never overshoots either resource's own cap, independently -- a
+## near-full Warrior's HP stops exactly at max, and a near-full Cleric's MP
+## stops exactly at mp_max, even though both recover on the same turn.
+func test_natural_recovery_never_exceeds_max_hp_or_max_mp() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.set_adventurer_health("warrior_001", 9)
+	session.set_adventurer_mp("cleric_test", 2)
+
+	session.end_world_turn()
+
+	assert_eq(session.get_current_health("warrior_001"), session.get_effective_max_health("warrior_001"))
+	assert_eq(session.get_current_mp("cleric_test"), 3)
+
+
+func test_natural_recovery_is_a_no_op_for_an_unknown_or_dead_record() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	# No adventurer named "no_such_id" is ever iterated by recovery -- calling
+	# its accessors directly must still be a safe no-op, not a crash.
+	session.end_world_turn()
+	assert_eq(session.get_current_health("no_such_id"), 0)
+	assert_eq(session.get_current_mp("no_such_id"), 0)
+
+
+## --- "Heal party member" details-view transaction ---
+
+func _fresh_session_with_a_cleric_and_a_warrior_in_one_party() -> Node:
+	var session: Node = GameSessionScript.new()
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	return session
+
+
+func test_heal_party_member_heals_a_legal_deployed_party_target() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	session.set_adventurer_health("warrior_001", 2)
+	session.heal_amount_roll = func(_min_value: int, _max_value: int) -> int: return 5
+
+	assert_true(session.heal_party_member("cleric_test", "warrior_001"))
+
+	assert_eq(session.get_current_health("warrior_001"), 7)
+	assert_eq(session.get_current_mp("cleric_test"), 2, "Healing spends 1 MP")
+
+
+func test_heal_party_member_heals_a_legal_encamped_target_while_the_caster_is_encamped() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	# Neither the party nor the Cleric is deployed -- both are "at the
+	# Encampment" -- so the Cleric may heal any living Encampment adventurer,
+	# not merely a fellow party member.
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.set_adventurer_health("scout_test", 1)
+	session.heal_amount_roll = func(_min_value: int, _max_value: int) -> int: return 4
+
+	assert_true(session.heal_party_member("cleric_test", "scout_test"))
+
+	assert_eq(session.get_current_health("scout_test"), 5)
+	assert_eq(session.get_current_mp("cleric_test"), 2)
+
+
+func test_heal_party_member_can_heal_the_casting_cleric_itself() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	session.set_adventurer_health("cleric_test", 1)
+	session.heal_amount_roll = func(_min_value: int, _max_value: int) -> int: return 6
+
+	assert_true(session.heal_party_member("cleric_test", "cleric_test"))
+
+	assert_eq(session.get_current_health("cleric_test"), 7)
+
+
+func test_heal_party_member_is_a_no_op_when_the_caster_lacks_enough_mp() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.set_adventurer_mp("cleric_test", 0)
+	session.set_adventurer_health("warrior_001", 2)
+
+	assert_false(session.heal_party_member("cleric_test", "warrior_001"))
+
+	assert_eq(session.get_current_health("warrior_001"), 2, "No HP is restored")
+	assert_eq(session.get_current_mp("cleric_test"), 0, "No MP is spent")
+
+
+func test_heal_party_member_is_a_no_op_when_the_target_is_already_at_full_health() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+
+	assert_false(session.heal_party_member("cleric_test", "warrior_001"))
+
+	assert_eq(session.get_current_mp("cleric_test"), 3, "No MP is spent on a doomed heal")
+
+
+## The live campaign only ever fields one party (GameSession.get_max_party_
+## count() == 1), so a genuine second, also-deployed party is constructed
+## directly (mirroring this file's own _party() helper, used the same way
+## elsewhere for multi-party edge cases) rather than through create_party().
+func test_heal_party_member_is_a_no_op_for_a_member_of_a_different_deployed_party() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	var other_scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(other_scout)
+	session.parties.append(_party("party_other", ["scout_test"], GameSessionScript.STARTING_SETTLEMENT_ID, true))
+	session.set_adventurer_health("scout_test", 1)
+
+	assert_false(session.heal_party_member("cleric_test", "scout_test"))
+
+	assert_eq(session.get_current_health("scout_test"), 1)
+	assert_eq(session.get_current_mp("cleric_test"), 3)
+
+
+func test_heal_party_member_is_a_no_op_for_an_encamped_target_while_the_caster_is_deployed() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.set_adventurer_health("scout_test", 1)
+
+	assert_false(session.heal_party_member("cleric_test", "scout_test"))
+
+	assert_eq(session.get_current_health("scout_test"), 1)
+
+
+func test_heal_party_member_is_a_no_op_for_a_dead_or_unknown_target() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+
+	assert_false(session.heal_party_member("cleric_test", "no_such_adventurer"))
+	assert_eq(session.get_current_mp("cleric_test"), 3)
+
+
+func test_heal_party_member_is_a_no_op_for_an_unknown_caster() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.set_adventurer_health("warrior_001", 2)
+
+	assert_false(session.heal_party_member("no_such_cleric", "warrior_001"))
+
+	assert_eq(session.get_current_health("warrior_001"), 2)
+
+
+## Atomicity: a call that ultimately fails must never spend MP nor change HP,
+## even when the target is legal and damaged -- every precondition (including
+## MP affordability) is checked before any mutation.
+func test_heal_party_member_atomically_fails_without_mutating_either_side() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.set_adventurer_mp("cleric_test", 0)
+	session.set_adventurer_health("warrior_001", 2)
+	var mp_before: int = session.get_current_mp("cleric_test")
+	var health_before: int = session.get_current_health("warrior_001")
+
+	var result: bool = session.heal_party_member("cleric_test", "warrior_001")
+
+	assert_false(result)
+	assert_eq(session.get_current_mp("cleric_test"), mp_before)
+	assert_eq(session.get_current_health("warrior_001"), health_before)
+
+
+func test_get_legal_heal_targets_lists_only_legal_damaged_targets() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	session.set_adventurer_health("warrior_001", 2)
+
+	assert_eq(session.get_legal_heal_targets("cleric_test"), ["warrior_001"] as Array[String])
+
+
+func test_get_legal_heal_targets_excludes_a_full_health_member() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+
+	assert_eq(session.get_legal_heal_targets("cleric_test"), [] as Array[String])
+
+
+func test_get_legal_heal_targets_is_empty_for_a_non_caster() -> void:
+	var session := _fresh_session_with_a_cleric_and_a_warrior_in_one_party()
+	autofree(session)
+	session.depart_selected_party()
+	session.set_adventurer_health("cleric_test", 1)
+
+	assert_eq(session.get_legal_heal_targets("warrior_001"), [] as Array[String])
+
+
 ## --- Scout strategic reconnaissance (Step 4) ---
 
 func test_get_party_scouting_intel_reveals_composition_when_a_scout_is_within_range() -> void:
@@ -5289,6 +5611,13 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"HEAL_RATE_ENCAMPED": true,
 		"HEAL_RATE_RESTING": true,
 		"HEAL_RATE_MOVING": true,
+		"MP_RATE_ENCAMPED": true,
+		"MP_RATE_RESTING": true,
+		"MP_RATE_MOVING": true,
+		"TEMPLE_HP_BONUS_PER_TIER": true,
+		"DETAILS_HEAL_MP_COST": true,
+		"DETAILS_HEAL_MIN": true,
+		"DETAILS_HEAL_MAX": true,
 		"PERK_TREE_SIZE": true,
 		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
 		"WARRIOR_BULWARK_GUARD": true,

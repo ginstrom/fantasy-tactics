@@ -171,6 +171,9 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	var adventurer_perks_error := _validate_perks_field(normalized.adventurers, "adventurers")
 	if not adventurer_perks_error.is_empty():
 		return _invalid(adventurer_perks_error)
+	var adventurer_mp_error := _validate_mp_field(normalized.adventurers, "adventurers")
+	if not adventurer_mp_error.is_empty():
+		return _invalid(adventurer_mp_error)
 
 	var candidates_result := _normalize_id_list(data.get("recruitment_candidates"), "recruitment_candidates")
 	if not candidates_result.ok:
@@ -179,6 +182,9 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	var candidate_perks_error := _validate_perks_field(normalized.recruitment_candidates, "recruitment_candidates")
 	if not candidate_perks_error.is_empty():
 		return _invalid(candidate_perks_error)
+	var candidate_mp_error := _validate_mp_field(normalized.recruitment_candidates, "recruitment_candidates")
+	if not candidate_mp_error.is_empty():
+		return _invalid(candidate_mp_error)
 
 	var recruitment_vacancies_result := _normalize_vacancy_list(data.get("recruitment_vacancies"), "recruitment_vacancies")
 	if not recruitment_vacancies_result.ok:
@@ -490,6 +496,20 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 		else:
 			copy["health"] = max_hp
 
+		# Durable MP migration (docs/designs/campaign-loop.md: "a save with no
+		# mp_current field migrates it to full"): only a class that actually
+		# carries an mp_max (Cleric today) ever gets an "mp_current" field
+		# synthesized here -- a class with none (Warrior/Scout) is left
+		# exactly as the raw record had it (normally absent), never gaining a
+		# spurious 0 field of its own. A present mp_current is left untouched
+		# here rather than clamped -- _validate_mp_field() below rejects the
+		# whole snapshot atomically if it turns out to be the wrong shape or
+		# out of range, the same two-pass pattern _validate_perks_field() uses
+		# for progression.perks.
+		var class_mp_max := int(class_def.get("mp_max", 0))
+		if class_mp_max > 0 and not copy.has("mp_current"):
+			copy["mp_current"] = class_mp_max
+
 		normalized.append(copy)
 	return normalized
 
@@ -526,6 +546,32 @@ static func _validate_perks_field(records: Array[Dictionary], field_name: String
 			if seen.has(id):
 				return "%s entry %s has a duplicate perk id: %s" % [field_name, record.get("id", "?"), id]
 			seen[id] = true
+	return ""
+
+
+## Validates already-normalized roster records' "mp_current" field (see
+## _normalize_roster_records()'s migration above): shape (must be an int
+## where present) and range ([0, the record's own class's mp_max]) both
+## reject the whole snapshot atomically, the same two-pass pattern
+## _validate_perks_field() uses for progression.perks -- a soft clamp here
+## would silently accept hand-edited or corrupted save data instead of
+## surfacing it. A record whose class carries no MP resource is never
+## policed even if it happens to carry a stray mp_current key -- that key
+## does nothing (GameSession.get_current_mp()/set_adventurer_mp() both key
+## off the class, not field presence), so rejecting it would only reject
+## otherwise-harmless data.
+static func _validate_mp_field(records: Array[Dictionary], field_name: String) -> String:
+	for record in records:
+		var class_id := str(record.get("class", "warrior"))
+		var class_def: Dictionary = _GameSessionScript.CLASS_DEFINITIONS.get(class_id, {})
+		var class_mp_max := int(class_def.get("mp_max", 0))
+		if class_mp_max <= 0 or not record.has("mp_current"):
+			continue
+		var raw_mp: Variant = record.get("mp_current")
+		if not raw_mp is int:
+			return "%s entry %s has a non-int mp_current" % [field_name, record.get("id", "?")]
+		if int(raw_mp) < 0 or int(raw_mp) > class_mp_max:
+			return "%s entry %s has an out-of-range mp_current" % [field_name, record.get("id", "?")]
 	return ""
 
 

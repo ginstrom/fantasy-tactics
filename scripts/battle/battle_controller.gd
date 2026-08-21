@@ -253,7 +253,14 @@ func _ready() -> void:
 		if not spell_ids.is_empty():
 			player_unit.spells = spell_ids.duplicate()
 			player_unit.mp_max = int(class_def.get("mp_max", 0))
-			player_unit.mp_remaining = player_unit.mp_max
+			# Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is
+			# durable adventurer state" paragraph): battle start hydrates from
+			# the adventurer's own stored current MP -- NOT always full -- so a
+			# Cleric who entered this battle already spent, or naturally
+			# recovering, MP carries that value in. Mirrors player_unit.health
+			# a few lines above, which reads GameSession.get_current_health()
+			# the same way rather than always starting at max.
+			player_unit.mp_remaining = GameSession.get_current_mp(adventurer_id)
 		player_unit.facing = Vector2i.RIGHT
 		units.append(player_unit)
 	var enemy_specs: Array[Dictionary] = _build_enemy_specs(expedition)

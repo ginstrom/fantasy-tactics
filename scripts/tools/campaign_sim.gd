@@ -682,16 +682,23 @@ func _run_battle_to_resolution(controller: Node2D, telemetry: Dictionary = {}) -
 ## stalemate/abandon alike) -- mirrors battlefield.gd's own _persist_battle_
 ## aftermath(): permadeath resolves before the health write-back so a unit
 ## whose reported health is <= 0 is removed from the roster rather than
-## clamped to 1 HP. Returns the ids permadeath removed this battle.
+## clamped to 1 HP, and a surviving caster's leftover MP writes back
+## alongside health (see GameSession.apply_battle_mp_aftermath(), the MP
+## twin of apply_battle_aftermath() below). Returns the ids permadeath
+## removed this battle.
 func _persist_battle_state(controller: Node2D) -> Array:
 	var health_by_id := {}
+	var mp_by_id := {}
 	for unit in controller.units:
 		if unit.side == BattleControllerScript.Side.PLAYER and unit.adventurer_id != "":
 			health_by_id[unit.adventurer_id] = unit.health
+			if unit.mp_max > 0:
+				mp_by_id[unit.adventurer_id] = unit.mp_remaining
 	for adventurer_id in controller.defeated_player_health_by_id:
 		health_by_id[adventurer_id] = controller.defeated_player_health_by_id[adventurer_id]
 	var dead_ids := GameSession.resolve_battle_deaths(health_by_id)
 	GameSession.apply_battle_aftermath(health_by_id)
+	GameSession.apply_battle_mp_aftermath(mp_by_id)
 	return dead_ids
 
 
@@ -741,13 +748,25 @@ func _build_player_units() -> Array:
 		var adventurer := GameSession.get_adventurer(member_id)
 		if adventurer.is_empty() or not _is_fieldable(adventurer):
 			continue
-		units.append({
+		var unit_spec := {
 			"id": member_id,
 			"template_id": String(adventurer.get("class", "warrior")),
 			"weapon_id": String(adventurer.equipment.get("weapon", GameSession.DEFAULT_WEAPON_ID)),
 			"armor_id": String(adventurer.equipment.get("armor", GameSession.DEFAULT_ARMOR_ID)),
 			"level": int(adventurer.get("level", 1)),
-		})
+		}
+		# Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is
+		# durable adventurer state" paragraph): this simulator plays many
+		# battles back to back off the same live roster, so a Cleric's MP
+		# must carry over between them exactly like production battle start
+		# does (see BattleController._ready()) -- not the scenario-contract
+		# default of always-full, which would silently let every simulated
+		# Cleric refill to 3 MP before every fight. get_effective_max_mp()
+		# returns 0 for a non-caster, so this only ever sets the field for a
+		# class that actually has one.
+		if GameSession.get_effective_max_mp(member_id) > 0:
+			unit_spec["mp_current"] = GameSession.get_current_mp(member_id)
+		units.append(unit_spec)
 	return units
 
 

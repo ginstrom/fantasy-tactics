@@ -551,19 +551,32 @@ func _finish_victory() -> void:
 ## dead id back to 1 HP -- it simply no-ops for an id that no longer exists.
 func _persist_battle_aftermath() -> void:
 	var health_by_id: Dictionary = {}
+	var mp_by_id: Dictionary = {}
 	if grid != null and grid.get("units") != null:
 		for unit in grid.units:
 			if unit.side == BattleControllerScript.Side.PLAYER and unit.adventurer_id != "":
 				health_by_id[unit.adventurer_id] = unit.health
+				# MP write-back (docs/designs/campaign-loop.md's "battle
+				# aftermath writes the surviving Cleric's remaining MP back"):
+				# only a caster (mp_max > 0) ever has a durable MP record to
+				# write, so a Warrior/Scout's always-zero mp_max keeps it out
+				# of this batch entirely rather than writing a spurious 0.
+				if unit.mp_max > 0:
+					mp_by_id[unit.adventurer_id] = unit.mp_remaining
 		# A player unit defeated in real combat (as opposed to a unit whose
 		# health a test set directly, or one that survived to battle's end at
 		# low HP) is erased from grid.units well before this point -- see
 		# BattleController.defeated_player_health_by_id's own doc comment for
-		# why its 0 HP must be merged in from there instead.
+		# why its 0 HP must be merged in from there instead. It never
+		# contributes to mp_by_id: it is already excluded from grid.units, so
+		# apply_battle_mp_aftermath() would have nothing to write for it even
+		# if it were a Cleric -- resolve_battle_deaths() below erases the
+		# record first, and a dead adventurer owns no persisted MP record.
 		for adventurer_id in grid.get("defeated_player_health_by_id"):
 			health_by_id[adventurer_id] = grid.defeated_player_health_by_id[adventurer_id]
 	GameSession.resolve_battle_deaths(health_by_id)
 	GameSession.apply_battle_aftermath(health_by_id)
+	GameSession.apply_battle_mp_aftermath(mp_by_id)
 
 
 func _set_enemy_turn_in_progress(value: bool) -> void:

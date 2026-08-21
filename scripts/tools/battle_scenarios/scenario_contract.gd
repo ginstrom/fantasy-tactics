@@ -226,6 +226,15 @@ static func _normalize_side(raw_side: Dictionary, side_label: String) -> Diction
 			unit["weapon_id"] = String(raw_unit.get("weapon_id", GameSession.DEFAULT_WEAPON_ID))
 			unit["armor_id"] = String(raw_unit.get("armor_id", GameSession.DEFAULT_ARMOR_ID))
 			unit["level"] = int(raw_unit.get("level", 1))
+			# Explicit optional MP field (see the governing design's own note
+			# that deterministic scenarios must never rely on ambient
+			# GameSession session state): -1 means "not specified" -- a
+			# spellcasting template (Cleric today) then hydrates at full MP,
+			# same as it always has -- see BattleStateFactory._build_player_
+			# unit(). Meaningless for a non-spellcasting template, but still
+			# normalized/validated uniformly rather than special-cased per
+			# template_id.
+			unit["mp_current"] = int(raw_unit.get("mp_current", -1))
 		var default_position: Vector2i = (
 			default_positions[index] if index < default_positions.size() else Vector2i(-1, -1)
 		)
@@ -285,6 +294,16 @@ static func _validate_side(
 			var level: int = int(unit.get("level", 1))
 			if level < 1:
 				errors.append("invalid_limit: %s unit %s has non-positive level %d" % [side_label, unit_id, level])
+
+			var mp_current: int = int(unit.get("mp_current", -1))
+			if mp_current != -1:
+				var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(template_id, {})
+				var class_mp_max := int(class_def.get("mp_max", 0))
+				if mp_current < 0 or mp_current > class_mp_max:
+					errors.append(
+						"invalid_limit: %s unit %s has out-of-range mp_current %d (class mp_max %d)"
+						% [side_label, unit_id, mp_current, class_mp_max]
+					)
 
 		var pos := position_from_dict(unit.get("position", {}))
 		if not _in_bounds(pos, width, height):

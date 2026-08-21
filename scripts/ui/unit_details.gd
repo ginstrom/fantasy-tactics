@@ -23,12 +23,16 @@ extends Control
 @onready var skills_label: Label = $Body/Center/VBox/SkillsLabel
 @onready var perks_label: Label = $Body/Center/VBox/PerksLabel
 @onready var stats_label: Label = $Body/Center/VBox/StatsLabel
+@onready var mp_label: Label = $Body/Center/VBox/MpLabel
 @onready var equipment_label: Label = $Body/Center/VBox/EquipmentLabel
 @onready var weapons_label: Label = $Body/Center/VBox/WeaponsLabel
 @onready var weapons_list: VBoxContainer = $Body/Center/VBox/WeaponsList
 @onready var armor_label: Label = $Body/Center/VBox/ArmorLabel
 @onready var armor_list: VBoxContainer = $Body/Center/VBox/ArmorList
 @onready var not_found_label: Label = $Body/Center/VBox/NotFoundLabel
+@onready var heal_explanation_label: Label = $Body/Center/VBox/HealExplanationLabel
+@onready var heal_target_picker: OptionButton = $Body/Center/VBox/HealTargetPicker
+@onready var heal_button: Button = $Body/Center/VBox/HealButton
 @onready var assignment_explanation_label: Label = $Body/Center/VBox/AssignmentExplanationLabel
 @onready var party_picker: OptionButton = $Body/Center/VBox/PartyPicker
 @onready var add_to_party_button: Button = $Body/Center/VBox/AddToPartyButton
@@ -84,6 +88,16 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 		% [xp_display, xp_to_next_level, current_health, effective_max_health, effective_defense, effective_resistance]
 	)
 
+	# MP row (durable, docs/designs/campaign-loop.md's "Cleric current MP is
+	# durable adventurer state" paragraph): shown only for a class that
+	# actually carries an MP resource (Cleric today) -- a Warrior/Scout's
+	# get_effective_max_mp() is always 0, so this row simply stays hidden for
+	# them rather than showing a meaningless "0 / 0".
+	var effective_max_mp: int = GameSession.get_effective_max_mp(adventurer_id)
+	mp_label.visible = effective_max_mp > 0
+	if effective_max_mp > 0:
+		mp_label.text = tr("unit_details.mp") % [GameSession.get_current_mp(adventurer_id), effective_max_mp]
+
 	var weapon_damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
 	var weapon_attack_range: Vector2i = GameSession.get_effective_weapon_attack_range(adventurer_id)
 	var weapon_range_text := (
@@ -116,6 +130,7 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 		perks_label.text = "\n".join(perk_lines)
 
 	_refresh_equipment_sections(adventurer)
+	_refresh_heal_section(adventurer_id, effective_max_mp)
 
 
 	for label in [
@@ -132,6 +147,8 @@ func _show_not_found() -> void:
 		equipment_label, weapons_label, weapons_list, armor_label, armor_list,
 	]:
 		label.visible = false
+	mp_label.visible = false
+	_hide_heal_section()
 	_hide_assignment_section()
 
 
@@ -197,6 +214,59 @@ func _on_activate_pressed(slot: String, item_id: String) -> void:
 
 func _on_unequip_pressed(slot: String, item_id: String) -> void:
 	GameSession.unequip_to_bank(unit_id, slot, item_id)
+	refresh()
+
+
+## "Heal party member" (docs/designs/campaign-loop.md's Healer paragraph):
+## shown only when this adventurer is itself a spellcaster (effective_max_mp
+## > 0, Cleric today) -- every other class simply never carries this section.
+## The target picker lists only GameSession.get_legal_heal_targets(), which
+## already excludes anything a real heal_party_member() call would reject or
+## waste (wrong party, dead, already at full HP) -- an empty result disables
+## the whole action and shows why, rather than offering a target the
+## transaction is guaranteed to no-op on. This screen only ever calls the
+## transaction through the button signal (_on_heal_button_pressed) and
+## re-reads state via refresh() afterward; it never assigns health or MP
+## itself.
+func _refresh_heal_section(adventurer_id: String, effective_max_mp: int) -> void:
+	if effective_max_mp <= 0:
+		_hide_heal_section()
+		return
+
+	var target_ids: Array[String] = GameSession.get_legal_heal_targets(adventurer_id)
+	heal_target_picker.clear()
+	for target_id in target_ids:
+		var target := GameSession.get_adventurer(target_id)
+		heal_target_picker.add_item(target.get("name", target_id))
+		heal_target_picker.set_item_metadata(heal_target_picker.item_count - 1, target_id)
+
+	var can_heal: bool = (
+		GameSession.get_current_mp(adventurer_id) >= GameSession.DETAILS_HEAL_MP_COST and not target_ids.is_empty()
+	)
+	heal_target_picker.visible = can_heal
+	heal_button.visible = true
+	heal_button.disabled = not can_heal
+	heal_explanation_label.visible = not can_heal
+
+
+func _hide_heal_section() -> void:
+	heal_target_picker.visible = false
+	heal_target_picker.clear()
+	heal_button.visible = false
+	heal_explanation_label.visible = false
+
+
+## Party id/target id both come from picker item metadata, never displayed
+## text -- same convention as _on_add_to_party_pressed(). A stale/invalid
+## selection (nothing chosen, or the picker is empty) just re-refreshes in
+## place rather than calling the transaction with a meaningless target.
+func _on_heal_button_pressed() -> void:
+	var selected_index := heal_target_picker.get_selected()
+	if selected_index < 0:
+		refresh()
+		return
+	var target_id: String = heal_target_picker.get_item_metadata(selected_index)
+	GameSession.heal_party_member(unit_id, target_id)
 	refresh()
 
 

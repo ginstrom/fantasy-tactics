@@ -867,6 +867,27 @@ func test_ready_hydrates_mp_and_spells_only_for_a_fielded_cleric() -> void:
 	assert_eq(cleric_unit.mp_remaining, 3)
 
 
+## Core Step 3 behavior change (docs/designs/campaign-loop.md's "Cleric
+## current MP is durable adventurer state" paragraph): battle start reads the
+## adventurer's own stored current MP -- NOT always full. A Cleric who
+## entered this battle already down to 1 of 3 MP (e.g. from an earlier fight,
+## or natural recovery not yet catching up) must field a unit that starts at
+## 1 MP, not a freshly-topped-off 3.
+func test_ready_hydrates_a_fielded_clerics_mp_from_durable_state_not_always_full() -> void:
+	GameSession.create_party()
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.set_adventurer_mp("cleric_test", 1)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+
+	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
+
+	assert_eq(cleric_unit.mp_max, 3)
+	assert_eq(cleric_unit.mp_remaining, 1, "Battle start must hydrate from durable current MP, not always full")
+
+
 func test_unaffordable_attack_preserves_action_points_and_combat_state() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)

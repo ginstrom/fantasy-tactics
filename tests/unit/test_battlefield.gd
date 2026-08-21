@@ -1286,6 +1286,58 @@ func test_victory_aftermath_persists_surviving_player_unit_health() -> void:
 	assert_eq(GameSession.get_current_health("warrior_001"), 6, "Surviving unit health (6) persists after victory")
 
 
+## MP write-back (docs/designs/campaign-loop.md: "battle aftermath writes the
+## surviving Cleric's remaining MP back, clamped to cleric.mp_max"): a
+## surviving Cleric's leftover battle MP overwrites its durable current MP,
+## the same way health does above. A non-caster (Warrior) in the same party
+## never gains an mp_current field from this write-back.
+func test_victory_aftermath_persists_a_surviving_clerics_remaining_mp() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
+	cleric_unit.mp_remaining = 1
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(GameSession.get_current_mp("cleric_test"), 1, "The surviving Cleric's leftover MP persists after victory")
+	assert_false(
+		GameSession.get_adventurer("warrior_001").has("mp_current"),
+		"A non-caster survivor never gains an mp_current field from aftermath"
+	)
+
+
+## A dead Cleric owns no persisted MP record, the same as HP (docs/designs/
+## campaign-loop.md): permadeath already erases the whole adventurer record
+## (see resolve_battle_deaths()), so a Cleric reduced to 0 HP by battle's end
+## must not resurrect an mp_current field anywhere -- the id is simply gone.
+func test_a_dead_clerics_mp_does_not_survive_permadeath() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var cleric := GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	GameSession.adventurers.append(cleric)
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
+	cleric_unit.mp_remaining = 1
+	cleric_unit.health = 0
+
+	battlefield._apply_battle_outcome(false)
+
+	assert_true(GameSession.get_adventurer("cleric_test").is_empty(), "A 0 HP Cleric is permanently removed")
+	assert_eq(GameSession.get_current_mp("cleric_test"), 0, "An unknown id's MP reads as 0, never an error")
+
+
 ## Superseded by permadeath (docs/plans/2026-08-18-core-loop-and-engagement/
 ## 02-permadeath-retreat-and-economy-floor.md): a unit reduced to 0 HP by
 ## battle's end is no longer floored back up to 1 -- it is permanently

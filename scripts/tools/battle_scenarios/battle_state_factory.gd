@@ -190,16 +190,25 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	# Mirrors BattleController's own runtime hydration (see that file's
 	# _build_player_units()-equivalent code, ~lines 245-255): a class whose
 	# CLASS_DEFINITIONS entry declares spells (Cleric today) gets those
-	# spells and its class's mp_max, full at battle start; every other class
-	# keeps unit.gd's field defaults (spells == [], mp_max == 0, mp_remaining
-	# == 0). Reuses the same class_def already resolved above rather than
-	# looking template_id back up through GameSession.get_adventurer(), since
-	# this factory builds from a scenario spec, not a live adventurer record.
+	# spells and its class's mp_max; every other class keeps unit.gd's field
+	# defaults (spells == [], mp_max == 0, mp_remaining == 0). Reuses the
+	# same class_def already resolved above rather than looking template_id
+	# back up through GameSession.get_adventurer(), since this factory builds
+	# from a scenario spec, not a live adventurer record.
+	#
+	# Unlike production battle start (which reads the adventurer's own
+	# durable current MP -- see BattleController._ready()), a scenario has no
+	# adventurer record to read: it hydrates at full MP by default, unless
+	# the scenario spec sets an explicit mp_current (see scenario_contract.gd's
+	# own doc comment on that field -- -1 means "not specified"), which lets a
+	# deterministic test scenario exercise a Cleric who entered battle already
+	# short on MP without depending on any ambient GameSession state.
 	var spell_ids: Array = class_def.get("spells", [])
 	if not spell_ids.is_empty():
 		unit.spells = spell_ids.duplicate()
 		unit.mp_max = int(class_def.get("mp_max", 0))
-		unit.mp_remaining = unit.mp_max
+		var explicit_mp: int = int(spec.get("mp_current", -1))
+		unit.mp_remaining = explicit_mp if explicit_mp >= 0 else unit.mp_max
 
 	return unit
 

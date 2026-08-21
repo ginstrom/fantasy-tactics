@@ -69,6 +69,10 @@ visible = false
 layout_mode = 2
 visible = false
 
+[node name="MpLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
 [node name="EquipmentLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false
@@ -96,6 +100,21 @@ layout_mode = 2
 visible = false
 text = "unit_details.not_found"
 horizontal_alignment = 1
+
+[node name="HealExplanationLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.heal_unavailable"
+horizontal_alignment = 1
+
+[node name="HealTargetPicker" type="OptionButton" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
+[node name="HealButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+text = "unit_details.heal_party_member"
 
 [node name="AssignmentExplanationLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
@@ -127,5 +146,6 @@ theme_override_constants/margin_bottom = 16
 unique_name_in_owner = true
 layout_mode = 2
 
+[connection signal="pressed" from="Body/Center/VBox/HealButton" to="." method="_on_heal_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/AddToPartyButton" to="." method="_on_add_to_party_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

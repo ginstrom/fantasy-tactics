@@ -864,9 +864,34 @@ var TRADING_POST_PURCHASE_COST: int = 50
 var TRADING_POST_INCOME_PER_TURN: int = 1
 var EFFECTIVE_HIT_CHANCE_CAP: float = 0.95
 var ATTACK_TO_HIT_CHANCE_DIVISOR: float = 100.0
-var HEAL_RATE_ENCAMPED: int = 4
+## Superseded flat, Temple-blind encamped HP rate (docs/designs/campaign-
+## loop.md): natural recovery now also depends on Temple tier (see
+## TEMPLE_HP_BONUS_PER_TIER) and, for MP-bearing classes, a parallel MP_RATE_*
+## trio below -- see _apply_natural_recovery().
+var HEAL_RATE_ENCAMPED: int = 3
 var HEAL_RATE_RESTING: int = 2
 var HEAL_RATE_MOVING: int = 1
+## Per-World-Map-Turn MP recovery (config/game_config.json's "healing"
+## section): only ever applied to a class carrying an mp_max (Cleric today) --
+## see _apply_natural_recovery(), which no-ops MP recovery entirely for any
+## other class rather than writing a stray mp_current field. Unlike HP, the
+## Temple bonus never applies to MP (docs/designs/campaign-loop.md: "it does
+## not change MP recovery").
+var MP_RATE_ENCAMPED: int = 6
+var MP_RATE_RESTING: int = 4
+var MP_RATE_MOVING: int = 2
+## +1 HP/turn of natural recovery per Temple tier, added only to the
+## Encampment (non-deployed) HP rate above -- see _apply_natural_recovery().
+## TEMPLE_MAX_LEVEL is 1 today, so this is currently a step function (+0
+## unbuilt, +1 built), but the formula (TEMPLE_HP_BONUS_PER_TIER *
+## temple_level) already generalizes to a future higher-tier Temple.
+var TEMPLE_HP_BONUS_PER_TIER: int = 1
+## Details-view "Heal party member" transaction (see heal_party_member()):
+## locked to match the existing battle-local Heal spell exactly (see
+## BattleController.SPELL_MP_COST/SPELL_HEAL_MIN/SPELL_HEAL_MAX).
+var DETAILS_HEAL_MP_COST: int = 1
+var DETAILS_HEAL_MIN: int = 2
+var DETAILS_HEAL_MAX: int = 8
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
 # A campaign starts sparse (two active encounters, one active recruitment
@@ -953,6 +978,13 @@ func get_default_cleric(adventurer_id: String, adventurer_name: String) -> Dicti
 		"availability_status": "available",
 		"stats": CLASS_DEFINITIONS.cleric.base_stats.duplicate(true),
 		"health": CLASS_DEFINITIONS.cleric.base_stats.max_health,
+		# Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is
+		# durable adventurer state" paragraph): a fresh Cleric starts at full
+		# MP, exactly like health above starts at full HP. Warrior/Scout carry
+		# no "mp_current" field at all -- get_current_mp()/get_effective_max_mp()
+		# read CLASS_DEFINITIONS to return 0 for those classes without needing
+		# a dead field on every record.
+		"mp_current": CLASS_DEFINITIONS.cleric.mp_max,
 		"progression": {
 			"xp": 0.0,
 			"perks": [],
@@ -1118,6 +1150,10 @@ func reset_injectable_rolls() -> void:
 # its own complete_current_encounter() call, same as enemy_composition_roll.
 var loot_gold_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var loot_gear_roll: Callable = func() -> float: return randf()
+## Injectable so tests can force a deterministic "Heal party member" amount
+## (see heal_party_member()) instead of depending on real randomness -- the
+## same pattern as loot_gold_roll immediately above. Never reset by reset().
+var heal_amount_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 
 # Durable campaign milestone progression -- separate from the repeatable
 # sandbox encounter/vacancy state below (completed_encounters, active_
@@ -1249,6 +1285,13 @@ func _load_balance_config() -> void:
 	HEAL_RATE_ENCAMPED = GameConfig.get_int("healing", "encamped_rate", HEAL_RATE_ENCAMPED)
 	HEAL_RATE_RESTING = GameConfig.get_int("healing", "resting_rate", HEAL_RATE_RESTING)
 	HEAL_RATE_MOVING = GameConfig.get_int("healing", "moving_rate", HEAL_RATE_MOVING)
+	MP_RATE_ENCAMPED = GameConfig.get_int("healing", "encamped_mp_rate", MP_RATE_ENCAMPED)
+	MP_RATE_RESTING = GameConfig.get_int("healing", "resting_mp_rate", MP_RATE_RESTING)
+	MP_RATE_MOVING = GameConfig.get_int("healing", "moving_mp_rate", MP_RATE_MOVING)
+	TEMPLE_HP_BONUS_PER_TIER = GameConfig.get_int("healing", "temple_hp_bonus_per_tier", TEMPLE_HP_BONUS_PER_TIER)
+	DETAILS_HEAL_MP_COST = GameConfig.get_int("cleric", "details_heal_mp_cost", DETAILS_HEAL_MP_COST)
+	DETAILS_HEAL_MIN = GameConfig.get_int("cleric", "details_heal_min", DETAILS_HEAL_MIN)
+	DETAILS_HEAL_MAX = GameConfig.get_int("cleric", "details_heal_max", DETAILS_HEAL_MAX)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -3472,6 +3515,51 @@ func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
 	return true
 
 
+## Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is durable
+## adventurer state" paragraph): a class's mp_max is a fixed CLASS_
+## DEFINITIONS value (3 for Cleric today, see that dict's own doc comment),
+## not a perk-derived effective stat -- no Step 1 perk grants a bonus to it,
+## unlike get_effective_max_health()'s Juggernaut/Devout percent bonus.
+## Returns 0 for an unknown adventurer or a class with no "mp_max" entry
+## (Warrior/Scout), so a caller never needs its own class check first.
+func get_effective_max_mp(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	var class_def: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
+	return int(class_def.get("mp_max", 0))
+
+
+## Returns current persistent MP for adventurer_id (clamped in [0, max_mp]),
+## or 0 for an unknown adventurer or one whose class carries no MP resource.
+## Unlike get_current_health(), 0 is a legitimate resting value (an out-of-MP
+## Cleric is not dead), so this clamps to a floor of 0, not 1.
+func get_current_mp(adventurer_id: String) -> int:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return 0
+	var max_mp := get_effective_max_mp(adventurer_id)
+	if max_mp <= 0:
+		return 0
+	var adventurer: Dictionary = adventurers[adventurer_index]
+	return clampi(int(adventurer.get("mp_current", max_mp)), 0, max_mp)
+
+
+## Sets persistent MP for adventurer_id, clamped to [0, max_mp]. Returns false
+## (a no-op) for an unknown adventurer or one whose class carries no MP
+## resource -- mirrors set_adventurer_health()'s unknown-id no-op, extended to
+## "no MP resource at all" so a caller never needs its own class check first.
+func set_adventurer_mp(adventurer_id: String, amount: int) -> bool:
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	var max_mp := get_effective_max_mp(adventurer_id)
+	if max_mp <= 0:
+		return false
+	adventurers[adventurer_index]["mp_current"] = clampi(amount, 0, max_mp)
+	return true
+
+
 ## Unit permadeath transaction (docs/plans/2026-08-18-core-loop-and-
 ## engagement/02-permadeath-retreat-and-economy-floor.md): called by
 ## Battlefield._persist_battle_aftermath() -- before apply_battle_aftermath()
@@ -3485,7 +3573,10 @@ func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
 ## into the party's own pending_gear store (see _transfer_dead_unit_gear_
 ## to_pending()), its id is erased from every party's member_ids, and the
 ## adventurer record itself is deleted from the roster -- so a dead id can
-## never remain in live session state afterward. A later successful retreat
+## never remain in live session state afterward, and (docs/designs/campaign-
+## loop.md: "a dead adventurer owns no persisted MP record, the same as HP")
+## whatever "mp_current" the record carried is discarded along with it, no
+## separate MP-specific cleanup needed. A later successful retreat
 ## or victory banks that gear through the existing settlement transition
 ## (deposit_pending_reward()); a wipe forfeits it instead
 ## (resolve_party_wipe()). owned_item_instances records are never deleted
@@ -3532,6 +3623,21 @@ func apply_battle_aftermath(health_by_id: Dictionary) -> void:
 		set_adventurer_health(adventurer_id, max(1, reported))
 
 
+## Batch write-back used by the battlefield after victory or defeat, the MP
+## twin of apply_battle_aftermath() above (docs/designs/campaign-loop.md:
+## "battle aftermath writes the surviving Cleric's remaining MP back,
+## clamped to cleric.mp_max"). Battlefield._persist_battle_aftermath() only
+## ever populates mp_by_id from grid.units survivors (never from
+## defeated_player_health_by_id), but even if a now-dead id somehow reached
+## this call, set_adventurer_mp() already no-ops for an id resolve_battle_
+## deaths() just erased -- no MP floor is needed the way apply_battle_
+## aftermath()'s max(1, ...) floors health, because 0 MP is a legitimate
+## resting value, not a death condition.
+func apply_battle_mp_aftermath(mp_by_id: Dictionary) -> void:
+	for id_key in mp_by_id:
+		set_adventurer_mp(String(id_key), int(mp_by_id[id_key]))
+
+
 func _get_party_for_adventurer(adventurer_id: String) -> Dictionary:
 	for party in parties:
 		if adventurer_id in party.member_ids:
@@ -3539,20 +3645,112 @@ func _get_party_for_adventurer(adventurer_id: String) -> Dictionary:
 	return {}
 
 
+## True when adventurer_id is physically at the Encampment: either unassigned
+## to any party, or a member of a party that has not deployed. Used by both
+## _apply_natural_recovery() (Temple bonus eligibility) and heal_party_
+## member()'s target legality (docs/designs/campaign-loop.md: "a living
+## adventurer at the Encampment when the Healer is encamped").
+func _is_adventurer_at_encampment(adventurer_id: String) -> bool:
+	var party: Dictionary = _get_party_for_adventurer(adventurer_id)
+	return party.is_empty() or not bool(party.get("deployed", false))
+
+
+## Natural per-World-Map-Turn recovery (docs/designs/campaign-loop.md):
+## HP always recovers (moving/resting/encamped rate, the last boosted by
+## TEMPLE_HP_BONUS_PER_TIER * temple_level); MP recovers on the parallel
+## MP_RATE_* trio, but only for a class that actually carries an MP resource
+## (get_effective_max_mp() > 0) -- every other class is left with no
+## "mp_current" field at all, never a spurious 0 one.
 func _apply_natural_recovery() -> void:
 	for adventurer in adventurers:
 		var adv_id := String(adventurer.id)
+		var deployed := not _is_adventurer_at_encampment(adv_id)
 		var party: Dictionary = _get_party_for_adventurer(adv_id)
-		var rate := HEAL_RATE_ENCAMPED
-		if not party.is_empty() and bool(party.get("deployed", false)):
-			if bool(party.get("movement_spent", false)):
-				rate = HEAL_RATE_MOVING
+		var moving := deployed and bool(party.get("movement_spent", false))
+
+		var hp_rate := HEAL_RATE_ENCAMPED + TEMPLE_HP_BONUS_PER_TIER * temple_level
+		var mp_rate := MP_RATE_ENCAMPED
+		if deployed:
+			if moving:
+				hp_rate = HEAL_RATE_MOVING
+				mp_rate = MP_RATE_MOVING
 			else:
-				rate = HEAL_RATE_RESTING
+				hp_rate = HEAL_RATE_RESTING
+				mp_rate = MP_RATE_RESTING
+
 		var current_hp := get_current_health(adv_id)
 		var max_hp := get_effective_max_health(adv_id)
 		if current_hp < max_hp:
-			adventurers[_get_adventurer_index(adv_id)]["health"] = mini(current_hp + rate, max_hp)
+			adventurers[_get_adventurer_index(adv_id)]["health"] = mini(current_hp + hp_rate, max_hp)
+
+		var max_mp := get_effective_max_mp(adv_id)
+		if max_mp > 0:
+			var current_mp := get_current_mp(adv_id)
+			if current_mp < max_mp:
+				adventurers[_get_adventurer_index(adv_id)]["mp_current"] = mini(current_mp + mp_rate, max_mp)
+
+
+## Details-view "Heal party member" transaction (docs/designs/campaign-
+## loop.md's Healer paragraph): caster_id spends DETAILS_HEAL_MP_COST MP to
+## restore a random DETAILS_HEAL_MIN-DETAILS_HEAL_MAX HP (matching the
+## existing battle-local Heal spell exactly -- see BattleController.
+## SPELL_MP_COST/SPELL_HEAL_MIN/SPELL_HEAL_MAX) to target_id, capped at the
+## target's own effective max HP. Every precondition -- caster has enough MP,
+## target is a legal heal target (see _is_legal_heal_target()), target is not
+## already at full HP -- is checked before any mutation, so a rejected call
+## never spends MP or changes HP. Returns whether the heal actually happened.
+func heal_party_member(caster_id: String, target_id: String) -> bool:
+	if get_current_mp(caster_id) < DETAILS_HEAL_MP_COST:
+		return false
+	if not _is_legal_heal_target(caster_id, target_id):
+		return false
+	var current_hp := get_current_health(target_id)
+	var max_hp := get_effective_max_health(target_id)
+	if current_hp >= max_hp:
+		return false
+
+	set_adventurer_mp(caster_id, get_current_mp(caster_id) - DETAILS_HEAL_MP_COST)
+	var healed: int = heal_amount_roll.call(DETAILS_HEAL_MIN, DETAILS_HEAL_MAX)
+	set_adventurer_health(target_id, current_hp + healed)
+	return true
+
+
+## heal_party_member()'s target-legality rule, factored out so get_legal_
+## heal_targets() (unit_details.gd's target picker) and the transaction
+## itself always agree: caster_id and target_id must both name a live
+## adventurer (a dead one owns no record at all, see resolve_battle_deaths()),
+## and either target_id is a member of caster_id's own deployed party, or
+## caster_id itself is not deployed and target_id is at the Encampment.
+func _is_legal_heal_target(caster_id: String, target_id: String) -> bool:
+	if get_adventurer(caster_id).is_empty() or get_adventurer(target_id).is_empty():
+		return false
+	var caster_party: Dictionary = _get_party_for_adventurer(caster_id)
+	var caster_deployed := not caster_party.is_empty() and bool(caster_party.get("deployed", false))
+	if caster_deployed:
+		return target_id in caster_party.member_ids
+	return _is_adventurer_at_encampment(target_id)
+
+
+## The living, legal, actually-healable targets for caster_id's "Heal party
+## member" action (unit_details.gd's target picker) -- legal per _is_legal_
+## heal_target() and not already at full HP, since a full-HP target can never
+## be usefully healed (see heal_party_member()'s own no-op check). Excluding
+## those here, rather than merely letting the transaction no-op on one, is
+## what lets the UI disable the whole action and explain why instead of
+## offering a target guaranteed to do nothing. Returns [] for an unknown
+## caster or a class with no MP resource at all.
+func get_legal_heal_targets(caster_id: String) -> Array[String]:
+	var targets: Array[String] = []
+	if get_effective_max_mp(caster_id) <= 0:
+		return targets
+	for adventurer in adventurers:
+		var target_id := String(adventurer.id)
+		if not _is_legal_heal_target(caster_id, target_id):
+			continue
+		if get_current_health(target_id) >= get_effective_max_health(target_id):
+			continue
+		targets.append(target_id)
+	return targets
 
 
 ## Centralized effective battle AP: every unit starts with the battle

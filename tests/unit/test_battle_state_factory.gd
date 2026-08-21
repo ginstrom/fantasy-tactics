@@ -230,6 +230,27 @@ func test_build_hydrates_cleric_spells_and_mp_from_the_class_definition() -> voi
 	assert_eq(healer.max_health, cleric_def.base_stats.max_health)
 
 
+## Explicit optional MP field (scenario_contract.gd's own doc comment on
+## "mp_current" -- deterministic scenarios never rely on ambient GameSession
+## session state): an explicit scenario mp_current hydrates the built unit at
+## that value instead of always-full, exercising the same durable-not-always-
+## full rule production battle start now follows (see BattleController.
+## _ready()) without touching any adventurer record.
+func test_build_hydrates_a_clerics_mp_from_an_explicit_scenario_value() -> void:
+	var scenario := _normalized({
+		"scenario_id": "cleric_explicit_mp",
+		"player": {"units": [{"id": "healer", "template_id": "cleric", "position": {"x": 0, "y": 0}, "mp_current": 1}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var healer = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(healer.mp_max, 3)
+	assert_eq(healer.mp_remaining, 1, "An explicit scenario mp_current must hydrate the built unit, not the class's full mp_max")
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)

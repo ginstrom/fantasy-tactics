@@ -300,6 +300,130 @@ func test_perks_label_shows_a_legacy_bonus_move_perk_with_its_effect() -> void:
 
 
 
+## --- Durable MP row and "Heal party member" (docs/plans/2026-08-21-
+## stage-2-party-readiness/03-persistent-mp-temple-and-details-healing.md) ---
+
+func test_mp_row_is_hidden_for_a_non_caster() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_false(screen.get_node("Body/Center/VBox/MpLabel").visible)
+
+
+func test_mp_row_shows_current_and_max_mp_for_a_cleric() -> void:
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.set_adventurer_mp("cleric_test", 1)
+	var screen := _open_unit_details("cleric_test")
+
+	var mp_label: Label = screen.get_node("Body/Center/VBox/MpLabel")
+	assert_true(mp_label.visible)
+	assert_eq(mp_label.text, tr("unit_details.mp") % [1, 3])
+
+
+func test_heal_section_is_hidden_for_a_non_caster() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_false(screen.get_node("Body/Center/VBox/HealTargetPicker").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealButton").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealExplanationLabel").visible)
+
+
+## The target picker lists only a legal, damaged target -- a full-health
+## party member is excluded entirely, never offered as a doomed pick (see
+## GameSession.get_legal_heal_targets()'s own doc comment).
+func test_heal_target_picker_lists_only_a_legal_damaged_party_member() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_adventurer_health(GameSession.WARRIOR_ID, 2)
+	var screen := _open_unit_details("cleric_test")
+
+	var picker: OptionButton = screen.get_node("Body/Center/VBox/HealTargetPicker")
+	var button: Button = screen.get_node("Body/Center/VBox/HealButton")
+	assert_true(picker.visible)
+	assert_eq(picker.item_count, 1)
+	assert_eq(picker.get_item_text(0), "Warrior")
+	assert_eq(picker.get_item_metadata(0), GameSession.WARRIOR_ID)
+	assert_true(button.visible)
+	assert_false(button.disabled)
+	assert_false(screen.get_node("Body/Center/VBox/HealExplanationLabel").visible)
+
+
+## Pressing Heal invokes GameSession.heal_party_member() through the button
+## signal -- this screen never assigns health or MP itself -- and refreshes
+## both the target's HP row and the caster's own MP row in place.
+## The Cleric heals itself here (a legal target, see GameSession.
+## _is_legal_heal_target()) so both of this screen's own rows -- its HP
+## (StatsLabel) and its MP (MpLabel) -- are observable on the very page the
+## button lives on, proving refresh() re-reads both after the transaction
+## rather than either being stale until a later navigation.
+func test_pressing_heal_invokes_the_transaction_and_refreshes_both_rows() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_adventurer_health("cleric_test", 2)
+	GameSession.heal_amount_roll = func(_min_value: int, _max_value: int) -> int: return 5
+	var screen := _open_unit_details("cleric_test")
+	var picker: OptionButton = screen.get_node("Body/Center/VBox/HealTargetPicker")
+	assert_eq(picker.get_item_metadata(0), "cleric_test", "The damaged Cleric is its own only legal, useful target here")
+	var button: Button = screen.get_node("Body/Center/VBox/HealButton")
+
+	button.emit_signal("pressed")
+
+	assert_eq(GameSession.get_current_health("cleric_test"), 7)
+	assert_eq(GameSession.get_current_mp("cleric_test"), 2)
+	assert_eq(
+		screen.get_node("Body/Center/VBox/MpLabel").text, tr("unit_details.mp") % [2, 3],
+		"The MP row must refresh in place after healing"
+	)
+	assert_true(
+		screen.get_node("Body/Center/VBox/StatsLabel").text.contains("Hit points: 7 / 12"),
+		"The healed caster's own HP row must refresh in place after healing"
+	)
+	GameSession.reset_injectable_rolls()
+
+
+## No legal, affordable target exists (the sole party member is already at
+## full HP) -- the action must disable itself and explain why rather than
+## offering a target guaranteed to do nothing.
+func test_heal_action_is_disabled_and_explained_when_no_legal_target_exists() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen := _open_unit_details("cleric_test")
+
+	var picker: OptionButton = screen.get_node("Body/Center/VBox/HealTargetPicker")
+	var button: Button = screen.get_node("Body/Center/VBox/HealButton")
+	var explanation: Label = screen.get_node("Body/Center/VBox/HealExplanationLabel")
+	assert_false(picker.visible)
+	assert_true(button.visible, "The disabled action itself must still be present, not merely absent")
+	assert_true(button.disabled)
+	assert_true(explanation.visible)
+	assert_eq(explanation.text, "unit_details.heal_unavailable")
+
+
+## Same disabled-and-explained outcome when the Cleric simply has no MP left,
+## even though a legal, damaged target does exist.
+func test_heal_action_is_disabled_and_explained_when_the_caster_lacks_mp() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.set_adventurer_health(GameSession.WARRIOR_ID, 2)
+	GameSession.set_adventurer_mp("cleric_test", 0)
+	var screen := _open_unit_details("cleric_test")
+
+	var button: Button = screen.get_node("Body/Center/VBox/HealButton")
+	assert_true(button.disabled)
+	assert_true(screen.get_node("Body/Center/VBox/HealExplanationLabel").visible)
+
+
 func test_an_unknown_unit_id_shows_a_not_found_message_and_hides_detail_rows() -> void:
 	var screen := _open_unit_details("no_such_adventurer")
 
@@ -313,6 +437,10 @@ func test_an_unknown_unit_id_shows_a_not_found_message_and_hides_detail_rows() -
 	assert_false(screen.get_node("Body/Center/VBox/PerksLabel").visible)
 	assert_false(screen.get_node("Body/Center/VBox/StatsLabel").visible)
 	assert_false(screen.get_node("Body/Center/VBox/EquipmentLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/MpLabel").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealTargetPicker").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealButton").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealExplanationLabel").visible)
 
 
 func test_an_unknown_unit_id_still_has_a_safe_working_back_button() -> void:
