@@ -58,19 +58,43 @@ Instead of set movement/attack phases, units get a generic action point budget (
 
 ### Healing
 
-Units heal naturally over time, more if they don't move, and more if they are in the encampment. Various buffs can speed healing, including healing potions (found, bought or made). Cleric and Temple healing/protection details remain a deferred campaign-slice decision.
+Units recover 1 HP/2 MP while moving, 2 HP/4 MP while stationary, and 3 HP/6
+MP while in the Encampment each World Map Turn. Each Temple tier adds 1 HP to
+Encampment recovery. Healers can spend their MP from their details view to
+restore a party member's HP in the field or an adventurer's HP at the
+Encampment, creating a useful medic-corps role for Clerics. Healing potions
+and a future mana-recovery potion can speed this recovery. See the
+[Borderlands Campaign Loop](campaign-loop.md#encampment-progression-and-economy-floor)
+for the authoritative recovery rules and deferred healing balance.
 
 ## Party management
 
 The first campaign has exactly one active party. It begins with three
 deployable slots; Guild Hall upgrades raise that to four and then five. The
-initial roster may contain more adventurers than can deploy, but multi-party
-coordination and specialized parties remain future work.
+initial roster may contain more adventurers than can deploy. Multi-party
+coordination is a core strategic design, but remains deferred implementation
+work beyond the first campaign.
 
 A rich unit and party UI is required, inspired by XCOM/Xenonauts: recruitment,
 development/skills/equipment, party formation, and stats.
 
 As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. The Guild Hall provides the first Warrior/Scout recruitment; Temple recruitment and its later Cleric/Paladin path remain deferred campaign-slice work.
+
+## Unit development
+
+Each unit class has a role which can be further developed through perks.
+
+Warriors are all-around damanage dealers, who can specialize into ranged damage delears or front-line damage dealers/absorbers.
+
+Clerics are a support class who can specialize into healers/buff dealers or front-liners with powerful personal buffs that make them very tough (paladins). Paladins are unique in that they require a high Temple tier level in order to be available for recruitment or level-up path.
+
+Mages are very vulnerable but provide offensive buffs and AOE attacks. They can specialize into a pure magic class or a hybrid mage/melee class that covers defensive holes with powerful buffs.
+
+The Scout is an intelligence-gathering/luck-based class that can specialize
+into Ranger or the deferred Rogue. Rangers emphasize Scouting and pre-battle
+information; Rogues are luck-based critical dealers with weaker Scouting. Both
+retain some ability to spot encounters and learn about them before engaging,
+but the Ranger is the scouting specialist.
 
 ## Town management
 
@@ -90,7 +114,12 @@ Town management needs its own rich UI, although a true town-building experience 
 
 ## World map
 
-The world should play somewhat like Civ, although instead of warring against other nations, the player wars against the monster threat. 
+The world should play somewhat like the XCOM world map. Encounter locations
+appear through optional Guild Hall quests or through Scout and Watchtower
+intelligence. The first campaign keeps its one-party implementation boundary;
+the core future model supports multiple independently travelling parties. See
+the [Intelligence System](intelligence.md) and [World Map and
+Encounters](world-map-and-encounters.md).
 
 On the world map, time advances in **Turns** (the unit of time governing encounter repopulation, recruit availability, crafting, etc.). In tactical combat, time advances in **Rounds**. World map turn time is frozen while a party is engaged in an encounter; players can view the map, encampment, and trade, but world turns cannot advance until the battle resolves.
 
@@ -102,6 +131,10 @@ Map risk signal.
 
 ### Fog of war
 
-There is a fog of war on the world map. The city has a fixed vision radius, which can be improved with buildings (watchtowers & upgrades). Beyond the vision radius, information about enemy parties and POIs becomes increasingly vague.
-
-Units also have vision ability, enhanced by various unit capabilities. Scouts should have a major value here which somewhat compensates for their relatively poor combat ability.
+World Map fog of war is location- and intelligence-based, not a geometric city
+vision radius. Each live encounter receives independent, repeated discovery
+checks from the Encampment, eligible Scouts, and Watchtowers. Distance reduces
+the chance multiplicatively; discovered encounters then reveal their details
+in ordered scouting tiers. Scouts therefore have major strategic value even
+when their combat contribution is lower. See the [Intelligence
+System](intelligence.md) for the canonical formulas.

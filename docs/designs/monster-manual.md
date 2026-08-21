@@ -26,7 +26,7 @@ starter gear, before perks or upgraded equipment. They are a compatibility
 baseline for the still-live manual skill-point system, not the target
 automatic-skill progression model:
 
-| Baseline | max_health | accuracy | guard | resistance | mobility | attack |
+| Baseline | max_health | melee | guard | resistance | movement range | attack |
 |---|---:|---:|---:|---:|---:|---|
 | Level 1 Warrior | 10 | 60 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
 | Level 2 Warrior, unspent points | 20 | 60 | 10 | 10% | 3 | Iron Longsword, 1–8 (mean 4.5) |
@@ -50,7 +50,7 @@ Monsters possess all the same tactical attributes as adventurer units, though at
 |---|---|
 | `id`, `name_key` | Stable data and localization identity. |
 | `tier` | Encounter danger grouping; it is not a level. |
-| `max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `mobility` | Shared tactical attributes matching adventurer unit profiles. |
+| `max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `action_points` | Shared tactical attributes matching adventurer unit profiles. |
 | `attacks` | One or more natural/weapon attacks with name, range/tags, and damage range. |
 | `abilities` | Explicit, data-defined behaviours; empty until a slice implements them. |
 | `kill_xp`, `loot_id` | Campaign reward contract. |
@@ -58,14 +58,14 @@ Monsters possess all the same tactical attributes as adventurer units, though at
 
 ## Initial roster — preserve shipped values
 
-The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0`, `spellcasting: 0`, `magic_resistance: 0`, and `mobility: 3`. Attack hit chances map to `melee` (or `missile` for ranged monsters). Its attack damage stays exactly as the current game: documented as a fixed natural/weapon range. This prevents a schema migration from being a stealth rebalance.
+The initial migration gives every monster `might: 0`, `guard: 0`, `resistance: 0`, `spellcasting: 0`, `magic_resistance: 0`, and `action_points: 6`. Attack hit chances map to `melee` (or `missile` for ranged monsters). Its attack damage stays exactly as the current game: documented as a fixed natural/weapon range. This prevents a schema migration from being a stealth rebalance.
 
-| Monster | Tier / role | HP | Melee | Missile | Might | Guard | Resistance | Mobility | Attack | Kill XP |
+| Monster | Tier / role | HP | Melee | Missile | Might | Guard | Resistance | AP | Attack | Kill XP |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|
-| Kobold | 3 / swarm | 6 | 25 | 0 | 0 | 0 | 0% | 3 | Rusty Dagger, 1–1 | 3 |
-| Goblin | 1 / skirmisher | 13 | 30 | 0 | 0 | 0 | 0% | 3 | Short Sword, 2–2 | 5 |
-| Orc | 2 / bruiser | 22 | 50 | 0 | 0 | 0 | 0% | 3 | War Axe, 3–3 | 10 |
-| Hobgoblin | 3 / elite | 30 | 60 | 0 | 0 | 0 | 0% | 3 | Two-Handed Sword, 4–4 | 20 |
+| Kobold | 3 / swarm | 6 | 25 | 0 | 0 | 0 | 0% | 6 | Rusty Dagger, 1–1 | 3 |
+| Goblin | 1 / skirmisher | 13 | 30 | 0 | 0 | 0 | 0% | 6 | Short Sword, 2–2 | 5 |
+| Orc | 2 / bruiser | 22 | 50 | 0 | 0 | 0 | 0% | 6 | War Axe, 3–3 | 10 |
+| Hobgoblin | 3 / elite | 30 | 60 | 0 | 0 | 0 | 0% | 6 | Two-Handed Sword, 4–4 | 20 |
 
 ### What the numbers mean against the baseline
 
@@ -100,7 +100,7 @@ These are a backlog, not spawnable content. Each family must enter through a sep
 |---|---|---|
 | Bandit | armed humanoid mirror | ranged attack or Guard-focused gear |
 | Skeleton | resistant undead | Resistance and Cleric interaction |
-| Wolf | fast flanker | Mobility/pack AI |
+| Wolf | fast flanker | movement/pack AI |
 | Giant Spider | control skirmisher | status effects and cleansing |
 | Ogre | high-health bruiser | multi-unit party encounter pacing |
 | Wraith | magical elite | spells, magical damage, or resistance rules |

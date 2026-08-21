@@ -13,7 +13,12 @@ The design grows a balanced party through four complementary roots, rather than 
 | Cleric | Sustain and protection | Health, Guard, Resistance | Proposed targeted healing/protection; exact slice is deferred. |
 | Mage | Control and burst | spell Accuracy, Action Points | Trades durability for area damage and control. |
 
-Specializations build on a proven root role: Warrior becomes Knight or Archer, Mage becomes Spellcaster or Battle Mage, Cleric becomes Healer or Paladin, and Scout becomes Ranger. A specialization never arrives before its root's core combat loop and counterplay are playable.
+Specializations build on a proven root role: Warrior becomes Knight or Archer,
+Mage becomes Spellcaster or Battle Mage, Cleric becomes Healer or Paladin, and
+Scout becomes Ranger or the deferred Rogue. Ranger prioritizes Scouting and
+pre-battle intelligence; Rogue is a luck-based critical dealer with weaker
+Scouting. A specialization never arrives before its root's core combat loop
+and counterplay are playable.
 
 ## Shared tactical attributes
 
@@ -24,11 +29,11 @@ Character creation rolls primary attributes on a 1–10 scale based on class-spe
 * **Warrior:** Strength 6–8, Intelligence 1–4 (higher Strength & Agility)
 * **Scout:** Strength 4–6, Intelligence 3–5 (higher Agility)
 * **Mage:** Strength 1–3, Intelligence 6–8 (higher Intelligence)
-* **Priest:** Strength 4–5, Intelligence 4–6 (higher Piety)
+* **Cleric:** Strength 4–5, Intelligence 4–6 (higher Piety)
 
 Initial combat skills are calculated directly from primary attributes and class multipliers:
 * **Base hit chance (`melee` and `missile`):** `(agility × 10 × class_multiplier)%`
-  * Class multipliers: Warrior: 1.5, Paladin: 1.25, Scout: 1.0, Priest: 0.8, Mage: 0.5.
+  * Class multipliers: Warrior: 1.5, Paladin: 1.25, Scout: 1.0, Cleric: 0.8, Mage: 0.5.
 * **Max Health:** `vitality × level × perk_modifiers` (e.g., `Robust` and `Tank` perks grant percentage HP bonuses; `Glass Cannon` grants spell damage at the expense of a percentage HP penalty).
 
 | Attribute | Type | Meaning |
@@ -45,6 +50,10 @@ Initial combat skills are calculated directly from primary attributes and class 
 
 `attack_damage`/weapon damage remains an attack property, not a seventh unit attribute. This keeps a sword, a bow, a spell, and a monster bite able to use the same attributes while retaining their own range, damage, and tags.
 
+MP is a separate, class-owned resource rather than a universal combat
+attribute. Only a class with an MP-backed ability has maximum and current MP;
+Healers use it for recovery and healing, while Mage branches use it for spells.
+
 ### Skills leveled up by class
 
 ```
@@ -56,7 +65,8 @@ mage              n/a      n/a     low       n/a     med
 spellcaster       n/a      n/a     low       n/a     hi
 battlemage        low      med     low       low     med
 scout/ranger      low      low     hi        low     n/a
-priest            low      low     low       low     med
+scout/rogue       low      low     med       low     n/a
+cleric            low      low     low       low     med
 healer            low      low     low       low     hi
 paladin           med      med     low       med     med      
 ```
@@ -99,7 +109,7 @@ Primary stats (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck
 | Agility | Rolled 1–10 (high for Warrior & Scout) | Determines base `melee` and `missile` hit % (`agility × 10 × class_multiplier`) and Dodge. |
 | Vitality | Rolled 1–10 (high for Warrior) | Determines `max_health` (`vitality × level × modifiers`). |
 | Intelligence | Rolled 1–10 (Mage 6–8) | Unlocks Mage spells and scales `spellcasting`. |
-| Piety | Rolled 1–10 (Priest 4–6, Paladin high) | Unlocks Cleric/Paladin spells and healing potency. |
+| Piety | Rolled 1–10 (Cleric 4–6, Paladin high) | Unlocks Cleric/Paladin spells and healing potency. |
 | Luck | Rolled 1–10 | Governs critical hits and loot-roll modifiers. |
 
 ## Advancement and perks
@@ -126,11 +136,18 @@ The first implementation slice must define, in class data, each applicable skill
 
 - **Warrior / Knight:** Parry, Shield Bash, Chain Blow, and Thrust. Thrust is the first candidate once penetration exists.
 - **Warrior / Archer:** Lock On, Piercing Arrow, and Called Shot. This branch waits for ranged attacks, line/range rules, and target persistence.
-- **Mage / Spellcaster:** sleep/charm control, elemental damage, and haste. This branch owns MP and spell effects when the Mage slice begins.
+- **Mage / Spellcaster:** sleep/charm control, elemental damage, and haste.
+  This branch adds its own MP-backed offensive and control spell effects when
+  the Mage slice begins.
 - **Mage / Battle Mage:** elemental attacks, temporary Guard, and enchanted weapon penetration.
-- **Cleric / Healer:** healing, defensive buffs, curses, and paralysis.
+- **Cleric / Healer:** healing, defensive buffs, curses, and paralysis. A
+  Healer's details view can spend MP to heal a deployed party member or an
+  adventurer at the Encampment; its exact heal amount and MP cost are deferred
+  balance data.
 - **Cleric / Paladin:** Temple-gated recruitment, holy melee, and boons.
 - **Scout / Ranger:** scouting, pre-battle enemy information, and Hunter's Mark. The first Ranger slice must make scouting information useful before adding its deeper perk tree.
+- **Scout / Rogue (Deferred):** luck-based critical perks and loot benefits;
+  weaker Scouting than Ranger. Rogue must not be presented as a current class.
 
 ## Incremental delivery roadmap
 
@@ -141,8 +158,8 @@ Every slice must add an encounter pattern that rewards its role, automated comba
 | 0 — **Shipped** | Warrior | adjacent attack, gear, health, accuracy, defense/resistance, movement | One Warrior can fight current monsters at their documented roles. |
 | 1 | Warrior | generic AP, potion action foundation, item-instance contract | AP choices must be readable and retain a three-tile move plus attack option. |
 | 2 | Warrior + Scout/Ranger | ranged attacks, range/line-of-sight, basic scouting | Ranger pressure is valuable but cannot replace a front line. |
-| 3 | + Cleric/Healer | targeted healing, protection, durations | Healing offsets attrition but cannot make a Warrior unkillable. |
-| 4 | + Mage/Spellcaster | MP, spells, area/control effects | Mage has powerful output/control but poor durability and limited resources. |
+| 3 | + Cleric/Healer | MP-backed targeted healing, protection, durations | Healing offsets attrition but cannot make a Warrior unkillable. |
+| 4 | + Mage/Spellcaster | MP-backed spells, area/control effects | Mage has powerful output/control but poor durability and limited resources. |
 | 5 | root specializations | Knight, Archer, Battle Mage, Paladin | Each specialization changes decisions, not merely a percentage bonus. |
 | 6 | advanced perk branches | reactions, penetration, marks, cooldowns, multi-target effects | Effects have clear counters, stack limits, and scenario coverage. |
 

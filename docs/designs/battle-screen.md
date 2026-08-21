@@ -44,8 +44,11 @@ attack. The full range beyond my move-and-attack range is shown in yellow.
 ## Retreat
 
 The bottom panel has a **Retreat** button at its lower left, alongside Move,
-Action, and End Turn. Retreat is a campaign-level battle-resolution action,
-not an AP action. It ends the encounter, discards unbanked/pending rewards,
-and applies the nearest-enemy retreat consequence defined in the
+Action, and End Turn. This is **Battle Retreat**, a campaign-level
+battle-resolution action rather than an AP action. It ends the encounter,
+discards unbanked/pending rewards, and applies the nearest-enemy consequence
+defined in the
 [Borderlands Campaign Loop](campaign-loop.md#defeat-death-and-retreat).
-The player remains over the encounter location after retreat.
+Survivors remain at the encounter location with a committed route to the
+Encampment. The distinct pre-battle **Withdraw** action is defined in [World
+Map and Encounters](world-map-and-encounters.md#arrival-and-withdrawal).

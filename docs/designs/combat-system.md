@@ -114,14 +114,19 @@ Action points are a generic budget (fixed base of 6 AP per unit per Round) used 
 Players do not have omniscient vision of the battlefield. Visibility is limited to the units' line of sight (assuming 360-degree view). Out-of-sight areas grow "stale."
 
 ### Enemy Info
-The accuracy and detail of enemy status may depend on proximity and the party's
-best scouting score. Exact Scout reconnaissance reveals and UI rules are
-deferred; see [Borderlands Campaign Loop](campaign-loop.md#deferred-roadmap-decisions).
+The accuracy and detail of enemy status depend on the accumulated strategic
+intelligence for the encounter. See the [Intelligence System](intelligence.md)
+for discovery, distance falloff, and ordered Scout reveals.
 
 ## Conditions, Wounds, and Status Effects
 
 Conditions and debuffs alter combat attributes.
 * **Spells & Perks:** Apply temporary combat bonuses or penalties.
 * **Wounds:** Physical degradation based on current health:
-  * **50% or less Max HP:** -10% to all combat stats, available AP, and world map movement speed.
-  * **Under 20% Max HP:** -25% to all combat stats, available AP, and world map movement speed.
+  * **50% or less Max HP:** 90% of all combat stats, available AP, and world map movement speed.
+  * **Under 20% Max HP:** 75% of all combat stats, available AP, and world map movement speed.
+
+Only the most severe applicable wound band applies. When a wound modifies an
+integer value, including available AP, calculate `floor(base_value * wound
+multiplier)`. A base 6 AP therefore becomes 5 AP at 50% HP or less and 4 AP
+under 20% HP.

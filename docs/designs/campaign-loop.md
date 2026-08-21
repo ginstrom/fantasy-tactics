@@ -62,15 +62,32 @@ concrete unlock.
 | Hub | Contract role |
 |---|---|
 | Guild Hall | General Warrior/Scout recruitment and party capacity. Tier 1 permits 10 roster members and 4 offers; tier 2 permits 15 and 6. When an arriving offer would exceed the cap, remove the oldest offer. |
-| Temple | Future Cleric recruitment and one blessing. Exact Cleric/Temple feature scope is deferred. |
+| Temple | Cleric recruitment and recovery support. Each Temple tier adds 1 HP to Encampment natural recovery per World Map Turn; it does not change MP recovery. |
 | Blacksmith and Workshops | Physical gear, potions, and rune upgrades; see the Equipment Handbook. |
 | Shop and Stores | Sells loot and buys basic gear/provisions. It grants 2 gold per World Map Turn at tier 1, 5 at tier 2, and 10 at tier 3; the tier-3 contract includes 2–8 HP healing potions costing 20 gold. |
 
-World Map Turns advance healing, jobs, recruitment vacancies, and Shop income
-even with no deployable party. The campaign must always permit an affordable
-level-1 replacement and an accessible way to advance recovery after bankruptcy
-or a wipe. Zero-gold, no-party, repeated-retreat, and wipe states must lead to
-a legal replacement party rather than a soft lock.
+World Map Turns advance recovery, jobs, recruitment vacancies, and Shop income
+even with no deployable party. Natural recovery is per adventurer, per World
+Map Turn: a moving deployed adventurer recovers **1 HP and 2 MP**; a stationary
+deployed adventurer recovers **2 HP and 4 MP**; and an adventurer at the
+Encampment recovers **3 HP and 6 MP**, plus **1 HP for each Temple tier**. Thus
+an Encampment with a tier-2 Temple restores 5 HP and 6 MP per turn. Recovery
+cannot exceed the adventurer's maximum HP or MP.
+
+A Healer is a deliberate recovery accelerator. The Healer's details view must
+offer **Heal party member**: it targets a member of that Healer's deployed
+party, or an adventurer at the Encampment when the Healer is encamped, and
+spends the Healer's available MP to restore HP. Exact MP cost and HP restored
+are deferred balance data. A future mana-recovery potion joins the healing
+potion line to speed MP recovery.
+
+Passing a World Map Turn is a legal, intentional recovery action, not a free
+pause: it advances every stated world-turn system, including jobs, vacancies,
+Shop income, and accepted Guild Hall quest timers. Future unquested-encounter
+escalation will add further time pressure. The campaign must always permit an
+affordable level-1 replacement and an accessible way to advance recovery after
+bankruptcy or a wipe. Zero-gold, no-party, repeated-retreat, and wipe states
+must lead to a legal replacement party rather than a soft lock.
 
 ## Defeat, death, and retreat
 
@@ -81,7 +98,8 @@ after a successful retreat, that loot returns to the Encampment bank. A dead
 id must not remain in party membership, item ownership, save data, or
 battle-aftermath input.
 
-Retreat is an explicit player action. It ends the battle, discards all
+**Battle Retreat** is an explicit player action available only after entering
+the Battlefield. It ends the battle, discards all
 unbanked/pending rewards, applies the nearest-enemy consequence below to each
 surviving party member, and leaves the party at the encounter location.
 
@@ -91,8 +109,14 @@ surviving party member, and leaves the party at the encounter location.
 | 4–6 | 20% | 50% | 10% | 10% |
 | 7+ | 50% | 30% | 10% | 10% |
 
-The distance is measured when retreat resolves. Each row is a complete,
-mutually exclusive outcome distribution and totals 100%.
+The distance is measured when Battle Retreat resolves. Each row is a complete,
+mutually exclusive per-unit outcome distribution and totals 100%.
+
+After Battle Retreat, surviving members appear on the World Map at the
+encounter location with their destination set to the Encampment. They travel
+home over subsequent World Map Turns. The lower-risk pre-battle **Withdraw**
+action is defined separately in [World Map and
+Encounters](world-map-and-encounters.md#arrival-and-withdrawal).
 
 A party wipe returns the party to the Encampment, permanently resolves deaths,
 and loses all gold and loot. It also discards unbanked/pending rewards. It must
@@ -102,12 +126,14 @@ not erase completed campaign objectives or upgrades.
 
 The following are intentionally not implementation contracts yet:
 
-- **Scout reconnaissance (D6):** the roadmap target is pre-battle information
-  about enemy types/counts, danger tier, and reward categories, but its exact
-  reveal and UI rules remain to be decided.
-- **Cleric and Temple scope (D7):** a targeted in-battle heal and temporary
-  protection are the proposed first slice, without a broad spell tree; final
-  costs, targeting, and Temple integration remain to be decided.
+- **Scout reconnaissance (D6):** discovery, scouting reveals, Watchtowers,
+  and optional Guild Hall quests are defined in the [Intelligence
+  System](intelligence.md). Their multi-party and time-escalation portions
+  remain deferred from the first campaign implementation.
+- **Cleric and Temple scope (D7):** the recovery and details-view healing
+  contract above is locked. A targeted in-battle heal and temporary protection
+  remain the proposed first slice; final spell costs, HP values, targeting, and
+  broader Temple effects remain to be decided.
 - **Final encounter and free-play presentation (D8):** victory is required,
   but the final composition, reward presentation, and free-play details remain
   to be decided.
@@ -123,6 +149,8 @@ The following are intentionally not implementation contracts yet:
 - [Battle Screen](battle-screen.md) places the Retreat control and tactical
   controls.
 - [Combat System](combat-system.md) defines round-level combat rules.
+- [Intelligence System](intelligence.md) defines discovery, scouting, and
+  optional quest intelligence.
 - [Classes](class-system.md), [Monster Manual](monster-manual.md), and the
   [Equipment Handbook](equipment-handbook.md) define the tactical choices that
   authored encounters and recovery use.
