@@ -2159,6 +2159,114 @@ func test_resolve_battle_deaths_only_transfers_the_dead_units_own_gear() -> void
 	)
 
 
+## Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: pre-battle
+## Withdraw (withdraw_from_encounter()) -- a nonlethal alternative to
+## entering an authored/sandbox encounter, available only before Battlefield
+## is ever reached.
+
+func test_withdraw_from_encounter_rolls_once_per_living_deployed_member_and_can_apply_no_loss() -> void:
+	GameSession.reset()
+	var survivor_id: String = GameSession.adventurers[1].id
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.assign_adventurer_to_selected_party(survivor_id)
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	# An Array, not a plain int, since GDScript lambdas capture a local int by
+	# value -- an in-lambda increment would never be visible out here.
+	var roll_calls := [0]
+	var no_loss_roll := func() -> float:
+		roll_calls[0] += 1
+		return 0.0
+
+	var results: Array[Dictionary] = GameSession.withdraw_from_encounter(encounter_id, no_loss_roll)
+
+	assert_eq(roll_calls[0], 2, "One roll per living deployed member")
+	assert_eq(results.size(), 2)
+	assert_eq(GameSession.get_current_health("warrior_001"), 10, "A roll below 0.90 must leave health untouched")
+	assert_eq(GameSession.get_current_health(survivor_id), GameSession.get_effective_max_health(survivor_id))
+
+
+func test_withdraw_from_encounter_applies_a_rounded_up_ten_percent_loss_that_cannot_kill() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	var high_roll := func() -> float: return 0.95
+
+	var results: Array[Dictionary] = GameSession.withdraw_from_encounter(encounter_id, high_roll)
+
+	# warrior_001's 10 max health -> ceili(10 * 0.10) == 1 lost, never below 1 HP.
+	assert_eq(GameSession.get_current_health("warrior_001"), 9)
+	assert_eq(results.size(), 1)
+	assert_eq(results[0].id, "warrior_001")
+	assert_eq(results[0].previous_health, 10)
+	assert_eq(results[0].new_health, 9)
+
+
+func test_withdraw_from_encounter_preserves_the_objective_and_records_a_homeward_route() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	var pending_reward_before := GameSession.pending_reward
+	var pending_gear_before := GameSession.pending_gear.duplicate(true)
+	var battle_reward_before := GameSession.battle_reward
+
+	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+
+	assert_eq(GameSession.campaign_objective_id, encounter_id, "The current objective must remain current")
+	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain enterable")
+	assert_false(GameSession.is_encounter_complete(encounter_id))
+	assert_eq(GameSession.pending_reward, pending_reward_before, "Withdraw must not touch reward buckets")
+	assert_eq(GameSession.pending_gear, pending_gear_before)
+	assert_eq(GameSession.battle_reward, battle_reward_before)
+	var route := GameSession.get_deployed_party_route()
+	assert_false(route.is_empty(), "A homeward route must be recorded")
+	assert_eq(
+		route[route.size() - 1], GameSession.STARTING_SETTLEMENT_WORLD_POSITION,
+		"The recorded route must lead to the settlement"
+	)
+
+
+func test_withdraw_from_encounter_is_a_no_op_when_the_party_is_not_at_the_encounter() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+
+	var results: Array[Dictionary] = GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+
+	assert_true(results.is_empty())
+	assert_eq(GameSession.get_current_health("warrior_001"), 10, "Health must be untouched")
+	assert_true(GameSession.get_deployed_party_route().is_empty(), "No route may be recorded")
+
+
+func test_withdraw_from_encounter_is_a_no_op_once_a_battle_is_already_selected() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	GameSession.enter_encounter(encounter_id)
+
+	var results: Array[Dictionary] = GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+
+	assert_true(results.is_empty())
+	assert_eq(GameSession.selected_encounter, encounter_id, "The active battle selection must be untouched")
+
+
 ## deposit_pending_reward() -- the existing party-to-Encampment settlement
 ## transition -- is the only thing that ever banks recovered permadeath
 ## loot; resolve_battle_deaths() alone never reaches banked_gear/banked_

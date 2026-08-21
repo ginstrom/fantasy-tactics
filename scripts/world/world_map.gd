@@ -55,6 +55,13 @@ var repathing: bool = false
 ## encounter while mid-route-planning never clobbers the party summary.
 var hovered_encounter_id: String = ""
 
+## The encounter_activated id awaiting a player choice on the arrival panel,
+## or "" when the panel is closed (see _on_encounter_activated()/_close_
+## arrival_panel()). Both the Enter and Withdraw handlers read this instead
+## of re-deriving the id from party_position, since the panel may still be
+## open after a later click elsewhere moved party_position on.
+var pending_arrival_encounter_id: String = ""
+
 @onready var board: Node2D = $Board
 @onready var tile_container: Node2D = $Board/Tiles
 @onready var highlight_container: Node2D = $Board/Highlights
@@ -65,6 +72,8 @@ var hovered_encounter_id: String = ""
 @onready var information_panel: PanelContainer = %InformationPanel
 @onready var campaign_guide: PanelContainer = %CampaignGuide
 @onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
+@onready var hint_label: Label = %Hint
+@onready var arrival_panel: PanelContainer = %ArrivalPanel
 
 
 func _ready() -> void:
@@ -389,8 +398,41 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_refresh_campaign_guide()
 
 
+## Pre-battle Withdraw (docs/plans/2026-08-21-stage-1-campaign-spine/
+## 01-pre-battle-withdraw.md): arrival at an available encounter now opens
+## the arrival panel instead of entering battle directly -- Enter/Withdraw/
+## Cancel below decide what happens next.
 func _on_encounter_activated(encounter_id: String) -> void:
+	pending_arrival_encounter_id = encounter_id
+	arrival_panel.visible = true
+
+
+func _on_arrival_enter_pressed() -> void:
+	var encounter_id := pending_arrival_encounter_id
+	_close_arrival_panel()
 	GameManager.enter_battle(encounter_id)
+
+
+func _on_arrival_withdraw_pressed() -> void:
+	var encounter_id := pending_arrival_encounter_id
+	_close_arrival_panel()
+	if GameManager.withdraw_from_encounter(encounter_id) == OK:
+		hint_label.text = tr("world_map.arrival.withdraw_summary")
+	party_position = GameSession.get_deployed_party_position()
+	_draw_markers()
+	_draw_routes()
+	_update_highlights()
+	_refresh_information_panel()
+	_refresh_campaign_guide()
+
+
+func _on_arrival_cancel_pressed() -> void:
+	_close_arrival_panel()
+
+
+func _close_arrival_panel() -> void:
+	pending_arrival_encounter_id = ""
+	arrival_panel.visible = false
 
 
 func _on_settlement_activated(_location_id: String) -> void:

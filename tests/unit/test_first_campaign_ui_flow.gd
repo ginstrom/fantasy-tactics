@@ -146,6 +146,12 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	assert_true(world_map.party_selected, "First click on the camp must select, not enter")
 	world_map._handle_tile_click(world_map.party_position)
 
+	# Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: arrival now
+	# offers the Enter/Withdraw panel instead of entering battle immediately
+	# -- a real player presses Enter to proceed exactly as this does.
+	assert_true(world_map.get_node("%ArrivalPanel").visible, "Arrival must offer the Enter/Withdraw panel")
+	world_map.get_node("%EnterButton").pressed.emit()
+
 	assert_eq(GameSession.selected_encounter, GameSession.GOBLIN_CAMP_ID)
 
 	# Complete battle: defeat the goblin via the real board-click path (not

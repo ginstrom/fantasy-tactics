@@ -527,6 +527,45 @@ func test_retreat_from_battle_wipe_routes_home_and_forfeits_loot() -> void:
 	assert_eq(GameSession.gold, 0)
 
 
+## Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: withdraw_from_
+## encounter() is the thin manager wrapper over GameSession.withdraw_from_
+## encounter() -- see that function's own doc comment for the HP/route rules
+## this wrapper deliberately does not reimplement.
+func test_withdraw_from_encounter_routes_the_deployed_party_home_without_entering_battle() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var result: Error = manager.withdraw_from_encounter(encounter_id)
+
+	assert_eq(result, OK)
+	assert_eq(GameSession.selected_encounter, "", "Withdraw must never select the encounter for battle")
+	assert_false(GameSession.get_deployed_party_route().is_empty(), "A homeward route must be recorded")
+	assert_true(GameSession.has_deployed_party(), "The party must not be teleported home")
+	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain enterable")
+
+
+func test_withdraw_from_encounter_is_a_no_op_for_an_out_of_position_encounter() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var result: Error = manager.withdraw_from_encounter("obj_tier1_1_goblin_outpost")
+
+	assert_eq(result, ERR_INVALID_DATA)
+	assert_true(GameSession.get_deployed_party_route().is_empty(), "Session routing must be untouched")
+	assert_eq(GameSession.get_current_health("warrior_001"), 10, "Session health must be untouched")
+
+
 func test_apply_super_power_reports_unavailable_without_an_active_battlefield() -> void:
 	assert_eq(GameManager.apply_super_power(), ERR_UNAVAILABLE)
 

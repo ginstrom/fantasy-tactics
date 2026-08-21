@@ -1563,3 +1563,77 @@ func test_encounter_label_stays_in_the_default_palette_when_unrevealed() -> void
 
 	assert_eq(label.text, "")
 	assert_false(label.has_theme_color_override("font_color"))
+
+
+## --- Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: pre-battle
+## Withdraw's arrival panel. encounter_activated must no longer enter battle
+## directly -- see _on_encounter_activated() in world_map.gd -- so these use
+## the real packed scene (its [connection] block wires the signal) and press
+## real button signals, not direct method calls, to prove the .tscn wiring
+## itself.
+
+func test_activating_an_encounter_via_the_real_scene_shows_the_arrival_panel_instead_of_entering_battle() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	assert_false(panel.visible, "The panel must start hidden")
+
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_true(panel.visible, "Arriving at an available encounter must offer the panel")
+	assert_eq(GameSession.selected_encounter, "", "Showing the panel must not itself enter battle")
+
+
+func test_pressing_withdraw_on_the_arrival_panel_records_a_homeward_route_and_closes_the_panel() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	var withdraw_button: Button = world_map.get_node("%WithdrawButton")
+
+	withdraw_button.pressed.emit()
+
+	assert_false(panel.visible, "Withdraw must close the panel")
+	assert_false(GameSession.get_deployed_party_route().is_empty(), "Withdraw must record a homeward route")
+	assert_eq(GameSession.selected_encounter, "", "Withdraw must never enter battle")
+	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain available")
+
+
+func test_pressing_cancel_on_the_arrival_panel_changes_nothing() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	var cancel_button: Button = world_map.get_node("%CancelButton")
+
+	cancel_button.pressed.emit()
+
+	assert_false(panel.visible, "Cancel must close the panel")
+	assert_true(GameSession.get_deployed_party_route().is_empty(), "Cancel must not record a route")
+	assert_eq(GameSession.selected_encounter, "", "Cancel must not enter battle")
+	assert_true(GameSession.can_enter_encounter(encounter_id))
+
+
+func test_pressing_enter_on_the_arrival_panel_reaches_the_existing_battle_entry_path() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	var enter_button: Button = world_map.get_node("%EnterButton")
+
+	enter_button.pressed.emit()
+
+	assert_eq(GameSession.selected_encounter, encounter_id, "Enter must reach the existing battle-entry path")
+	assert_false(panel.visible, "Entering battle must close the arrival panel")

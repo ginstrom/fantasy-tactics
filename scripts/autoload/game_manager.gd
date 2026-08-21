@@ -175,6 +175,20 @@ func enter_battle(encounter_id: String) -> Error:
 	return _change_scene(BATTLEFIELD_SCENE)
 
 
+## Pre-battle Withdraw's thin manager wrapper (docs/plans/2026-08-21-stage-1-
+## campaign-spine/01-pre-battle-withdraw.md): all HP and route mutation lives
+## in GameSession.withdraw_from_encounter() -- this only forwards the call
+## and reports whether it actually resolved, so World Map's arrival panel
+## can tell a real withdrawal apart from a stale/out-of-position request. It
+## never changes scene -- the caller is already on World Map -- and so can
+## never load Battlefield.
+func withdraw_from_encounter(encounter_id: String) -> Error:
+	var results: Array[Dictionary] = GameSession.withdraw_from_encounter(
+		encounter_id, func() -> float: return randf()
+	)
+	return OK if not results.is_empty() else ERR_INVALID_DATA
+
+
 func complete_battle() -> Error:
 	GameSession.complete_current_encounter()
 	return go_to_world_map()

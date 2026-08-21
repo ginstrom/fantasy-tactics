@@ -1811,6 +1811,64 @@ func abandon_current_encounter() -> void:
 	selected_encounter = ""
 
 
+## Pre-battle Withdraw (docs/plans/2026-08-21-stage-1-campaign-spine/
+## 01-pre-battle-withdraw.md): a nonlethal alternative to entering
+## encounter_id, available only before Battlefield is ever reached. Returns
+## an empty array (no mutation at all) unless the deployed party is standing
+## on encounter_id, encounter_id is currently enterable, and no battle is
+## already selected. Otherwise rolls once per living deployed member via
+## roll.call(): a result below 0.90 leaves health untouched; 0.90 or above
+## subtracts ceili(max_health * 0.10), clamped to a minimum of 1 HP by
+## set_adventurer_health()'s own clamp, so Withdraw can never kill. Clears no
+## campaign/objective/reward state and leaves encounter_id itself untouched
+## (still enterable afterward); only records a route home so the party must
+## still walk it back one World Map Turn at a time, exactly like a
+## player-planned route -- unlike return_deployed_party_to_settlement()'s
+## instant teleport, which this deliberately does not call. Returns one
+## {id, previous_health, new_health} Dictionary per rolled member for UI
+## feedback.
+func withdraw_from_encounter(encounter_id: String, roll: Callable) -> Array[Dictionary]:
+	if not has_deployed_party() or selected_encounter != "":
+		return []
+	if not can_enter_encounter(encounter_id):
+		return []
+	var expedition := get_expedition(encounter_id)
+	if not expedition.has("position") or expedition.position != get_deployed_party_position():
+		return []
+
+	var results: Array[Dictionary] = []
+	for member_id in get_selected_party().member_ids:
+		var previous_health := get_current_health(member_id)
+		var new_health := previous_health
+		if roll.call() >= 0.90:
+			var max_health := get_effective_max_health(member_id)
+			set_adventurer_health(member_id, previous_health - ceili(max_health * 0.10))
+			new_health = get_current_health(member_id)
+		results.append({"id": member_id, "previous_health": previous_health, "new_health": new_health})
+
+	set_deployed_party_route(_build_route_to_settlement())
+	return results
+
+
+## Manhattan-step route builder mirroring world_map.gd's build_route(): pure
+## grid-agnostic path construction (see WORLD_GRID_WIDTH/HEIGHT above) is
+## duplicated here rather than reused because GameSession owns no Grid
+## instance -- only World Map's own script holds one, for on-screen bounds
+## validation this call site never needs (both endpoints are always
+## in-bounds authored/settlement positions).
+func _build_route_to_settlement() -> Array[Vector2i]:
+	var route: Array[Vector2i] = []
+	var current := get_deployed_party_position()
+	var destination := STARTING_SETTLEMENT_WORLD_POSITION
+	while current.x != destination.x:
+		current.x += 1 if destination.x > current.x else -1
+		route.append(current)
+	while current.y != destination.y:
+		current.y += 1 if destination.y > current.y else -1
+		route.append(current)
+	return route
+
+
 ## A duplicate of the current node's CAMPAIGN_OBJECTIVES entry, or {} once
 ## the campaign is complete (campaign_objective_id is "" from that point on
 ## -- see complete_campaign_objective()).

@@ -176,6 +176,14 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("world_map.end_turn"), "End Turn")
 	assert_eq(tr("world_map.turn") % 3, "Turn 3")
 	assert_eq(tr("world_map.arrival_turns") % 8, "8 turns to arrival")
+	assert_eq(tr("world_map.arrival.title"), "Encounter Sighted")
+	assert_eq(tr("world_map.arrival.enter"), "Enter")
+	assert_eq(tr("world_map.arrival.withdraw"), "Withdraw")
+	assert_eq(tr("world_map.arrival.cancel"), "Cancel")
+	assert_eq(
+		tr("world_map.arrival.withdraw_summary"),
+		"The party withdraws safely and starts the journey home."
+	)
 	assert_eq(tr("expedition.goblin_camp.name"), "Goblin Camp")
 	assert_eq(tr("expedition.orc_outpost.name"), "Orc Outpost")
 	assert_eq(tr("battle.enemy.goblin"), "Goblin")
@@ -416,6 +424,20 @@ func test_world_map_end_turn_button_uses_translation_key_not_literal_copy() -> v
 	add_child_autofree(world_map)
 
 	assert_eq(world_map.get_node("%EndTurnButton").text, "world_map.end_turn")
+
+
+## Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: the arrival
+## panel's static copy must be authored as translation keys, exactly like
+## the Hint/EndTurnButton pattern above -- the panel's default hidden state
+## does not require deploying a party at an encounter to check its labels.
+func test_world_map_arrival_panel_uses_translation_keys_not_literal_copy() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.get_node("%ArrivalTitle").text, "world_map.arrival.title")
+	assert_eq(world_map.get_node("%EnterButton").text, "world_map.arrival.enter")
+	assert_eq(world_map.get_node("%WithdrawButton").text, "world_map.arrival.withdraw")
+	assert_eq(world_map.get_node("%CancelButton").text, "world_map.arrival.cancel")
 
 
 func test_world_map_turn_label_is_built_from_translated_copy() -> void:
