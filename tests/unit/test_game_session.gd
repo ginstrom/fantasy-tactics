@@ -2351,29 +2351,41 @@ func test_end_world_turn_applies_natural_recovery_based_on_encamped_resting_and_
 	assert_eq(session.get_current_health("warrior_001"), 10)
 
 
-func test_choose_perk_accepts_bonus_move_only_once_and_only_when_pending() -> void:
+## Perk selection (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): choose_perk() only ever accepts one of
+## the adventurer's own class's two locked perks (docs/designs/class-
+## system.md's "Stage 2 locked perk set"), only once a slot is pending, and
+## only once per perk. Every scenario below is a red/green rejection that
+## must leave progression.perks completely untouched.
+
+func test_choose_perk_accepts_a_class_owned_perk_only_once_and_only_when_pending() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
 	session.assign_adventurer_to_selected_party("warrior_001")
 
 	assert_false(
-		session.choose_perk("warrior_001", "bonus_move"),
-		"A perk cannot be chosen before it is pending"
+		session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID),
+		"A perk cannot be chosen before any slot is pending (level 1, no interval reached yet)"
 	)
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
 	assert_true(session.is_perk_choice_pending("warrior_001"))
 
-	assert_true(session.choose_perk("warrior_001", "bonus_move"))
-	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
-	assert_false(session.is_perk_choice_pending("warrior_001"), "Choosing the perk resolves the pending choice")
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID))
+	assert_eq(
+		session.get_adventurer("warrior_001").progression.perks, [GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID]
+	)
 
 	assert_false(
-		session.choose_perk("warrior_001", "bonus_move"),
-		"The same perk cannot be chosen a second time"
+		session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID),
+		"The same perk cannot be chosen a second time (duplicate selection)"
 	)
-	assert_eq(session.get_adventurer("warrior_001").progression.perks, ["bonus_move"])
+	assert_eq(
+		session.get_adventurer("warrior_001").progression.perks, [GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID],
+		"A rejected duplicate selection leaves progression.perks unchanged"
+	)
 
 
 func test_choose_perk_rejects_an_unknown_perk_id() -> void:
@@ -2385,6 +2397,155 @@ func test_choose_perk_rejects_an_unknown_perk_id() -> void:
 
 	assert_false(session.choose_perk("warrior_001", "no_such_perk"))
 	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
+
+
+## bonus_move is retired from new choices for every class (docs/designs/
+## class-system.md), including a Warrior, who has no class-owned AP perk of
+## its own to conflict with it -- retirement is unconditional, not merely
+## "unless nothing else offers this effect".
+func test_choose_perk_rejects_bonus_move_as_a_new_choice() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_false(session.choose_perk("warrior_001", GameSessionScript.BONUS_MOVE_PERK_ID))
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
+
+
+func test_choose_perk_rejects_a_perk_belonging_to_a_different_class() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
+
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID),
+		"A Warrior cannot choose a Scout-owned perk"
+	)
+	assert_eq(session.get_adventurer("warrior_001").progression.perks, [])
+
+
+## progression.perk_tree_size (2) caps how many slots ever open, even though
+## PERK_LEVEL_INTERVAL alone would open a third at level 9 -- once both of a
+## class's perks are chosen, is_perk_choice_pending() must stay false
+## permanently, and every further choose_perk() call (whether the id is
+## already-owned or simply unavailable) must leave state unchanged.
+func test_is_perk_choice_pending_and_choose_perk_stay_locked_once_both_class_slots_are_spent() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)  # crosses the level 6 threshold (200 XP)
+
+	assert_eq(session.get_adventurer("warrior_001").level, 6)
+	assert_true(session.is_perk_choice_pending("warrior_001"), "Level 6 earns both of a Warrior's two locked slots")
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID))
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID))
+	assert_false(session.is_perk_choice_pending("warrior_001"), "Both slots are now spent")
+	assert_eq(session.get_available_perks("warrior_001"), [] as Array[String])
+
+	# Award enough further XP to cross level 9 (the third PERK_LEVEL_INTERVAL
+	# multiple) -- PERK_TREE_SIZE must still cap this at zero new slots.
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 250.0)
+	assert_eq(session.get_adventurer("warrior_001").level, 9)
+	assert_false(
+		session.is_perk_choice_pending("warrior_001"),
+		"A class with only two locked perks never opens a third slot, however high level climbs"
+	)
+	assert_false(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID))
+	assert_eq(
+		session.get_adventurer("warrior_001").progression.perks,
+		[GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID],
+		"A rejected full-slot selection leaves progression.perks unchanged"
+	)
+
+
+## get_available_perks() is scoped to exactly the calling adventurer's own
+## class -- a pure data query, independent of level or of whether a slot is
+## currently pending -- and never lists an already-chosen perk again.
+func test_get_available_perks_lists_only_the_adventurers_own_class_perks_not_yet_chosen() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+
+	# get_available_perks() is a pure "which of this class's perks are not
+	# yet chosen" query -- it does not itself gate on is_perk_choice_pending()
+	# (that is level_up.gd's own job before ever calling it, see its
+	# _refresh_perk_options()), so both scout perks already list here even
+	# at level 1.
+	assert_eq(
+		session.get_available_perks("scout_test"),
+		[GameSessionScript.SCOUT_QUICKDRAW_PERK_ID, GameSessionScript.SCOUT_KEEN_EYES_PERK_ID],
+		"A Scout sees only its own two class perks, neither yet chosen"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3
+
+	session.choose_perk("scout_test", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID)
+	assert_eq(
+		session.get_available_perks("scout_test"),
+		[GameSessionScript.SCOUT_KEEN_EYES_PERK_ID],
+		"An already-chosen perk is never offered again"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 150.0)  # level 6 (200 total XP)
+	assert_eq(session.get_adventurer("scout_test").level, 6)
+	assert_eq(
+		session.get_available_perks("scout_test"),
+		[GameSessionScript.SCOUT_KEEN_EYES_PERK_ID],
+		"The unchosen Keen Eyes perk remains available at the second slot"
+	)
+
+
+## Legacy compatibility (docs/designs/class-system.md): an adventurer who
+## already holds the retired universal bonus_move perk is never migrated --
+## it keeps its own effect exactly as before, sits alongside the class-owned
+## perks as a "third" perk, and critically never consumes one of the two new
+## class-owned slots. A Scout is used here (rather than a Warrior/Cleric,
+## neither of whom has any class-owned AP perk) specifically because it lets
+## bonus_move's flat +1 AP and Quickdraw's own configured AP bonus stack
+## independently, proving they are tracked as genuinely separate bonuses.
+func test_legacy_bonus_move_holder_is_not_migrated_and_still_earns_both_class_perk_slots() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	scout.progression.perks.append(GameSessionScript.BONUS_MOVE_PERK_ID)
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	assert_eq(session.get_effective_action_points("scout_test"), 7, "The pre-existing bonus_move perk already applies")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)  # level 6: two locked slots earned
+	assert_eq(session.get_adventurer("scout_test").level, 6)
+	assert_true(
+		session.is_perk_choice_pending("scout_test"),
+		"bonus_move must not have silently consumed either of the two new class slots"
+	)
+	assert_eq(
+		session.get_available_perks("scout_test"),
+		[GameSessionScript.SCOUT_QUICKDRAW_PERK_ID, GameSessionScript.SCOUT_KEEN_EYES_PERK_ID]
+	)
+
+	assert_true(session.choose_perk("scout_test", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID))
+	assert_true(session.choose_perk("scout_test", GameSessionScript.SCOUT_KEEN_EYES_PERK_ID))
+	assert_false(session.is_perk_choice_pending("scout_test"), "Both of the Scout's own slots are now spent")
+	assert_eq(
+		session.get_adventurer("scout_test").progression.perks,
+		[
+			GameSessionScript.BONUS_MOVE_PERK_ID, GameSessionScript.SCOUT_QUICKDRAW_PERK_ID,
+			GameSessionScript.SCOUT_KEEN_EYES_PERK_ID,
+		]
+	)
+	assert_eq(
+		session.get_effective_action_points("scout_test"), 8,
+		"bonus_move's +1 and Quickdraw's own +1 stack independently: 6 base + 1 + 1"
+	)
 
 
 func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
@@ -2425,7 +2586,10 @@ func test_get_effective_max_health_reflects_leveling() -> void:
 	assert_eq(session.get_effective_max_health("warrior_001"), 20)
 
 
-func test_get_effective_action_points_adds_the_bonus_move_perk() -> void:
+## A legacy bonus_move holder (see the migration test above for how it gets
+## there -- direct progression.perks mutation, since choose_perk() no longer
+## accepts it) still gets its flat +1 AP.
+func test_get_effective_action_points_adds_the_legacy_bonus_move_perk() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.create_party()
@@ -2433,10 +2597,242 @@ func test_get_effective_action_points_adds_the_bonus_move_perk() -> void:
 
 	assert_eq(session.get_effective_action_points("warrior_001"), 6)
 
-	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)
-	session.choose_perk("warrior_001", "bonus_move")
+	session.adventurers[0].progression.perks.append(GameSessionScript.BONUS_MOVE_PERK_ID)
 
 	assert_eq(session.get_effective_action_points("warrior_001"), 7, "bonus_move grants one flexible action point")
+
+
+## --- Stage 2 locked perk effects (docs/plans/2026-08-21-stage-2-party-
+## readiness/02-class-progression-and-perks.md): each of the six perk
+## effects below is verified to land on its own single named effective-stat
+## reader and nowhere else -- a battery of unrelated readers is checked
+## alongside the target one so a perk that accidentally leaked into the
+## wrong reader would fail loudly here. ---
+
+func test_warrior_juggernaut_adds_its_configured_percent_to_effective_max_health_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3: base max_health 30
+
+	var defense_before: int = session.get_effective_defense("warrior_001")
+	var ap_before: int = session.get_effective_action_points("warrior_001")
+
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID))
+
+	assert_eq(
+		session.get_effective_max_health("warrior_001"), 35,
+		"30 base + round(30 * 15%) = 35 (config-driven warrior_juggernaut_hp_percent)"
+	)
+	assert_eq(session.get_effective_defense("warrior_001"), defense_before, "Juggernaut must not touch Guard/defense")
+	assert_eq(session.get_effective_action_points("warrior_001"), ap_before, "Juggernaut must not touch Action Points")
+
+
+func test_warrior_bulwark_adds_its_configured_guard_to_effective_defense_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3
+
+	# Guard grows by a real random roll each level-up (skill_gain_roll is not
+	# pinned here), so the pre-perk defense is captured fresh rather than
+	# assumed, and the perk's contribution is checked as a delta on top of it.
+	var defense_before: int = session.get_effective_defense("warrior_001")
+	var max_health_before: int = session.get_effective_max_health("warrior_001")
+	var ap_before: int = session.get_effective_action_points("warrior_001")
+
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID))
+
+	assert_eq(
+		session.get_effective_defense("warrior_001"), defense_before + 10,
+		"Bulwark adds exactly its config-driven warrior_bulwark_guard (10) on top of whatever defense already was"
+	)
+	assert_eq(session.get_effective_max_health("warrior_001"), max_health_before, "Bulwark must not touch max health")
+	assert_eq(session.get_effective_action_points("warrior_001"), ap_before, "Bulwark must not touch Action Points")
+
+
+func test_scout_quickdraw_adds_its_configured_bonus_to_effective_action_points_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3
+
+	var max_health_before: int = session.get_effective_max_health("scout_test")
+	var defense_before: int = session.get_effective_defense("scout_test")
+
+	assert_true(session.choose_perk("scout_test", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID))
+
+	assert_eq(session.get_effective_action_points("scout_test"), 7, "6 base + 1 config-driven quickdraw bonus")
+	assert_eq(session.get_effective_max_health("scout_test"), max_health_before, "Quickdraw must not touch max health")
+	assert_eq(session.get_effective_defense("scout_test"), defense_before, "Quickdraw must not touch defense")
+
+
+func test_scout_keen_eyes_adds_its_configured_bonus_to_effective_scout_intel_range_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3
+
+	assert_eq(session.get_effective_scout_intel_range("scout_test"), 3, "Base Scout intel range")
+	var ap_before: int = session.get_effective_action_points("scout_test")
+
+	assert_true(session.choose_perk("scout_test", GameSessionScript.SCOUT_KEEN_EYES_PERK_ID))
+
+	assert_eq(
+		session.get_effective_scout_intel_range("scout_test"), 4,
+		"3 base + 1 config-driven scout_keen_eyes_intel_range_bonus"
+	)
+	assert_eq(session.get_effective_action_points("scout_test"), ap_before, "Keen Eyes must not touch Action Points")
+
+
+## get_party_scouting_intel() reads get_effective_scout_intel_range() per
+## Scout member (see that function's own doc comment) rather than a flat
+## constant -- a party whose Scout has chosen Keen Eyes sees intel at
+## distance 4, which test_get_party_scouting_intel_hides_composition_when_
+## the_scout_is_four_or_more_squares_away above proves is out of range for a
+## Scout without the perk.
+func test_get_party_scouting_intel_reveals_composition_at_distance_four_with_keen_eyes() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	# award_party_xp() splits its amount evenly across all party members
+	# (two here), so 100 total XP gives each member 50 -- exactly the level
+	# 3 threshold.
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 100.0)  # level 3 for both members
+	assert_true(session.choose_perk("scout_test", GameSessionScript.SCOUT_KEEN_EYES_PERK_ID))
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	# Goblin Camp sits at (4, 4) (difficulty 1); (0, 4) is Manhattan distance 4.
+	session.set_deployed_party_position(Vector2i(0, 4))
+
+	var intel: Dictionary = session.get_party_scouting_intel(
+		GameSessionScript.FIRST_PARTY_ID, GameSessionScript.GOBLIN_CAMP_ID
+	)
+
+	assert_true(intel.has_intel, "Keen Eyes extends detection range to 4 tiles")
+	assert_eq(intel.danger_tier, 1)
+
+
+func test_cleric_meditation_adds_its_configured_bonus_to_effective_spell_range_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3
+
+	assert_eq(session.get_effective_spell_range("cleric_test"), 3, "Base Cleric spell range")
+	var max_health_before: int = session.get_effective_max_health("cleric_test")
+
+	assert_true(session.choose_perk("cleric_test", GameSessionScript.CLERIC_MEDITATION_PERK_ID))
+
+	assert_eq(
+		session.get_effective_spell_range("cleric_test"), 4,
+		"3 base + 1 config-driven cleric_meditation_spell_range_bonus"
+	)
+	assert_eq(session.get_effective_max_health("cleric_test"), max_health_before, "Meditation must not touch max health")
+
+
+func test_cleric_devout_adds_its_configured_percent_to_effective_max_health_only() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 50.0)  # level 3: base max_health 36 (vitality 12 * 3)
+
+	var spell_range_before: int = session.get_effective_spell_range("cleric_test")
+	var defense_before: int = session.get_effective_defense("cleric_test")
+
+	assert_true(session.choose_perk("cleric_test", GameSessionScript.CLERIC_DEVOUT_PERK_ID))
+
+	assert_eq(
+		session.get_effective_max_health("cleric_test"), 40,
+		"36 base + round(36 * 10%) = 40 (config-driven cleric_devout_hp_percent)"
+	)
+	assert_eq(session.get_effective_spell_range("cleric_test"), spell_range_before, "Devout must not touch spell range")
+	assert_eq(session.get_effective_defense("cleric_test"), defense_before, "Devout must not touch defense")
+
+
+## Task 7 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): monster-manual.md's "Stage 2 locked
+## values" table used to be a mean-of-range approximation (melee 63.5, guard
+## 11.5, might +3.5 -- see docs/designs/monster-manual.md's Calibration
+## Baseline section). This pins skill_gain_roll to a fully deterministic,
+## reproducible sequence -- always the top of each skill's gain range,
+## rather than a real seeded roll, since GameSession's own leveling loop
+## already takes skill_gain_roll as its sole entropy source -- computes the
+## resulting REAL (not averaged) level-2 Warrior baseline, and checks the
+## comparison figures monster-manual.md's own table now derives from it
+## against every initial-roster monster's real stats. If a future change to
+## skill gain ranges, Might's damage contribution, or a monster's stats moves
+## any of these numbers, this test and monster-manual.md's own table must be
+## updated together -- never silently patched around by retuning a monster
+## to hide a failed comparison (see this step's own doc comment).
+func test_deterministic_level_two_warrior_baseline_matches_monster_manual_table() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.skill_gain_roll = func(_min_value: int, max_value: int) -> int: return max_value
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)  # exactly the level-2 threshold
+
+	var warrior: Dictionary = session.get_adventurer("warrior_001")
+	assert_eq(warrior.level, 2)
+	assert_eq(warrior.stats.melee, 64, "60 base + a pinned max melee gain of 4 ('med' tier, one level-up)")
+	assert_eq(int(warrior.stats.guard), 2, "0 base + a pinned max guard gain of 2 ('low' tier, one level-up)")
+	assert_eq(warrior.stats.might, 4, "0 base + a pinned max might gain of 4 ('med' tier, one level-up)")
+	assert_eq(session.get_effective_max_health("warrior_001"), 20, "vitality 10 * level 2, unaffected by pinning")
+	assert_eq(session.get_effective_defense("warrior_001"), 12, "10 leather armor + 2 pinned Guard")
+
+	var hit_chance: float = session.get_effective_hit_chance("warrior_001")
+	var mean_weapon_damage_with_might: float = 4.5 + session.get_effective_might("warrior_001")  # Iron Longsword 1-8
+	var expected_damage_per_swing: float = hit_chance * mean_weapon_damage_with_might
+	var warrior_guard: int = session.get_effective_defense("warrior_001")
+	var warrior_resistance: int = session.get_effective_resistance("warrior_001")
+
+	var monsters := {
+		"Kobold": GameSessionScript.KOBOLD_ENEMY_STATS,
+		"Goblin": GameSessionScript.GOBLIN_ENEMY_STATS,
+		"Orc": GameSessionScript.ORC_ENEMY_STATS,
+		"Hobgoblin": GameSessionScript.HOBGOBLIN_ENEMY_STATS,
+	}
+	# See docs/designs/monster-manual.md's "Stage 2 locked values" table --
+	# these are that table's own numbers, recalculated here from the real
+	# pinned baseline above rather than Step 1's mean-based approximation.
+	var expected_attacks_to_defeat := {"Kobold": 1.1, "Goblin": 2.4, "Orc": 4.0, "Hobgoblin": 5.5}
+	var expected_damage_to_warrior := {"Kobold": 0.12, "Goblin": 0.32, "Orc": 1.03, "Hobgoblin": 1.73}
+
+	for monster_name in monsters:
+		var monster: Dictionary = monsters[monster_name]
+
+		var attacks_to_defeat: float = monster.max_health / expected_damage_per_swing
+		assert_almost_eq(
+			snappedf(attacks_to_defeat, 0.1), expected_attacks_to_defeat[monster_name], 0.001,
+			"%s expected-attacks-to-defeat must match monster-manual.md's Stage 2 table" % monster_name
+		)
+
+		var monster_hit_chance: float = maxf(0.0, float(monster.hit_chance) - warrior_guard / 100.0)
+		var monster_mean_damage: float = float(monster.attack_damage) * (1.0 - warrior_resistance / 100.0)
+		var damage_to_warrior: float = monster_hit_chance * monster_mean_damage
+		assert_almost_eq(
+			snappedf(damage_to_warrior, 0.01), expected_damage_to_warrior[monster_name], 0.001,
+			"%s expected-damage-to-Warrior-per-attack must match monster-manual.md's Stage 2 table" % monster_name
+		)
 
 
 ## Task 4 (vacancy-timed population): a fresh campaign is sparse, and every
@@ -3905,6 +4301,8 @@ func test_load_balance_config_populates_every_section_from_game_config() -> void
 	const SENTINEL := -12345
 	session.BASE_MOVE_RANGE = SENTINEL
 	session.PERK_LEVEL_INTERVAL = SENTINEL
+	session.PERK_TREE_SIZE = SENTINEL
+	session.WARRIOR_JUGGERNAUT_HP_PERCENT = SENTINEL
 	session.GUILD_HALL_UPGRADE_COST = SENTINEL
 	session.ENCOUNTER_VACANCY_TURNS = SENTINEL
 	session.EFFECTIVE_HIT_CHANCE_CAP = float(SENTINEL)
@@ -3920,6 +4318,16 @@ func test_load_balance_config_populates_every_section_from_game_config() -> void
 		session.PERK_LEVEL_INTERVAL,
 		GameConfig.get_int("progression", "perk_level_interval", SENTINEL),
 		"progression.perk_level_interval must come from GameConfig"
+	)
+	assert_eq(
+		session.PERK_TREE_SIZE,
+		GameConfig.get_int("progression", "perk_tree_size", SENTINEL),
+		"progression.perk_tree_size must come from GameConfig"
+	)
+	assert_eq(
+		session.WARRIOR_JUGGERNAUT_HP_PERCENT,
+		GameConfig.get_int("progression", "warrior_juggernaut_hp_percent", SENTINEL),
+		"progression.warrior_juggernaut_hp_percent must come from GameConfig"
 	)
 	assert_eq(
 		session.GUILD_HALL_UPGRADE_COST,
@@ -4688,6 +5096,60 @@ func test_import_keeps_carried_rewards_unbanked() -> void:
 	assert_eq(GameSession.gold, 0)
 
 
+## Task 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): a pre-Stage-2 save may already hold
+## the legacy bonus_move perk. Importing it must not migrate/strip it away,
+## and -- the actual regression this locks -- must not let it silently
+## consume one of the two new class-owned slots either (see _pending_perk_
+## slot_count()'s own doc comment): a lone bonus_move save at level 6 still
+## earns both of its class's real perks.
+func test_importing_a_legacy_lone_bonus_move_save_normalizes_without_granting_an_extra_slot() -> void:
+	GameSession.adventurers[0].level = 6
+	GameSession.adventurers[0].stats.max_health = 20
+	GameSession.adventurers[0].progression.perks = [GameSessionScript.BONUS_MOVE_PERK_ID]
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	var warrior := GameSession.get_adventurer(GameSessionScript.WARRIOR_ID)
+	assert_eq(
+		warrior.progression.perks, [GameSessionScript.BONUS_MOVE_PERK_ID],
+		"The legacy perk is preserved on import, not migrated away"
+	)
+	assert_true(
+		GameSession.is_perk_choice_pending(GameSessionScript.WARRIOR_ID),
+		"A lone bonus_move save must still earn both of its class's real perk slots at level 6"
+	)
+	assert_eq(
+		GameSession.get_available_perks(GameSessionScript.WARRIOR_ID),
+		[GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID],
+		"Not just one slot -- bonus_move must not have consumed either of the two new slots"
+	)
+	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID))
+	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID))
+	assert_false(GameSession.is_perk_choice_pending(GameSessionScript.WARRIOR_ID), "Both real slots are now spent")
+
+
+## A malformed/foreign perk id must reject the whole import atomically --
+## live session state stays exactly as it was before the attempt, same as
+## every other reject-atomically snapshot contract test in this file (see
+## test_alchemy_snapshot_rejects_more_than_ten_carried_items_without_
+## mutating_live_state() for the same pattern).
+func test_importing_a_foreign_perk_id_is_rejected_without_mutating_live_state() -> void:
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0]["level"] = 3
+	snapshot.adventurers[0].progression["perks"] = [GameSessionScript.SCOUT_QUICKDRAW_PERK_ID]
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "perk")
+	assert_eq(_capture_durable_fields(), before)
+
+
 ## Exercises every durable category the snapshot contract covers: roster/
 ## progression/equipment, parties/routes, selected ids, world turn,
 ## encounter instances/completions/vacancies, recruitment offers/vacancies,
@@ -4797,6 +5259,13 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"HEAL_RATE_ENCAMPED": true,
 		"HEAL_RATE_RESTING": true,
 		"HEAL_RATE_MOVING": true,
+		"PERK_TREE_SIZE": true,
+		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
+		"WARRIOR_BULWARK_GUARD": true,
+		"SCOUT_QUICKDRAW_ACTION_POINTS": true,
+		"SCOUT_KEEN_EYES_INTEL_RANGE_BONUS": true,
+		"CLERIC_MEDITATION_SPELL_RANGE_BONUS": true,
+		"CLERIC_DEVOUT_HP_PERCENT": true,
 	}
 
 

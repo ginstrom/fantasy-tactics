@@ -695,10 +695,18 @@ func _persist_battle_state(controller: Node2D) -> Array:
 	return dead_ids
 
 
+## Resolves every pending perk slot (there can be more than one if a single
+## XP award crossed more than one PERK_LEVEL_INTERVAL multiple) by picking
+## the first still-available class-owned perk each time, same as battle_
+## sim.gd's own _resolve_level_up().
 func _resolve_pending_perks(leveled_up: Array) -> void:
 	for adventurer_id in leveled_up:
-		if GameSession.is_perk_choice_pending(adventurer_id):
-			GameSession.choose_perk(adventurer_id, GameSession.BONUS_MOVE_PERK_ID)
+		while GameSession.is_perk_choice_pending(adventurer_id):
+			var available: Array[String] = GameSession.get_available_perks(adventurer_id)
+			if available.is_empty():
+				push_error("[campaign_sim] unresolvable perk choice for %s" % adventurer_id)
+				break
+			GameSession.choose_perk(adventurer_id, available[0])
 
 
 func _return_to_encampment(telemetry: Dictionary) -> void:

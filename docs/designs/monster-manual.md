@@ -60,18 +60,28 @@ Monsters possess all the same tactical attributes as adventurer units, though at
 | `kill_xp`, `loot_id` | Campaign reward contract. |
 | `role` | Human-readable encounter purpose, such as swarm, skirmisher, bruiser, or elite. |
 
-### Stage 2 locked values (2026-08-21)
+### Stage 2 locked values (2026-08-21, recalculated for class progression and perks)
 
-Recalibrated Level-2 Warrior matchups under automatic skills (mean melee
-63.5%, mean guard 11.5, mean raw damage 8.0 — see the baseline row above),
-replacing the deprecated manual-Accuracy comparison:
+Recalibrated Level-2 Warrior matchups under automatic skills, replacing both
+the deprecated manual-Accuracy comparison and the mean-of-range approximation
+this table originally shipped with. `test_deterministic_level_two_warrior_
+baseline_matches_monster_manual_table()` (tests/unit/test_game_session.gd)
+pins `skill_gain_roll` to a fully deterministic, reproducible sequence —
+always the top of each skill's gain range, rather than an average — and
+regression-checks the real resulting baseline (melee 64%, guard 12, raw
+damage 8.5 — max_health 20 stays exact either way, since it is
+`vitality × level` rather than a rolled skill) against every initial-roster
+monster's real stats. The deterministic pin lands slightly stronger than
+Step 1's mean-based estimate (which used melee 63.5%, guard 11.5, raw damage
+8.0), so these figures are correspondingly a little better for the Warrior
+than the original approximation:
 
 | Monster | Level-2 automatic-skill Warrior expected attacks to defeat | Expected damage to Warrior per monster attack |
 |---|---:|---:|
-| Kobold | 1.2 | 0.14 |
-| Goblin | 2.6 | 0.37 |
-| Orc | 4.3 | 1.16 |
-| Hobgoblin | 5.9 | 1.94 |
+| Kobold | 1.1 | 0.12 |
+| Goblin | 2.4 | 0.32 |
+| Orc | 4.0 | 1.03 |
+| Hobgoblin | 5.5 | 1.73 |
 
 ## Initial roster — preserve shipped values
 

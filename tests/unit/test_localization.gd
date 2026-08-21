@@ -298,8 +298,21 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("level_up.level") % 2, "Level: 2")
 	assert_eq(tr("level_up.health_gain") % [4, 1], "Max Health: 4 (+1)")
 	assert_eq(tr("level_up.perk_pending"), "Choose a perk to continue.")
-	assert_eq(tr("level_up.choose_bonus_move"), "Choose Bonus Move")
 	assert_eq(tr("level_up.continue"), "Continue")
+	assert_eq(tr("perk.warrior_juggernaut.name"), "Juggernaut")
+	assert_eq(tr("perk.warrior_juggernaut.effect") % 15, "+15% Max HP")
+	assert_eq(tr("perk.warrior_bulwark.name"), "Bulwark")
+	assert_eq(tr("perk.warrior_bulwark.effect") % 10, "+10 Guard")
+	assert_eq(tr("perk.scout_quickdraw.name"), "Quickdraw")
+	assert_eq(tr("perk.scout_quickdraw.effect") % 1, "+1 Action Point")
+	assert_eq(tr("perk.scout_keen_eyes.name"), "Keen Eyes")
+	assert_eq(tr("perk.scout_keen_eyes.effect") % 1, "+1 Scout Intel Range")
+	assert_eq(tr("perk.cleric_meditation.name"), "Meditation")
+	assert_eq(tr("perk.cleric_meditation.effect") % 1, "+1 Spell Range")
+	assert_eq(tr("perk.cleric_devout.name"), "Devout")
+	assert_eq(tr("perk.cleric_devout.effect") % 10, "+10% Max HP")
+	assert_eq(tr("perk.bonus_move.name"), "Bonus Move")
+	assert_eq(tr("perk.bonus_move.effect"), "+1 Action Point")
 	assert_eq(tr("guild_hall.title"), "Guild Hall")
 	assert_eq(tr("guild_hall.level") % 1, "Guild Hall — Level 1")
 	assert_eq(tr("guild_hall.party_size") % 4, "Party size: 4")
@@ -487,7 +500,17 @@ func test_level_up_uses_translation_keys_not_literal_copy() -> void:
 	add_child_autofree(level_up)
 
 	assert_eq(level_up.continue_button.text, "level_up.continue")
-	assert_eq(level_up.choose_bonus_move_button.text, "level_up.choose_bonus_move")
+
+	# Perk option buttons are built dynamically (see level_up.gd's
+	# _refresh_perk_options()), not as a static .tscn Button property, so
+	# their text is already resolved through an explicit tr() call by the
+	# time a test can read it -- checked here as a source-code assertion
+	# instead, confirming the option text is built from GameSession's own
+	# localized perk-metadata readers rather than any copy hard-coded in
+	# level_up.gd itself.
+	var source := FileAccess.get_file_as_string("res://scripts/ui/level_up.gd")
+	assert_string_contains(source, "GameSession.get_perk_display_name")
+	assert_string_contains(source, "GameSession.get_perk_effect_description")
 
 
 func test_starting_settlement_uses_translation_keys_not_literal_copy() -> void:

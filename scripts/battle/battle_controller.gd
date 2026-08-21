@@ -111,7 +111,6 @@ const ITEM_ACTION_POINT_COST := 2
 ## same-tile target, so no self-cast special case is needed here).
 const SPELL_ACTION_POINT_COST := 3
 const SPELL_MP_COST := 1
-const SPELL_RANGE := 3
 const SPELL_HEAL_MIN := 2
 const SPELL_HEAL_MAX := 8
 ## +10 percentage points to final hit chance (still respecting the hit cap)
@@ -970,10 +969,15 @@ func try_use_selected_potion(potion_id: String) -> bool:
 ## that isn't already at full health) and "bless" (apply the battle-local
 ## BLESSED_STATUS_ID status -- see try_attack_selected_unit() -- to a living
 ## ally not already blessed). Both share the same 3 AP / 1 MP cost and the
-## same 0-3 tile occupied-endpoint line-of-sight range (see grid.
-## has_line_of_sight()/get_manhattan_distance(), the same primitives ranged
-## attacks already use via get_legal_attack_targets()). Every validation runs
-## before any mutation, matching every other try_* action in this file, so a
+## same occupied-endpoint line-of-sight range (see grid.has_line_of_sight()/
+## get_manhattan_distance(), the same primitives ranged attacks already use
+## via get_legal_attack_targets()) -- 0-3 tiles by default, 0-4 once the
+## caster has chosen the Meditation perk (see GameSession.get_effective_
+## spell_range(), consulted per-caster below rather than a flat constant, per
+## docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md's "effects belong in explicit
+## GameSession.get_effective_* readers" rule). Every validation runs before
+## any mutation, matching every other try_* action in this file, so a
 ## rejected cast leaves AP/MP/target state untouched.
 func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
@@ -994,7 +998,7 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 		return false
 
 	var distance: int = grid.get_manhattan_distance(selected_unit.grid_position, target_pos)
-	if distance > SPELL_RANGE:
+	if distance > GameSession.get_effective_spell_range(selected_unit.adventurer_id):
 		last_targeting_failure = {"reason": "out_of_range"}
 		return false
 	var blocking_tiles: Array[Vector2i] = []

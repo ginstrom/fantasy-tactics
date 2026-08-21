@@ -48,10 +48,8 @@ layout_mode = 2
 layout_mode = 2
 visible = false
 
-[node name="ChooseBonusMoveButton" type="Button" parent="Content"]
+[node name="PerkOptionsContainer" type="VBoxContainer" parent="Content"]
 layout_mode = 2
-visible = false
-text = "level_up.choose_bonus_move"
 
 [node name="ContinueButton" type="Button" parent="Content"]
 layout_mode = 2

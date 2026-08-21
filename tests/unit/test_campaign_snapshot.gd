@@ -597,3 +597,92 @@ func test_legacy_adventurer_stats_migrate_attack_to_skill_tracks_and_recalculate
 	assert_eq(adv.stats.might, 3)
 	assert_eq(adv.stats.max_health, 20)
 	assert_eq(adv.get("health", 0), 20, "Legacy save without health key normalizes to max_health")
+
+
+## Task 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): progression.perks validation. Every
+## element must be a String naming either GameSession.BONUS_MOVE_PERK_ID (the
+## retired-but-still-valid legacy universal perk) or one of the adventurer's
+## own class's CLASS_PERKS ids -- see _validate_perks_field() in campaign_
+## snapshot.gd.
+
+func test_valid_new_perk_ids_survive_a_round_trip_unchanged() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {"xp": 200.0, "perks": ["warrior_juggernaut", "warrior_bulwark"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].progression.perks, ["warrior_juggernaut", "warrior_bulwark"])
+
+
+func test_a_perk_id_belonging_to_a_different_class_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 3,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 30},
+			"progression": {"xp": 50.0, "perks": ["scout_quickdraw"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "A Scout-owned perk id on a Warrior record must be rejected")
+	assert_eq(result.snapshot, {}, "A rejected import returns no partial snapshot")
+
+
+func test_an_unrecognized_perk_id_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 3,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 30},
+			"progression": {"xp": 50.0, "perks": ["not_a_real_perk"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+
+
+func test_a_duplicate_perk_id_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {"xp": 200.0, "perks": ["warrior_juggernaut", "warrior_juggernaut"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+
+
+## The legacy universal perk is not "foreign" to any class -- it must still
+## validate successfully everywhere, exactly as it always has.
+func test_the_legacy_bonus_move_perk_id_still_validates_for_any_class() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 3,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 30},
+			"progression": {"xp": 50.0, "perks": ["bonus_move"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].progression.perks, ["bonus_move"])

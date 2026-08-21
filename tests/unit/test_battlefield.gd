@@ -1649,7 +1649,10 @@ func test_a_clear_xp_level_up_that_requires_a_perk_choice_still_gates_completion
 		"A required perk choice must block completion, not just the modal's own Continue button"
 	)
 
-	battlefield.level_up.choose_bonus_move_button.emit_signal("pressed")
+	var perk_option: Button = battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	)
+	perk_option.emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_true(GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID))

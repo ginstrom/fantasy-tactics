@@ -253,7 +253,7 @@ func test_skills_label_shows_class_skills_and_growth_tiers() -> void:
 	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").visible)
 
 
-func test_perks_label_shows_bonus_move_not_yet_learned_before_a_perk_choice() -> void:
+func test_perks_label_shows_none_before_any_perk_is_chosen() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_eq(
@@ -263,16 +263,39 @@ func test_perks_label_shows_bonus_move_not_yet_learned_before_a_perk_choice() ->
 	assert_true(screen.get_node("Body/Center/VBox/PerksLabel").visible)
 
 
-func test_perks_label_shows_bonus_move_learned_after_choosing_it() -> void:
+## Step 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): a chosen class-owned perk shows both
+## its localized name and its effect, read fresh from GameSession's own
+## perk-metadata readers (get_perk_display_name()/get_perk_effect_
+## description()) rather than any copy hard-coded in unit_details.gd.
+func test_perks_label_shows_a_chosen_class_perk_with_its_effect() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
-	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.BONUS_MOVE_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/PerksLabel").text,
-		"Perks:\n* Bonus Move"
+		"Perks:\n* %s (%s)" % [
+			tr("perk.warrior_juggernaut.name"),
+			tr("perk.warrior_juggernaut.effect") % GameSession.WARRIOR_JUGGERNAUT_HP_PERCENT,
+		]
+	)
+
+
+## choose_perk() no longer accepts bonus_move as a new choice (it is retired
+## -- see GameSession.choose_perk()'s doc comment), so a legacy holder is
+## simulated the same way GameSession's own migration tests do: direct
+## progression.perks mutation, standing in for a pre-Stage-2 save. It must
+## still render with its own name and effect, exactly like any other perk.
+func test_perks_label_shows_a_legacy_bonus_move_perk_with_its_effect() -> void:
+	GameSession.adventurers[0].progression.perks.append(GameSession.BONUS_MOVE_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/PerksLabel").text,
+		"Perks:\n* %s (%s)" % [tr("perk.bonus_move.name"), tr("perk.bonus_move.effect")]
 	)
 
 

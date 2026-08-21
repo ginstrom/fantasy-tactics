@@ -168,11 +168,17 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not adventurers_result.ok:
 		return _invalid(adventurers_result.error)
 	normalized["adventurers"] = _normalize_roster_records(adventurers_result.list)
+	var adventurer_perks_error := _validate_perks_field(normalized.adventurers, "adventurers")
+	if not adventurer_perks_error.is_empty():
+		return _invalid(adventurer_perks_error)
 
 	var candidates_result := _normalize_id_list(data.get("recruitment_candidates"), "recruitment_candidates")
 	if not candidates_result.ok:
 		return _invalid(candidates_result.error)
 	normalized["recruitment_candidates"] = _normalize_roster_records(candidates_result.list)
+	var candidate_perks_error := _validate_perks_field(normalized.recruitment_candidates, "recruitment_candidates")
+	if not candidate_perks_error.is_empty():
+		return _invalid(candidate_perks_error)
 
 	var recruitment_vacancies_result := _normalize_vacancy_list(data.get("recruitment_vacancies"), "recruitment_vacancies")
 	if not recruitment_vacancies_result.ok:
@@ -468,6 +474,41 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 
 		normalized.append(copy)
 	return normalized
+
+
+## Validates progression.perks on already-normalized roster records (see
+## _normalize_roster_records()). Each element must be a String naming either
+## GameSession.BONUS_MOVE_PERK_ID (the retired-but-still-valid legacy
+## universal perk -- see GameSession.choose_perk()'s doc comment for why it
+## is never migrated away from an existing holder) or one of the record's
+## own class's perk ids (GameSession.CLASS_PERKS); a perk belonging to a
+## different class, or any other unrecognized id, fails the *whole* snapshot
+## atomically here rather than being silently dropped from just that record.
+## A record with no progression field, or a progression with no perks field
+## (legacy pre-progression saves), is left alone -- only a present perks
+## array is checked. Returns "" when every record passes, or the first
+## failure's error message.
+static func _validate_perks_field(records: Array[Dictionary], field_name: String) -> String:
+	for record in records:
+		var progression: Variant = record.get("progression")
+		if not progression is Dictionary or not (progression as Dictionary).has("perks"):
+			continue
+		var perks: Variant = (progression as Dictionary).perks
+		if not perks is Array:
+			return "%s entry %s has a non-array perks field" % [field_name, record.get("id", "?")]
+		var class_id := str(record.get("class", "warrior"))
+		var valid_ids: Array = _GameSessionScript.CLASS_PERKS.get(class_id, [])
+		var seen: Dictionary = {}
+		for perk_id in perks as Array:
+			if not perk_id is String:
+				return "%s entry %s has a non-string perk id" % [field_name, record.get("id", "?")]
+			var id := String(perk_id)
+			if id != _GameSessionScript.BONUS_MOVE_PERK_ID and not valid_ids.has(id):
+				return "%s entry %s has an unknown or foreign perk id: %s" % [field_name, record.get("id", "?"), id]
+			if seen.has(id):
+				return "%s entry %s has a duplicate perk id: %s" % [field_name, record.get("id", "?"), id]
+			seen[id] = true
+	return ""
 
 
 static func _is_recruitment_template_id(id: String) -> bool:

@@ -752,7 +752,71 @@ const DEFAULT_ARMOR_ID := "leather_armor"
 # exposes both consts and vars the same way through a singleton instance.
 var BASE_MOVE_RANGE: int = 3
 var PERK_LEVEL_INTERVAL: int = 3
+## Caps how many pending perk slots _pending_perk_slot_count() will ever
+## report earned for one adventurer (see docs/designs/class-system.md's
+## "Stage 2 locked perk set"). Each class has exactly two perks today, so a
+## third earned level-interval never opens a third slot -- is_perk_choice_
+## pending() simply stays false forever past this point, with no "no perks
+## available" empty state required anywhere in the UI. A future slice that
+## ships a third class perk raises this alongside CLASS_PERKS.
+var PERK_TREE_SIZE: int = 2
 const BONUS_MOVE_PERK_ID := "bonus_move"
+# Stage 2 locked class-owned perk ids (docs/designs/class-system.md's "Stage
+# 2 locked perk set", approved 2026-08-21). Exactly two per class, no
+# prerequisites, choose-once -- see CLASS_PERKS/PERK_DEFINITIONS below for
+# the catalog these ids index into, and choose_perk()/get_available_perks()
+# for the only ways they are ever offered or selected. BONUS_MOVE_PERK_ID
+# above is deliberately excluded from every class's list: it is retired from
+# new choices (see choose_perk()'s own doc comment) but not migrated away
+# from any adventurer who already holds it.
+const WARRIOR_JUGGERNAUT_PERK_ID := "warrior_juggernaut"
+const WARRIOR_BULWARK_PERK_ID := "warrior_bulwark"
+const SCOUT_QUICKDRAW_PERK_ID := "scout_quickdraw"
+const SCOUT_KEEN_EYES_PERK_ID := "scout_keen_eyes"
+const CLERIC_MEDITATION_PERK_ID := "cleric_meditation"
+const CLERIC_DEVOUT_PERK_ID := "cleric_devout"
+## Class id -> ordered Array of that class's own perk ids. The order here is
+## purely presentational (get_available_perks() returns eligible ids in this
+## order); selection has no prerequisite relationship between the two
+## entries. A class id absent from this dict (should not happen for
+## warrior/scout/cleric) simply offers no perks.
+const CLASS_PERKS: Dictionary = {
+	"warrior": [WARRIOR_JUGGERNAUT_PERK_ID, WARRIOR_BULWARK_PERK_ID],
+	"scout": [SCOUT_QUICKDRAW_PERK_ID, SCOUT_KEEN_EYES_PERK_ID],
+	"cleric": [CLERIC_MEDITATION_PERK_ID, CLERIC_DEVOUT_PERK_ID],
+}
+## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
+## name and effect description through this catalog (get_perk_definition(),
+## get_perk_display_name(), get_perk_effect_description()) rather than any
+## UI file hard-coding perk copy or a class-name switch -- see level_up.gd's
+## dynamic option rendering and unit_details.gd's perk line. effect_key's
+## format argument (where present) is filled from this same file's own
+## config-driven balance var (see get_perk_effect_description()), never a
+## number invented in the UI layer.
+const PERK_DEFINITIONS: Dictionary = {
+	"warrior_juggernaut": {"class": "warrior", "name_key": "perk.warrior_juggernaut.name", "effect_key": "perk.warrior_juggernaut.effect"},
+	"warrior_bulwark": {"class": "warrior", "name_key": "perk.warrior_bulwark.name", "effect_key": "perk.warrior_bulwark.effect"},
+	"scout_quickdraw": {"class": "scout", "name_key": "perk.scout_quickdraw.name", "effect_key": "perk.scout_quickdraw.effect"},
+	"scout_keen_eyes": {"class": "scout", "name_key": "perk.scout_keen_eyes.name", "effect_key": "perk.scout_keen_eyes.effect"},
+	"cleric_meditation": {"class": "cleric", "name_key": "perk.cleric_meditation.name", "effect_key": "perk.cleric_meditation.effect"},
+	"cleric_devout": {"class": "cleric", "name_key": "perk.cleric_devout.name", "effect_key": "perk.cleric_devout.effect"},
+}
+# Stage 2 locked balance values (see docs/designs/class-system.md and
+# config/game_config.json's "progression" section) -- loaded from config in
+# _load_balance_config() same as every other UPPER_SNAKE_CASE var above.
+var WARRIOR_JUGGERNAUT_HP_PERCENT: int = 15
+var WARRIOR_BULWARK_GUARD: int = 10
+var SCOUT_QUICKDRAW_ACTION_POINTS: int = 1
+var SCOUT_KEEN_EYES_INTEL_RANGE_BONUS: int = 1
+var CLERIC_MEDITATION_SPELL_RANGE_BONUS: int = 1
+var CLERIC_DEVOUT_HP_PERCENT: int = 10
+# Base (pre-perk) ranges the two Keen Eyes/Meditation perks add to. Named
+# here rather than left as a bare "3" at each call site (get_party_scouting_
+# intel()'s scout range, BattleController.try_cast_spell()'s spell range) so
+# both the base and its perk bonus are visible together at each effective-
+# stat reader below.
+const BASE_SCOUT_INTEL_RANGE := 3
+const BASE_CLERIC_SPELL_RANGE := 3
 # Guild Hall tier model (see docs/plans/2026-08-18-core-loop-and-engagement/
 # 03-encampment-buildings-and-tier-model.md): three tiers scaling deployable
 # party size (3/4/5), roster capacity (10/15/20), and recruitment offer
@@ -1151,6 +1215,13 @@ func _load_balance_config() -> void:
 	EFFECTIVE_HIT_CHANCE_CAP = GameConfig.get_float("combat", "effective_hit_chance_cap", EFFECTIVE_HIT_CHANCE_CAP)
 	ATTACK_TO_HIT_CHANCE_DIVISOR = GameConfig.get_float("combat", "attack_to_hit_chance_divisor", ATTACK_TO_HIT_CHANCE_DIVISOR)
 	PERK_LEVEL_INTERVAL = GameConfig.get_int("progression", "perk_level_interval", PERK_LEVEL_INTERVAL)
+	PERK_TREE_SIZE = GameConfig.get_int("progression", "perk_tree_size", PERK_TREE_SIZE)
+	WARRIOR_JUGGERNAUT_HP_PERCENT = GameConfig.get_int("progression", "warrior_juggernaut_hp_percent", WARRIOR_JUGGERNAUT_HP_PERCENT)
+	WARRIOR_BULWARK_GUARD = GameConfig.get_int("progression", "warrior_bulwark_guard", WARRIOR_BULWARK_GUARD)
+	SCOUT_QUICKDRAW_ACTION_POINTS = GameConfig.get_int("progression", "scout_quickdraw_action_points", SCOUT_QUICKDRAW_ACTION_POINTS)
+	SCOUT_KEEN_EYES_INTEL_RANGE_BONUS = GameConfig.get_int("progression", "scout_keen_eyes_intel_range_bonus", SCOUT_KEEN_EYES_INTEL_RANGE_BONUS)
+	CLERIC_MEDITATION_SPELL_RANGE_BONUS = GameConfig.get_int("progression", "cleric_meditation_spell_range_bonus", CLERIC_MEDITATION_SPELL_RANGE_BONUS)
+	CLERIC_DEVOUT_HP_PERCENT = GameConfig.get_int("progression", "cleric_devout_hp_percent", CLERIC_DEVOUT_HP_PERCENT)
 	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_LEVEL_3_PARTY_CAP = GameConfig.get_int("guild_hall", "level_3_party_cap", GUILD_HALL_LEVEL_3_PARTY_CAP)
@@ -2445,16 +2516,21 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 	if party.is_empty() or expedition.is_empty():
 		return {}
 
+	# A party with more than one Scout uses whichever member's own effective
+	# range (see get_effective_scout_intel_range() -- BASE_SCOUT_INTEL_RANGE,
+	# +1 once Keen Eyes is chosen) is largest, rather than any single fixed
+	# member's.
 	var has_scout := false
+	var best_intel_range := 0
 	for member_id in party.member_ids:
 		var member := get_adventurer(str(member_id))
 		if not member.is_empty() and str(member.get("class", "")) == "scout":
 			has_scout = true
-			break
+			best_intel_range = maxi(best_intel_range, get_effective_scout_intel_range(str(member_id)))
 
 	var within_range: bool = (
 		bool(party.get("deployed", false))
-		and _grid_distance(party.world_position, expedition.position) <= 3
+		and _grid_distance(party.world_position, expedition.position) <= best_intel_range
 	)
 
 	if has_scout and within_range:
@@ -3201,9 +3277,13 @@ func get_level_xp_threshold(level: int) -> float:
 	return float(5 * level * (level + 1) - 10)
 
 
-## True once an adventurer has reached a level divisible by PERK_LEVEL_INTERVAL
-## for which no perk has been chosen yet. choose_perk() is the only way to
-## resolve a pending choice.
+## True once an adventurer has earned a class-owned perk slot (see
+## _pending_perk_slot_count()) it has not yet resolved. Capped at
+## PERK_TREE_SIZE slots total, so once both of a class's perks are chosen
+## this returns false permanently -- no adventurer ever runs out of perks to
+## offer without also running out of pending slots (see docs/designs/
+## class-system.md's "Stage 2 locked perk set"). choose_perk() is the only
+## way to resolve a pending choice.
 func is_perk_choice_pending(adventurer_id: String) -> bool:
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if adventurer_index == -1:
@@ -3211,23 +3291,99 @@ func is_perk_choice_pending(adventurer_id: String) -> bool:
 	return _pending_perk_slot_count(adventurers[adventurer_index]) > 0
 
 
+## earned_slots is level-derived, capped at PERK_TREE_SIZE. Slots already
+## spent count only class-owned perks (CLASS_PERKS' own ids) -- a legacy
+## BONUS_MOVE_PERK_ID entry (retired from new choices, never migrated away;
+## see choose_perk()'s doc comment) never consumes a class-owned slot, so an
+## old save holding it still earns both of its class's real perks.
 func _pending_perk_slot_count(adventurer: Dictionary) -> int:
-	var earned_slots: int = adventurer.level / PERK_LEVEL_INTERVAL
-	return earned_slots - adventurer.progression.perks.size()
+	var earned_slots: int = mini(adventurer.level / PERK_LEVEL_INTERVAL, PERK_TREE_SIZE)
+	var spent_slots := 0
+	for perk_id in adventurer.progression.perks:
+		if perk_id != BONUS_MOVE_PERK_ID:
+			spent_slots += 1
+	return earned_slots - spent_slots
 
 
-## Only accepts BONUS_MOVE_PERK_ID, only while is_perk_choice_pending() is
-## true for adventurer_id, and only once per adventurer (a perk already in
-## progression.perks cannot be re-chosen).
+## Returns the still-choosable perk ids for adventurer_id's own class -- its
+## class's CLASS_PERKS entries that are not already in progression.perks, in
+## catalog order. Returns [] for an unknown adventurer or a class with no
+## perk catalog. BONUS_MOVE_PERK_ID never appears here; it is retired from
+## new choices (see choose_perk()).
+func get_available_perks(adventurer_id: String) -> Array[String]:
+	var adventurer := get_adventurer(adventurer_id)
+	var available: Array[String] = []
+	if adventurer.is_empty():
+		return available
+	var class_id := str(adventurer.get("class", ""))
+	var chosen: Array = adventurer.progression.get("perks", [])
+	for perk_id in CLASS_PERKS.get(class_id, []):
+		if not chosen.has(perk_id):
+			available.append(perk_id)
+	return available
+
+
+## A safe copy of PERK_DEFINITIONS' own entry for perk_id, or {} for an
+## unknown id.
+func get_perk_definition(perk_id: String) -> Dictionary:
+	return (PERK_DEFINITIONS.get(perk_id, {}) as Dictionary).duplicate(true)
+
+
+## Localized display name for perk_id -- BONUS_MOVE_PERK_ID (not in
+## PERK_DEFINITIONS; see its own doc comment) resolves through its own
+## dedicated key, any other unrecognized id falls back to its raw id.
+func get_perk_display_name(perk_id: String) -> String:
+	if perk_id == BONUS_MOVE_PERK_ID:
+		return tr("perk.bonus_move.name")
+	var definition := get_perk_definition(perk_id)
+	if definition.is_empty():
+		return perk_id.capitalize()
+	return tr(str(definition.name_key))
+
+
+## Localized, numerically-filled effect description for perk_id (e.g.
+## "+15% Max HP") -- the single place that formats a perk's effect_key
+## against this file's own config-driven balance var, so level_up.gd's
+## option buttons and unit_details.gd's owned-perk lines render identical
+## text from the same source instead of each inventing their own copy.
+func get_perk_effect_description(perk_id: String) -> String:
+	match perk_id:
+		WARRIOR_JUGGERNAUT_PERK_ID:
+			return tr("perk.warrior_juggernaut.effect") % WARRIOR_JUGGERNAUT_HP_PERCENT
+		WARRIOR_BULWARK_PERK_ID:
+			return tr("perk.warrior_bulwark.effect") % WARRIOR_BULWARK_GUARD
+		SCOUT_QUICKDRAW_PERK_ID:
+			return tr("perk.scout_quickdraw.effect") % SCOUT_QUICKDRAW_ACTION_POINTS
+		SCOUT_KEEN_EYES_PERK_ID:
+			return tr("perk.scout_keen_eyes.effect") % SCOUT_KEEN_EYES_INTEL_RANGE_BONUS
+		CLERIC_MEDITATION_PERK_ID:
+			return tr("perk.cleric_meditation.effect") % CLERIC_MEDITATION_SPELL_RANGE_BONUS
+		CLERIC_DEVOUT_PERK_ID:
+			return tr("perk.cleric_devout.effect") % CLERIC_DEVOUT_HP_PERCENT
+		BONUS_MOVE_PERK_ID:
+			return tr("perk.bonus_move.effect")
+		_:
+			return ""
+
+
+## Accepts only an id in adventurer_id's own class's CLASS_PERKS (rejecting
+## an unknown id, another class's perk, and -- since BONUS_MOVE_PERK_ID is in
+## no class's list -- BONUS_MOVE_PERK_ID itself: it is retired from new
+## choices, though any adventurer who already holds it from before this slice
+## keeps its effect unchanged, see get_effective_action_points()). Only
+## while is_perk_choice_pending() is true for adventurer_id, and only once
+## per adventurer (a perk already in progression.perks cannot be re-chosen).
+## Every check runs before any mutation, so a rejected call leaves
+## progression.perks untouched.
 func choose_perk(adventurer_id: String, perk_id: String) -> bool:
-	if perk_id != BONUS_MOVE_PERK_ID:
-		return false
-
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if adventurer_index == -1:
 		return false
 
 	var adventurer: Dictionary = adventurers[adventurer_index]
+	var class_id := str(adventurer.get("class", ""))
+	if not (CLASS_PERKS.get(class_id, []) as Array).has(perk_id):
+		return false
 	if adventurer.progression.perks.has(perk_id):
 		return false
 	if _pending_perk_slot_count(adventurer) <= 0:
@@ -3255,13 +3411,24 @@ func get_effective_hit_chance(adventurer_id: String) -> float:
 	return minf(raw_stat / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
 
 
-## Centralized effective max health: the adventurer's stored max_health,
-## which leveling already keeps current. Returns 0 for an unknown adventurer.
+## Centralized effective max health: the adventurer's stored max_health
+## (which leveling already keeps current) plus the Juggernaut/Devout perk's
+## percentage bonus, rounded to the nearest whole point. Both perks are
+## class-gated to opposite classes (Warrior/Cleric) so at most one ever
+## applies in practice, but both are checked independently rather than
+## assuming that exclusivity. Returns 0 for an unknown adventurer.
 func get_effective_max_health(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	return adventurer.stats.max_health
+	var base: int = int(adventurer.stats.max_health)
+	var perks: Array = adventurer.progression.get("perks", [])
+	var percent_bonus := 0
+	if perks.has(WARRIOR_JUGGERNAUT_PERK_ID):
+		percent_bonus += WARRIOR_JUGGERNAUT_HP_PERCENT
+	if perks.has(CLERIC_DEVOUT_PERK_ID):
+		percent_bonus += CLERIC_DEVOUT_HP_PERCENT
+	return base + int(round(base * percent_bonus / 100.0))
 
 
 ## Returns current persistent health for adventurer_id (clamped in [1, max_health]),
@@ -3369,14 +3536,22 @@ func _apply_natural_recovery() -> void:
 			adventurers[_get_adventurer_index(adv_id)]["health"] = mini(current_hp + rate, max_hp)
 
 
-## Centralized effective battle AP: every unit starts with the battle baseline,
-## and Bonus Move adds one flexible AP rather than a movement-only allowance.
+## Centralized effective battle AP: every unit starts with the battle
+## baseline, plus one flexible AP per legacy Bonus Move holder (retired from
+## new choices but never migrated away, see choose_perk()) and Scout
+## Quickdraw's own configured bonus -- both can coexist on a Scout who
+## picked up Bonus Move before this slice and later chose Quickdraw too.
 ## Returns 0 for an unknown adventurer.
 func get_effective_action_points(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	var bonus := 1 if adventurer.progression.perks.has(BONUS_MOVE_PERK_ID) else 0
+	var perks: Array = adventurer.progression.get("perks", [])
+	var bonus := 0
+	if perks.has(BONUS_MOVE_PERK_ID):
+		bonus += 1
+	if perks.has(SCOUT_QUICKDRAW_PERK_ID):
+		bonus += SCOUT_QUICKDRAW_ACTION_POINTS
 	return 6 + bonus
 
 
@@ -3433,6 +3608,8 @@ func get_effective_armor_name(adventurer_id: String) -> String:
 	return "" if armor.is_empty() else tr(armor.name_key)
 
 
+## Armor defense plus the adventurer's own guard stat, plus Bulwark's flat
+## configured Guard bonus once a Warrior has chosen it.
 func get_effective_defense(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
@@ -3440,7 +3617,36 @@ func get_effective_defense(adventurer_id: String) -> int:
 	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
 	var armor_def: int = 0 if armor.is_empty() else int(armor.defense)
 	var guard_stat: int = int(adventurer.stats.get("guard", 0))
-	return armor_def + guard_stat
+	var perks: Array = adventurer.progression.get("perks", [])
+	var bulwark_bonus := WARRIOR_BULWARK_GUARD if perks.has(WARRIOR_BULWARK_PERK_ID) else 0
+	return armor_def + guard_stat + bulwark_bonus
+
+
+## Scout strategic reconnaissance detection range (see get_party_scouting_
+## intel()): BASE_SCOUT_INTEL_RANGE, plus Keen Eyes' configured bonus once a
+## Scout has chosen it. Returns the base range for an unknown adventurer --
+## callers only ever consult this for a party member already confirmed to be
+## a Scout.
+func get_effective_scout_intel_range(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return BASE_SCOUT_INTEL_RANGE
+	var perks: Array = adventurer.progression.get("perks", [])
+	var bonus := SCOUT_KEEN_EYES_INTEL_RANGE_BONUS if perks.has(SCOUT_KEEN_EYES_PERK_ID) else 0
+	return BASE_SCOUT_INTEL_RANGE + bonus
+
+
+## Cleric Heal/Bless spell range (see BattleController.try_cast_spell(),
+## which consults this per-caster instead of a flat constant):
+## BASE_CLERIC_SPELL_RANGE, plus Meditation's configured bonus once a Cleric
+## has chosen it. Returns the base range for an unknown adventurer.
+func get_effective_spell_range(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return BASE_CLERIC_SPELL_RANGE
+	var perks: Array = adventurer.progression.get("perks", [])
+	var bonus := CLERIC_MEDITATION_SPELL_RANGE_BONUS if perks.has(CLERIC_MEDITATION_PERK_ID) else 0
+	return BASE_CLERIC_SPELL_RANGE + bonus
 
 
 func get_effective_might(adventurer_id: String) -> int:

@@ -281,8 +281,14 @@ func _on_back_pressed() -> void:
 		GameManager.go_to_parties()
 
 
+## Delegates to GameSession's own perk metadata readers (get_perk_display_
+## name()/get_perk_effect_description()) rather than inventing display copy
+## here -- the same source level_up.gd's option buttons render from, so an
+## owned perk's name and effect read identically in both places. A perk with
+## no effect description (should not happen for any id GameSession actually
+## grants) still shows its bare name rather than a dangling "()" suffix.
 func _get_perk_display_name(perk_id: String) -> String:
-	if perk_id == GameSession.BONUS_MOVE_PERK_ID:
-		return "Bonus Move"
-	return perk_id.capitalize()
+	var perk_name := GameSession.get_perk_display_name(perk_id)
+	var effect := GameSession.get_perk_effect_description(perk_id)
+	return "%s (%s)" % [perk_name, effect] if not effect.is_empty() else perk_name
 

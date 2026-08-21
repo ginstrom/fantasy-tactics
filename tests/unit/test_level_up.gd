@@ -5,6 +5,14 @@ extends GutTest
 ## chooses perks only through GameSession's validated mutation APIs, and
 ## never calls GameManager or changes scenes itself — it only emits a
 ## completion signal that its owner (Battlefield) reacts to.
+##
+## Step 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md) replaced the single hard-coded
+## ChooseBonusMoveButton with dynamic per-class perk option buttons -- one
+## Button per GameSession.get_available_perks() entry, addressed by name
+## ("PerkOption_<perk_id>") rather than a fixed node path, so these tests
+## exercise the real .tscn signal wiring the same way a class-name switch or
+## a second hard-coded button never could.
 
 const LevelUpScene := preload("res://scenes/ui/level_up.tscn")
 
@@ -20,6 +28,10 @@ func _open_level_up(adventurer_id: String, health_before: int) -> Control:
 	add_child_autofree(level_up)
 	level_up.show_for_adventurer(adventurer_id, health_before)
 	return level_up
+
+
+func _perk_option_button(level_up: Control, perk_id: String) -> Button:
+	return level_up.perk_options_container.get_node_or_null("PerkOption_%s" % perk_id)
 
 
 func test_shows_xp_level_health_gain_and_skill_gains_after_a_level_up() -> void:
@@ -46,6 +58,26 @@ func test_continue_is_free_on_an_ordinary_level_and_emits_resolved() -> void:
 	assert_false(level_up.visible, "Continue should close the modal")
 
 
+## At level 3, a Warrior has exactly two eligible options -- Juggernaut and
+## Bulwark, in GameSession.CLASS_PERKS' own order -- rendered as real Button
+## nodes rather than one fixed ChooseBonusMoveButton.
+func test_a_pending_level_shows_exactly_the_warriors_own_two_perk_options() -> void:
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+
+	assert_true(level_up.perk_label.visible)
+	assert_eq(level_up.perk_options_container.get_child_count(), 2)
+	assert_not_null(_perk_option_button(level_up, GameSession.WARRIOR_JUGGERNAUT_PERK_ID))
+	assert_not_null(_perk_option_button(level_up, GameSession.WARRIOR_BULWARK_PERK_ID))
+	assert_eq(
+		_perk_option_button(level_up, GameSession.WARRIOR_JUGGERNAUT_PERK_ID).text,
+		"%s (%s)" % [
+			GameSession.get_perk_display_name(GameSession.WARRIOR_JUGGERNAUT_PERK_ID),
+			GameSession.get_perk_effect_description(GameSession.WARRIOR_JUGGERNAUT_PERK_ID),
+		]
+	)
+
+
 func test_continue_stays_disabled_until_a_pending_level_three_perk_is_chosen() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
@@ -53,15 +85,18 @@ func test_continue_stays_disabled_until_a_pending_level_three_perk_is_chosen() -
 
 	assert_true(level_up.continue_button.disabled)
 	assert_true(level_up.perk_label.visible)
-	assert_true(level_up.choose_bonus_move_button.visible)
 
 	level_up.continue_button.emit_signal("pressed")
 	assert_signal_not_emitted(level_up, "resolved")
 	assert_true(level_up.visible, "A required perk choice must block dismissal")
 
-	level_up.choose_bonus_move_button.emit_signal("pressed")
+	_perk_option_button(level_up, GameSession.WARRIOR_JUGGERNAUT_PERK_ID).emit_signal("pressed")
 
-	assert_true(GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.perks.has("bonus_move"))
+	assert_true(
+		GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.perks.has(
+			GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+		)
+	)
 	assert_false(level_up.continue_button.disabled)
 	assert_false(level_up.perk_label.visible)
 
@@ -69,15 +104,29 @@ func test_continue_stays_disabled_until_a_pending_level_three_perk_is_chosen() -
 	assert_signal_emitted(level_up, "resolved")
 
 
-func test_choosing_the_perk_uses_game_sessions_bonus_move_perk_id_constant() -> void:
+## Choosing one perk immediately re-renders the option list down to only the
+## still-available one (dynamic, not a fixed two-button layout) -- a level 6
+## Warrior who already resolved level 3's slot only ever sees the remaining
+## perk, never a re-offer of the one already chosen.
+func test_choosing_a_perk_removes_it_from_the_remaining_options() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
 
-	level_up.choose_bonus_move_button.emit_signal("pressed")
+	_perk_option_button(level_up, GameSession.WARRIOR_JUGGERNAUT_PERK_ID).emit_signal("pressed")
+
+	assert_eq(level_up.perk_options_container.get_child_count(), 0, "The slot is resolved, so no options remain")
+	assert_null(_perk_option_button(level_up, GameSession.WARRIOR_JUGGERNAUT_PERK_ID))
+
+
+func test_choosing_the_perk_uses_game_sessions_choose_perk_api() -> void:
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+
+	_perk_option_button(level_up, GameSession.WARRIOR_BULWARK_PERK_ID).emit_signal("pressed")
 
 	assert_eq(
 		GameSession.get_adventurer(GameSession.WARRIOR_ID).progression.perks,
-		[GameSession.BONUS_MOVE_PERK_ID]
+		[GameSession.WARRIOR_BULWARK_PERK_ID]
 	)
 
 
@@ -86,7 +135,21 @@ func test_an_ordinary_level_never_shows_the_perk_controls() -> void:
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
 
 	assert_false(level_up.perk_label.visible)
-	assert_false(level_up.choose_bonus_move_button.visible)
+	assert_eq(level_up.perk_options_container.get_child_count(), 0)
+
+
+## Once both of a class's perks are already chosen, is_perk_choice_pending()
+## is permanently false (docs/designs/class-system.md) -- no "no perks
+## available" empty state is needed, and Continue is never blocked again.
+func test_a_level_with_no_perks_left_to_offer_shows_no_perk_controls_and_never_blocks_continue() -> void:
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)  # level 6: both slots earned
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+
+	assert_false(level_up.perk_label.visible)
+	assert_eq(level_up.perk_options_container.get_child_count(), 0)
+	assert_false(level_up.continue_button.disabled)
 
 
 func test_level_up_never_calls_game_manager_or_changes_scenes() -> void:

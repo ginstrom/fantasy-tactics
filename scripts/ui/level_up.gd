@@ -19,7 +19,7 @@ signal resolved
 @onready var health_gain_label: Label = $Content/HealthGainLabel
 @onready var skill_gains_label: Label = $Content/SkillGainsLabel
 @onready var perk_label: Label = $Content/PerkLabel
-@onready var choose_bonus_move_button: Button = $Content/ChooseBonusMoveButton
+@onready var perk_options_container: VBoxContainer = $Content/PerkOptionsContainer
 @onready var continue_button: Button = $Content/ContinueButton
 
 var adventurer_id: String = ""
@@ -27,7 +27,6 @@ var _health_before: int = 0
 
 
 func _ready() -> void:
-	choose_bonus_move_button.pressed.connect(_on_choose_bonus_move_pressed)
 	continue_button.pressed.connect(_on_continue_pressed)
 
 
@@ -77,12 +76,44 @@ func refresh() -> void:
 	perk_label.visible = pending
 	if pending:
 		perk_label.text = tr("level_up.perk_pending")
-	choose_bonus_move_button.visible = pending
+	_refresh_perk_options(pending)
 	continue_button.disabled = pending
 
 
-func _on_choose_bonus_move_pressed() -> void:
-	GameSession.choose_perk(adventurer_id, GameSession.BONUS_MOVE_PERK_ID)
+## Rebuilds the perk-choice buttons from scratch every refresh -- remove_
+## child() (not just queue_free()) before re-populating, same as unit_
+## details.gd's _populate_inventory_list(), so a synchronous re-refresh
+## (pressing an option button calls refresh() with no frame in between)
+## never counts a stale button still parented here. One button per
+## GameSession.get_available_perks() entry -- dynamic, data-driven option
+## controls rather than a class-name switch or a hard-coded second button --
+## so a Warrior, Scout, or Cleric (one, two, or eventually more perks) all
+## render correctly from this same code path. Renders nothing while no
+## choice is pending, including once both of a class's perks are already
+## chosen (get_available_perks() then returns [] and is_perk_choice_pending()
+## is already permanently false -- no empty-tree state needed).
+func _refresh_perk_options(pending: bool) -> void:
+	for child in perk_options_container.get_children():
+		perk_options_container.remove_child(child)
+		child.queue_free()
+
+	if not pending:
+		return
+
+	for perk_id in GameSession.get_available_perks(adventurer_id):
+		var button := Button.new()
+		button.name = "PerkOption_%s" % perk_id
+		var effect := GameSession.get_perk_effect_description(perk_id)
+		button.text = (
+			"%s (%s)" % [GameSession.get_perk_display_name(perk_id), effect] if not effect.is_empty()
+			else GameSession.get_perk_display_name(perk_id)
+		)
+		button.pressed.connect(_on_perk_option_pressed.bind(perk_id))
+		perk_options_container.add_child(button)
+
+
+func _on_perk_option_pressed(perk_id: String) -> void:
+	GameSession.choose_perk(adventurer_id, perk_id)
 	refresh()
 
 

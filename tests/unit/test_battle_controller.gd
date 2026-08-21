@@ -1299,11 +1299,16 @@ func test_ready_builds_the_player_unit_with_a_ninety_five_percent_hit_chance_whe
 	assert_eq(warrior.hit_chance, 0.95, "Raw Attack 100 should cap the unit's hit chance at 0.95")
 
 
-func test_ready_builds_the_player_unit_with_one_extra_move_tile_after_choosing_bonus_move() -> void:
+## Step 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md) retired bonus_move from new choose_perk()
+## selections -- an existing holder keeps its effect unchanged, but a fresh
+## selection is no longer how a test gets one either, so this simulates a
+## legacy holder the same way GameSession's own migration tests do: direct
+## progression.perks mutation.
+func test_ready_builds_the_player_unit_with_one_extra_move_tile_for_a_legacy_bonus_move_holder() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 50.0)
-	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.BONUS_MOVE_PERK_ID)
+	GameSession.adventurers[0].progression.perks.append(GameSession.BONUS_MOVE_PERK_ID)
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])

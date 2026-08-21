@@ -121,13 +121,16 @@ func _resolve_round(battlefield: Node) -> void:
 
 
 ## Drives the level-up modal exactly the way a human would click through
-## it: choose the only available perk if one is pending (the same
-## ChooseBonusMoveButton handler in scripts/ui/level_up.gd calls), then
+## it: choose the first still-available class-owned perk if one is pending
+## (the same GameSession.get_available_perks() level_up.gd's own dynamic
+## option buttons render from -- see its _refresh_perk_options()), then
 ## Continue. Repeats for every queued level-up.
 func _resolve_level_up(level_up: Control) -> void:
 	while level_up.visible:
 		if GameSession.is_perk_choice_pending(level_up.adventurer_id):
-			GameSession.choose_perk(level_up.adventurer_id, GameSession.BONUS_MOVE_PERK_ID)
+			var available: Array[String] = GameSession.get_available_perks(level_up.adventurer_id)
+			if not available.is_empty():
+				GameSession.choose_perk(level_up.adventurer_id, available[0])
 		# _on_continue_pressed() refuses to close while a perk choice is still
 		# pending, which would spin here forever; bail out instead of hanging
 		# if choose_perk() above could not resolve it.
