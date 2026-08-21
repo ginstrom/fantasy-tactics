@@ -2769,41 +2769,68 @@ func test_cleric_devout_adds_its_configured_percent_to_effective_max_health_only
 
 ## Task 7 (docs/plans/2026-08-21-stage-2-party-readiness/
 ## 02-class-progression-and-perks.md): monster-manual.md's "Stage 2 locked
-## values" table used to be a mean-of-range approximation (melee 63.5, guard
-## 11.5, might +3.5 -- see docs/designs/monster-manual.md's Calibration
-## Baseline section). This pins skill_gain_roll to a fully deterministic,
-## reproducible sequence -- always the top of each skill's gain range,
-## rather than a real seeded roll, since GameSession's own leveling loop
-## already takes skill_gain_roll as its sole entropy source -- computes the
-## resulting REAL (not averaged) level-2 Warrior baseline, and checks the
-## comparison figures monster-manual.md's own table now derives from it
-## against every initial-roster monster's real stats. If a future change to
-## skill gain ranges, Might's damage contribution, or a monster's stats moves
-## any of these numbers, this test and monster-manual.md's own table must be
-## updated together -- never silently patched around by retuning a monster
-## to hide a failed comparison (see this step's own doc comment).
+## values" table is a mean-of-range approximation (melee 63.5, guard 11.5,
+## might +3.5 -- see docs/designs/monster-manual.md's Calibration Baseline
+## section), the same convention Step 1 originally used. skill_gain_roll's
+## real signature returns an int, so no single pinned Callable can produce a
+## fractional "3.5" gain directly; instead this pins two separate sessions --
+## one always taking each skill's minimum gain, one always taking its
+## maximum -- and averages the two genuinely deterministic, reproducible
+## outcomes (e.g. melee's "med" tier, min 3 / max 4, averages to 3.5),
+## reproducing the doc's own mean convention from real code rather than a
+## hand-derived approximation. Also locks in the doc's established (if
+## under-documented) comparison-figure convention: guard reduces the
+## monster's hit chance directly, but Resistance is NOT applied to this
+## particular "expected damage to the Warrior" figure -- verified by
+## reverse-deriving the doc's own pre-existing Level 1 baseline row (Kobold
+## 0.15, Goblin 0.40, Orc 1.20, Hobgoblin 2.00 at guard 10) against
+## (monster_hit_chance - guard / 100) * monster_mean_damage, which matches
+## exactly, whereas also multiplying by (1 - resistance) does not. If a
+## future change to skill gain ranges, Might's damage contribution, or a
+## monster's stats moves any of these numbers, this test and monster-
+## manual.md's own table must be updated together -- never silently patched
+## around by retuning a monster to hide a failed comparison.
 func test_deterministic_level_two_warrior_baseline_matches_monster_manual_table() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.skill_gain_roll = func(_min_value: int, max_value: int) -> int: return max_value
-	session.create_party()
-	session.assign_adventurer_to_selected_party("warrior_001")
+	var min_session: Node = GameSessionScript.new()
+	autofree(min_session)
+	min_session.skill_gain_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	min_session.create_party()
+	min_session.assign_adventurer_to_selected_party("warrior_001")
+	min_session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)  # exactly the level-2 threshold
 
-	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)  # exactly the level-2 threshold
+	var max_session: Node = GameSessionScript.new()
+	autofree(max_session)
+	max_session.skill_gain_roll = func(_min_value: int, max_value: int) -> int: return max_value
+	max_session.create_party()
+	max_session.assign_adventurer_to_selected_party("warrior_001")
+	max_session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
 
-	var warrior: Dictionary = session.get_adventurer("warrior_001")
-	assert_eq(warrior.level, 2)
-	assert_eq(warrior.stats.melee, 64, "60 base + a pinned max melee gain of 4 ('med' tier, one level-up)")
-	assert_eq(int(warrior.stats.guard), 2, "0 base + a pinned max guard gain of 2 ('low' tier, one level-up)")
-	assert_eq(warrior.stats.might, 4, "0 base + a pinned max might gain of 4 ('med' tier, one level-up)")
-	assert_eq(session.get_effective_max_health("warrior_001"), 20, "vitality 10 * level 2, unaffected by pinning")
-	assert_eq(session.get_effective_defense("warrior_001"), 12, "10 leather armor + 2 pinned Guard")
+	var min_warrior: Dictionary = min_session.get_adventurer("warrior_001")
+	var max_warrior: Dictionary = max_session.get_adventurer("warrior_001")
+	assert_eq(min_warrior.level, 2)
+	assert_eq(max_warrior.level, 2)
+	assert_eq(min_warrior.stats.melee, 63, "60 base + a pinned min melee gain of 3 ('med' tier, one level-up)")
+	assert_eq(max_warrior.stats.melee, 64, "60 base + a pinned max melee gain of 4 ('med' tier, one level-up)")
+	assert_eq(int(min_warrior.stats.guard), 1, "0 base + a pinned min guard gain of 1 ('low' tier, one level-up)")
+	assert_eq(int(max_warrior.stats.guard), 2, "0 base + a pinned max guard gain of 2 ('low' tier, one level-up)")
+	assert_eq(min_warrior.stats.might, 3, "0 base + a pinned min might gain of 3 ('med' tier, one level-up)")
+	assert_eq(max_warrior.stats.might, 4, "0 base + a pinned max might gain of 4 ('med' tier, one level-up)")
+	assert_eq(min_session.get_effective_max_health("warrior_001"), 20, "vitality 10 * level 2, unaffected by pinning")
+	assert_eq(max_session.get_effective_max_health("warrior_001"), 20, "vitality 10 * level 2, unaffected by pinning")
 
-	var hit_chance: float = session.get_effective_hit_chance("warrior_001")
-	var mean_weapon_damage_with_might: float = 4.5 + session.get_effective_might("warrior_001")  # Iron Longsword 1-8
-	var expected_damage_per_swing: float = hit_chance * mean_weapon_damage_with_might
-	var warrior_guard: int = session.get_effective_defense("warrior_001")
-	var warrior_resistance: int = session.get_effective_resistance("warrior_001")
+	var mean_melee: float = (min_warrior.stats.melee + max_warrior.stats.melee) / 2.0
+	var mean_guard: float = (
+		(min_session.get_effective_defense("warrior_001") + max_session.get_effective_defense("warrior_001")) / 2.0
+	)
+	var mean_might: float = (min_warrior.stats.might + max_warrior.stats.might) / 2.0
+	assert_eq(mean_melee, 63.5, "Matches monster-manual.md's Calibration Baseline mean melee")
+	assert_eq(mean_guard, 11.5, "10 leather armor + mean guard stat 1.5 -- matches the Baseline's mean guard")
+	assert_eq(mean_might, 3.5, "Matches the Baseline's mean might gain")
+
+	var mean_hit_chance: float = minf(mean_melee / 100.0, min_session.EFFECTIVE_HIT_CHANCE_CAP)
+	var mean_weapon_damage_with_might: float = 4.5 + mean_might  # Iron Longsword 1-8, mean 4.5
+	var expected_damage_per_swing: float = mean_hit_chance * mean_weapon_damage_with_might
+	assert_almost_eq(expected_damage_per_swing, 5.08, 0.001, "0.635 hit chance * 8.0 mean weapon damage with Might")
 
 	var monsters := {
 		"Kobold": GameSessionScript.KOBOLD_ENEMY_STATS,
@@ -2811,26 +2838,29 @@ func test_deterministic_level_two_warrior_baseline_matches_monster_manual_table(
 		"Orc": GameSessionScript.ORC_ENEMY_STATS,
 		"Hobgoblin": GameSessionScript.HOBGOBLIN_ENEMY_STATS,
 	}
-	# See docs/designs/monster-manual.md's "Stage 2 locked values" table --
-	# these are that table's own numbers, recalculated here from the real
-	# pinned baseline above rather than Step 1's mean-based approximation.
-	var expected_attacks_to_defeat := {"Kobold": 1.1, "Goblin": 2.4, "Orc": 4.0, "Hobgoblin": 5.5}
-	var expected_damage_to_warrior := {"Kobold": 0.12, "Goblin": 0.32, "Orc": 1.03, "Hobgoblin": 1.73}
+	# The precise (unrounded) figures monster-manual.md's own "Stage 2 locked
+	# values" table displays rounded to 1/2 decimals (1.2/2.6/4.3/5.9 and
+	# 0.14/0.37/1.16/1.94 respectively).
+	var expected_attacks_to_defeat := {
+		"Kobold": 6.0 / 5.08, "Goblin": 13.0 / 5.08, "Orc": 22.0 / 5.08, "Hobgoblin": 30.0 / 5.08,
+	}
+	var expected_damage_to_warrior := {"Kobold": 0.135, "Goblin": 0.37, "Orc": 1.155, "Hobgoblin": 1.94}
 
 	for monster_name in monsters:
 		var monster: Dictionary = monsters[monster_name]
 
 		var attacks_to_defeat: float = monster.max_health / expected_damage_per_swing
 		assert_almost_eq(
-			snappedf(attacks_to_defeat, 0.1), expected_attacks_to_defeat[monster_name], 0.001,
+			attacks_to_defeat, expected_attacks_to_defeat[monster_name], 0.001,
 			"%s expected-attacks-to-defeat must match monster-manual.md's Stage 2 table" % monster_name
 		)
 
-		var monster_hit_chance: float = maxf(0.0, float(monster.hit_chance) - warrior_guard / 100.0)
-		var monster_mean_damage: float = float(monster.attack_damage) * (1.0 - warrior_resistance / 100.0)
-		var damage_to_warrior: float = monster_hit_chance * monster_mean_damage
+		# Guard reduces the monster's hit chance directly; Resistance is not
+		# applied here (see this test's own doc comment for the derivation).
+		var monster_hit_chance: float = maxf(0.0, float(monster.hit_chance) - mean_guard / 100.0)
+		var damage_to_warrior: float = monster_hit_chance * float(monster.attack_damage)
 		assert_almost_eq(
-			snappedf(damage_to_warrior, 0.01), expected_damage_to_warrior[monster_name], 0.001,
+			damage_to_warrior, expected_damage_to_warrior[monster_name], 0.001,
 			"%s expected-damage-to-Warrior-per-attack must match monster-manual.md's Stage 2 table" % monster_name
 		)
 

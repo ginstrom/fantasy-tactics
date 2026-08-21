@@ -62,26 +62,31 @@ Monsters possess all the same tactical attributes as adventurer units, though at
 
 ### Stage 2 locked values (2026-08-21, recalculated for class progression and perks)
 
-Recalibrated Level-2 Warrior matchups under automatic skills, replacing both
-the deprecated manual-Accuracy comparison and the mean-of-range approximation
-this table originally shipped with. `test_deterministic_level_two_warrior_
-baseline_matches_monster_manual_table()` (tests/unit/test_game_session.gd)
-pins `skill_gain_roll` to a fully deterministic, reproducible sequence —
-always the top of each skill's gain range, rather than an average — and
-regression-checks the real resulting baseline (melee 64%, guard 12, raw
-damage 8.5 — max_health 20 stays exact either way, since it is
-`vitality × level` rather than a rolled skill) against every initial-roster
-monster's real stats. The deterministic pin lands slightly stronger than
-Step 1's mean-based estimate (which used melee 63.5%, guard 11.5, raw damage
-8.0), so these figures are correspondingly a little better for the Warrior
-than the original approximation:
+Recalibrated Level-2 Warrior matchups under automatic skills, replacing the
+deprecated manual-Accuracy comparison, using the same mean-of-range baseline
+as the Calibration Baseline table above (melee 63.5%, guard 11.5, raw damage
+8.0 — max_health 20 is exact either way, since it is `vitality × level`
+rather than a rolled skill). This mean is now backed by a real deterministic
+regression rather than a hand-derived approximation:
+`test_deterministic_level_two_warrior_baseline_matches_monster_manual_table()`
+(tests/unit/test_game_session.gd) pins two separate sessions'
+`skill_gain_roll` — one always taking each skill's minimum gain, one always
+taking its maximum — and averages the two genuinely deterministic outcomes
+(e.g. melee's "med" tier, min 3 / max 4, averages to the same 63.5 this
+table uses), reproducing this baseline from real code instead of an
+un-exercised approximation. The same test also locks in this table's own
+comparison-figure convention: Guard reduces the monster's hit chance
+directly, but Resistance is not applied to the "damage to Warrior" column
+(verified against this doc's own pre-existing Level 1 baseline numbers,
+which only match `(monster_hit_chance - guard / 100) * monster_mean_damage`,
+not that formula times `(1 - resistance)` as well):
 
 | Monster | Level-2 automatic-skill Warrior expected attacks to defeat | Expected damage to Warrior per monster attack |
 |---|---:|---:|
-| Kobold | 1.1 | 0.12 |
-| Goblin | 2.4 | 0.32 |
-| Orc | 4.0 | 1.03 |
-| Hobgoblin | 5.5 | 1.73 |
+| Kobold | 1.2 | 0.14 |
+| Goblin | 2.6 | 0.37 |
+| Orc | 4.3 | 1.16 |
+| Hobgoblin | 5.9 | 1.94 |
 
 ## Initial roster — preserve shipped values
 
