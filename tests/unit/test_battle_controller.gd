@@ -1263,6 +1263,43 @@ func test_ready_hydrates_the_shared_tactical_profile_for_both_player_and_enemy_u
 	assert_eq(goblin.max_action_points, GameSession.GOBLIN_ENEMY_STATS.action_points)
 
 
+## Fix-review finding 2 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md's task-1-report.md fix report):
+## the live-battle route's melee/missile display hydration must also derive
+## a real value for a still-legacy enemy template (GOBLIN_ARCHER_ENEMY_STATS,
+## flat hit_chance 0.4, no melee/missile key) -- not just for the four
+## migrated monsters -- while leaving hit_chance itself untouched. Mirrors
+## test_battle_state_factory.gd's
+## test_build_derives_melee_and_missile_display_fields_for_an_unmodified_
+## legacy_template for the scene-free route.
+func test_ready_derives_melee_and_missile_display_fields_for_a_legacy_enemy_template() -> void:
+	GameSession.reset()
+	var enemy_stats: Dictionary = GameSession.GOBLIN_ARCHER_ENEMY_STATS.duplicate(true)
+	enemy_stats["count"] = 1
+	GameSession.active_encounters.append({
+		"id": "legacy_profile_test",
+		"template_id": GameSession.RUINED_FORTRESS_ID,
+		"position": Vector2i(2, 2),
+		"name_key": "expedition.ruined_fortress.name",
+		"danger_key": "expedition.danger.high",
+		"difficulty": 3,
+		"kill_xp": 6,
+		"clear_xp": 30,
+		"enemy": enemy_stats,
+	})
+	GameSession.selected_encounter = "legacy_profile_test"
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var archer = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	assert_not_null(archer)
+	assert_eq(GameSession.GOBLIN_ARCHER_ENEMY_STATS.hit_chance, 0.4, "Guard against this fixture drifting silently")
+	assert_eq(archer.melee, 40, "0.4 hit_chance derived to a melee display value, not a misleading 0")
+	assert_eq(archer.missile, 40, "0.4 hit_chance derived to a missile display value, not a misleading 0")
+	assert_eq(archer.hit_chance, 0.4, "The real resolved hit chance must stay exactly the legacy value, unaffected")
+
+
 func test_enemy_start_positions_supports_up_to_eight_enemies() -> void:
 	assert_eq(BattleControllerScript.ENEMY_START_POSITIONS.size(), 8)
 

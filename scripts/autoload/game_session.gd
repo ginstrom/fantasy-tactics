@@ -3575,6 +3575,42 @@ func get_enemy_profile_guard(stats: Dictionary) -> int:
 	return int(stats.get("guard", stats.get("defense", 0)))
 
 
+## The shared melee/missile pair for a monster template's raw accuracy -- the
+## mirror image of get_enemy_profile_hit_chance()'s hit_chance normalization,
+## and the value unit.gd's Unit.melee/Unit.missile fields hydrate from for
+## BOTH a migrated and a legacy template (see BattleController._ready()/
+## BattleStateFactory._build_enemy_unit(), the same two call sites get_enemy_
+## profile_hit_chance() documents), so the "melee/missile are the same raw
+## accuracy stat hit_chance is derived from" invariant (unit.gd's own doc
+## comment) holds for every enemy, not just the four migrated monsters.
+##
+## A migrated template's explicit melee/missile keys win outright. A legacy
+## template (flat hit_chance only) derives an equivalent value from
+## hit_chance * 100 for BOTH melee and missile -- the same convention a
+## player Unit already uses: a Warrior's `missile` field is populated to its
+## raw missile skill even though it's equipped with a sword, not a bow (see
+## BattleController._ready()'s player_unit.missile assignment). This is
+## read-only/display normalization: it never changes hit_chance itself,
+## which always comes from get_enemy_profile_hit_chance() directly, not from
+## these two functions.
+##
+## Also the seed a scenario's "melee"/"missile" modifier adjusts for a
+## legacy template (see BattleStateFactory._build_enemy_unit()) -- so
+## {"melee": 5} against a template whose real accuracy is hit_chance 0.4
+## resolves to melee 45 (40 + 5), not 5 (0 + 5).
+func get_enemy_profile_melee(stats: Dictionary) -> int:
+	if stats.has("melee") or stats.has("missile"):
+		return int(stats.get("melee", 0))
+	return int(round(float(stats.get("hit_chance", 0.0)) * ATTACK_TO_HIT_CHANCE_DIVISOR))
+
+
+## See get_enemy_profile_melee()'s own doc comment.
+func get_enemy_profile_missile(stats: Dictionary) -> int:
+	if stats.has("melee") or stats.has("missile"):
+		return int(stats.get("missile", 0))
+	return int(round(float(stats.get("hit_chance", 0.0)) * ATTACK_TO_HIT_CHANCE_DIVISOR))
+
+
 ## Centralized effective max health: the adventurer's stored max_health
 ## (which leveling already keeps current) plus the Juggernaut/Devout perk's
 ## percentage bonus, rounded to the nearest whole point. Both perks are

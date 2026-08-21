@@ -431,6 +431,63 @@ func test_build_applies_explicit_enemy_shared_profile_modifiers_on_top_of_the_ba
 	)
 
 
+## Fix-review finding 1 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md's task-1-report.md fix report): a
+## "melee" modifier against a still-legacy template (ORC_BRUISER_ENEMY_STATS,
+## authored with a flat hit_chance 0.5 and no melee/missile/attack_max_range
+## keys, so it is a melee, not ranged, template) must adjust its *real*
+## hit_chance-derived accuracy (50 + 10 = 60), not replace it with the bare
+## modifier value (0 + 10 = 10) -- get_enemy_profile_melee() seeds the merge
+## from hit_chance * 100 for exactly this reason. The resolved hit_chance
+## itself must reflect the same base + modifier arithmetic, proving this
+## isn't just a display-field fix.
+func test_build_applies_a_melee_modifier_to_a_legacy_template_on_top_of_its_real_accuracy() -> void:
+	var scenario := _normalized({
+		"scenario_id": "legacy_melee_modifier",
+		"player": {"template_id": "warrior", "count": 1},
+		"enemy": {
+			"units": [
+				{"id": "grunt", "template_id": "orc_bruiser", "position": {"x": 5, "y": 5}, "modifiers": {"melee": 10}},
+			],
+		},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+	var grunt = controller.get_unit_at(Vector2i(5, 5))
+
+	assert_eq(GameSession.ORC_BRUISER_ENEMY_STATS.hit_chance, 0.5, "Guard against this fixture drifting silently")
+	assert_eq(grunt.melee, 60, "50 (hit_chance-derived) + 10 (modifier), not 0 + 10")
+	assert_eq(
+		grunt.hit_chance, minf(0.6, GameSession.EFFECTIVE_HIT_CHANCE_CAP),
+		"The resolved hit chance itself -- not just the display field -- must be base 0.5 + modifier 0.10 = 0.6"
+	)
+
+
+## Fix-review finding 2: a still-legacy template's melee/missile display
+## fields must show its real, hit_chance-derived accuracy even with no
+## modifier applied at all -- not a misleading 0 -- and this must never
+## change the resolved hit_chance itself, which keeps coming from the exact
+## same legacy hit_chance read as before this fix (GOBLIN_ARCHER_ENEMY_STATS
+## is ranged -- attack_max_range 3 -- so this also proves the derivation
+## doesn't accidentally depend on the ranged/melee split).
+func test_build_derives_melee_and_missile_display_fields_for_an_unmodified_legacy_template() -> void:
+	var scenario := _normalized({
+		"scenario_id": "legacy_unmodified_display",
+		"player": {"template_id": "warrior", "count": 1},
+		"enemy": {"units": [{"id": "grunt", "template_id": "goblin_archer", "position": {"x": 5, "y": 5}}]},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+	var grunt = controller.get_unit_at(Vector2i(5, 5))
+
+	assert_eq(GameSession.GOBLIN_ARCHER_ENEMY_STATS.hit_chance, 0.4, "Guard against this fixture drifting silently")
+	assert_eq(grunt.melee, 40, "0.4 hit_chance derived to a melee display value, not a misleading 0")
+	assert_eq(grunt.missile, 40, "0.4 hit_chance derived to a missile display value, not a misleading 0")
+	assert_eq(grunt.hit_chance, 0.4, "Unmodified: hit_chance itself must stay exactly the legacy value")
+
+
 func test_build_never_mutates_gamesession_or_gameconfig_state() -> void:
 	var scenario := _normalized({
 		"scenario_id": "no_side_effects",

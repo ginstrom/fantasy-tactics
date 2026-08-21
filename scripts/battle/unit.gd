@@ -35,16 +35,23 @@ var might: int = 0
 # tactical attributes" section; see also docs/plans/2026-08-21-stage-2-
 # party-readiness/05-shared-tactical-profile-migration.md). melee/missile are
 # the same raw accuracy stat `hit_chance` above is already derived from
-# (whichever the attacker's weapon category picks -- see GameSession.
-# get_effective_hit_chance()/get_enemy_profile_hit_chance()); `guard` is the
-# same percentage-point subtraction `defense` above already applies in
-# BattleController.try_attack_selected_unit(). Both pairs are intentionally
-# kept in sync by construction (BattleController/BattleStateFactory set both
-# from the same source value) rather than merged into one field yet -- see
-# this step's own design note about removing the duplication only once
-# parity tests exist. spellcasting/magic_resistance are 0 for every unit
-# with no spellcasting source yet (every monster, and every adventurer class
-# except Cleric's spellcasting -- see GameSession.get_effective_spellcasting()).
+# (whichever the attacker's weapon category/range picks -- see GameSession.
+# get_effective_hit_chance()/get_enemy_profile_hit_chance()) -- this holds for
+# EVERY unit, including a still-legacy monster template (one authored with a
+# flat `hit_chance` instead of explicit melee/missile): GameSession.
+# get_enemy_profile_melee()/get_enemy_profile_missile() derive an equivalent
+# value from that same `hit_chance` for exactly this reason, the same
+# convention a player Unit already uses (a Warrior's `missile` is populated
+# to its raw missile skill even though it's equipped with a sword). `guard`
+# is the same percentage-point subtraction `defense` above already applies in
+# BattleController.try_attack_selected_unit(). All three pairs are
+# intentionally kept in sync by construction (BattleController/
+# BattleStateFactory set both fields of each pair from the same source
+# value/adapter call) rather than merged into one field yet -- see this
+# step's own design note about removing the duplication only once parity
+# tests exist. spellcasting/magic_resistance are 0 for every unit with no
+# spellcasting source yet (every monster, and every adventurer class except
+# Cleric's spellcasting -- see GameSession.get_effective_spellcasting()).
 var melee: int = 0
 var missile: int = 0
 var guard: int = 0

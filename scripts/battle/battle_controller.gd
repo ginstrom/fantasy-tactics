@@ -299,11 +299,18 @@ func _ready() -> void:
 		enemy_unit.attack_min_range = int(enemy_stats.get("attack_min_range", 1))
 		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
 		# Explicit shared tactical profile -- see the player_unit block above's
-		# identical doc comment. 0 for every still-legacy enemy template (no
-		# "melee"/"missile"/"spellcasting"/"magic_resistance" key authored),
-		# same as unit.gd's own field defaults.
-		enemy_unit.melee = int(enemy_stats.get("melee", 0))
-		enemy_unit.missile = int(enemy_stats.get("missile", 0))
+		# identical doc comment. melee/missile hydrate through the same
+		# adapter as hit_chance (see get_enemy_profile_melee()/
+		# get_enemy_profile_missile()'s own doc comment) so a still-legacy
+		# enemy template's melee/missile display fields show its real
+		# accuracy (derived from hit_chance) rather than a misleading 0 --
+		# this is display normalization only and never changes enemy_
+		# hit_chance itself, which is computed above straight from
+		# enemy_stats. spellcasting/magic_resistance stay 0 for every
+		# still-legacy template (no such key authored), same as unit.gd's
+		# own field defaults.
+		enemy_unit.melee = GameSession.get_enemy_profile_melee(enemy_stats)
+		enemy_unit.missile = GameSession.get_enemy_profile_missile(enemy_stats)
 		enemy_unit.guard = enemy_guard
 		enemy_unit.spellcasting = int(enemy_stats.get("spellcasting", 0))
 		enemy_unit.magic_resistance = int(enemy_stats.get("magic_resistance", 0))

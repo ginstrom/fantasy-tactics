@@ -280,8 +280,15 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	var base_damage_max: int = int(base.get("damage_max", int(base.get("attack_damage", 0))))
 	var damage_min: int = base_damage_min + int(modifiers.get("damage_min", 0))
 	var damage_max: int = base_damage_max + int(modifiers.get("damage_max", 0))
-	var melee: int = int(base.get("melee", 0)) + int(modifiers.get("melee", 0))
-	var missile: int = int(base.get("missile", 0)) + int(modifiers.get("missile", 0))
+	# get_enemy_profile_melee()/get_enemy_profile_missile() (not a bare
+	# base.get("melee", 0)) so a modifier against a still-legacy template
+	# (no "melee"/"missile" key -- e.g. GOBLIN_ARCHER_ENEMY_STATS, hit_chance
+	# 0.4) adjusts its real, hit_chance-derived accuracy (40 + modifier) --
+	# not a modifier applied on top of a 0 floor (0 + modifier), which would
+	# silently discard the template's actual accuracy. See those two
+	# functions' own doc comment.
+	var melee: int = GameSession.get_enemy_profile_melee(base) + int(modifiers.get("melee", 0))
+	var missile: int = GameSession.get_enemy_profile_missile(base) + int(modifiers.get("missile", 0))
 	# get_enemy_profile_hit_chance() normalizes a template dict, so a melee/
 	# missile modifier must be folded in *before* calling it (a "melee"
 	# scenario modifier on a migrated template must move hit_chance, exactly
@@ -289,7 +296,9 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	# hence resolving against this merged copy rather than `base` directly.
 	# Only overridden when either side actually supplies melee/missile, so a
 	# purely legacy template with neither still resolves through the
-	# adapter's flat "hit_chance" branch exactly as before.
+	# adapter's flat "hit_chance" branch exactly as before (unaffected by
+	# melee/missile now defaulting to a real derived value instead of 0,
+	# since this branch is skipped entirely when neither is present).
 	var profile_for_hit_chance: Dictionary = base
 	if base.has("melee") or base.has("missile") or modifiers.has("melee") or modifiers.has("missile"):
 		profile_for_hit_chance = base.duplicate()
