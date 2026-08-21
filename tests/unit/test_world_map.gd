@@ -1637,3 +1637,98 @@ func test_pressing_enter_on_the_arrival_panel_reaches_the_existing_battle_entry_
 
 	assert_eq(GameSession.selected_encounter, encounter_id, "Enter must reach the existing battle-entry path")
 	assert_false(panel.visible, "Entering battle must close the arrival panel")
+
+
+## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: the homeward route
+## GameSession.withdraw_from_encounter() records must be a real, walkable
+## World Map route, not a marker only the save/load layer understands -- a
+## freshly (re)instantiated World Map (mirroring how a restored save resumes
+## play) must still show the party at the encounter tile and let ordinary
+## World Map Turns carry it toward the Encampment.
+func test_a_withdrawn_partys_route_still_advances_toward_the_encampment() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	GameSession.set_deployed_party_position(encounter_position)
+	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	assert_eq(world_map.party_position, encounter_position, "The party must still be shown at the encounter tile")
+	assert_false(GameSession.get_deployed_party_route().is_empty())
+
+	world_map._on_end_turn_pressed()
+
+	assert_ne(
+		world_map.party_position, encounter_position,
+		"A World Map Turn must advance the party along its recorded homeward route"
+	)
+	assert_true(GameSession.has_deployed_party(), "Withdraw must not itself remove the party from the field")
+
+
+## --- Arrival must open the panel by itself, not wait for a further click ---
+## Manual playtesting found that a party who *walks* onto an available
+## encounter (rather than being placed there directly and re-clicked, as
+## try_activate_current_tile()'s own tests above do) never saw the arrival
+## panel at all -- nothing checked for arrival after a movement-driven
+## position change, only after an explicit re-click on an already-standing-
+## there party. Both real ways a party's position changes on the World Map
+## must trigger the same check: the automatic route step a World Map Turn
+## takes, and a manual one-tile step onto a route's own destination tile.
+
+func test_arriving_at_an_encounter_via_a_world_map_turn_opens_the_arrival_panel_automatically() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var approach_position := encounter_position + Vector2i(1, 0)
+	GameSession.set_deployed_party_position(approach_position)
+	GameSession.set_deployed_party_route([encounter_position])
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	assert_false(panel.visible)
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(world_map.party_position, encounter_position, "Setup: the auto route step must land exactly on the encounter")
+	assert_true(
+		panel.visible,
+		"Arriving at an available encounter via a World Map Turn must open the panel automatically"
+	)
+	assert_eq(GameSession.selected_encounter, "", "Opening the panel must not itself enter battle")
+
+
+func test_arriving_at_an_encounter_via_a_manual_route_step_click_opens_the_arrival_panel_automatically() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var approach_position := encounter_position + Vector2i(1, 0)
+	GameSession.set_deployed_party_position(approach_position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(encounter_position)
+	world_map._handle_tile_click(encounter_position)
+
+	assert_eq(world_map.party_position, encounter_position, "Setup: the manual step must land exactly on the encounter")
+	assert_true(
+		panel.visible,
+		"A manual one-tile route step landing on an encounter must open the panel automatically"
+	)
+
+
+func test_end_turn_is_disabled_while_the_arrival_panel_is_open() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var approach_position := encounter_position + Vector2i(1, 0)
+	GameSession.set_deployed_party_position(approach_position)
+	GameSession.set_deployed_party_route([encounter_position])
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._on_end_turn_pressed()
+
+	assert_true(
+		world_map.get_node("%EndTurnButton").disabled,
+		"A World Map Turn must not be able to walk the party past an unresolved arrival choice"
+	)

@@ -181,3 +181,66 @@ func test_three_consecutive_retreats_recover_in_encampment_without_an_economic_d
 
 	assert_false(sim._fieldable_member_ids().is_empty(), "3 HP-penalty retreats must not wipe the party outright")
 	assert_true(GameSession.gold >= 0, "Gold must never go negative across repeated retreats")
+
+
+## --- Withdraw-Then-Wipe Recovery ---------------------------------------------
+
+## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: pre-battle
+## Withdraw must not disturb the zero-gold/no-party recovery invariant
+## test_zero_gold_full_wipe_at_tier_two_recovers_an_affordable_recruit_
+## within_five_turns() above already locks. This adds a real Withdraw before
+## the party is lost, and the new requirement this plan's exit gate demands:
+## the current campaign objective itself is still targetable once a fresh
+## party can be formed. Reuses the same canonical end_world_turn()/
+## recruitment APIs as every other test in this file -- never direct array
+## edits.
+func test_a_withdrawn_and_later_wiped_party_still_recovers_toward_the_unchanged_objective() -> void:
+	GameSession.guild_hall_level = 2
+	GameSession.shop_level = 1
+	var encounter_id: String = GameSession.campaign_objective_id
+	GameSession.create_party()
+	for adventurer in GameSession.adventurers.duplicate():
+		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
+	GameSession.deploy_party(GameSession.selected_party_id)
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+
+	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+	assert_true(GameSession.can_enter_encounter(encounter_id), "Setup: Withdraw must leave the objective enterable")
+
+	var health_by_id := {}
+	for member_id in GameSession.get_selected_party().member_ids:
+		health_by_id[member_id] = 0
+	GameSession.resolve_battle_deaths(health_by_id)
+	GameSession.resolve_party_wipe()
+	# The real wipe path (GameManager.fail_battle()) always routes the party
+	# home through this same canonical API immediately afterward -- without
+	# it, the party stays "deployed" and purchase_recruit_for_party()'s own
+	# _is_party_encamped() gate silently refuses every recruit below.
+	GameSession.return_deployed_party_to_settlement()
+
+	assert_eq(GameSession.adventurers.size(), 0, "Every roster member must be gone after the forced wipe")
+	assert_eq(GameSession.gold, 0, "Gold must be forfeited by the wipe")
+	assert_eq(GameSession.campaign_objective_id, encounter_id, "The current objective must survive a withdraw-then-wipe")
+
+	var sim := CampaignSimScript.new()
+	sim.sim_seed = 902
+
+	var turns := 0
+	while sim._fieldable_member_ids().is_empty() and turns < MAX_RECOVERY_WAIT_TURNS:
+		GameSession.end_world_turn()
+		turns += 1
+		sim._refill_party()
+
+	assert_true(
+		turns <= MAX_RECOVERY_WAIT_TURNS,
+		(
+			"Passive Shop income must still produce an affordable, fieldable recruit within %d world turns "
+			+ "after a withdraw-then-wipe (took %d)"
+		) % [MAX_RECOVERY_WAIT_TURNS, turns]
+	)
+	assert_false(sim._fieldable_member_ids().is_empty(), "A Warrior or Scout must have been recruited and assigned to the party")
+	assert_eq(GameSession.campaign_objective_id, encounter_id, "Recovery must not have altered the current objective")
+	assert_true(
+		GameSession.can_enter_encounter(encounter_id),
+		"The newly formed party must be able to target the unchanged current objective"
+	)

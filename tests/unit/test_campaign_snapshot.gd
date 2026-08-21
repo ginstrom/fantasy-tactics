@@ -3,6 +3,14 @@ extends GutTest
 const CampaignSnapshot := preload("res://scripts/save/campaign_snapshot.gd")
 
 
+## Only the withdraw round-trip test below touches the live GameSession
+## singleton -- every other test in this file exercises the CampaignSnapshot
+## class in isolation. Reset unconditionally anyway so a future test added
+## here can never leak session state into a later test file.
+func after_each() -> void:
+	GameSession.reset()
+
+
 ## A fully-populated snapshot covering every durable category: roster,
 ## recruitment offers/vacancies, a party with a travel route, selected ids,
 ## world turn, active encounters/completions/vacancies, gold/buildings,
@@ -145,6 +153,42 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.shop_gold, 150)
 	assert_eq(snapshot.player_name, "Ryan")
 	assert_eq(snapshot.tutorial_progress, {"formed_party": true})
+
+
+## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: pre-battle
+## Withdraw's combined health/route/objective/reward state must round-trip
+## through the real GameSession.export_campaign_snapshot()/import_campaign_
+## snapshot() path. CampaignSnapshot already owns every field Withdraw
+## touches -- party health, world_position, travel_route, movement_spent,
+## selected_encounter, and the reward buckets -- so this locks that combined
+## behavior at the new route boundary rather than adding a snapshot field.
+func test_a_withdrawn_partys_state_round_trips_through_the_real_game_session_snapshot() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+	var health_before := GameSession.get_current_health(GameSession.WARRIOR_ID)
+	var route_before := GameSession.get_deployed_party_route()
+	var position_before := GameSession.get_deployed_party_position()
+	var objective_before := GameSession.campaign_objective_id
+	var pending_reward_before := GameSession.pending_reward
+	var pending_gear_before := GameSession.pending_gear.duplicate(true)
+	var data := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.get_current_health(GameSession.WARRIOR_ID), health_before)
+	assert_eq(GameSession.get_deployed_party_route(), route_before)
+	assert_eq(GameSession.get_deployed_party_position(), position_before)
+	assert_eq(GameSession.campaign_objective_id, objective_before)
+	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain available after import")
+	assert_eq(GameSession.pending_reward, pending_reward_before)
+	assert_eq(GameSession.pending_gear, pending_gear_before)
 
 
 ## Step 3 of docs/plans/2026-08-18-core-loop-and-engagement: temple_level

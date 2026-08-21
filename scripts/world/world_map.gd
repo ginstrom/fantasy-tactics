@@ -309,6 +309,7 @@ func _on_end_turn_pressed() -> void:
 			"[world_map end_turn] after: party_position=%s route=%s"
 			% [party_position, GameSession.get_deployed_party_route()]
 		)
+	_check_for_arrival()
 	_draw_markers()
 	_draw_routes()
 	_update_highlights()
@@ -381,6 +382,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			party_position = GameSession.get_deployed_party_position()
 			hover_route = []
 			repathing = false
+			_check_for_arrival()
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
@@ -396,6 +398,30 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_routes()
 		_update_highlights()
 		_refresh_campaign_guide()
+
+
+## Manual playtesting found that a party who *walks* onto an available
+## encounter -- an automatic World Map Turn route step, or a manual one-tile
+## step onto a route's own destination tile -- never saw the arrival panel
+## at all, since only an explicit re-click on an already-standing-there
+## party (try_activate_current_tile(), still used by that path) opened it.
+## Called after every party-position-changing move; mirrors try_activate_
+## current_tile()'s own gating exactly, but opens the panel directly instead
+## of requiring a further click to notice arrival.
+func _check_for_arrival() -> void:
+	# Several existing tests build a bare WorldMapScript instance that is
+	# never added to the tree (see _make_world_map() in test_world_map.gd),
+	# so @onready arrival_panel never resolves -- mirrors the same guard
+	# _draw_markers()/_update_highlights()/_refresh_turn_controls() already
+	# use for exactly that reason.
+	if not is_inside_tree() or arrival_panel.visible:
+		return
+	var encounter_id := _expedition_id_at(party_position)
+	if encounter_id == "" or GameSession.is_encounter_complete(encounter_id):
+		return
+	if GameSession.selected_encounter != "" and GameSession.selected_encounter != encounter_id:
+		return
+	_on_encounter_activated(encounter_id)
 
 
 ## Pre-battle Withdraw (docs/plans/2026-08-21-stage-1-campaign-spine/
@@ -619,7 +645,10 @@ func _update_turn_label() -> void:
 func _refresh_turn_controls() -> void:
 	if not is_inside_tree():
 		return
-	end_turn_button.disabled = GameSession.selected_encounter != ""
+	# An open arrival panel is an unresolved player choice -- a further World
+	# Map Turn must not be able to silently walk the party past it (see
+	# _check_for_arrival()).
+	end_turn_button.disabled = GameSession.selected_encounter != "" or arrival_panel.visible
 
 
 func _refresh_information_panel() -> void:

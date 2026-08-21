@@ -1437,6 +1437,42 @@ func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to
 	assert_eq(GameSession.battle_mana_crystals, {2: 1})
 
 
+## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: a withdrawn
+## party's health/route/objective state (see GameSession.withdraw_from_
+## encounter()) must survive a real save/load exactly like any other
+## deployed-party state -- go_to_loaded_campaign() must route it back to the
+## World Map still walking home, never silently settling it at the
+## Encampment or resetting its route.
+func test_go_to_loaded_campaign_returns_a_withdrawn_deployed_party_to_the_world_map_still_en_route() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
+	var route_before := GameSession.get_deployed_party_route()
+	var health_before := GameSession.get_current_health(GameSession.WARRIOR_ID)
+	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
+	writer_repository.save_campaign(GameSession)
+	GameSession.reset()
+	GameManager.save_repository = writer_repository
+
+	var result: Dictionary = GameManager.go_to_loaded_campaign()
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(
+		GameSession.has_deployed_party(),
+		"A withdrawn party must route through go_to_world_map(), not settle at the Encampment"
+	)
+	assert_eq(GameSession.get_deployed_party_route(), route_before, "The homeward route must not be cleared by a load")
+	assert_eq(GameSession.get_current_health(GameSession.WARRIOR_ID), health_before)
+	assert_eq(GameSession.selected_encounter, "")
+	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain available after a load")
+	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.pending_gear, {})
+
+
 func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_world_map() -> void:
 	GameSession.reset()
 	GameSession.create_party()
