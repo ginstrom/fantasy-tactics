@@ -599,6 +599,58 @@ func test_legacy_adventurer_stats_migrate_attack_to_skill_tracks_and_recalculate
 	assert_eq(adv.get("health", 0), 20, "Legacy save without health key normalizes to max_health")
 
 
+## Review finding (docs/plans/2026-08-21-stage-2-party-readiness/
+## 02-class-progression-and-perks.md): the health clamp above must clamp to
+## the record's EFFECTIVE max health (base stats.max_health plus Juggernaut/
+## Devout's percent bonus -- see GameSession.get_effective_max_health()),
+## not merely stats.max_health itself. A level-3 Warrior with base
+## max_health 30 who has chosen warrior_juggernaut has effective max health
+## 35 (30 + round(30 * 15%)); resting to full and round-tripping a snapshot
+## must preserve 35, not silently clip it back down to 30.
+func test_a_perked_adventurers_health_round_trips_at_its_effective_not_base_max_health() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 3, "health": 35,
+			"stats": {"melee": 63, "missile": 63, "guard": 1, "might": 3, "vitality": 10, "max_health": 30},
+			"progression": {"xp": 50.0, "perks": ["warrior_juggernaut"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	var adv: Dictionary = result.snapshot.adventurers[0]
+	assert_eq(adv.stats.max_health, 30, "Base max_health is unaffected by the perk")
+	assert_eq(adv.health, 35, "Health must round-trip at the perked effective max (35), not clamp down to base (30)")
+
+
+## Same regression, Cleric Devout side (a different class, a different
+## percent, and importing via GameSession.import_campaign_snapshot() rather
+## than CampaignSnapshot.from_dictionary() directly) -- proves the fix holds
+## through the real production import path, not just the isolated
+## normalizer.
+func test_import_campaign_snapshot_preserves_a_cleric_devout_holders_effective_health() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 3, "health": 40,
+			"stats": {"melee": 47, "guard": 14, "might": 3, "spellcasting": 60, "vitality": 12, "max_health": 36},
+			"progression": {"xp": 50.0, "perks": ["cleric_devout"]},
+		},
+	]
+	data.selected_party_id = ""
+	data.parties = []
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_true(result.ok, result.error)
+	var adv := GameSession.get_adventurer("cleric_001")
+	assert_eq(adv.stats.max_health, 36, "Base max_health is unaffected by the perk")
+	assert_eq(adv.health, 40, "Health must round-trip at the perked effective max (40), not clamp down to base (36)")
+	assert_eq(GameSession.get_effective_max_health("cleric_001"), 40, "36 + round(36 * 10%) = 40")
+
+
 ## Task 2 (docs/plans/2026-08-21-stage-2-party-readiness/
 ## 02-class-progression-and-perks.md): progression.perks validation. Every
 ## element must be a String naming either GameSession.BONUS_MOVE_PERK_ID (the

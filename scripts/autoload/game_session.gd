@@ -3421,14 +3421,33 @@ func get_effective_max_health(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	var base: int = int(adventurer.stats.max_health)
 	var perks: Array = adventurer.progression.get("perks", [])
+	return compute_effective_max_health(
+		int(adventurer.stats.max_health), perks, WARRIOR_JUGGERNAUT_HP_PERCENT, CLERIC_DEVOUT_HP_PERCENT
+	)
+
+
+## Pure Juggernaut/Devout percent-bonus math, factored out of get_effective_
+## max_health() so CampaignSnapshot's own health-clamp normalization (see
+## _normalize_roster_records() in campaign_snapshot.gd) can compute the same
+## effective max for a record that is not yet -- and may never be -- part of
+## GameSession.adventurers, without duplicating this formula in two files.
+## Static and side-effect-free: takes every input explicitly (base max
+## health, the record's own progression.perks, and both percentages) rather
+## than reading any session state, so campaign_snapshot.gd can call it via
+## the preloaded script reference the same way it already does for
+## CLASS_PERKS, reading the percentages from GameConfig directly instead of
+## a live GameSession instance (see that file's own doc comment for why it
+## avoids the stateful singleton).
+static func compute_effective_max_health(
+	base_max_health: int, perks: Array, juggernaut_percent: int, devout_percent: int
+) -> int:
 	var percent_bonus := 0
 	if perks.has(WARRIOR_JUGGERNAUT_PERK_ID):
-		percent_bonus += WARRIOR_JUGGERNAUT_HP_PERCENT
+		percent_bonus += juggernaut_percent
 	if perks.has(CLERIC_DEVOUT_PERK_ID):
-		percent_bonus += CLERIC_DEVOUT_HP_PERCENT
-	return base + int(round(base * percent_bonus / 100.0))
+		percent_bonus += devout_percent
+	return base_max_health + int(round(base_max_health * percent_bonus / 100.0))
 
 
 ## Returns current persistent health for adventurer_id (clamped in [1, max_health]),

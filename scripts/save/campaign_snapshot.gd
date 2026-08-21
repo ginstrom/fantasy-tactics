@@ -465,8 +465,26 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 		var calc_max_health := vitality * level
 		stats["max_health"] = max(int(stats.get("max_health", 0)), calc_max_health)
 
-		# Health
-		var max_hp := int(stats.max_health)
+		# Health -- clamped to the record's EFFECTIVE max health (base
+		# stats.max_health above, plus the Juggernaut/Devout percent bonus --
+		# see GameSession.compute_effective_max_health(), the single shared
+		# formula GameSession.get_effective_max_health() itself calls), not
+		# merely stats.max_health. Clamping to the base alone would silently
+		# clip a perked holder's stored health back down on every save/load
+		# round trip (docs/plans/2026-08-21-stage-2-party-readiness/
+		# 02-class-progression-and-perks.md review finding). Reads the two
+		# percentages straight from GameConfig rather than the live
+		# GameSession singleton (see EXPEDITIONS' own doc comment above for
+		# why this file avoids that stateful autoload), so this stays a pure
+		# normalization needing no session state.
+		var perks: Array = []
+		if copy.get("progression") is Dictionary and (copy.progression as Dictionary).get("perks") is Array:
+			perks = (copy.progression as Dictionary).perks
+		var juggernaut_percent := GameConfig.get_int("progression", "warrior_juggernaut_hp_percent", 15)
+		var devout_percent := GameConfig.get_int("progression", "cleric_devout_hp_percent", 10)
+		var max_hp: int = _GameSessionScript.compute_effective_max_health(
+			int(stats.max_health), perks, juggernaut_percent, devout_percent
+		)
 		if copy.has("health"):
 			copy["health"] = clampi(int(copy.health), 1, max_hp)
 		else:
