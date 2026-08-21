@@ -303,7 +303,13 @@ func test_a_scenario_built_ranged_attack_against_an_armored_enemy_is_fully_repro
 	# override -- proving a Scout's bow attack against an armored (defense
 	# 10/resistance 15) enemy reproduces identically from the seed alone, the
 	# same reproducibility contract test_battle_state_factory.gd's own seeded-
-	# roll tests already prove for the raw callables individually.
+	# roll tests already prove for the raw callables individually. Iteration
+	# seed 1 is pinned (not arbitrary) precisely because it deterministically
+	# produces a landed hit with real (non-zero) damage for this exact
+	# scenario -- without the precondition asserts below, a seed that
+	# happened to roll a miss on both runs would let this test pass
+	# vacuously (false == false, 0 == 0) without ever proving damage
+	# computation reproduces at all.
 	var scenario := _scenario({
 		"scenario_id": "reproducible_ranged_attack_vs_armor",
 		"board": {"width": 6, "height": 6},
@@ -311,9 +317,9 @@ func test_a_scenario_built_ranged_attack_against_an_armored_enemy_is_fully_repro
 		"enemy": {"units": [{"id": "bruiser", "template_id": "orc_bruiser", "position": {"x": 0, "y": 4}}]},
 	})
 
-	var controller_a: Node2D = BattleStateFactory.build(scenario, 777)
+	var controller_a: Node2D = BattleStateFactory.build(scenario, 1)
 	autofree(controller_a)
-	var controller_b: Node2D = BattleStateFactory.build(scenario, 777)
+	var controller_b: Node2D = BattleStateFactory.build(scenario, 1)
 	autofree(controller_b)
 
 	var attacked_a: bool = controller_a.try_attack_selected_unit(Vector2i(0, 4))
@@ -321,6 +327,11 @@ func test_a_scenario_built_ranged_attack_against_an_armored_enemy_is_fully_repro
 
 	assert_true(attacked_a, "A legal ranged target must execute regardless of hit/miss")
 	assert_eq(attacked_a, attacked_b)
+	# Precondition: this pinned seed must land a real hit with real damage on
+	# BOTH runs, or the equality assertions below could pass vacuously on two
+	# misses without proving anything about damage computation.
+	assert_true(controller_a.last_attack_result.get("hit", false), "Seed 1 must land a hit -- pick a different seed if this ever regresses")
+	assert_gt(int(controller_a.last_attack_result.get("damage", 0)), 0, "A landed hit against this target must deal real, non-zero damage")
 	assert_eq(controller_a.last_attack_result.get("hit"), controller_b.last_attack_result.get("hit"))
 	assert_eq(controller_a.last_attack_result.get("damage", 0), controller_b.last_attack_result.get("damage", 0))
 
@@ -357,7 +368,13 @@ func test_a_scenario_built_ranged_attack_against_an_armored_enemy_is_fully_repro
 ## is why the Warrior's own scenario unit id is deliberately GameSession.
 ## WARRIOR_ID -- the one adventurer GameSession.reset() always seeds -- rather
 ## than an arbitrary made-up id.
-func _tier_two_fixture_scenario() -> Dictionary:
+## warrior_armor_id defaults to the fixture's own prepared chainmail_armor
+## (see the doc comment above); test_tier_two_fixture_demonstrates_the_
+## chainmail_warriors_armour_and_resistance_actually_reduce_bruiser_damage
+## below passes "leather_armor" instead to build the SAME scenario/positions/
+## enemy roll sequence with only the Warrior's armor swapped, so the two
+## runs are otherwise identical inputs to the seeded RNG.
+func _tier_two_fixture_scenario(warrior_armor_id: String = "chainmail_armor") -> Dictionary:
 	return _scenario({
 		"scenario_id": "tier_two_scout_intel_to_bow_and_potion_pattern",
 		"board": {"width": 6, "height": 6},
@@ -365,7 +382,7 @@ func _tier_two_fixture_scenario() -> Dictionary:
 			"units": [
 				{
 					"id": GameSession.WARRIOR_ID, "template_id": "warrior",
-					"weapon_id": "longsword_iron", "armor_id": "chainmail_armor",
+					"weapon_id": "longsword_iron", "armor_id": warrior_armor_id,
 					"position": {"x": 3, "y": 4},
 				},
 				{
@@ -420,6 +437,50 @@ func test_tier_two_fixture_demonstrates_bow_positioned_pressure_alongside_the_wa
 		"The armored Warrior, not the Scout, holds the adjacent front-line tile the Bruiser can actually strike"
 	)
 	assert_false(controller.get_legal_attack_targets(bruiser).has(scout))
+
+
+## Finding 1 fix: the two hydration assertions in test_tier_two_fixture_
+## validates_cleanly_and_hydrates_the_prepared_equipment above (defense ==
+## chainmail's catalog value, chainmail's catalog resistance > leather's)
+## are pure data checks -- neither would fail if armour had zero effect on
+## actual combat damage. This test instead builds the fixture scenario
+## TWICE at the identical seed -- once with the Warrior in the fixture's own
+## chainmail_armor, once with the same Warrior in leather_armor -- and has
+## the Bruiser execute the exact same attack in both runs. Same seed means
+## the same hit_roll/crit_roll/damage_roll draws in both runs (see
+## BattleStateFactory.build()'s per-iteration RandomNumberGenerator); only
+## the target's own defense/resistance differs. No roll is ever manually
+## overridden here, keeping this file's "every random roll seeded through
+## the factory" property. Seed 1 is pinned because it deterministically
+## lands a hit in both runs (required for a real damage comparison) --
+## see the precondition asserts below.
+func test_tier_two_fixture_demonstrates_the_chainmail_warriors_armour_and_resistance_actually_reduce_bruiser_damage() -> void:
+	var chainmail_controller: Node2D = BattleStateFactory.build(_tier_two_fixture_scenario("chainmail_armor"), 1)
+	autofree(chainmail_controller)
+	var leather_controller: Node2D = BattleStateFactory.build(_tier_two_fixture_scenario("leather_armor"), 1)
+	autofree(leather_controller)
+
+	for controller in [chainmail_controller, leather_controller]:
+		controller.active_side = BattleControllerScript.Side.ENEMY
+		controller.selected_unit = controller.get_unit_at(Vector2i(3, 3))  # the Bruiser
+
+	var chainmail_attacked: bool = chainmail_controller.try_attack_selected_unit(Vector2i(3, 4))
+	var leather_attacked: bool = leather_controller.try_attack_selected_unit(Vector2i(3, 4))
+
+	# Precondition: both runs must land a real hit, or comparing damage would
+	# be vacuous (e.g. 0 == 0 proves nothing about armour mitigating damage).
+	assert_true(chainmail_attacked and leather_attacked)
+	assert_true(chainmail_controller.last_attack_result.get("hit", false), "Seed 1 must land a hit against the chainmail Warrior")
+	assert_true(leather_controller.last_attack_result.get("hit", false), "Seed 1 must land a hit against the leather Warrior")
+	var chainmail_damage: int = int(chainmail_controller.last_attack_result.get("damage", 0))
+	var leather_damage: int = int(leather_controller.last_attack_result.get("damage", 0))
+	assert_gt(chainmail_damage, 0)
+	assert_gt(leather_damage, 0)
+
+	assert_lt(
+		chainmail_damage, leather_damage,
+		"The chainmail-armored Warrior must take strictly less damage from the identical Bruiser attack than the leather-armored one would -- real behavioral armour/resistance counterplay, not just a hydrated stat value"
+	)
 
 
 func test_tier_two_fixture_lets_the_warrior_use_a_prepared_potion_after_taking_armored_bruiser_damage() -> void:
