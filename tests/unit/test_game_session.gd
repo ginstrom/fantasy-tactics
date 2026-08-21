@@ -4274,6 +4274,40 @@ func test_get_party_scouting_intel_returns_empty_for_an_unknown_party_or_encount
 	assert_eq(session.get_party_scouting_intel(GameSessionScript.FIRST_PARTY_ID, "nope"), {})
 
 
+## get_party_scouting_intel() resolves encounter_id through get_expedition(),
+## which already falls back from an active-encounter instance to the
+## EXPEDITIONS template for any id, authored or sandbox (see get_expedition()'s
+## own doc comment) -- so an authored campaign-ladder node (docs/plans/
+## 2026-08-18-core-loop-and-engagement/05-authored-encounters-and-final-boss.md)
+## must reveal intel exactly like the legacy sandbox ids above, with no
+## separate code path of its own. "obj_tier2_1_orc_outpost" is used here
+## because it is also a mixed authored formation (see EXPEDITIONS' "enemies"
+## field) -- proving the parallel enemy_types/enemy_counts arrays resolve
+## correctly for an authored id too, not just the mixed Gatehouse case
+## exercised elsewhere.
+func test_get_party_scouting_intel_reveals_composition_for_an_authored_objective_id_the_same_as_a_sandbox_id() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.deploy_party(GameSessionScript.FIRST_PARTY_ID)
+	var orc_outpost: Dictionary = session.get_expedition("obj_tier2_1_orc_outpost")
+	session.set_deployed_party_position(orc_outpost.position)
+
+	var intel: Dictionary = session.get_party_scouting_intel(
+		GameSessionScript.FIRST_PARTY_ID, "obj_tier2_1_orc_outpost"
+	)
+
+	assert_true(intel.has_intel, "An authored objective id must reveal intel exactly like a sandbox encounter id")
+	assert_eq(intel.danger_tier, 2)
+	assert_eq(intel.enemy_types, [tr("battle.enemy.orc_bruiser"), tr("battle.enemy.goblin_archer")])
+	assert_eq(intel.enemy_counts, [1, 1])
+	assert_eq(intel.enemy_count, 2)
+
+
 ## --- Blacksmith ---
 
 ## --- Alchemy Workshop ---

@@ -176,6 +176,15 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	var damage_max: int = int(weapon.get("damage_max", 0)) + int(modifiers.get("damage_max", 0))
 	var defense: int = int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0))
 	var resistance: int = int(armor.get("resistance", 0)) + int(modifiers.get("resistance", 0))
+	# Ranged weapon attack range hydration (Step 4 of docs/plans/2026-08-21-
+	# stage-2-party-readiness/04-scout-ranged-and-tier-two-pattern.md): mirrors
+	# GameSession.get_effective_weapon_attack_range()'s own min_range/max_range
+	# floor exactly, so a scenario-built unit's range always agrees with what
+	# the same weapon_id would hydrate to in a real (BattleController._ready())
+	# battle. Without this, every scenario-built player unit silently kept
+	# unit.gd's melee-only 1/1 default even when the scenario declared a bow.
+	var attack_min_range: int = maxi(int(weapon.get("min_range", 1)), 1)
+	var attack_max_range: int = maxi(int(weapon.get("max_range", 1)), attack_min_range)
 
 	var position := ScenarioContractScript.position_from_dict(spec.position)
 	var color: Color = BattleControllerScript.PLAYER_COLORS[index % BattleControllerScript.PLAYER_COLORS.size()]
@@ -184,6 +193,8 @@ static func _build_player_unit(spec: Dictionary, index: int):
 		action_points, max_health, damage_min, damage_max, hit_chance,
 		TranslationServer.translate(weapon.get("name_key", "")), String(spec.id), defense, resistance, 0, might
 	)
+	unit.attack_min_range = attack_min_range
+	unit.attack_max_range = attack_max_range
 	unit.display_name = String(spec.id)
 	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "right")))
 

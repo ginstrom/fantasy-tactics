@@ -153,6 +153,63 @@ func test_end_turn_skips_a_defeated_party_member_when_reselecting_at_round_start
 	)
 
 
+## --- Ranged weapon attack range hydration (Step 4 of docs/plans/2026-08-21-
+## stage-2-party-readiness/04-scout-ranged-and-tier-two-pattern.md) ----------
+## A live battle hydrates a player unit's attack_min_range/attack_max_range
+## from its equipped weapon (see battle_controller.gd's own _ready(), which
+## reads GameSession.get_effective_weapon_attack_range()) -- but until this
+## fix, _build_player_unit() below never read a scenario unit's weapon_id for
+## range at all, silently leaving every scenario-built player unit at
+## unit.gd's melee-only 1/1 default even when the scenario declared a bow.
+## Mirrors GameSession.get_effective_weapon_attack_range()'s own min_range/
+## max_range floor logic exactly, so a scenario-built unit's range always
+## agrees with what the same weapon_id would hydrate to in a real battle.
+
+func test_build_hydrates_a_shortbows_attack_range_onto_the_scenario_player_unit() -> void:
+	var scenario := _normalized({
+		"scenario_id": "shortbow_hydration",
+		"player": {"units": [{"id": "scout", "template_id": "scout", "weapon_id": "shortbow_iron", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var scout = controller.get_unit_at(Vector2i(0, 0))
+	var shortbow: Dictionary = GameSession.WEAPONS.shortbow_iron
+	assert_eq(scout.attack_min_range, shortbow.min_range)
+	assert_eq(scout.attack_max_range, shortbow.max_range, "A scenario-built Scout must not be stuck at the melee-only 1-tile default")
+
+
+func test_build_hydrates_a_longbows_longer_attack_range_than_a_shortbows() -> void:
+	var scenario := _normalized({
+		"scenario_id": "longbow_hydration",
+		"player": {"units": [{"id": "scout", "template_id": "scout", "weapon_id": "longbow_iron", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var scout = controller.get_unit_at(Vector2i(0, 0))
+	var longbow: Dictionary = GameSession.WEAPONS.longbow_iron
+	assert_eq(scout.attack_min_range, longbow.min_range)
+	assert_eq(scout.attack_max_range, longbow.max_range)
+	assert_gt(longbow.max_range, GameSession.WEAPONS.shortbow_iron.max_range, "Longbow must genuinely outrange shortbow for this to be a meaningful hydration proof")
+
+
+func test_build_hydrates_a_melee_weapons_default_one_tile_attack_range() -> void:
+	# The default warrior/longsword_iron template must keep its existing
+	# melee-only 1/1 range -- this hydration fix must not change behavior for
+	# every scenario test written before it existed.
+	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(hero.attack_min_range, 1)
+	assert_eq(hero.attack_max_range, 1)
+
+
 ## --- Stats read from GameSession's read-only balance constants ---------------
 
 func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_default_gear() -> void:

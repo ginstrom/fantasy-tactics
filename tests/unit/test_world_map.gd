@@ -877,6 +877,101 @@ func test_hovering_away_from_an_encounter_restores_the_default_panel() -> void:
 	assert_false(panel.get_node("Content/EncounterEnemies").visible)
 
 
+## Step 4 of docs/plans/2026-08-21-stage-2-party-readiness/
+## 04-scout-ranged-and-tier-two-pattern.md's task 2: a real world_map.tscn
+## scene test, not just a call into GameSession.get_party_scouting_intel()
+## directly -- drives the same _draw_markers()/_update_hovered_encounter()
+## path production input drives, against an AUTHORED campaign-ladder node
+## (obj_tier2_1_orc_outpost, a mixed Orc Bruiser/Goblin Archer formation --
+## see EXPEDITIONS) rather than only the legacy sandbox goblin_camp/
+## orc_outpost ids every other marker test above already covers. Proves the
+## marker's own star Label (not just the InformationPanel hover preview)
+## renders identically for an authored node once a Scout is in range.
+func test_world_map_scene_reveals_an_authored_tier_two_markers_star_and_composition_once_a_scout_is_in_range() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	# _current_campaign_objective_marker() (world_map.gd) draws whichever node
+	# campaign_objective_id currently names -- advancing it directly here
+	# (rather than completing the three tier-1 nodes first) is enough to make
+	# this authored node's own marker exist to click/hover, matching how
+	# get_party_scouting_intel()/get_expedition() themselves never consult
+	# unlocked_authored_encounters at all.
+	GameSession.campaign_objective_id = "obj_tier2_1_orc_outpost"
+	var orc_outpost: Dictionary = GameSession.get_expedition("obj_tier2_1_orc_outpost")
+	GameSession.set_deployed_party_position(orc_outpost.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+
+	var label := _find_expedition_label_by_position(world_map, orc_outpost.position)
+	world_map._update_hovered_encounter(orc_outpost.position)
+
+	assert_not_null(label, "The authored node's marker label must exist")
+	assert_eq(label.text, "★★", "obj_tier2_1_orc_outpost is difficulty 2")
+	assert_true(panel.get_node("Content/EncounterDanger").visible)
+	assert_true(panel.get_node("Content/EncounterEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterEnemies").text,
+		"%s, %s" % [
+			tr("information.encounter_enemies") % [tr("battle.enemy.orc_bruiser"), 1],
+			tr("information.encounter_enemies") % [tr("battle.enemy.goblin_archer"), 1],
+		],
+		"Both groups of a mixed authored formation must render, not just the first"
+	)
+
+
+## Companion to the reveal test above: moving the deployed party back out of
+## range hides both the marker's star and the hover preview again -- proving
+## "moving out of range removes the view" against the real scene's own redraw
+## path (_draw_markers()/_update_hovered_encounter()), not just a second
+## GameSession.get_party_scouting_intel() call in isolation.
+func test_world_map_scene_hides_an_authored_tier_two_markers_star_and_composition_after_moving_out_of_range() -> void:
+	# Async: _draw_markers() queue_free()s the prior call's marker children
+	# rather than freeing them synchronously, so a second _draw_markers() call
+	# within the same test needs a process frame to elapse before searching
+	# marker_container again, or a stale (soon-to-be-freed) label with the old
+	# "★★" text can still be the first match -- the same deferred-free gotcha
+	# several tests above already work around for battlefield/highlight
+	# children.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.campaign_objective_id = "obj_tier2_1_orc_outpost"
+	var orc_outpost: Dictionary = GameSession.get_expedition("obj_tier2_1_orc_outpost")
+	GameSession.set_deployed_party_position(orc_outpost.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+	# Confirm the reveal actually happened first, so the assertions below prove
+	# a real transition rather than vacuously passing against a marker that was
+	# never revealed in the first place.
+	assert_eq(_find_expedition_label_by_position(world_map, orc_outpost.position).text, "★★")
+
+	# Manhattan distance from (6, 6) to (1, 1) is 10, well beyond even the
+	# scout_keen_eyes-extended range of 4 -- mirrors how a real move commits
+	# (GameSession.set_deployed_party_position()) followed by the screen's own
+	# redraw of markers and the hover preview.
+	GameSession.set_deployed_party_position(Vector2i(6, 6))
+	world_map._draw_markers()
+	await get_tree().process_frame
+	world_map._update_hovered_encounter(orc_outpost.position)
+
+	var label := _find_expedition_label_by_position(world_map, orc_outpost.position)
+	assert_not_null(label, "The marker itself (bare location) must still exist")
+	assert_eq(label.text, "", "Out of range must withhold the star again")
+	assert_false(panel.get_node("Content/EncounterDanger").visible)
+	assert_false(panel.get_node("Content/EncounterEnemies").visible)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
