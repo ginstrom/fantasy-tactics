@@ -1732,3 +1732,49 @@ func test_end_turn_is_disabled_while_the_arrival_panel_is_open() -> void:
 		world_map.get_node("%EndTurnButton").disabled,
 		"A World Map Turn must not be able to walk the party past an unresolved arrival choice"
 	)
+
+
+## Regression: withdrawing closed the arrival panel but never re-checked the
+## End Turn button's disabled state, which _refresh_turn_controls() only ever
+## sets on the World-Map-Turn arrival path (see _on_end_turn_pressed()) -- so
+## a party that arrived via an automatic route step and then withdrew was
+## left permanently unable to end another turn, with no way to walk itself
+## home.
+func test_end_turn_is_re_enabled_after_withdrawing_from_the_arrival_panel() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var approach_position := encounter_position + Vector2i(1, 0)
+	GameSession.set_deployed_party_position(approach_position)
+	GameSession.set_deployed_party_route([encounter_position])
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_end_turn_pressed()
+	var end_turn_button: Button = world_map.get_node("%EndTurnButton")
+	assert_true(end_turn_button.disabled, "Setup: the arrival panel must disable End Turn first")
+
+	world_map.get_node("%WithdrawButton").pressed.emit()
+
+	assert_false(
+		end_turn_button.disabled,
+		"Withdraw must re-enable End Turn so a withdrawn party can walk itself home"
+	)
+
+
+func test_end_turn_is_re_enabled_after_cancelling_the_arrival_panel() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var approach_position := encounter_position + Vector2i(1, 0)
+	GameSession.set_deployed_party_position(approach_position)
+	GameSession.set_deployed_party_route([encounter_position])
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_end_turn_pressed()
+	var end_turn_button: Button = world_map.get_node("%EndTurnButton")
+	assert_true(end_turn_button.disabled, "Setup: the arrival panel must disable End Turn first")
+
+	world_map.get_node("%CancelButton").pressed.emit()
+
+	assert_false(
+		end_turn_button.disabled,
+		"Cancel must re-enable End Turn just like Withdraw does"
+	)

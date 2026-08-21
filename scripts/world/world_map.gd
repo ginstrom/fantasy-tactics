@@ -431,6 +431,7 @@ func _check_for_arrival() -> void:
 func _on_encounter_activated(encounter_id: String) -> void:
 	pending_arrival_encounter_id = encounter_id
 	arrival_panel.visible = true
+	_refresh_turn_controls()
 
 
 func _on_arrival_enter_pressed() -> void:
@@ -459,6 +460,7 @@ func _on_arrival_cancel_pressed() -> void:
 func _close_arrival_panel() -> void:
 	pending_arrival_encounter_id = ""
 	arrival_panel.visible = false
+	_refresh_turn_controls()
 
 
 func _on_settlement_activated(_location_id: String) -> void:
