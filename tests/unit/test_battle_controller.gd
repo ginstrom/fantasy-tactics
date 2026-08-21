@@ -1232,6 +1232,37 @@ func test_ready_builds_one_goblin_when_the_goblin_camp_is_selected() -> void:
 	assert_eq(goblin.attack_name, tr("battle.enemy.goblin.attack"))
 
 
+## Step 5 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md): the live-battle route
+## (BattleController._ready(), exercised here via Battlefield) must hydrate
+## the exact same explicit shared tactical profile fields as the scene-free
+## BattleStateFactory route -- see test_battle_state_factory.gd's matching
+## test_build_derives_the_enemy_units_stats_from_gamesessions_named_template/
+## test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_
+## default_gear for that route's own coverage of the same parity claim.
+func test_ready_hydrates_the_shared_tactical_profile_for_both_player_and_enemy_units() -> void:
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	var warrior = controller.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	assert_eq(warrior.melee, GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee)
+	assert_eq(warrior.missile, GameSession.CLASS_DEFINITIONS.warrior.base_stats.missile)
+	assert_eq(warrior.guard, warrior.defense)
+	assert_eq(warrior.spellcasting, 0)
+	assert_eq(warrior.magic_resistance, 0)
+
+	var goblin = controller.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	assert_eq(goblin.melee, GameSession.GOBLIN_ENEMY_STATS.melee)
+	assert_eq(goblin.missile, GameSession.GOBLIN_ENEMY_STATS.missile)
+	assert_eq(goblin.guard, GameSession.GOBLIN_ENEMY_STATS.guard)
+	assert_eq(goblin.guard, goblin.defense, "The legacy defense field and the new guard field must always agree")
+	assert_eq(goblin.spellcasting, GameSession.GOBLIN_ENEMY_STATS.spellcasting)
+	assert_eq(goblin.magic_resistance, GameSession.GOBLIN_ENEMY_STATS.magic_resistance)
+	assert_eq(goblin.max_action_points, GameSession.GOBLIN_ENEMY_STATS.action_points)
+
+
 func test_enemy_start_positions_supports_up_to_eight_enemies() -> void:
 	assert_eq(BattleControllerScript.ENEMY_START_POSITIONS.size(), 8)
 

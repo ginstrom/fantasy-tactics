@@ -230,6 +230,15 @@ func test_build_derives_the_player_units_stats_from_gamesessions_baseline_and_de
 		hero.hit_chance,
 		minf(GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP),
 	)
+	# Step 5's explicit shared tactical profile fields must hydrate
+	# identically through this scene-free factory route -- see
+	# BattleController._ready()'s matching assertions in
+	# test_battle_controller.gd for the live-battle route.
+	assert_eq(hero.melee, GameSession.CLASS_DEFINITIONS.warrior.base_stats.melee)
+	assert_eq(hero.missile, GameSession.CLASS_DEFINITIONS.warrior.base_stats.missile)
+	assert_eq(hero.guard, hero.defense)
+	assert_eq(hero.spellcasting, 0, "Warrior has no spellcasting skill")
+	assert_eq(hero.magic_resistance, 0)
 
 
 func test_build_derives_the_enemy_units_stats_from_gamesessions_named_template() -> void:
@@ -239,10 +248,23 @@ func test_build_derives_the_enemy_units_stats_from_gamesessions_named_template()
 	var grunt = controller.get_unit_at(Vector2i(5, 5))
 
 	assert_eq(grunt.max_health, GameSession.GOBLIN_ENEMY_STATS.max_health)
-	assert_eq(grunt.damage_min, GameSession.GOBLIN_ENEMY_STATS.attack_damage)
-	assert_eq(grunt.damage_max, GameSession.GOBLIN_ENEMY_STATS.attack_damage)
-	assert_eq(grunt.hit_chance, GameSession.GOBLIN_ENEMY_STATS.hit_chance)
+	assert_eq(grunt.damage_min, GameSession.GOBLIN_ENEMY_STATS.damage_min)
+	assert_eq(grunt.damage_max, GameSession.GOBLIN_ENEMY_STATS.damage_max)
+	assert_eq(
+		grunt.hit_chance,
+		minf(GameSession.GOBLIN_ENEMY_STATS.melee / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, GameSession.EFFECTIVE_HIT_CHANCE_CAP),
+	)
 	assert_eq(grunt.kill_xp, GameSession.GOBLIN_ENEMY_STATS.kill_xp)
+	# Step 5's explicit shared tactical profile fields (docs/plans/2026-08-21-
+	# stage-2-party-readiness/05-shared-tactical-profile-migration.md) must
+	# hydrate identically through this scene-free factory route -- see
+	# BattleController._ready()'s matching assertions in
+	# test_battle_controller.gd for the live-battle route.
+	assert_eq(grunt.melee, GameSession.GOBLIN_ENEMY_STATS.melee)
+	assert_eq(grunt.missile, GameSession.GOBLIN_ENEMY_STATS.missile)
+	assert_eq(grunt.guard, GameSession.GOBLIN_ENEMY_STATS.guard)
+	assert_eq(grunt.spellcasting, GameSession.GOBLIN_ENEMY_STATS.spellcasting)
+	assert_eq(grunt.magic_resistance, GameSession.GOBLIN_ENEMY_STATS.magic_resistance)
 
 
 func test_build_applies_a_higher_level_players_max_health_bonus() -> void:
@@ -367,8 +389,46 @@ func test_build_applies_explicit_enemy_modifiers_on_top_of_the_baseline() -> voi
 	var grunt = controller.get_unit_at(Vector2i(5, 5))
 
 	assert_eq(grunt.max_health, GameSession.GOBLIN_ENEMY_STATS.max_health + 10)
-	assert_eq(grunt.damage_min, GameSession.GOBLIN_ENEMY_STATS.attack_damage + 1)
-	assert_eq(grunt.damage_max, GameSession.GOBLIN_ENEMY_STATS.attack_damage + 1)
+	assert_eq(grunt.damage_min, GameSession.GOBLIN_ENEMY_STATS.damage_min + 1)
+	assert_eq(grunt.damage_max, GameSession.GOBLIN_ENEMY_STATS.damage_max + 1)
+
+
+## Step 5's explicit shared tactical profile fields (melee/missile/guard/
+## might/spellcasting/magic_resistance) are real modifier deltas on an enemy
+## template, exactly like a player's -- see _build_player_unit()'s "attack"/
+## "melee"/"missile" handling and the corresponding
+## test_build_applies_explicit_player_modifiers_on_top_of_the_baseline test.
+func test_build_applies_explicit_enemy_shared_profile_modifiers_on_top_of_the_baseline() -> void:
+	var scenario := _normalized({
+		"scenario_id": "modified_enemy_profile",
+		"player": {"template_id": "warrior", "count": 1},
+		"enemy": {
+			"units": [
+				{
+					"id": "grunt", "template_id": "goblin", "position": {"x": 5, "y": 5},
+					"modifiers": {"melee": 10, "guard": 15, "might": 2, "spellcasting": 3, "magic_resistance": 4},
+				},
+			],
+		},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+	var grunt = controller.get_unit_at(Vector2i(5, 5))
+
+	assert_eq(grunt.melee, GameSession.GOBLIN_ENEMY_STATS.melee + 10)
+	assert_eq(grunt.guard, GameSession.GOBLIN_ENEMY_STATS.guard + 15)
+	assert_eq(grunt.defense, grunt.guard, "The legacy defense field and the new guard field must always agree")
+	assert_eq(grunt.might, 2)
+	assert_eq(grunt.spellcasting, 3)
+	assert_eq(grunt.magic_resistance, 4)
+	assert_eq(
+		grunt.hit_chance,
+		minf(
+			(GameSession.GOBLIN_ENEMY_STATS.melee + 10) / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR,
+			GameSession.EFFECTIVE_HIT_CHANCE_CAP,
+		),
+	)
 
 
 func test_build_never_mutates_gamesession_or_gameconfig_state() -> void:

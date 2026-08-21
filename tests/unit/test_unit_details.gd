@@ -122,12 +122,19 @@ func test_unit_details_uses_the_sessions_availability_query_not_a_private_predic
 ## Task 3: real progression data replaces the old TBD placeholders — see
 ## GameSession.get_default_warrior() / get_adventurer() for the exact dict shape
 ## (stats.attack, progression.xp/skill_points/perks) these labels read.
+##
+## Step 5 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md): this line previously mislabeled
+## Guard (effective_defense) as "Damage resistance" and Resistance
+## (effective_resistance) as "Magic resistance" -- see unit_details.gd's own
+## doc comment on this exact line. Values are unchanged (a default Warrior's
+## Guard and Resistance are both still 10%); only the labels are corrected.
 func test_stats_label_shows_xp_raw_and_effective_attack_and_health() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_eq(
 		screen.get_node("Body/Center/VBox/StatsLabel").text,
-		"XP: 0 / 20 — Hit points: 10 / 10 — Action points: 6 — Damage resistance: 10% — Magic resistance: 10% — Effects: None"
+		"XP: 0 / 20 — Hit points: 10 / 10 — Action points: 6 — Guard: 10% — Resistance: 10% — Effects: None"
 	)
 	assert_true(screen.get_node("Body/Center/VBox/StatsLabel").visible)
 
@@ -251,6 +258,22 @@ func test_skills_label_shows_class_skills_and_growth_tiers() -> void:
 	var expected_skills := "Skills:\n   Melee: 60%\n   Missile: 60%\n   Guard: 0%\n   Might: 0%"
 	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, expected_skills)
 	assert_true(screen.get_node("Body/Center/VBox/SkillsLabel").visible)
+
+
+## Step 5 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md): a spellcasting class (Cleric
+## today) gets a Spellcasting row appended to the same Skills list, reading
+## adventurer.stats.spellcasting -- the exact stat CLASS_DEFINITIONS.cleric.
+## base_stats already carries (see game_session.gd's own doc comment on that
+## key). A non-spellcasting class (see the Warrior test just above, whose
+## exact-match assertion already has no such row) never gets this row at
+## all, not a "Spellcasting: 0%" placeholder.
+func test_skills_label_appends_spellcasting_for_a_cleric() -> void:
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	var screen := _open_unit_details("cleric_test")
+
+	var expected_skills := "Skills:\n   Melee: 45%\n   Missile: 30%\n   Guard: 10%\n   Might: 1%\n   Spellcasting: 55%"
+	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, expected_skills)
 
 
 func test_perks_label_shows_none_before_any_perk_is_chosen() -> void:

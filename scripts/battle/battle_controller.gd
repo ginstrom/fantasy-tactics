@@ -234,6 +234,17 @@ func _ready() -> void:
 		player_unit.attack_max_range = attack_range.y
 		player_unit.raw_damage_bonus = GameSession.get_effective_weapon_raw_damage_bonus(adventurer_id)
 		player_unit.might = GameSession.get_effective_might(adventurer_id)
+		# Explicit shared tactical profile (docs/designs/class-system.md's
+		# "Shared tactical attributes" section; see unit.gd's melee/missile/
+		# guard/spellcasting/magic_resistance doc comment). guard/hit_chance
+		# above both already derive from the exact same GameSession getters,
+		# so these can never disagree with the combat math this unit actually
+		# resolves against.
+		player_unit.melee = GameSession.get_effective_melee(adventurer_id)
+		player_unit.missile = GameSession.get_effective_missile(adventurer_id)
+		player_unit.guard = player_unit.defense
+		player_unit.spellcasting = GameSession.get_effective_spellcasting(adventurer_id)
+		player_unit.magic_resistance = GameSession.get_effective_magic_resistance(adventurer_id)
 		player_unit.health = max(1, GameSession.get_current_health(adventurer_id))
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
@@ -267,15 +278,35 @@ func _ready() -> void:
 	var enemy_type_counts: Dictionary = {}
 	for index in mini(enemy_specs.size(), ENEMY_START_POSITIONS.size()):
 		var enemy_stats: Dictionary = enemy_specs[index]
+		# Enemy hit chance/Guard are normalized once through GameSession's
+		# shared adapter (see get_enemy_profile_hit_chance()/get_enemy_
+		# profile_guard()'s own doc comments) so a migrated, explicit-profile
+		# template (melee/missile/guard -- Step 5's locked "Initial roster")
+		# and a still-legacy template (flat hit_chance/defense -- every other
+		# enemy const in this file) hydrate through the exact same formula
+		# BattleStateFactory._build_enemy_unit() uses for a scenario battle.
+		var enemy_hit_chance: float = GameSession.get_enemy_profile_hit_chance(enemy_stats)
+		var enemy_guard: int = GameSession.get_enemy_profile_guard(enemy_stats)
 		var enemy_unit := UnitScript.new(
-			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY, BASE_ACTION_POINTS,
+			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY,
+			int(enemy_stats.get("action_points", BASE_ACTION_POINTS)),
 			enemy_stats.max_health, enemy_stats.get("damage_min", int(enemy_stats.get("attack_damage", 1))),
-			enemy_stats.get("damage_max", int(enemy_stats.get("attack_damage", 1))), enemy_stats.hit_chance,
+			enemy_stats.get("damage_max", int(enemy_stats.get("attack_damage", 1))), enemy_hit_chance,
 			tr(enemy_stats.attack_name_key), "",
-			int(enemy_stats.get("defense", 0)), int(enemy_stats.get("resistance", 0)), enemy_stats.get("kill_xp", 0)
+			enemy_guard, int(enemy_stats.get("resistance", 0)), enemy_stats.get("kill_xp", 0),
+			int(enemy_stats.get("might", 0))
 		)
 		enemy_unit.attack_min_range = int(enemy_stats.get("attack_min_range", 1))
 		enemy_unit.attack_max_range = int(enemy_stats.get("attack_max_range", 1))
+		# Explicit shared tactical profile -- see the player_unit block above's
+		# identical doc comment. 0 for every still-legacy enemy template (no
+		# "melee"/"missile"/"spellcasting"/"magic_resistance" key authored),
+		# same as unit.gd's own field defaults.
+		enemy_unit.melee = int(enemy_stats.get("melee", 0))
+		enemy_unit.missile = int(enemy_stats.get("missile", 0))
+		enemy_unit.guard = enemy_guard
+		enemy_unit.spellcasting = int(enemy_stats.get("spellcasting", 0))
+		enemy_unit.magic_resistance = int(enemy_stats.get("magic_resistance", 0))
 		# Placeholder sprites (docs/plans/2026-08-20-placeholder-sprites/
 		# 02-battlefield-sprites.md): presentation-only SpriteCatalog lookup
 		# key, derived from untranslated raw data only -- see

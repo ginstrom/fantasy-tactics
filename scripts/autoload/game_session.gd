@@ -390,12 +390,39 @@ const EXPEDITIONS: Dictionary = {
 		],
 	},
 }
+# The four original species below (Goblin/Orc/Kobold/Hobgoblin) are Step 5's
+# ("shared tactical profile migration") locked "Initial roster" (see
+# docs/designs/monster-manual.md's "Initial roster — preserve shipped
+# values" section, which is the sole source for every number in these four
+# consts -- never re-derive or invent one here). They author the explicit
+# melee/missile/might/guard/resistance/spellcasting/magic_resistance/
+# action_points profile vocabulary directly, plus damage_min/damage_max in
+# place of the old flat attack_damage -- see get_enemy_profile_hit_chance()/
+# get_enemy_profile_guard() just below, which read melee/missile/guard (or
+# fall back to legacy hit_chance/defense for every other, still-legacy enemy
+# template in this file, e.g. GOBLIN_ARCHER_ENEMY_STATS just below). melee
+# 25/30/50/60 reproduce the pre-migration hit_chance 0.25/0.3/0.5/0.6 exactly
+# (melee / ATTACK_TO_HIT_CHANCE_DIVISOR), and damage_min == damage_max
+# reproduces the old fixed attack_damage exactly -- see this step's own
+# baseline-fixture regression coverage (test_deterministic_level_two_
+# warrior_baseline_matches_monster_manual_table() and the *_enemy_stats_are_
+# the_*_tier tests in test_game_session.gd, and test_battle_state_factory.gd/
+# test_battle_controller.gd's own enemy-hydration tests) for the numbers
+# this must never silently drift from.
 const GOBLIN_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.goblin",
 	"attack_name_key": "battle.enemy.goblin.attack",
 	"max_health": 13,
-	"attack_damage": 2,
-	"hit_chance": 0.3,
+	"damage_min": 2,
+	"damage_max": 2,
+	"melee": 30,
+	"missile": 0,
+	"might": 0,
+	"guard": 0,
+	"resistance": 0,
+	"spellcasting": 0,
+	"magic_resistance": 0,
+	"action_points": 6,
 	"kill_xp": 5,
 	"loot_id": "goblin",
 }
@@ -420,8 +447,16 @@ const ORC_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.orc",
 	"attack_name_key": "battle.enemy.orc.attack",
 	"max_health": 22,
-	"attack_damage": 3,
-	"hit_chance": 0.5,
+	"damage_min": 3,
+	"damage_max": 3,
+	"melee": 50,
+	"missile": 0,
+	"might": 0,
+	"guard": 0,
+	"resistance": 0,
+	"spellcasting": 0,
+	"magic_resistance": 0,
+	"action_points": 6,
 	"kill_xp": 10,
 	"loot_id": "orc",
 }
@@ -429,8 +464,16 @@ const KOBOLD_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.kobold",
 	"attack_name_key": "battle.enemy.kobold.attack",
 	"max_health": 6,
-	"attack_damage": 1,
-	"hit_chance": 0.25,
+	"damage_min": 1,
+	"damage_max": 1,
+	"melee": 25,
+	"missile": 0,
+	"might": 0,
+	"guard": 0,
+	"resistance": 0,
+	"spellcasting": 0,
+	"magic_resistance": 0,
+	"action_points": 6,
 	"kill_xp": 3,
 	"loot_id": "kobold",
 }
@@ -438,8 +481,16 @@ const HOBGOBLIN_ENEMY_STATS: Dictionary = {
 	"name_key": "battle.enemy.hobgoblin",
 	"attack_name_key": "battle.enemy.hobgoblin.attack",
 	"max_health": 30,
-	"attack_damage": 4,
-	"hit_chance": 0.6,
+	"damage_min": 4,
+	"damage_max": 4,
+	"melee": 60,
+	"missile": 0,
+	"might": 0,
+	"guard": 0,
+	"resistance": 0,
+	"spellcasting": 0,
+	"magic_resistance": 0,
+	"action_points": 6,
 	"kill_xp": 20,
 	"loot_id": "hobgoblin",
 }
@@ -3438,7 +3489,11 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 
 ## Centralized effective-hit-chance formula: min(raw skill / 100.0, 0.95).
 ## Skill used depends on weapon category: "bow" -> missile, others -> melee.
-## Returns 0.0 for an unknown adventurer.
+## Returns 0.0 for an unknown adventurer. Delegates to get_effective_melee()/
+## get_effective_missile() (Step 5's shared tactical profile fields -- see
+## docs/designs/class-system.md's "Shared tactical attributes" section) so
+## this and a battle unit's own explicit Unit.melee/Unit.missile fields can
+## never drift apart -- both read the exact same adventurer.stats value.
 func get_effective_hit_chance(adventurer_id: String) -> float:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
@@ -3446,12 +3501,78 @@ func get_effective_hit_chance(adventurer_id: String) -> float:
 	var weapon_id := str(adventurer.equipment.weapon)
 	var weapon: Dictionary = get_item_definition(weapon_id)
 	var category := str(weapon.get("category", ""))
-	var raw_stat: float = 0.0
-	if category == "bow":
-		raw_stat = float(adventurer.stats.get("missile", adventurer.stats.get("attack", 60)))
-	else:
-		raw_stat = float(adventurer.stats.get("melee", adventurer.stats.get("attack", 60)))
+	var raw_stat: float = float(
+		get_effective_missile(adventurer_id) if category == "bow" else get_effective_melee(adventurer_id)
+	)
 	return minf(raw_stat / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
+
+
+## Raw melee accuracy skill (percentage points, pre-guard-subtraction, pre-
+## weapon-category selection -- see get_effective_hit_chance()). Returns 0
+## for an unknown adventurer.
+func get_effective_melee(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	return int(adventurer.stats.get("melee", adventurer.stats.get("attack", 60)))
+
+
+## Raw missile accuracy skill -- see get_effective_melee()'s own doc comment.
+func get_effective_missile(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	return int(adventurer.stats.get("missile", adventurer.stats.get("attack", 60)))
+
+
+## Raw spellcasting skill (Cleric today -- see CLASS_DEFINITIONS.cleric.
+## base_stats.spellcasting). 0 for any class whose base_stats carries no
+## "spellcasting" key, exactly like every other reader of this stat (see the
+## Cleric class_def's own doc comment). Returns 0 for an unknown adventurer.
+func get_effective_spellcasting(adventurer_id: String) -> int:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return 0
+	return int(adventurer.stats.get("spellcasting", 0))
+
+
+## No adventurer stat or armor field grants magic resistance yet, so every
+## class's effective value is 0 -- mirrors every monster's locked
+## "magic_resistance: 0" (docs/designs/monster-manual.md's "Initial roster"
+## section). A real getter (not an inlined 0 at each call site) so a future
+## magic-resistance source only ever needs to change this one place.
+func get_effective_magic_resistance(_adventurer_id: String) -> int:
+	return 0
+
+
+## Normalizes a monster template's attack accuracy into the shared melee/
+## missile-vs-guard hit-chance formula (docs/designs/class-system.md's
+## "Combat resolution" section): `stats` either authors the explicit
+## "melee"/"missile" profile fields directly (Step 5's locked "Initial
+## roster" -- GOBLIN_ENEMY_STATS/ORC_ENEMY_STATS/KOBOLD_ENEMY_STATS/
+## HOBGOBLIN_ENEMY_STATS) or a flat legacy "hit_chance" (every other, still-
+## legacy enemy template, e.g. GOBLIN_ARCHER_ENEMY_STATS). Both paths must
+## keep producing bit-identical numbers to before Step 5's migration -- see
+## that step's own baseline-fixture regression coverage. The single call site
+## for this normalization is intentional (see the design's "single adapter"
+## note) -- both BattleController._ready() (live battle) and
+## BattleStateFactory._build_enemy_unit() (scenario battle) call this instead
+## of re-deriving the formula.
+func get_enemy_profile_hit_chance(stats: Dictionary) -> float:
+	if stats.has("melee") or stats.has("missile"):
+		var is_ranged: bool = int(stats.get("attack_max_range", 1)) > 1
+		var raw: float = float(stats.get("missile", 0)) if is_ranged else float(stats.get("melee", 0))
+		return minf(raw / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
+	return float(stats.get("hit_chance", 0.0))
+
+
+## A monster template's Guard: the explicit-profile "guard" key for a
+## migrated template, or the legacy "defense" key otherwise -- both mean the
+## same percentage-point hit-chance subtraction (see unit.gd's defense/guard
+## doc comment). See get_enemy_profile_hit_chance()'s own doc comment for the
+## single-adapter rationale.
+func get_enemy_profile_guard(stats: Dictionary) -> int:
+	return int(stats.get("guard", stats.get("defense", 0)))
 
 
 ## Centralized effective max health: the adventurer's stored max_health

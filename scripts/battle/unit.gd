@@ -31,6 +31,25 @@ var resistance: int
 # target resistance. It is battle-local derived state, never campaign state.
 var raw_damage_bonus: int = 0
 var might: int = 0
+# Explicit shared tactical profile (docs/designs/class-system.md's "Shared
+# tactical attributes" section; see also docs/plans/2026-08-21-stage-2-
+# party-readiness/05-shared-tactical-profile-migration.md). melee/missile are
+# the same raw accuracy stat `hit_chance` above is already derived from
+# (whichever the attacker's weapon category picks -- see GameSession.
+# get_effective_hit_chance()/get_enemy_profile_hit_chance()); `guard` is the
+# same percentage-point subtraction `defense` above already applies in
+# BattleController.try_attack_selected_unit(). Both pairs are intentionally
+# kept in sync by construction (BattleController/BattleStateFactory set both
+# from the same source value) rather than merged into one field yet -- see
+# this step's own design note about removing the duplication only once
+# parity tests exist. spellcasting/magic_resistance are 0 for every unit
+# with no spellcasting source yet (every monster, and every adventurer class
+# except Cleric's spellcasting -- see GameSession.get_effective_spellcasting()).
+var melee: int = 0
+var missile: int = 0
+var guard: int = 0
+var spellcasting: int = 0
+var magic_resistance: int = 0
 # XP awarded to the party when this unit is the one defeated (see
 # GameSession.*_ENEMY_STATS.kill_xp). 0 and unused for player-side units.
 var kill_xp: int = 0

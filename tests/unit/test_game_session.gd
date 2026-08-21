@@ -2857,8 +2857,11 @@ func test_deterministic_level_two_warrior_baseline_matches_monster_manual_table(
 
 		# Guard reduces the monster's hit chance directly; Resistance is not
 		# applied here (see this test's own doc comment for the derivation).
-		var monster_hit_chance: float = maxf(0.0, float(monster.hit_chance) - mean_guard / 100.0)
-		var damage_to_warrior: float = monster_hit_chance * float(monster.attack_damage)
+		# monster.melee / 100.0 (Step 5's shared tactical profile field) is
+		# exactly the pre-migration monster.hit_chance this test used to read
+		# directly -- see get_enemy_profile_hit_chance()'s own doc comment.
+		var monster_hit_chance: float = maxf(0.0, float(monster.melee) / 100.0 - mean_guard / 100.0)
+		var damage_to_warrior: float = monster_hit_chance * float(monster.damage_min)
 		assert_almost_eq(
 			damage_to_warrior, expected_damage_to_warrior[monster_name], 0.001,
 			"%s expected-damage-to-Warrior-per-attack must match monster-manual.md's Stage 2 table" % monster_name
@@ -4823,8 +4826,9 @@ func test_goblin_and_orc_enemy_stats_carry_their_kill_xp() -> void:
 
 func test_kobold_enemy_stats_are_the_weakest_tier() -> void:
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.max_health, 6)
-	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_damage, 1)
-	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.hit_chance, 0.25)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.damage_min, 1)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.damage_max, 1)
+	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.melee, 25)
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.name_key, "battle.enemy.kobold")
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.attack_name_key, "battle.enemy.kobold.attack")
 	assert_eq(GameSessionScript.KOBOLD_ENEMY_STATS.loot_id, "kobold")
@@ -4833,12 +4837,61 @@ func test_kobold_enemy_stats_are_the_weakest_tier() -> void:
 
 func test_hobgoblin_enemy_stats_are_the_strongest_tier() -> void:
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.max_health, 30)
-	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.attack_damage, 4)
-	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.hit_chance, 0.6)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.damage_min, 4)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.damage_max, 4)
+	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.melee, 60)
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.name_key, "battle.enemy.hobgoblin")
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.attack_name_key, "battle.enemy.hobgoblin.attack")
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.loot_id, "hobgoblin")
 	assert_eq(GameSessionScript.HOBGOBLIN_ENEMY_STATS.kill_xp, 20)
+
+
+## Step 5 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md): the "Initial roster — preserve
+## shipped values" table (docs/designs/monster-manual.md) is the sole source
+## for every number asserted here -- never re-derive or invent one. Every
+## value traces to that table's Melee/Missile/Might/Guard/Resistance/AP
+## columns, plus a flat spellcasting/magic_resistance of 0 the doc's prose
+## also locks for every monster. melee 25/30/50/60 must still equal the
+## pre-migration hit_chance 0.25/0.3/0.5/0.6 (see get_enemy_profile_hit_
+## chance()'s own doc comment) -- a changed number here without a matching,
+## approved monster-manual.md table change is a migration defect, not a
+## balance change.
+func test_the_four_original_monsters_carry_the_locked_shared_tactical_profile() -> void:
+	var expected := {
+		"Kobold": {
+			"stats": GameSessionScript.KOBOLD_ENEMY_STATS, "max_health": 6, "melee": 25, "damage_min": 1, "damage_max": 1,
+		},
+		"Goblin": {
+			"stats": GameSessionScript.GOBLIN_ENEMY_STATS, "max_health": 13, "melee": 30, "damage_min": 2, "damage_max": 2,
+		},
+		"Orc": {
+			"stats": GameSessionScript.ORC_ENEMY_STATS, "max_health": 22, "melee": 50, "damage_min": 3, "damage_max": 3,
+		},
+		"Hobgoblin": {
+			"stats": GameSessionScript.HOBGOBLIN_ENEMY_STATS, "max_health": 30, "melee": 60, "damage_min": 4, "damage_max": 4,
+		},
+	}
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	for monster_name in expected:
+		var row: Dictionary = expected[monster_name]
+		var stats: Dictionary = row.stats
+		assert_eq(stats.max_health, row.max_health, "%s max_health" % monster_name)
+		assert_eq(stats.melee, row.melee, "%s melee" % monster_name)
+		assert_eq(stats.missile, 0, "%s missile" % monster_name)
+		assert_eq(stats.might, 0, "%s might" % monster_name)
+		assert_eq(stats.guard, 0, "%s guard" % monster_name)
+		assert_eq(stats.resistance, 0, "%s resistance" % monster_name)
+		assert_eq(stats.spellcasting, 0, "%s spellcasting" % monster_name)
+		assert_eq(stats.magic_resistance, 0, "%s magic_resistance" % monster_name)
+		assert_eq(stats.action_points, 6, "%s action_points" % monster_name)
+		assert_eq(stats.damage_min, row.damage_min, "%s damage_min" % monster_name)
+		assert_eq(stats.damage_max, row.damage_max, "%s damage_max" % monster_name)
+		assert_eq(
+			session.get_enemy_profile_hit_chance(stats), row.melee / 100.0,
+			"%s's shared-formula hit chance must equal its melee / 100" % monster_name
+		)
 
 
 func test_kobold_and_hobgoblin_loot_ids_already_have_loot_table_rows() -> void:

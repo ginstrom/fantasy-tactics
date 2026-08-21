@@ -404,6 +404,81 @@ func test_validate_rejects_an_unsupported_player_count() -> void:
 	assert_true(_has_error_with_prefix(errors, "unsupported_count"), "Expected an unsupported_count error, got: %s" % [errors])
 
 
+## --- Shared tactical profile modifiers (docs/plans/2026-08-21-stage-2-
+## party-readiness/05-shared-tactical-profile-migration.md) -------------------
+
+func test_validate_rejects_an_unknown_player_modifier_key() -> void:
+	var raw := {
+		"scenario_id": "bad_modifier",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "modifiers": {"not_a_real_stat": 5}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "unknown_modifier"), "Expected an unknown_modifier error, got: %s" % [errors])
+
+
+func test_validate_rejects_an_unknown_enemy_modifier_key() -> void:
+	var raw := {
+		"scenario_id": "bad_enemy_modifier",
+		"player": {"template_id": "warrior", "count": 1},
+		"enemy": {"units": [{"id": "grunt", "template_id": "goblin", "position": {"x": 5, "y": 5}, "modifiers": {"not_a_real_stat": 5}}]},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "unknown_modifier"), "Expected an unknown_modifier error, got: %s" % [errors])
+
+
+func test_validate_rejects_a_non_numeric_modifier_value() -> void:
+	var raw := {
+		"scenario_id": "non_numeric_modifier",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "modifiers": {"melee": "a lot"}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(
+		_has_error_with_prefix(errors, "invalid_modifier_type"), "Expected an invalid_modifier_type error, got: %s" % [errors]
+	)
+
+
+## Every shared-tactical-profile field (docs/designs/class-system.md's
+## "Shared tactical attributes" section), on both sides at once, must
+## validate cleanly -- this is the explicit-profile-fixture half of this
+## step's task 2 (the malformed-field tests just above are the other half).
+func test_validate_accepts_explicit_shared_tactical_profile_modifiers_on_both_sides() -> void:
+	var raw := {
+		"scenario_id": "explicit_profile",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0},
+					"modifiers": {"melee": 5, "missile": 5, "guard": 5, "might": 5, "spellcasting": 5, "magic_resistance": 5},
+				},
+			],
+		},
+		"enemy": {
+			"units": [
+				{
+					"id": "grunt", "template_id": "goblin", "position": {"x": 5, "y": 5},
+					"modifiers": {"melee": 5, "missile": 5, "guard": 5, "might": 5, "spellcasting": 5, "magic_resistance": 5},
+				},
+			],
+		},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_eq(errors, [], "A fully-specified, valid shared tactical profile modifier set must validate cleanly")
+
+
 ## --- derive_iteration_seed(): reproducibility --------------------------------
 
 func test_derive_iteration_seed_is_deterministic_for_identical_inputs() -> void:

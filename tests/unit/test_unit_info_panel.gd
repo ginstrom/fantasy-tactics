@@ -237,3 +237,57 @@ func test_hovered_and_selected_bars_update_immediately_on_damage() -> void:
 
 	assert_eq(_selected_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])
 	assert_eq(_hovered_fill(panel).color, WoundVisuals.HEALTH_BAR_COLORS[WoundVisuals.TIER_CRITICAL])
+
+
+## Step 5 (docs/plans/2026-08-21-stage-2-party-readiness/
+## 05-shared-tactical-profile-migration.md): the selected unit (always the
+## player's own -- see unit_info_panel.gd's own doc comment) shows its real
+## Guard and Resistance, correctly labeled -- never "damage resistance" for
+## Guard, the mislabeling bug this step fixed on the separate Unit Details
+## screen (see test_unit_details.gd's own coverage of that fix).
+func test_selected_section_shows_guard_and_resistance() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	var defense_label: Label = panel.get_node("Content/SelectedSection/DefenseLabel")
+	assert_eq(defense_label.text, tr("battle.unit_info.defense") % [warrior.guard, warrior.resistance])
+	assert_eq(defense_label.text, "Guard: 10% — Resistance: 10%", "A fresh starter Warrior has Guard 10 / Resistance 10")
+
+
+## A non-caster (every starter Warrior/Scout, and every original monster) has
+## unit.spellcasting == 0 -- the SpellcastingLabel row must stay hidden
+## rather than showing a meaningless "Spellcasting: 0%" (see unit_info_panel.
+## gd's own doc comment on this exact row).
+func test_selected_section_hides_spellcasting_for_a_non_caster() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	assert_false(panel.get_node("Content/SelectedSection/SpellcastingLabel").visible)
+
+
+## A Cleric (the one shipped spellcasting class) shows its real Spellcasting
+## value once selected.
+func test_selected_section_shows_spellcasting_for_a_cleric() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.adventurers.append(GameSession.get_default_cleric("cleric_test", "Test Cleric"))
+	GameSession.assign_adventurer_to_selected_party("cleric_test")
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var cleric = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[1])
+
+	battlefield.grid._select_unit(cleric)
+
+	var panel := _panel(battlefield)
+	var spellcasting_label: Label = panel.get_node("Content/SelectedSection/SpellcastingLabel")
+	assert_true(spellcasting_label.visible)
+	assert_eq(spellcasting_label.text, "Spellcasting: 55%")

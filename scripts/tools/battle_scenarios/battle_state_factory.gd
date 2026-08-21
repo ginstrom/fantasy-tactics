@@ -198,6 +198,34 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	unit.display_name = String(spec.id)
 	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "right")))
 
+	# Explicit shared tactical profile (docs/designs/class-system.md's
+	# "Shared tactical attributes" section; see unit.gd's melee/missile/
+	# guard/spellcasting/magic_resistance doc comment and BattleController.
+	# _ready()'s identical assignment for the live-battle route). melee/
+	# missile above are the exact same local values already folded into
+	# hit_chance, so they can never disagree with the combat math this unit
+	# actually resolves against. Guard is `defense` (armor Guard + the
+	# guard skill above, already fully resolved a few lines up), NOT the
+	# bare `guard` skill-only local -- see class-system.md's own "Guard
+	# Stacking" note (base Guard + armor Guard).
+	unit.melee = melee
+	unit.missile = missile
+	unit.guard = defense
+	# spellcasting only grows for a class whose skills_def actually owns it
+	# (Cleric today) -- mirrors missile_min_gain/melee_min_gain's pattern
+	# above, but guarded so a class with no spellcasting skill (Warrior/
+	# Scout) never picks up an invented per-level gain from the shared
+	# default min_gain fallback those two rely on.
+	var spellcasting: int = int(base.get("spellcasting", 0))
+	if skills_def.has("spellcasting"):
+		var spellcasting_min_gain: int = int(skills_def.spellcasting.get("min_gain", 1))
+		spellcasting += (level - 1) * spellcasting_min_gain
+	unit.spellcasting = spellcasting + int(modifiers.get("spellcasting", 0))
+	# No adventurer stat or armor field grants magic resistance yet (see
+	# GameSession.get_effective_magic_resistance()) -- 0 unless a scenario
+	# explicitly modifies it.
+	unit.magic_resistance = int(modifiers.get("magic_resistance", 0))
+
 	# Mirrors BattleController's own runtime hydration (see that file's
 	# _build_player_units()-equivalent code, ~lines 245-255): a class whose
 	# CLASS_DEFINITIONS entry declares spells (Cleric today) gets those
@@ -224,11 +252,19 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	return unit
 
 
-## Enemy hit chance is authored directly on the template (see
+## Enemy hit chance/Guard are authored directly on the template (see
 ## GameSession.*_ENEMY_STATS) rather than derived from an Attack stat --
 ## enemies are not migrated onto the weapon/armor/attack system (see
-## unit.gd's own defense/resistance doc comment) -- so an enemy `hit_chance`
-## modifier is a direct delta, unlike a player's `attack` modifier.
+## unit.gd's own defense/resistance doc comment). A Step 5-migrated template
+## (GOBLIN_ENEMY_STATS/ORC_ENEMY_STATS/KOBOLD_ENEMY_STATS/HOBGOBLIN_ENEMY_
+## STATS) authors explicit melee/missile/guard directly; every other,
+## still-legacy template authors a flat hit_chance/defense instead -- see
+## GameSession.get_enemy_profile_hit_chance()/get_enemy_profile_guard(),
+## the single adapter both this function and BattleController._ready() call
+## to normalize either shape identically (see this step's design note about
+## a single adapter avoiding duplicate formula derivation). A `hit_chance`/
+## `defense` scenario modifier is still a direct delta on top of either
+## shape's resolved value, unlike a player's `attack` modifier.
 static func _build_enemy_unit(spec: Dictionary, index: int):
 	var base := _read_enemy_template_stats(spec.template_id)
 	var modifiers: Dictionary = spec.get("modifiers", {})
@@ -244,27 +280,60 @@ static func _build_enemy_unit(spec: Dictionary, index: int):
 	var base_damage_max: int = int(base.get("damage_max", int(base.get("attack_damage", 0))))
 	var damage_min: int = base_damage_min + int(modifiers.get("damage_min", 0))
 	var damage_max: int = base_damage_max + int(modifiers.get("damage_max", 0))
-	var hit_chance: float = clampf(float(base.get("hit_chance", 0.0)) + float(modifiers.get("hit_chance", 0.0)), 0.0, 1.0)
+	var melee: int = int(base.get("melee", 0)) + int(modifiers.get("melee", 0))
+	var missile: int = int(base.get("missile", 0)) + int(modifiers.get("missile", 0))
+	# get_enemy_profile_hit_chance() normalizes a template dict, so a melee/
+	# missile modifier must be folded in *before* calling it (a "melee"
+	# scenario modifier on a migrated template must move hit_chance, exactly
+	# like a player's "melee"/"attack" modifier already moves theirs) --
+	# hence resolving against this merged copy rather than `base` directly.
+	# Only overridden when either side actually supplies melee/missile, so a
+	# purely legacy template with neither still resolves through the
+	# adapter's flat "hit_chance" branch exactly as before.
+	var profile_for_hit_chance: Dictionary = base
+	if base.has("melee") or base.has("missile") or modifiers.has("melee") or modifiers.has("missile"):
+		profile_for_hit_chance = base.duplicate()
+		profile_for_hit_chance["melee"] = melee
+		profile_for_hit_chance["missile"] = missile
+	var hit_chance: float = clampf(
+		GameSession.get_enemy_profile_hit_chance(profile_for_hit_chance) + float(modifiers.get("hit_chance", 0.0)), 0.0, 1.0
+	)
 	# An armored/elite template (see ORC_BRUISER_ENEMY_STATS/HOBGOBLIN_ELITE_
 	# ENEMY_STATS/HOBGOBLIN_CHAMPION_ENEMY_STATS/ORC_WARLORD_ENEMY_STATS/
 	# OGRE_ENEMY_STATS) authors its own defense/resistance directly, same
 	# additive-modifier-on-top-of-base pattern as max_health/hit_chance
 	# above -- an enemy with none (every original species) keeps the prior
-	# modifiers-only behavior since base.get(...) then defaults to 0.
-	var defense: int = int(base.get("defense", 0)) + int(modifiers.get("defense", 0))
+	# modifiers-only behavior since base.get(...) then defaults to 0. A
+	# "guard" modifier is the new-vocabulary alias for the same legacy
+	# "defense" modifier key -- both add onto the same resolved Guard value.
+	var guard: int = GameSession.get_enemy_profile_guard(base) + int(modifiers.get("guard", modifiers.get("defense", 0)))
 	var resistance: int = int(base.get("resistance", 0)) + int(modifiers.get("resistance", 0))
-	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
+	var action_points: int = (
+		int(base.get("action_points", BattleControllerScript.BASE_ACTION_POINTS)) + int(modifiers.get("action_points", 0))
+	)
 	var kill_xp: int = int(base.get("kill_xp", 0))
+	var spellcasting: int = int(base.get("spellcasting", 0)) + int(modifiers.get("spellcasting", 0))
+	var magic_resistance: int = int(base.get("magic_resistance", 0)) + int(modifiers.get("magic_resistance", 0))
+	var might: int = int(base.get("might", 0)) + int(modifiers.get("might", 0))
 
 	var position := ScenarioContractScript.position_from_dict(spec.position)
 	var unit := UnitScript.new(
 		position, BattleControllerScript.ENEMY_COLOR, BattleControllerScript.Side.ENEMY,
 		action_points, max_health, damage_min, damage_max, hit_chance,
-		TranslationServer.translate(base.get("attack_name_key", "")), "", defense, resistance, kill_xp
+		TranslationServer.translate(base.get("attack_name_key", "")), "", guard, resistance, kill_xp, might
 	)
 	unit.attack_min_range = int(base.get("attack_min_range", 1))
 	unit.attack_max_range = int(base.get("attack_max_range", 1))
 	unit.display_name = String(spec.id)
 	unit.enemy_type_name = TranslationServer.translate(base.get("name_key", ""))
 	unit.facing = ScenarioContractScript.facing_from_string(String(spec.get("facing", "left")))
+	# Explicit shared tactical profile -- see _build_player_unit()'s identical
+	# doc comment and BattleController._ready()'s matching enemy-side
+	# assignment for the live-battle route (both must hydrate the same
+	# profile from the same template -- see this step's own parity tests).
+	unit.melee = melee
+	unit.missile = missile
+	unit.guard = guard
+	unit.spellcasting = spellcasting
+	unit.magic_resistance = magic_resistance
 	return unit

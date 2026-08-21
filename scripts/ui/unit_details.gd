@@ -83,8 +83,20 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	var effective_max_health: int = GameSession.get_effective_max_health(adventurer_id)
 	var effective_defense: int = GameSession.get_effective_defense(adventurer_id)
 	var effective_resistance: int = GameSession.get_effective_resistance(adventurer_id)
+	# Guard (effective_defense -- hit-chance subtraction) and Resistance
+	# (effective_resistance -- post-hit damage reduction) are two distinct
+	# shared tactical attributes (docs/designs/class-system.md's "Shared
+	# tactical attributes" section); this line previously mislabeled Guard
+	# as "Damage resistance" and Resistance as "Magic resistance" (Step 5's
+	# "shared tactical profile migration" -- see that step's own doc
+	# comment about not inventing a stat that means something else). Magic
+	# Resistance itself is omitted here rather than shown as an always-0
+	# placeholder -- no class has a magic-resistance source yet (see
+	# GameSession.get_effective_magic_resistance()) -- and Spellcasting gets
+	# its own conditional row in the Skills list below instead, the same
+	# "don't expose a missing stat as real" rule applied the other way.
 	stats_label.text = (
-		"XP: %d / %d — Hit points: %d / %d — Action points: 6 — Damage resistance: %d%% — Magic resistance: %d%% — Effects: None"
+		"XP: %d / %d — Hit points: %d / %d — Action points: 6 — Guard: %d%% — Resistance: %d%% — Effects: None"
 		% [xp_display, xp_to_next_level, current_health, effective_max_health, effective_defense, effective_resistance]
 	)
 
@@ -118,6 +130,13 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	var skills_lines: Array[String] = ["Skills:"]
 	for skill in ["melee", "missile", "guard", "might"]:
 		skills_lines.append("   %s: %d%%" % [skill.capitalize(), adventurer.stats.get(skill, 0)])
+	# Spellcasting only ever appears for a class whose stats actually carry
+	# it (Cleric today) -- unlike melee/missile/guard/might above, which
+	# every class has, showing "Spellcasting: 0%" for a Warrior/Scout would
+	# expose a stat that class doesn't own as though it were real (see this
+	# function's stats_label doc comment just above for the same rule).
+	if adventurer.stats.has("spellcasting"):
+		skills_lines.append("   Spellcasting: %d%%" % adventurer.stats.spellcasting)
 	skills_label.text = "\n".join(skills_lines)
 
 	var perks: Array = adventurer.progression.get("perks", [])

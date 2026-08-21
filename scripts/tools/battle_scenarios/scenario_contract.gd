@@ -71,6 +71,27 @@ const KNOWN_ENEMY_TEMPLATES: Array[String] = [
 # hydrate the real Unit.facing Vector2i).
 const KNOWN_FACINGS: Array[String] = ["right", "left", "up", "down"]
 
+# Every modifier key BattleStateFactory._build_player_unit()/_build_enemy_
+# unit() actually reads (docs/plans/2026-08-21-stage-2-party-readiness/
+# 05-shared-tactical-profile-migration.md), covering both the shared
+# tactical profile vocabulary (docs/designs/class-system.md's "Shared
+# tactical attributes" section) and each side's own legacy aliases -- a
+# player's "attack" (melee/missile shorthand) and an enemy's "defense"
+# (Guard shorthand, see GameSession.get_enemy_profile_guard()'s own doc
+# comment) and "hit_chance" (a direct delta on top of a legacy enemy
+# template's resolved accuracy). Kept as two side-specific sets (not one
+# shared list) because "attack"/"hit_chance" only ever mean something on
+# their own side -- see _validate_side()'s own per-side known_templates
+# parameter for the same pattern.
+const KNOWN_PLAYER_MODIFIER_KEYS: Array[String] = [
+	"max_health", "melee", "missile", "guard", "might", "spellcasting", "magic_resistance",
+	"attack", "damage_min", "damage_max", "defense", "resistance", "action_points",
+]
+const KNOWN_ENEMY_MODIFIER_KEYS: Array[String] = [
+	"max_health", "melee", "missile", "guard", "might", "spellcasting", "magic_resistance",
+	"hit_chance", "damage_min", "damage_max", "defense", "resistance", "action_points",
+]
+
 
 ## Fills every optional field with its documented default and expands each
 ## side's count/template_id shorthand into an explicit, positioned unit
@@ -314,6 +335,33 @@ static func _validate_side(
 		var facing: String = String(unit.get("facing", ""))
 		if not facing in KNOWN_FACINGS:
 			errors.append("invalid_facing: %s unit %s has unknown facing \"%s\"" % [side_label, unit_id, facing])
+
+		var known_modifier_keys: Array[String] = (
+			KNOWN_PLAYER_MODIFIER_KEYS if side_label == "player" else KNOWN_ENEMY_MODIFIER_KEYS
+		)
+		errors.append_array(_validate_modifiers(unit.get("modifiers", {}), side_label, unit_id, known_modifier_keys))
+	return errors
+
+
+## Rejects a unit's `modifiers` dict if it names an unrecognized profile
+## field, or gives a recognized one a non-numeric value (e.g. a String or
+## bool) -- BattleStateFactory always folds these values into `int(...)`/
+## `float(...)` arithmetic (see _build_player_unit()/_build_enemy_unit()),
+## so a malformed modifier would otherwise silently coerce (a String costs
+## 0, a bool becomes 0/1) instead of failing fast here at validate() time.
+static func _validate_modifiers(
+	modifiers: Dictionary, side_label: String, unit_id: String, known_keys: Array[String]
+) -> Array[String]:
+	var errors: Array[String] = []
+	for key in modifiers:
+		var value = modifiers[key]
+		if not String(key) in known_keys:
+			errors.append("unknown_modifier: %s unit %s has unknown modifier \"%s\"" % [side_label, unit_id, key])
+		elif not (value is int or value is float):
+			errors.append(
+				"invalid_modifier_type: %s unit %s modifier \"%s\" must be numeric, got %s"
+				% [side_label, unit_id, key, typeof(value)]
+			)
 	return errors
 
 

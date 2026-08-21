@@ -193,6 +193,13 @@ layout_mode = 2
 [node name="WeaponLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2
 
+[node name="DefenseLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+
+[node name="SpellcastingLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
+
 [node name="WoundLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2
 visible = false

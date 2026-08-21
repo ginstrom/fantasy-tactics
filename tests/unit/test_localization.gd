@@ -93,6 +93,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.unit_info.hp") % [3, 8], "HP: 3/8")
 	assert_eq(tr("battle.unit_info.ap") % [3, 9], "AP: 3/9")
 	assert_eq(tr("battle.unit_info.weapon") % "Longsword", "Weapon: Longsword")
+	assert_eq(tr("battle.unit_info.defense") % [10, 15], "Guard: 10% — Resistance: 15%")
+	assert_eq(tr("battle.unit_info.spellcasting") % 55, "Spellcasting: 55%")
 	assert_eq(tr("battle.unit_info.healthy"), "Healthy")
 	assert_eq(tr("battle.unit_info.wounded"), "Wounded")
 	assert_eq(tr("battle.unit_info.badly_wounded"), "Badly Wounded")

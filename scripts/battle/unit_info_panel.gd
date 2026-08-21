@@ -56,6 +56,8 @@ const FACING_KEYS := {
 @onready var selected_wound_badge: Label = $Content/SelectedSection/WoundBadge
 @onready var selected_ap_label: Label = $Content/SelectedSection/ApLabel
 @onready var selected_weapon_label: Label = $Content/SelectedSection/WeaponLabel
+@onready var selected_defense_label: Label = $Content/SelectedSection/DefenseLabel
+@onready var selected_spellcasting_label: Label = $Content/SelectedSection/SpellcastingLabel
 @onready var selected_wound_label: Label = $Content/SelectedSection/WoundLabel
 @onready var selected_status_label: Label = $Content/SelectedSection/StatusLabel
 
@@ -153,6 +155,27 @@ func _populate_selected(unit) -> void:
 	_selected_pulse_tween = _update_health_visual(selected_health_fill, selected_wound_badge, unit, true, _selected_pulse_tween)
 	selected_ap_label.text = tr("battle.unit_info.ap") % [unit.action_points_remaining, unit.max_action_points]
 	selected_weapon_label.text = tr("battle.unit_info.weapon") % unit.attack_name
+	# Guard (unit.guard -- hit-chance subtraction) and Resistance (unit.
+	# resistance -- post-hit damage reduction) are two distinct shared
+	# tactical attributes (docs/designs/class-system.md's "Shared tactical
+	# attributes" section) -- shown together here, never as a single mislabeled
+	# value (see this step's unit_details.gd fix for the bug this avoids
+	# repeating). The selected unit is always the player's own (see this
+	# file's own _populate_selected() doc comment), so this is never an
+	# enemy-stat spoiler the way an exact HP number would be.
+	selected_defense_label.text = tr("battle.unit_info.defense") % [unit.guard, unit.resistance]
+	# Spellcasting only shows for a unit that actually has some (Cleric
+	# today) -- a non-caster's unit.spellcasting is always 0, and showing
+	# "Spellcasting: 0%" for every Warrior/Scout would expose a stat that
+	# class doesn't own as though it were real (see unit_details.gd's own
+	# identical rule for its Skills list, and this step's design note about
+	# not exposing a missing spell value as a real stat). Magic Resistance is
+	# omitted entirely here -- no class or monster has a nonzero source yet
+	# (see GameSession.get_effective_magic_resistance()) -- rather than
+	# always showing a dead 0%.
+	selected_spellcasting_label.visible = unit.spellcasting > 0
+	if unit.spellcasting > 0:
+		selected_spellcasting_label.text = tr("battle.unit_info.spellcasting") % unit.spellcasting
 
 	var status_names: Array[String] = []
 	for status_id in unit.statuses:
