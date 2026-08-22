@@ -1610,6 +1610,14 @@ func test_resolving_the_only_queued_level_up_unlocks_board_and_end_turn_input() 
 	var units := _stage_a_killing_blow(battlefield)
 	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
 
+	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
+	# -- resolve it first, same as test_a_clear_xp_level_up_that_requires_a_
+	# perk_choice_still_gates_completion's own established pattern, or
+	# Continue stays gated and never actually closes the modal.
+	var perk_option: Button = battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	)
+	perk_option.emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_false(battlefield.level_up.visible)
@@ -1637,6 +1645,14 @@ func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party
 	assert_eq(battlefield.level_up.adventurer_id, "warrior_001", "The first party member must be shown first")
 	assert_true(battlefield.end_turn_button.disabled, "Input must stay locked while a second level-up is still queued")
 
+	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
+	# for both party members -- resolve each in turn or Continue never
+	# actually advances the queue (see test_a_clear_xp_level_up_that_
+	# requires_a_perk_choice_still_gates_completion's own established
+	# pattern).
+	battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	).emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_true(
@@ -1646,6 +1662,9 @@ func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party
 	assert_eq(battlefield.level_up.adventurer_id, second_member_id)
 	assert_true(battlefield.end_turn_button.disabled)
 
+	battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	).emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_false(battlefield.level_up.visible, "Input unlocks only after the last queued modal completes")
@@ -1674,6 +1693,13 @@ func test_a_level_up_from_clear_xp_must_resolve_before_the_battle_completes() ->
 		"The battle-result scene transition must wait for the queued level-up to resolve"
 	)
 
+	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
+	# -- resolve it first, same as test_a_clear_xp_level_up_that_requires_a_
+	# perk_choice_still_gates_completion's own established pattern, or
+	# Continue stays gated and the battle never actually completes.
+	battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	).emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_true(
@@ -1810,6 +1836,13 @@ func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summa
 
 	battlefield._apply_battle_outcome(true)
 	assert_true(battlefield.level_up.visible, "sanity check: this setup crosses the level-2 threshold")
+	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
+	# -- resolve it first or Continue stays gated and the summary is never
+	# built (see test_a_clear_xp_level_up_that_requires_a_perk_choice_still_
+	# gates_completion's own established pattern).
+	battlefield.level_up.perk_options_container.get_node(
+		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+	).emit_signal("pressed")
 	battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_eq(GameManager.battle_result_summary.leveled_up_ids, ["warrior_001"])
@@ -1835,7 +1868,13 @@ func test_multiple_kills_in_one_battle_are_tallied_by_type_not_overwritten() -> 
 	# _finish_victory() until the level-up modal resolves, same as
 	# test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary.
 	# Dismiss it exactly as a player would so the summary actually gets built.
+	# Level 2 also earns its own pending perk slot (PERK_LEVEL_INTERVAL ==
+	# 2) -- resolve it first or Continue stays gated (see test_a_clear_xp_
+	# level_up_that_requires_a_perk_choice_still_gates_completion).
 	if battlefield.level_up.visible:
+		battlefield.level_up.perk_options_container.get_node(
+			"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
+		).emit_signal("pressed")
 		battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_eq(GameManager.battle_result_summary.kills_by_type, {tr("battle.enemy.goblin"): 2})

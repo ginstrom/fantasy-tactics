@@ -77,7 +77,8 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 	# --- Reach a deterministic perk slot ------------------------------------
 	# award_party_xp() splits evenly across the two current members, so 100
 	# total XP gives each exactly 50 -- get_level_xp_threshold(3)'s own value
-	# -- landing both precisely on the level-3 (PERK_LEVEL_INTERVAL) slot.
+	# -- landing both at level 3, which earns exactly one pending slot under
+	# PERK_LEVEL_INTERVAL (2): floor(3 / 2) == 1.
 	var warrior_base_max_health_before_perk: int = GameSession.get_effective_max_health(GameSession.WARRIOR_ID)
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 100.0)
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).level, 3)
@@ -118,10 +119,12 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 
 	# A second perk slot, this time for the Cleric alone: award_party_xp()
 	# now splits 150 XP three ways (50 each). The Warrior/Scout climb from
-	# their already-spent level-3 slot to level 4 (threshold 90, still short
-	# of level 6's next PERK_LEVEL_INTERVAL slot) while the freshly-joined
-	# Cleric lands exactly on its own first level-3 slot -- proving all three
-	# classes can field a meaningful, class-owned perk choice, not just two.
+	# their already-spent level-3 slot to level 4 (threshold 90 -- under
+	# PERK_LEVEL_INTERVAL (2) this level also earns their own second class
+	# slot, floor(4 / 2) == 2, left unresolved here since this sequence
+	# is exercising the Cleric next) while the freshly-joined Cleric lands
+	# exactly on its own first level-3 slot -- proving all three classes can
+	# field a meaningful, class-owned perk choice, not just two.
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 150.0)
 	assert_eq(GameSession.get_adventurer(cleric_id).level, 3)
 	assert_true(GameSession.is_perk_choice_pending(cleric_id))

@@ -46,12 +46,18 @@ func test_shows_xp_level_health_gain_and_skill_gains_after_a_level_up() -> void:
 	assert_true(level_up.visible)
 
 
+## Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2), so
+## this resolves it up front (a real player action, not a UI bypass) to
+## reach a genuinely "nothing left pending" open -- the same shape as
+## test_a_level_with_no_perks_left_to_offer_shows_no_perk_controls_and_never_
+## blocks_continue below, just at a lower level.
 func test_continue_is_free_on_an_ordinary_level_and_emits_resolved() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
 	watch_signals(level_up)
 
-	assert_false(level_up.continue_button.disabled, "Level 2 has no pending perk choice")
+	assert_false(level_up.continue_button.disabled, "Level 2's own perk slot is already resolved")
 	level_up.continue_button.emit_signal("pressed")
 
 	assert_signal_emitted(level_up, "resolved")
@@ -130,8 +136,13 @@ func test_choosing_the_perk_uses_game_sessions_choose_perk_api() -> void:
 	)
 
 
+## See test_continue_is_free_on_an_ordinary_level_and_emits_resolved's own
+## doc comment: level 2's own perk slot must be resolved first now that
+## PERK_LEVEL_INTERVAL == 2, or this would not actually be an "ordinary"
+## (nothing pending) open.
 func test_an_ordinary_level_never_shows_the_perk_controls() -> void:
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
 
 	assert_false(level_up.perk_label.visible)

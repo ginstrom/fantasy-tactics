@@ -21,7 +21,7 @@ const DEFAULTS: Dictionary = {
 		"rear_flank_crit_bonus": 0.50,
 	},
 	"progression": {
-		"perk_level_interval": 3,
+		"perk_level_interval": 2,
 		"perk_tree_size": 2,
 		"warrior_juggernaut_hp_percent": 15,
 		"warrior_bulwark_guard": 10,

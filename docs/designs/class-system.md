@@ -120,7 +120,7 @@ Primary stats (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck
 
 The first implementation slice must define, in class data, each applicable skill's starting value, per-level gain, combat or campaign effect, UI presentation, save migration, and balance coverage. It must remove the manual Attack-spending flow rather than keeping two competing advancement systems.
 
-**Perks:** every third level still grants one perk choice. Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
+**Perks:** every second level still grants one perk choice (`progression.perk_level_interval`, `config/game_config.json`; see "Stage 2 locked perk set" below). Class-specific perks are choices from data-backed trees, with prerequisites, rather than separate attribute systems.
 
 **Future:** perks can alter raw damage before Resistance, grant penetration, add movement, or introduce an active ability only with the supporting combat primitive. A perk description alone does not enable a mechanic.
 
