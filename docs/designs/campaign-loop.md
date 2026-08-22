@@ -53,6 +53,135 @@ World Map displays the resulting threat as one to five stars. A star rating is
 an encounter-risk signal, not an objective prerequisite and not a substitute
 for the authored encounter definition.
 
+## Stage 3 arc contract: the twelve authored nodes
+
+Every number below is transcribed from `GameSession.CAMPAIGN_OBJECTIVES`/
+`EXPEDITIONS`/`*_ENEMY_STATS`/`ENEMY_LOOT_TABLES` (see
+`scripts/autoload/game_session.gd`) — none is invented here. "Threat/star" is
+each node's `difficulty` field, which doubles as `get_threat_stars()`'s floor
+value; the World Map may display a higher star count than this table states
+once `world_turn` escalation applies (`get_threat_stars()`), but a node's
+authored composition and reward never change with it.
+
+| ID | Tier/★ | Composition | Intended counterplay | Clear XP | Kill XP (sum) | Mean loot gold* |
+|---|---:|---|---|---:|---:|---:|
+| `obj_tier1_1_goblin_outpost` | 1/★1 | Goblin×1, Kobold×2 | Formation vs. a mixed weak group; teaches focus-fire | 15 | 11 | 8.5 + 20 bonus |
+| `obj_tier1_2_kobold_warren` | 1/★1 | Kobold×4, Kobold Slinger×1 | Swarm + one ranged threat; teaches AoE-adjacent positioning vs. numbers | 18 | 16 | 12.5 + 20 bonus |
+| `obj_tier1_3_goblin_warcamp` | 1/★1 | Goblin×2, Goblin Archer×1 | Closing distance on a ranged skirmisher; teaches facing/flanking | 20 | 16 | 10.5 + 20 bonus |
+| `obj_tier2_1_orc_outpost` | 2/★2 | Orc Bruiser×1, Goblin Archer×1 | Armored bruiser (10 guard/15 resist) + ranged pressure together | 30 | 18 | 9.5 + 40 bonus |
+| `obj_tier2_2_orc_warband` | 2/★2 | Orc Bruiser×2 | Sustained attrition vs. two armored units; tests healing/potions | 35 | 24 | 12 + 40 bonus |
+| `obj_tier2_3_brute_stronghold` | 2/★2 | Orc Bruiser×2, Goblin Archer×2 | Fortified position; terrain + potion use vs. a 4-unit mixed force | 40 | 36 | 19 + 40 bonus |
+| `obj_tier3_1_hobgoblin_command` | 3/★3 | Hobgoblin Elite×1, Kobold Slinger×2 | Elite burst damage (5 guard/10 resist, 5 dmg) plus ranged escort | 55 | 32 | 12.5 + 60 bonus |
+| `obj_tier3_2_mixed_forces_ambush` | 3/★3 | Hobgoblin Elite×1, Orc Bruiser×1, Goblin Shaman×1 | Target-priority puzzle: kill the ranged support (Shaman) before the two melee elites close | 60 | 44 | 17 + 60 bonus |
+| `obj_tier3_3_ruined_fortress` | 3/★3 | Hobgoblin Elite×2, Orc Bruiser×2 | Full mixed force, no swarm padding; tests a formed, upgraded party | 65 | 72 | 27 + 60 bonus |
+| `obj_preboss_1_borderlands_vanguard` | 4/★4 | Hobgoblin Elite×2, Goblin Archer×2, Kobold×1 | Five-unit gatehouse guard; volume-of-fire test before the honor guard | 90 | 63 | 24.5 + 80 bonus |
+| `obj_preboss_2_borderlands_stronghold` | 4/★4 | Hobgoblin Champion×3, Orc Warlord×1 | Heaviest pre-boss elites (Champion: 8 guard/15 resist/6 dmg; Warlord: 12 guard/20 resist/7 dmg) | 100 | 125 | 28.5 + 80 bonus |
+| `obj_boss_borderlands_ogre` | 5/★5 | Ogre×1 | Single 90-HP boss (15 guard/20 resist, 5–12 dmg); accumulated composition/positioning/upgrades test, not a swarm | 200 | 150 | 150 + 100 bonus |
+
+\* "Mean loot gold" = per-kill `(gold_min+gold_max)/2 * gold_multiplier` summed
+over the node's composition, from `ENEMY_LOOT_TABLES`, plus the mean of the
+flat completion bonus `randi_range(18,22) * difficulty`. This is an
+analytical expectation from shipped tables, not a measured average — Step 2
+(`make campaign-sim` telemetry) is the authority on what parties actually
+bank, since it also includes starting gold, Shop passive income, and gear
+drops this estimate excludes.
+
+### Arc totals
+
+- **Total clear+kill XP across all 12 nodes**: 1335 (985 before the Ogre, 350
+  from the Ogre alone).
+- **Target level near 6 before the Ogre**: `award_party_xp` splits every
+  award evenly across the party's *current* `member_ids` (capped by
+  `get_max_party_size()`, i.e. Guild Hall tier — 3/4/5), and
+  `get_level_xp_threshold(level)` is `5*level*(level+1)-10` (L6 = 200
+  XP/member, from `GameSession.get_level_xp_threshold()`). Dividing the
+  pre-Ogre total (985) by a constant party size across the whole arc gives:
+  5 members throughout → 197 XP/member → level 5, three points under the L6
+  threshold; 4 members throughout → 246 XP/member → level 6; 3 members
+  throughout (never upgrading Guild Hall) → 328 XP/member → level 7. The
+  locked target band is **level 5–7, centered on 6**, depending on Guild Hall
+  tier reached.
+- **Total expected gold before the Ogre**: starting gold (200) + mean
+  kill/completion loot (≈701.5, from the table) + variable Shop passive
+  income (2/5/10 gold per World Map Turn by Shop tier), which is not fixed
+  here since it depends on turns taken. Treat ≈900 gold as an analytical
+  floor, not a cap.
+- **Encampment upgrade budget**: the full upgrade catalog totals 12 possible
+  upgrade actions (`GUILD_HALL` to level 3 = 2 actions past its floor,
+  `TEMPLE` = 1, `BLACKSMITH` = 3, `ALCHEMY_WORKSHOP` = 2, `RUNIC_WORKSHOP` =
+  2, `SHOP` to level 3 = 2 — matching `get_campaign_victory_summary()`'s own
+  `upgrades_completed` formula). How many of these 12 a winning run typically
+  completes is deliberately left unspecified here; see "Stage 3 approval
+  bands" below.
+
+### Final encounter and free-play presentation (D8) — resolved
+
+The following is **already shipped code**; this paragraph locks it into the
+design contract as-is, not as a new decision:
+
+- **Ogre formation**: a single `OGRE_ENEMY_STATS` unit (90 HP, 15 guard, 20%
+  resist, 5–12 damage, 55% hit chance), fielded alone. No multi-Ogre or
+  reinforcement-wave formation exists.
+- **Victory screen**: headline "Campaign Victory!" / "The Borderlands Ogre
+  falls."; five stats — World Turns Elapsed, Battles Won, Casualties, Gold
+  Banked, Encampment Upgrades (`GameSession.get_campaign_victory_summary()`);
+  Continue button reads "Continue in Free Play".
+- **"Battles Won" is intentionally a total-battles-cleared count, not a
+  12-battle counter**: `get_campaign_victory_summary()` reports
+  `completed_encounters.size()`, which also includes the two starting sandbox
+  encounters (`goblin_camp`/`orc_outpost`) and any `ruined_fortress` clears
+  the player made alongside the 12-node ladder. This is approved, locked
+  behavior — the victory screen deliberately credits every battle cleared on
+  the way to victory, not only the required ladder.
+- **Free play timing**: `is_free_play_active` flips true the instant
+  `set_campaign_victory()` runs (i.e. the moment the Ogre dies), not when the
+  player presses Continue — Continue only navigates to the Encampment.
+- **Post-victory repeatable vacancies**: the same three sandbox templates used
+  throughout the campaign (`goblin_camp`, `orc_outpost`, `ruined_fortress`) —
+  there is no separate free-play-only template pool.
+- **Required IDs never reappear**: enforced by `can_enter_encounter()` (an
+  authored id, once in `completed_encounters`, can never be re-entered).
+- **Reward summary text describes the real mechanical reward, not a
+  guaranteed item**: each objective's `reward_summary_key` string
+  (`translations/en.tres`) states that gold and salvage come from the
+  cleared site, scaled qualitatively by difficulty, rather than promising a
+  specific named item — the actual reward is always the random per-kill loot
+  roll (`ENEMY_LOOT_TABLES`) plus the flat completion bonus
+  (`randi_range(18,22) * difficulty`); no code path grants a fixed weapon,
+  armor, or rune slot on objective completion.
+
+## Stage 3 approval bands
+
+`make campaign-sim` (Makefile) documents its representative seed set as "the
+documented representative campaign seed set (4, 9, 10, 12, 14)" — this is
+`CampaignSim.REPRESENTATIVE_VICTORY_SEEDS` (`scripts/tools/campaign_sim.gd`),
+the single production-owned copy read by the CLI, the metrics/label layer,
+and `test_campaign_sim.gd`'s
+`test_run_campaign_reaches_victory_on_the_representative_seed_set()`.
+
+| Band | Value | Source |
+|---|---|---|
+| Representative seed set | 4, 9, 10, 12, 14 | `CampaignSim.REPRESENTATIVE_VICTORY_SEEDS`, mirrored by `make campaign-sim` |
+| Required victory count | 5/5 (all representative seeds) | Already the passing contract of `test_run_campaign_reaches_victory_on_the_representative_seed_set()` |
+| Maximum simulated world turns (hard safety cap) | 400 | `CampaignSim.MAX_WORLD_TURNS` |
+| Target party level at Ogre entry | 5–7, centered on 6 | Computed above from `get_level_xp_threshold()` against the 985 pre-Ogre XP total at 3/4/5-member party sizes |
+| Allowed gold/resource range | not yet defined | Deliberately deferred: Step 2 must measure `gold.earned_total`/`gold.spent_*` on the representative set first and set the band from that real telemetry rather than a fabricated number here |
+| Allowed upgrade-count range | not yet defined | Same — derive from `mean_upgrade_progression_turns`/`upgrades_completed` telemetry once Step 2 has run, not guessed here |
+
+**Deviations requiring user approval**: a representative-seed victory count
+below 5/5, **or** any change to the seed set itself (4, 9, 10, 12, 14) —
+either one requires explicit user approval before proceeding, since the set
+is a small, hand-verified list rather than a re-derivable sample (see
+`REPRESENTATIVE_VICTORY_SEEDS`'s own doc comment). Once Step 2 establishes
+the gold/resource/upgrade-count bands from real telemetry, a run that falls
+outside them is the same kind of deviation and requires the same approval.
+
+Step 2 (Campaign telemetry and comparison) is the step that gathers real
+`make campaign-sim` output and checks it against this contract — this step
+only fixes the bands that are already numerically grounded (seed set,
+victory count, safety cap, target level) and explicitly defers the ones that
+require a first empirical run.
+
 ## Encampment progression and economy floor
 
 The Encampment is a fast, card-like strategic layer. Every building level must
@@ -158,9 +287,10 @@ The following are intentionally not implementation contracts yet:
   protection remain the proposed first slice; broader Temple effects beyond
   the HP recovery bonus above (e.g. a second Temple tier) remain to be
   decided.
-- **Final encounter and free-play presentation (D8):** victory is required,
-  but the final composition, reward presentation, and free-play details remain
-  to be decided.
+- **Final encounter and free-play presentation (D8):** locked — see [Stage 3
+  arc contract: the twelve authored
+  nodes](#stage-3-arc-contract-the-twelve-authored-nodes)'s "Final encounter
+  and free-play presentation" subsection above.
 - **Presentation proof standard (D9):** 3/4 top-down perspective, hybrid
   placeholder-to-custom assets, and audio/visual feedback are roadmap goals;
   their acceptance standard remains to be decided after the campaign loop is
