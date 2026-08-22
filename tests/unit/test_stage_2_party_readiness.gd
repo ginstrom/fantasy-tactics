@@ -267,6 +267,24 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 		"Battle start must hydrate from the Cleric's own durable current (partial) MP, not the factory's full-MP default"
 	)
 
+	# The Cleric casts Bless on the Warrior before retreating -- a real,
+	# public BattleController action (not a hand-mutated field) that spends
+	# exactly SPELL_MP_COST of the Cleric's own hydrated 1 MP. Without this,
+	# the post-aftermath MP assertion below would compare the pre-battle
+	# value against itself (nothing else in this fixture ever changes it),
+	# which would pass even if apply_battle_mp_aftermath() were a no-op --
+	# casting a real spell makes the post-battle value provably different
+	# from cleric_mp_before_battle, so write-back can only match by actually
+	# threading the battle's own changed MP through.
+	controller.selected_unit = battle_cleric
+	var cast_bless: bool = controller.try_cast_spell("bless", Vector2i(3, 4))
+	assert_true(cast_bless, "The Cleric must be able to cast Bless on the Warrior before retreating")
+	var expected_cleric_mp_after_cast: int = cleric_mp_before_battle - BattleControllerScript.SPELL_MP_COST
+	assert_eq(
+		battle_cleric.mp_remaining, expected_cleric_mp_after_cast,
+		"Casting Bless must spend exactly SPELL_MP_COST MP off the battle unit"
+	)
+
 	# Every board distance on a 6x6 board is "near" or "mid" per _retreat_
 	# distance_bucket(); both buckets' no_loss threshold sits below 0.2, so
 	# this pinned roll always lands "ten_percent" -- an HP-loss outcome, not
@@ -311,9 +329,14 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 		GameSession.get_current_health(GameSession.WARRIOR_ID), expected_warrior_hp_after_retreat,
 		"The pinned ten_percent retreat outcome must cost exactly ceil(max_health * 0.10) HP, written back durably"
 	)
+	# Distinct from cleric_mp_before_battle (1) by construction (the Bless
+	# cast above spent SPELL_MP_COST off the battle unit) -- this can only
+	# pass if apply_battle_mp_aftermath() actually threads the battle's own
+	# post-cast MP value through, not merely leaves the pre-battle durable
+	# value untouched.
 	assert_eq(
-		GameSession.get_current_mp(cleric_id), cleric_mp_before_battle,
-		"No spell was cast during the retreat -- MP aftermath must preserve the pre-battle partial durable value"
+		GameSession.get_current_mp(cleric_id), expected_cleric_mp_after_cast,
+		"MP aftermath must write back the battle's own post-cast MP, not the untouched pre-battle value"
 	)
 	assert_true(GameSession.get_adventurer(GameSession.WARRIOR_ID).has("id"), "The Warrior must have survived the ten_percent retreat")
 	assert_true(GameSession.get_adventurer(scout_id).has("id"), "The Scout must have survived the ten_percent retreat")
