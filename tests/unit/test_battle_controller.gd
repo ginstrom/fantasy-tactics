@@ -628,6 +628,28 @@ func test_invalid_potion_use_preserves_action_points_and_inventory() -> void:
 
 ## --- Cleric tactical spells (Step 4) ---
 
+## docs/designs/campaign-loop.md documents the Encampment's details-view heal
+## (GameSession.DETAILS_HEAL_MP_COST/MIN/MAX) as "locked to match the
+## existing battle-local Heal spell exactly" (BattleController.SPELL_MP_COST/
+## SPELL_HEAL_MIN/SPELL_HEAL_MAX), but nothing enforced that before this fix
+## wave -- a future edit to one trio that forgot the other would silently
+## drift. Asserts the two hardcoded battle-local consts and the two config-
+## driven campaign vars agree exactly.
+func test_details_heal_values_stay_locked_to_the_battle_local_heal_spell_values() -> void:
+	assert_eq(
+		GameSession.DETAILS_HEAL_MP_COST, BattleControllerScript.SPELL_MP_COST,
+		"Details-view heal MP cost must match the battle Heal spell's MP cost exactly"
+	)
+	assert_eq(
+		GameSession.DETAILS_HEAL_MIN, BattleControllerScript.SPELL_HEAL_MIN,
+		"Details-view heal minimum must match the battle Heal spell's minimum exactly"
+	)
+	assert_eq(
+		GameSession.DETAILS_HEAL_MAX, BattleControllerScript.SPELL_HEAL_MAX,
+		"Details-view heal maximum must match the battle Heal spell's maximum exactly"
+	)
+
+
 func test_try_cast_spell_heal_deducts_ap_and_mp_and_caps_at_max_health() -> void:
 	var controller := _make_controller(6, 6)
 	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
