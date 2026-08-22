@@ -137,6 +137,60 @@ func test_tier_one_formation_fixture_demonstrates_a_rear_attack_lands_a_critical
 	)
 
 
+## Formation fixture: obj_tier1_1_goblin_outpost's exact composition (one
+## Goblin, two Kobolds -- all three melee-only, attack_max_range 1 by the
+## shared-profile default, since none of GOBLIN_ENEMY_STATS/KOBOLD_ENEMY_
+## STATS declares a ranged attack_min_range/attack_max_range) surrounds a
+## single front-line tile from three sides. A Scout held two tiles further
+## back is out of every one of their reach, not merely harder to reach --
+## proving formation (who you place at the front vs. the back) is a real
+## reachability decision with consequences, mirroring test_stage_2_scout_
+## tier_two.gd's own "pressure without substituting for the front line"
+## proof style (get_legal_attack_targets(), not a data check).
+func _tier_one_formation_lineup_scenario() -> Dictionary:
+	return _scenario({
+		"scenario_id": "tier_one_formation_front_line_lineup",
+		"board": {"width": 6, "height": 6},
+		"player": {
+			"units": [
+				{"id": "warrior_1", "template_id": "warrior", "position": {"x": 3, "y": 3}},
+				{"id": "scout_1", "template_id": "scout", "position": {"x": 3, "y": 5}},
+			],
+		},
+		"enemy": {
+			"units": [
+				{"id": "goblin_1", "template_id": "goblin", "position": {"x": 3, "y": 2}},
+				{"id": "kobold_1", "template_id": "kobold", "position": {"x": 2, "y": 3}},
+				{"id": "kobold_2", "template_id": "kobold", "position": {"x": 4, "y": 3}},
+			],
+		},
+	})
+
+
+func test_tier_one_formation_fixture_demonstrates_the_front_line_absorbs_every_attack_the_back_line_never_faces() -> void:
+	var scenario := _tier_one_formation_lineup_scenario()
+	var errors: Array[String] = ScenarioContract.validate(scenario)
+	assert_eq(errors, [] as Array[String], "The tier-one formation fixture must validate cleanly")
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+	var warrior = controller.get_unit_at(Vector2i(3, 3))
+	var scout = controller.get_unit_at(Vector2i(3, 5))
+	var goblin = controller.get_unit_at(Vector2i(3, 2))
+	var kobold_1 = controller.get_unit_at(Vector2i(2, 3))
+	var kobold_2 = controller.get_unit_at(Vector2i(4, 3))
+
+	for enemy in [goblin, kobold_1, kobold_2]:
+		assert_true(
+			controller.get_legal_attack_targets(enemy).has(warrior),
+			"Every one of the outpost's own enemies must be able to reach the Warrior holding the front-line tile"
+		)
+		assert_false(
+			controller.get_legal_attack_targets(enemy).has(scout),
+			"None of the outpost's melee-only enemies can reach the Scout held two tiles back -- formation, not luck, keeps it safe"
+		)
+
+
 ## --- Tier 1: "return and bank loot" fixture ---------------------------------
 ## Named for obj_tier1_1_goblin_outpost's real loot output (GameSession.
 ## complete_current_encounter()/_roll_and_queue_loot(), reading its own

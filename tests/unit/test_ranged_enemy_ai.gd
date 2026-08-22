@@ -158,30 +158,87 @@ func test_authored_tier_two_compositions_goblin_archer_attacks_a_stationary_warr
 	assert_eq(warrior.health, warrior.max_health - 1)
 
 
+## Fix for an Important finding on this file's first version (see Step 6's
+## own task-1-report.md fix addendum): the original version of this test put
+## the Archer at Manhattan distance 5 from the Warrior with attack_max_range
+## 3, so it had to move regardless of whether the Bruiser was blocking
+## anything -- the test could not tell "moved because out of range" apart
+## from "moved because of line of sight." It also let the Bruiser act with
+## its full 6 AP, which _best_move_toward() (battle_controller.gd's existing
+## pathing) very likely walks off its own starting tile before the Archer's
+## own turn even begins, so the "blocker" may not have still been blocking.
+##
+## This version isolates the LoS mechanism causally: the Archer starts
+## already within its own attack_max_range (3) of the Warrior, so nothing
+## about range alone forces it to move. The Bruiser -- when present -- sits
+## on the direct line between them (an explicit action_points: -6 scenario
+## modifier keeps it genuinely stationary and blocking, the same explicit-
+## test-input pattern _tier_two_composition_scenario()'s own action_points
+## modifier above already uses, not a hidden balance change). The identical
+## scenario is built twice, with and without that one Bruiser -- proving the
+## Archer's differing behavior (attacks in place vs. is forced to move) is
+## actually caused by the blocker's presence, not by starting distance.
+func _archer_los_probe_scenario(include_bruiser: bool) -> Dictionary:
+	var enemies: Array = []
+	if include_bruiser:
+		enemies.append({
+			"id": "orc_bruiser_1", "template_id": "orc_bruiser", "position": {"x": 2, "y": 1},
+			"modifiers": {"action_points": -6},
+		})
+	enemies.append({"id": "goblin_archer_1", "template_id": "goblin_archer", "position": {"x": 2, "y": 0}})
+	return ScenarioContract.normalize({
+		"scenario_id": "archer_los_causal_probe_%s" % include_bruiser,
+		"board": {"width": 6, "height": 6},
+		# Warrior at (2, 3), Archer at (2, 0): Manhattan distance 3, exactly
+		# the Archer's own attack_max_range -- already in range without
+		# moving at all. A Bruiser at (2, 1) sits directly on that column,
+		# strictly between the two (occupied-endpoint LoS blocks a shot
+		# passing THROUGH a tile, never one landing ON it), so it blocks the
+		# Archer's direct shot only when present.
+		"player": {"units": [{"id": "warrior_1", "template_id": "warrior", "position": {"x": 2, "y": 3}}]},
+		"enemy": {"units": enemies},
+	})
+
+
 func test_authored_tier_two_compositions_goblin_archer_repositions_around_its_own_bruiser_for_a_clear_line_of_sight() -> void:
-	# Mirrors test_ranged_enemy_repositions_to_a_clear_line_of_sight_before_
-	# attacking()'s own geometry exactly, but the blocking unit is the
-	# composition's own Orc Bruiser (standing at its authored-adjacent
-	# formation position) rather than a bespoke zero-AP obstacle -- proving
-	# even a real formation's own ally can force this repositioning, not
-	# only a hand-placed test fixture.
-	var scenario := _tier_two_composition_scenario(
-		0, {"x": 4, "y": 4}, {"x": 5, "y": 5}, {"x": 2, "y": 3}
+	var clear_controller: Node2D = BattleStateFactory.build(_archer_los_probe_scenario(false), 1)
+	autofree(clear_controller)
+	var blocked_controller: Node2D = BattleStateFactory.build(_archer_los_probe_scenario(true), 1)
+	autofree(blocked_controller)
+
+	for controller in [clear_controller, blocked_controller]:
+		controller.active_side = BattleControllerScript.Side.ENEMY
+		controller.hit_roll = func() -> float: return 0.0
+		controller.crit_roll = func() -> float: return 1.0
+		controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
+
+	var clear_archer = clear_controller.get_unit_at(Vector2i(2, 0))
+	var clear_warrior = clear_controller.get_unit_at(Vector2i(2, 3))
+	var clear_steps: Array = clear_controller.run_enemy_turn()
+	var clear_archer_steps: Array = clear_steps.filter(func(step): return _step_actor(step) == clear_archer)
+
+	var blocked_archer = blocked_controller.get_unit_at(Vector2i(2, 0))
+	var blocked_warrior = blocked_controller.get_unit_at(Vector2i(2, 3))
+	var blocked_steps: Array = blocked_controller.run_enemy_turn()
+	var blocked_archer_steps: Array = blocked_steps.filter(func(step): return _step_actor(step) == blocked_archer)
+
+	# Without the Bruiser: already in range with a clear shot, so the Archer
+	# never moves -- its full 6 AP instead buys two 3-AP attacks in place.
+	for step in clear_archer_steps:
+		assert_eq(step.type, "attack", "With no blocker, the Archer must never need to move")
+	assert_eq(clear_archer.grid_position, Vector2i(2, 0), "With no blocker, the Archer's starting tile already had a clear shot")
+	assert_eq(clear_warrior.health, clear_warrior.max_health - 2, "Two unmoved attacks must land")
+
+	# With the identical Archer/Warrior placement but the Bruiser now
+	# blocking the direct line: the SAME starting position now forces a
+	# move before any attack can land, and that move spends enough AP that
+	# only one attack (not two) fits in the remaining budget -- the causal
+	# signature of the blocker's presence, not merely a different geometry.
+	assert_true(blocked_archer_steps.size() >= 2, "A blocked Archer must move before it can attack")
+	assert_eq(blocked_archer_steps[0].type, "move", "The Bruiser's block must force a reposition first")
+	assert_ne(
+		blocked_archer.grid_position, Vector2i(2, 0),
+		"The blocked Archer must actually leave its starting tile, unlike the unblocked run above"
 	)
-	var controller: Node2D = BattleStateFactory.build(scenario, 1)
-	autofree(controller)
-	var archer = controller.get_unit_at(Vector2i(5, 5))
-	var warrior = controller.get_unit_at(Vector2i(2, 3))
-	controller.active_side = BattleControllerScript.Side.ENEMY
-	controller.hit_roll = func() -> float: return 0.0
-	controller.crit_roll = func() -> float: return 1.0
-	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
-
-	var steps: Array = controller.run_enemy_turn()
-	var archer_steps: Array = steps.filter(func(step): return _step_actor(step) == archer)
-
-	assert_eq(archer_steps.size(), 2)
-	assert_eq(archer_steps[0].type, "move")
-	assert_eq(archer.grid_position, Vector2i(5, 3), "The Archer must reposition around its own Bruiser's blocking line of sight")
-	assert_eq(archer_steps[1].type, "attack")
-	assert_eq(warrior.health, warrior.max_health - 1)
+	assert_eq(blocked_archer_steps[1].type, "attack")
+	assert_eq(blocked_warrior.health, blocked_warrior.max_health - 1, "Only one attack fits once AP was spent repositioning")
