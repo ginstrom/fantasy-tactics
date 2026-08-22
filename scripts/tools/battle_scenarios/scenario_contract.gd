@@ -256,6 +256,17 @@ static func _normalize_side(raw_side: Dictionary, side_label: String) -> Diction
 			# normalized/validated uniformly rather than special-cased per
 			# template_id.
 			unit["mp_current"] = int(raw_unit.get("mp_current", -1))
+			# Explicit optional perks field (docs/plans/2026-08-21-stage-2-
+			# party-readiness/ final-review fix wave's Fix 1): mirrors mp_
+			# current's own precedent above -- a deterministic scenario must
+			# never rely on ambient GameSession.get_adventurer(...).progression.
+			# perks state, so a scenario-built unit only ever gets Juggernaut/
+			# Bulwark/Quickdraw/Devout's mechanical effect when this field
+			# names them explicitly. Defaults to [] (no perks), same as a
+			# fresh adventurer's own progression.perks. See battle_state_
+			# factory.gd's _build_player_unit() for where this is consumed.
+			var raw_perks: Array = raw_unit.get("perks", [])
+			unit["perks"] = raw_perks.duplicate(true)
 		var default_position: Vector2i = (
 			default_positions[index] if index < default_positions.size() else Vector2i(-1, -1)
 		)
@@ -324,6 +335,19 @@ static func _validate_side(
 					errors.append(
 						"invalid_limit: %s unit %s has out-of-range mp_current %d (class mp_max %d)"
 						% [side_label, unit_id, mp_current, class_mp_max]
+					)
+
+			# Each named perk must be a real id belonging to this unit's own
+			# template_id's class (GameSession.CLASS_PERKS) -- mirrors choose_
+			# perk()'s own class-gating so an authoring typo or a perk from the
+			# wrong class fails fast at validate() time instead of silently
+			# having zero effect in BattleStateFactory._build_player_unit().
+			var class_perks: Array = GameSession.CLASS_PERKS.get(template_id, [])
+			for perk_id in unit.get("perks", []):
+				if not class_perks.has(String(perk_id)):
+					errors.append(
+						"unknown_perk: %s unit %s has perk \"%s\" not owned by class \"%s\""
+						% [side_label, unit_id, perk_id, template_id]
 					)
 
 		var pos := position_from_dict(unit.get("position", {}))

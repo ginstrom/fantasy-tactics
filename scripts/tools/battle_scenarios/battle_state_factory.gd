@@ -149,9 +149,23 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	var armor: Dictionary = GameSession.ARMORS.get(spec.armor_id, {})
 	var modifiers: Dictionary = spec.get("modifiers", {})
 	var level: int = int(spec.get("level", 1))
+	# Explicit optional perks field (scenario_contract.gd's own doc comment on
+	# it, mirroring mp_current's precedent): a scenario-built unit only ever
+	# gets a perk's mechanical effect when this list names it -- never from
+	# ambient GameSession.get_adventurer(...).progression.perks state. See
+	# campaign_sim.gd's _build_player_units(), the only caller that populates
+	# this from a real adventurer's own chosen perks.
+	var perks: Array = spec.get("perks", [])
 
 	var vitality: int = int(base.get("vitality", 10))
 	var max_health: int = vitality * level + int(modifiers.get("max_health", 0))
+	# Juggernaut/Devout's max-health percent bonus (see GameSession.compute_
+	# effective_max_health()'s own doc comment on why this is a shared static
+	# helper): applied on top of the scenario's own level/modifiers-derived
+	# base, exactly mirroring get_effective_max_health()'s live-route formula.
+	max_health = GameSession.compute_effective_max_health(
+		max_health, perks, GameSession.WARRIOR_JUGGERNAUT_HP_PERCENT, GameSession.CLERIC_DEVOUT_HP_PERCENT
+	)
 
 	var melee_min_gain: int = int(skills_def.get("melee", {}).get("min_gain", 1))
 	var melee: int = int(base.get("melee", 60)) + (level - 1) * melee_min_gain + int(modifiers.get("melee", modifiers.get("attack", 0)))
@@ -171,10 +185,18 @@ static func _build_player_unit(spec: Dictionary, index: int):
 		raw_hit_stat / GameSession.ATTACK_TO_HIT_CHANCE_DIVISOR, 0.0, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
 
-	var action_points: int = BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0))
+	# Bonus Move/Quickdraw's flat AP bonus -- see GameSession.compute_
+	# effective_action_points()'s own doc comment.
+	var action_points: int = GameSession.compute_effective_action_points(
+		BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0)), perks, 1, GameSession.SCOUT_QUICKDRAW_ACTION_POINTS
+	)
 	var damage_min: int = int(weapon.get("damage_min", 0)) + int(modifiers.get("damage_min", 0))
 	var damage_max: int = int(weapon.get("damage_max", 0)) + int(modifiers.get("damage_max", 0))
-	var defense: int = int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0))
+	# Bulwark's flat Guard bonus -- see GameSession.compute_effective_
+	# defense()'s own doc comment.
+	var defense: int = GameSession.compute_effective_defense(
+		int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0)), perks, GameSession.WARRIOR_BULWARK_GUARD
+	)
 	var resistance: int = int(armor.get("resistance", 0)) + int(modifiers.get("resistance", 0))
 	# Ranged weapon attack range hydration (Step 4 of docs/plans/2026-08-21-
 	# stage-2-party-readiness/04-scout-ranged-and-tier-two-pattern.md): mirrors

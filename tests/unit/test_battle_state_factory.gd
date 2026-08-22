@@ -341,6 +341,102 @@ func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	assert_eq(hero.mp_remaining, 0)
 
 
+## --- Class-owned perks (docs/plans/2026-08-21-stage-2-party-readiness/
+## final-review fix wave's Fix 1) --------------------------------------------
+## Before this fix, a scenario-built unit's perks had zero mechanical effect
+## (only the live BattleController._ready() route consulted GameSession's
+## get_effective_max_health()/get_effective_defense()/get_effective_action_
+## points()), so make campaign-sim's balance evidence silently modeled a
+## build where 4 of 6 Stage 2 perks (all but Meditation/Keen Eyes, which
+## affect spell/scout range rather than battle stats) were inert. These
+## tests prove the scenario contract's own explicit "perks" field (never
+## ambient GameSession.get_adventurer(...).progression.perks state) now
+## drives the exact same math get_effective_max_health()/get_effective_
+## defense()/get_effective_action_points() apply on the live route.
+
+func test_build_applies_warrior_juggernauts_max_health_percent_bonus() -> void:
+	var scenario := _normalized({
+		"scenario_id": "juggernaut",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 1,
+					"perks": [GameSession.WARRIOR_JUGGERNAUT_PERK_ID],
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+	var base_max_health := int(GameSession.CLASS_DEFINITIONS.warrior.base_stats.vitality)
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	var expected := base_max_health + int(round(base_max_health * GameSession.WARRIOR_JUGGERNAUT_HP_PERCENT / 100.0))
+	assert_eq(hero.max_health, expected, "warrior_juggernaut must raise the scenario-built unit's max_health by its configured percent")
+	assert_gt(hero.max_health, base_max_health, "The perk must actually change the built unit's stats, not just be recorded")
+
+
+func test_build_omits_a_perks_bonus_when_the_scenario_names_no_perks() -> void:
+	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	var base_max_health := int(GameSession.CLASS_DEFINITIONS.warrior.base_stats.vitality)
+	assert_eq(hero.max_health, base_max_health, "No perks field must leave max_health at its unmodified baseline")
+
+
+func test_build_applies_warrior_bulwarks_flat_guard_bonus() -> void:
+	var scenario := _normalized({
+		"scenario_id": "bulwark",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "weapon_id": "longsword_iron", "armor_id": "leather_armor",
+					"position": {"x": 0, "y": 0}, "level": 1, "perks": [GameSession.WARRIOR_BULWARK_PERK_ID],
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+	var armor_defense := int(GameSession.ARMORS.leather_armor.defense)
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(
+		hero.defense, armor_defense + GameSession.WARRIOR_BULWARK_GUARD,
+		"warrior_bulwark must add its configured flat Guard bonus on top of armor defense"
+	)
+	assert_eq(hero.guard, hero.defense, "The shared tactical Guard field must track the perk-inclusive defense exactly")
+
+
+func test_build_applies_scout_quickdraws_flat_action_point_bonus() -> void:
+	var scenario := _normalized({
+		"scenario_id": "quickdraw",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "scout", "position": {"x": 0, "y": 0}, "level": 1,
+					"perks": [GameSession.SCOUT_QUICKDRAW_PERK_ID],
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(
+		hero.action_points_remaining, BattleControllerScript.BASE_ACTION_POINTS + GameSession.SCOUT_QUICKDRAW_ACTION_POINTS,
+		"scout_quickdraw must add its configured flat AP bonus on top of the battle baseline"
+	)
+
+
 ## --- Explicit modifiers affect only the constructed unit ---------------------
 
 func test_build_applies_explicit_player_modifiers_on_top_of_the_baseline() -> void:

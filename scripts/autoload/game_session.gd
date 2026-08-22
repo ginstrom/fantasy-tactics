@@ -716,16 +716,27 @@ const CLASS_DEFINITIONS: Dictionary = {
 	# duplicate key -- see that step's own doc comment, which explicitly
 	# deferred MP/Heal/Bless to this step). Sustain/support role: moderate
 	# melee, real spellcasting, blunt weapons (mace/hammer/staff -- see
-	# WEAPONS.mace_iron). "spellcasting" is a new base_stats key nothing else
-	# reads yet outside spell-flavor text; it exists on no other class, and
-	# every reader treats a missing spellcasting stat as 0 rather than
-	# requiring every class to carry a dead field. "missile" stays in
-	# base_stats for schema parity with warrior/scout (get_effective_hit_
-	# chance() falls back to it for a bow-category weapon, which a Cleric can
-	# never equip) but is deliberately absent from "skills" below -- it never
-	# needs to grow. mp_max (this class's only spellcasting resource) is a
-	# flat 3, hydrated onto the battle-local Unit by BattleController, never
-	# a persistent adventurer stat (see unit.gd's mp_max/mp_remaining).
+	# WEAPONS.mace_iron). "spellcasting" is a base_stats key read by
+	# get_effective_spellcasting() (the Cleric's own shared tactical
+	# attribute, see class-system.md's "Shared tactical attributes" section),
+	# unit_details.gd's Skills row, and unit_info_panel.gd's Skills row -- it
+	# exists on no other class, and every reader treats a missing
+	# spellcasting stat as 0 rather than requiring every class to carry a
+	# dead field. "missile" stays in base_stats for schema parity with
+	# warrior/scout (get_effective_hit_chance() falls back to it for a
+	# bow-category weapon, which a Cleric can never equip) but is
+	# deliberately absent from "skills" below -- it never needs to grow.
+	# mp_max (this class's only spellcasting resource) is hydrated onto the
+	# battle-local Unit by BattleController AND is now a persistent
+	# adventurer stat via the durable "mp_current" field (see docs/designs/
+	# campaign-loop.md's "Cleric current MP is durable adventurer state"
+	# paragraph, get_default_cleric(), and get_current_mp()/set_adventurer_
+	# mp()) -- Step 3's whole point. The flat mp_max value itself is config-
+	# driven (GameConfig's cleric.mp_max, see CLERIC_MP_MAX and get_
+	# effective_max_mp()), not this compile-time 3; this const stays as the
+	# default baseline other call sites (BattleController._ready(),
+	# campaign_snapshot.gd, scenario_contract.gd, battle_state_factory.gd)
+	# read directly for battle-local Unit.mp_max hydration.
 	"cleric": {
 		"allowed_weapon_categories": ["mace", "hammer", "staff"],
 		"base_stats": {"max_health": 12, "vitality": 12, "melee": 45, "missile": 30, "guard": 10, "might": 1, "spellcasting": 55, "move_range": 3},
@@ -802,7 +813,7 @@ const DEFAULT_ARMOR_ID := "leather_armor"
 # GameSession.SOME_CONSTANT call site keeps working unchanged — GDScript
 # exposes both consts and vars the same way through a singleton instance.
 var BASE_MOVE_RANGE: int = 3
-var PERK_LEVEL_INTERVAL: int = 3
+var PERK_LEVEL_INTERVAL: int = 2
 ## Caps how many pending perk slots _pending_perk_slot_count() will ever
 ## report earned for one adventurer (see docs/designs/class-system.md's
 ## "Stage 2 locked perk set"). Each class has exactly two perks today, so a
@@ -943,6 +954,17 @@ var TEMPLE_HP_BONUS_PER_TIER: int = 1
 var DETAILS_HEAL_MP_COST: int = 1
 var DETAILS_HEAL_MIN: int = 2
 var DETAILS_HEAL_MAX: int = 8
+## Cleric's max MP (docs/designs/campaign-loop.md: durable current MP is
+## "clamped to cleric.mp_max (3, config/game_config.json)"). Config-driven
+## like every other var in this block -- see _load_balance_config() and
+## get_effective_max_mp(), which reads this var rather than the CLASS_
+## DEFINITIONS.cleric.mp_max const those docs used to (incorrectly) claim was
+## authoritative. CLASS_DEFINITIONS.cleric.mp_max itself is left as the
+## compile-time default other call sites (BattleController._ready(),
+## campaign_snapshot.gd, scenario_contract.gd, battle_state_factory.gd) still
+## read directly for battle-local Unit.mp_max hydration -- out of scope for
+## this fix, see the fix wave's own report.
+var CLERIC_MP_MAX: int = 3
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
 # A campaign starts sparse (two active encounters, one active recruitment
@@ -1034,8 +1056,12 @@ func get_default_cleric(adventurer_id: String, adventurer_name: String) -> Dicti
 		# MP, exactly like health above starts at full HP. Warrior/Scout carry
 		# no "mp_current" field at all -- get_current_mp()/get_effective_max_mp()
 		# read CLASS_DEFINITIONS to return 0 for those classes without needing
-		# a dead field on every record.
-		"mp_current": CLASS_DEFINITIONS.cleric.mp_max,
+		# a dead field on every record. Reads the config-driven CLERIC_MP_MAX
+		# var (not the CLASS_DEFINITIONS.cleric.mp_max compile-time default)
+		# so a fresh Cleric's starting MP always agrees with get_effective_
+		# max_mp()'s own config-driven value -- see that function's doc
+		# comment.
+		"mp_current": CLERIC_MP_MAX,
 		"progression": {
 			"xp": 0.0,
 			"perks": [],
@@ -1343,6 +1369,7 @@ func _load_balance_config() -> void:
 	DETAILS_HEAL_MP_COST = GameConfig.get_int("cleric", "details_heal_mp_cost", DETAILS_HEAL_MP_COST)
 	DETAILS_HEAL_MIN = GameConfig.get_int("cleric", "details_heal_min", DETAILS_HEAL_MIN)
 	DETAILS_HEAL_MAX = GameConfig.get_int("cleric", "details_heal_max", DETAILS_HEAL_MAX)
+	CLERIC_MP_MAX = GameConfig.get_int("cleric", "mp_max", CLERIC_MP_MAX)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -3673,18 +3700,24 @@ func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
 
 
 ## Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is durable
-## adventurer state" paragraph): a class's mp_max is a fixed CLASS_
-## DEFINITIONS value (3 for Cleric today, see that dict's own doc comment),
-## not a perk-derived effective stat -- no Step 1 perk grants a bonus to it,
-## unlike get_effective_max_health()'s Juggernaut/Devout percent bonus.
-## Returns 0 for an unknown adventurer or a class with no "mp_max" entry
-## (Warrior/Scout), so a caller never needs its own class check first.
+## adventurer state" paragraph): a class's mp_max is a config-driven balance
+## value (CLERIC_MP_MAX, loaded from config/game_config.json's cleric.mp_max
+## -- see _load_balance_config()), not a perk-derived effective stat -- no
+## Step 1 perk grants a bonus to it, unlike get_effective_max_health()'s
+## Juggernaut/Devout percent bonus. Returns 0 for an unknown adventurer or a
+## class with no "mp_max" entry at all (Warrior/Scout), so a caller never
+## needs its own class check first. Only Cleric carries an "mp_max" key in
+## CLASS_DEFINITIONS today, so CLERIC_MP_MAX is the only config-driven value
+## needed here; a future second spellcasting class would need its own var
+## the same way, not a shared one.
 func get_effective_max_mp(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
 	var class_def: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
-	return int(class_def.get("mp_max", 0))
+	if not class_def.has("mp_max"):
+		return 0
+	return CLERIC_MP_MAX
 
 
 ## Returns current persistent MP for adventurer_id (clamped in [0, max_mp]),
@@ -3921,12 +3954,27 @@ func get_effective_action_points(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return 0
 	var perks: Array = adventurer.progression.get("perks", [])
+	return compute_effective_action_points(6, perks, 1, SCOUT_QUICKDRAW_ACTION_POINTS)
+
+
+## Pure Bonus Move/Quickdraw AP-bonus math, factored out of get_effective_
+## action_points() so BattleStateFactory._build_player_unit() (docs/plans/
+## 2026-08-21-stage-2-party-readiness/ fix wave's Fix 1) can apply the exact
+## same formula to a scenario-built unit's own explicit `perks` field,
+## without duplicating it or reading GameSession's mutable adventurer
+## records (a scenario has no adventurer record -- see battle_state_
+## factory.gd's own doc comment on why it never touches GameSession's
+## mutable campaign fields). Static and side-effect-free, mirroring compute_
+## effective_max_health()'s identical pattern.
+static func compute_effective_action_points(
+	base_action_points: int, perks: Array, bonus_move_bonus: int, quickdraw_bonus: int
+) -> int:
 	var bonus := 0
 	if perks.has(BONUS_MOVE_PERK_ID):
-		bonus += 1
+		bonus += bonus_move_bonus
 	if perks.has(SCOUT_QUICKDRAW_PERK_ID):
-		bonus += SCOUT_QUICKDRAW_ACTION_POINTS
-	return 6 + bonus
+		bonus += quickdraw_bonus
+	return base_action_points + bonus
 
 
 ## Returns (damage_min, damage_max) from the adventurer's equipped weapon, or
@@ -3992,8 +4040,18 @@ func get_effective_defense(adventurer_id: String) -> int:
 	var armor_def: int = 0 if armor.is_empty() else int(armor.defense)
 	var guard_stat: int = int(adventurer.stats.get("guard", 0))
 	var perks: Array = adventurer.progression.get("perks", [])
-	var bulwark_bonus := WARRIOR_BULWARK_GUARD if perks.has(WARRIOR_BULWARK_PERK_ID) else 0
-	return armor_def + guard_stat + bulwark_bonus
+	return compute_effective_defense(armor_def + guard_stat, perks, WARRIOR_BULWARK_GUARD)
+
+
+## Pure Bulwark Guard-bonus math, factored out of get_effective_defense() so
+## BattleStateFactory._build_player_unit() (docs/plans/2026-08-21-stage-2-
+## party-readiness/ fix wave's Fix 1) can apply the exact same formula to a
+## scenario-built unit's own explicit `perks` field -- see compute_effective_
+## action_points()'s identical doc comment for why this is static and takes
+## every input explicitly rather than reading GameSession's mutable
+## adventurer records.
+static func compute_effective_defense(base_defense: int, perks: Array, bulwark_bonus: int) -> int:
+	return base_defense + (bulwark_bonus if perks.has(WARRIOR_BULWARK_PERK_ID) else 0)
 
 
 ## Scout strategic reconnaissance detection range (see get_party_scouting_

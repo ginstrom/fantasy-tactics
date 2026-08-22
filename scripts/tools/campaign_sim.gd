@@ -766,6 +766,17 @@ func _build_player_units() -> Array:
 		# class that actually has one.
 		if GameSession.get_effective_max_mp(member_id) > 0:
 			unit_spec["mp_current"] = GameSession.get_current_mp(member_id)
+		# Class-owned perks (docs/plans/2026-08-21-stage-2-party-readiness/
+		# final-review fix wave's Fix 1): without this, every simulated battle
+		# built through BattleStateFactory silently ignored Juggernaut/
+		# Bulwark/Quickdraw/Devout even though _resolve_pending_perks() below
+		# dutifully spends every perk slot a simulated party earns -- this
+		# threads the party's real chosen perks into the scenario so campaign-
+		# sim's balance evidence actually reflects them, mirroring mp_current's
+		# identical durable-state-threading pattern just above.
+		var chosen_perks: Array = adventurer.progression.get("perks", [])
+		if not chosen_perks.is_empty():
+			unit_spec["perks"] = chosen_perks.duplicate()
 		units.append(unit_spec)
 	return units
 

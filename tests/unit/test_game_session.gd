@@ -2429,10 +2429,11 @@ func test_choose_perk_rejects_a_perk_belonging_to_a_different_class() -> void:
 
 
 ## progression.perk_tree_size (2) caps how many slots ever open, even though
-## PERK_LEVEL_INTERVAL alone would open a third at level 9 -- once both of a
-## class's perks are chosen, is_perk_choice_pending() must stay false
-## permanently, and every further choose_perk() call (whether the id is
-## already-owned or simply unavailable) must leave state unchanged.
+## PERK_LEVEL_INTERVAL alone would keep opening a new slot at every further
+## multiple of itself as level climbs -- once both of a class's perks are
+## chosen, is_perk_choice_pending() must stay false permanently, and every
+## further choose_perk() call (whether the id is already-owned or simply
+## unavailable) must leave state unchanged.
 func test_is_perk_choice_pending_and_choose_perk_stay_locked_once_both_class_slots_are_spent() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2447,8 +2448,9 @@ func test_is_perk_choice_pending_and_choose_perk_stay_locked_once_both_class_slo
 	assert_false(session.is_perk_choice_pending("warrior_001"), "Both slots are now spent")
 	assert_eq(session.get_available_perks("warrior_001"), [] as Array[String])
 
-	# Award enough further XP to cross level 9 (the third PERK_LEVEL_INTERVAL
-	# multiple) -- PERK_TREE_SIZE must still cap this at zero new slots.
+	# Award enough further XP to climb well past both slots' own thresholds
+	# (whatever PERK_LEVEL_INTERVAL is currently configured to) --
+	# PERK_TREE_SIZE must still cap this at zero new slots.
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 250.0)
 	assert_eq(session.get_adventurer("warrior_001").level, 9)
 	assert_false(
@@ -3895,6 +3897,33 @@ func test_get_default_cleric_starts_at_full_current_and_max_mp() -> void:
 
 	assert_eq(cleric.mp_current, 3)
 	assert_eq(GameSession.CLASS_DEFINITIONS.cleric.mp_max, 3)
+
+
+## Fix wave finding (docs/plans/2026-08-21-stage-2-party-readiness/ final-
+## review): config/game_config.json's cleric.mp_max was a dead key -- nothing
+## read it, and get_effective_max_mp() returned the hardcoded CLASS_
+## DEFINITIONS.cleric.mp_max const instead, contradicting docs/designs/
+## campaign-loop.md's own claim that MP is "clamped to cleric.mp_max (3,
+## config/game_config.json)". Poisoning CLERIC_MP_MAX (the var _load_balance_
+## config() now wires from that config key) away from the const's own value
+## proves get_effective_max_mp() actually reads it.
+func test_get_effective_max_mp_reflects_the_config_driven_value_not_the_hardcoded_const() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+
+	session.CLERIC_MP_MAX = 7
+
+	assert_eq(
+		session.get_effective_max_mp("cleric_test"), 7,
+		"get_effective_max_mp() must read the config-driven CLERIC_MP_MAX var"
+	)
+	assert_ne(
+		session.get_effective_max_mp("cleric_test"), int(GameSessionScript.CLASS_DEFINITIONS.cleric.mp_max),
+		"Must not equal the stale hardcoded CLASS_DEFINITIONS.cleric.mp_max const"
+	)
 
 
 func test_warrior_and_scout_carry_no_mp_resource() -> void:
@@ -5705,6 +5734,7 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"DETAILS_HEAL_MP_COST": true,
 		"DETAILS_HEAL_MIN": true,
 		"DETAILS_HEAL_MAX": true,
+		"CLERIC_MP_MAX": true,
 		"PERK_TREE_SIZE": true,
 		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
 		"WARRIOR_BULWARK_GUARD": true,
