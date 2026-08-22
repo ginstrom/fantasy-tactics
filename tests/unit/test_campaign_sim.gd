@@ -105,6 +105,101 @@ func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
 		assert_true(GameSession.is_campaign_completed)
 
 
+## --- Step 4 (docs/plans/2026-08-22-stage-3-campaign-assembly/04-authored-
+## arc-economy-and-boss-tuning.md), Task 1: checkpoint assertions for the
+## bands docs/designs/campaign-loop.md's "Stage 3 approval bands" table
+## locks (party level at Ogre entry) or leaves for this step to pin from
+## Step 2's own measured baseline (meaningful upgrades, gold/recovery
+## budget). Every assertion below reads a range/aggregate across the whole
+## representative seed set from a real, deterministic run -- never a single
+## seed's exact figure or one incidental roll -- per this step's own
+## instruction to avoid asserting on a single accidental value. The measured
+## Step 2 baseline (`make campaign-sim` against the shipped state, recorded
+## in this step's implementation report) is: world_turns=51, level average
+## at Ogre entry=5.6, upgrades_completed=7, gold_earned=1038-1135,
+## hp_recovered_total=264-293, for all five of 4/9/10/12/14 identically
+## (mp_recovered_total=0 for every seed -- none of the five representative
+## seeds happens to field a Cleric; see REPRESENTATIVE_VICTORY_SEEDS' own
+## doc comment). Each band below keeps headroom around that measured range
+## rather than pinning the exact figures, so a small, legitimate pacing
+## shift does not spuriously fail this suite.
+func _objective_record(record: Dictionary, objective_id: String) -> Dictionary:
+	for entry in record.get("objective_records", []):
+		if String(entry.get("objective_id", "")) == objective_id:
+			return entry
+	return {}
+
+
+## Locks docs/designs/campaign-loop.md's "Target party level at Ogre entry"
+## band (5-7, centered on 6) against the party actually fielded for the
+## Ogre fight itself (the boss's own objective_records entry's level_
+## summary, snapshotted immediately before that battle) -- not an
+## end-of-run or pre-final-tier snapshot, which could drift from what the
+## player actually faces the Ogre with.
+func test_representative_seeds_enter_the_ogre_fight_within_the_approved_level_band() -> void:
+	for seed in CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS:
+		GameSession.reset()
+		GameSession.reset_injectable_rolls()
+		var sim := CampaignSimScript.new()
+		var record := sim.run_campaign(seed)
+		var boss_entry := _objective_record(record, "obj_boss_borderlands_ogre")
+		assert_false(boss_entry.is_empty(), "seed %d: the boss node must have been attempted on a representative victory seed" % seed)
+		var average_level := float(boss_entry.get("level_summary", {}).get("average", -1.0))
+		assert_true(
+			average_level >= 5.0 and average_level <= 7.0,
+			"seed %d: party average level at Ogre entry was %.2f, outside the approved 5-7 band" % [seed, average_level]
+		)
+
+
+## Locks the "required meaningful upgrades" checkpoint as the floor Step 2's
+## baseline measured, not an invented target: docs/designs/campaign-loop.md's
+## Encampment upgrade budget table deliberately leaves the exact count
+## unspecified, but every one of the five representative seeds reached the
+## Guild Hall level-1 cap upgrade, a built Temple, and a built Blacksmith by
+## victory -- a regression that silently starves the economy below that
+## floor (e.g. a building-cost change that leaves a representative seed
+## unable to afford the Guild Hall cap) must fail here.
+func test_representative_seeds_complete_the_measured_floor_of_encampment_upgrades() -> void:
+	for seed in CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS:
+		GameSession.reset()
+		GameSession.reset_injectable_rolls()
+		var sim := CampaignSimScript.new()
+		var record := sim.run_campaign(seed)
+		var upgrades: Dictionary = record.upgrade_progression_turns
+		assert_true(
+			upgrades.size() >= 6,
+			"seed %d: expected at least 6 completed upgrades by victory (Step 2 baseline measured 7), got %d" % [seed, upgrades.size()]
+		)
+		for key in ["guild_hall_level_2", "guild_hall_level_3", "temple", "blacksmith"]:
+			assert_true(upgrades.has(key), "seed %d: expected upgrade '%s' to have landed by victory" % [seed, key])
+
+
+## Locks the "resource/recovery budget" checkpoint docs/designs/
+## campaign-loop.md's approval-bands table left "not yet defined" pending
+## Step 2's real telemetry: gold actually earned across a representative
+## victory, and total HP actually recovered across the whole run (summed
+## from every objective_records entry -- an aggregate, not one heal roll),
+## both stay inside the range Step 2's baseline measured, with headroom on
+## both sides.
+func test_representative_seeds_earn_gold_and_recover_hp_within_the_measured_baseline_range() -> void:
+	for seed in CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS:
+		GameSession.reset()
+		GameSession.reset_injectable_rolls()
+		var sim := CampaignSimScript.new()
+		var record := sim.run_campaign(seed)
+		assert_true(
+			int(record.gold_earned) >= 800 and int(record.gold_earned) <= 1500,
+			"seed %d: gold_earned %d fell outside the measured baseline range [800, 1500]" % [seed, int(record.gold_earned)]
+		)
+		var hp_recovered_total := 0
+		for entry in record.objective_records:
+			hp_recovered_total += int(entry.get("hp_recovered", 0))
+		assert_true(
+			hp_recovered_total >= 150 and hp_recovered_total <= 400,
+			"seed %d: total hp_recovered %d fell outside the measured baseline range [150, 400]" % [seed, hp_recovered_total]
+		)
+
+
 ## --- Step 2 (docs/plans/2026-08-22-stage-3-campaign-assembly/02-campaign-
 ## telemetry-and-comparison.md), Task 1-3: ordered per-objective record ------
 

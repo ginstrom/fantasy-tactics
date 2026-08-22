@@ -313,6 +313,31 @@ func test_authored_encounter_compositions_match_the_plan_doc() -> void:
 
 	assert_eq(GameSessionScript.EXPEDITIONS["obj_boss_borderlands_ogre"].enemies[0].enemy, GameSessionScript.OGRE_ENEMY_STATS)
 
+	# Step 4 (docs/plans/2026-08-22-stage-3-campaign-assembly/04-authored-arc-
+	# economy-and-boss-tuning.md) checkpoint: the "final pre-boss/boss
+	# composition" band from docs/designs/campaign-loop.md's "Stage 3 arc
+	# contract" table is locked by stat-block identity, not just by count --
+	# the count-only assertions above would still pass if the two pre-boss
+	# nodes' rosters were silently reshuffled to a different mix of the same
+	# total unit count.
+	assert_eq(
+		GameSessionScript.EXPEDITIONS["obj_preboss_1_borderlands_vanguard"].enemies,
+		[
+			{"enemy": GameSessionScript.HOBGOBLIN_ELITE_ENEMY_STATS, "count": 2},
+			{"enemy": GameSessionScript.GOBLIN_ARCHER_ENEMY_STATS, "count": 2},
+			{"enemy": GameSessionScript.KOBOLD_ENEMY_STATS, "count": 1},
+		],
+		"obj_preboss_1_borderlands_vanguard must field Hobgoblin Elite x2, Goblin Archer x2, Kobold x1 per the arc contract table"
+	)
+	assert_eq(
+		GameSessionScript.EXPEDITIONS["obj_preboss_2_borderlands_stronghold"].enemies,
+		[
+			{"enemy": GameSessionScript.HOBGOBLIN_CHAMPION_ENEMY_STATS, "count": 3},
+			{"enemy": GameSessionScript.ORC_WARLORD_ENEMY_STATS, "count": 1},
+		],
+		"obj_preboss_2_borderlands_stronghold must field Hobgoblin Champion x3, Orc Warlord x1 per the arc contract table"
+	)
+
 
 ## can_enter_encounter()/enter_encounter() gate authored nodes: only the
 ## currently-unlocked node (never a locked later one, and never one already

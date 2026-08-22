@@ -165,22 +165,29 @@ and `test_campaign_sim.gd`'s
 | Required victory count | 5/5 (all representative seeds) | Already the passing contract of `test_run_campaign_reaches_victory_on_the_representative_seed_set()` |
 | Maximum simulated world turns (hard safety cap) | 400 | `CampaignSim.MAX_WORLD_TURNS` |
 | Target party level at Ogre entry | 5–7, centered on 6 | Computed above from `get_level_xp_threshold()` against the 985 pre-Ogre XP total at 3/4/5-member party sizes |
-| Allowed gold/resource range | not yet defined | Deliberately deferred: Step 2 must measure `gold.earned_total`/`gold.spent_*` on the representative set first and set the band from that real telemetry rather than a fabricated number here |
-| Allowed upgrade-count range | not yet defined | Same — derive from `mean_upgrade_progression_turns`/`upgrades_completed` telemetry once Step 2 has run, not guessed here |
+| Allowed gold/resource range | `gold_earned` 800–1500 per representative seed; total `hp_recovered` (summed across a run's `objective_records`) 150–400 | Measured by `make campaign-sim` against the shipped state (all five representative seeds: `gold_earned` 1038–1135, `hp_recovered` total 264–293) and locked as a regression floor/ceiling with headroom by `test_campaign_sim.gd`'s `test_representative_seeds_earn_gold_and_recover_hp_within_the_measured_baseline_range()` |
+| Allowed upgrade-count range | at least 6 of the 12 possible upgrade actions completed by victory, always including the Guild Hall level-1→3 cap, a built Temple, and a built Blacksmith | Measured: all five representative seeds complete exactly the same 7 (`guild_hall_level_2`, `guild_hall_level_3`, `blacksmith`, `blacksmith_level_2`, `blacksmith_level_3`, `temple`, `shop_level_2`) by victory. Locked as a regression floor (not the observed exact count, to leave headroom for legitimate small pacing shifts) by `test_campaign_sim.gd`'s `test_representative_seeds_complete_the_measured_floor_of_encampment_upgrades()` |
 
 **Deviations requiring user approval**: a representative-seed victory count
 below 5/5, **or** any change to the seed set itself (4, 9, 10, 12, 14) —
 either one requires explicit user approval before proceeding, since the set
 is a small, hand-verified list rather than a re-derivable sample (see
-`REPRESENTATIVE_VICTORY_SEEDS`'s own doc comment). Once Step 2 establishes
-the gold/resource/upgrade-count bands from real telemetry, a run that falls
-outside them is the same kind of deviation and requires the same approval.
+`REPRESENTATIVE_VICTORY_SEEDS`'s own doc comment). The gold/resource and
+upgrade-count bands above are likewise the same kind of deviation gate: a run
+that falls outside them requires the same approval, never a silent tuning
+change.
 
 Step 2 (Campaign telemetry and comparison) is the step that gathers real
-`make campaign-sim` output and checks it against this contract — this step
-only fixes the bands that are already numerically grounded (seed set,
-victory count, safety cap, target level) and explicitly defers the ones that
-require a first empirical run.
+`make campaign-sim` output and checks it against this contract — that step
+fixed the bands that were already numerically grounded (seed set, victory
+count, safety cap, target level) and deferred the gold/resource and
+upgrade-count bands pending a first empirical run. Step 4 (Authored arc
+economy and boss tuning) ran that empirical baseline (`make campaign-sim`
+against the already-shipped state — no tuning was needed, since every
+representative seed already met every band above) and filled in the two
+rows this table left "not yet defined," each traceable to the measured
+report and the new regression test that now locks it, per this row's
+"Source" column.
 
 ## Encampment progression and economy floor
 
