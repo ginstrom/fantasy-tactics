@@ -4168,6 +4168,9 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 		return result
 
 	var snapshot: Dictionary = result.snapshot
+	var campaign_completion_error := _validate_campaign_completion_state(snapshot)
+	if not campaign_completion_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": campaign_completion_error}
 	var owned_instance_error := _validate_owned_item_instance_ownership(snapshot)
 	if not owned_instance_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": owned_instance_error}
@@ -4226,6 +4229,21 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	return result
+
+
+## set_campaign_victory() is the only place real play ever sets is_free_play_
+## active true, and it always flips is_campaign_completed true in the same
+## atomic call (see that function) -- no real campaign state ever has one
+## true and the other false. CampaignSnapshot.from_dictionary() only checks
+## each field's own type, not this cross-field relationship, so a
+## hand-edited or corrupted save could otherwise import an incomplete
+## campaign straight into free play. Rejecting it here (a GameSession-level
+## policy, alongside the blacksmith/alchemy/runic checks below) keeps this
+## rule out of CampaignSnapshot's own structural-only contract.
+func _validate_campaign_completion_state(snapshot: Dictionary) -> String:
+	if snapshot.is_free_play_active and not snapshot.is_campaign_completed:
+		return "is_free_play_active cannot be true while is_campaign_completed is false"
+	return ""
 
 
 func _validate_blacksmith_state(snapshot: Dictionary) -> String:

@@ -576,3 +576,157 @@ func test_campaign_guide_dismiss_button_is_reachable_by_a_real_click_on_encampme
 		"a real click on the Dismiss button's own on-screen position must record the dismissal"
 	)
 	assert_false(guide.visible, "the guide must hide itself once its message has been dismissed")
+
+
+## Step 3 (docs/plans/2026-08-22-stage-3-campaign-assembly/03-final-victory-
+## and-free-play-boundaries.md): proves the one hop the rest of this file's
+## coverage stops short of -- defeating the real final-boss node through the
+## genuine WorldMap -> Battlefield -> GameManager transition chain must land
+## on the real, scene-instantiated Campaign Victory screen (its .tscn signal
+## wiring, not victory_screen.gd new()'d bare) exactly once, with every
+## approved durable summary stat rendered from live GameSession state, and
+## its real Continue button must route to the real Encampment showing the
+## approved free-play label -- while the completed authored ladder stays
+## exactly as victory left it even after a free-play sandbox clear.
+##
+## The eleven earlier ladder nodes are completed via GameSession directly
+## (per this file's own "jump state" convention -- test_game_session.gd's
+## test_completing_every_authored_encounter_in_order_wins_the_campaign
+## already exhaustively covers replaying that chain step by step); this test
+## spends its own clicks solely on what's new here: the final battle's real
+## routing and the real post-victory screens.
+func test_defeating_the_final_boss_routes_exactly_once_to_the_real_campaign_victory_screen_and_continue_reaches_free_play() -> void:
+	_unload_any_stale_real_scene()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
+	assert_true(GameSession.has_deployed_party())
+
+	var chain: Array = []
+	var id: String = "obj_tier1_1_goblin_outpost"
+	while id != "obj_boss_borderlands_ogre":
+		chain.append(id)
+		id = GameSession.CAMPAIGN_OBJECTIVES[id].next_objective_id
+	for objective_id in chain:
+		GameSession.enter_encounter(objective_id)
+		GameSession.complete_current_encounter()
+	assert_eq(GameSession.campaign_objective_id, "obj_boss_borderlands_ogre", "Sanity check: the ladder must be down to the final boss")
+	assert_false(GameSession.is_campaign_completed)
+
+	var ogre_position: Vector2i = GameSession.get_expedition("obj_boss_borderlands_ogre").position
+	GameSession.set_deployed_party_position(ogre_position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_eq(world_map.party_position, ogre_position)
+
+	world_map._handle_tile_click(world_map.party_position)
+	assert_true(world_map.party_selected, "First click on the boss node must select, not enter")
+	world_map._handle_tile_click(world_map.party_position)
+	assert_true(world_map.get_node("%ArrivalPanel").visible, "Arrival must offer the Enter/Withdraw panel")
+	world_map.get_node("%EnterButton").pressed.emit()
+	assert_eq(GameSession.selected_encounter, "obj_boss_borderlands_ogre")
+
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	battlefield.enemy_turn_beat_seconds = 0.0
+	add_child_autofree(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
+	GameSession.loot_gear_roll = func() -> float: return 1.0
+	battlefield.grid.apply_super_power()
+
+	# The Ogre's 90 HP survives one super-power hit even after the fixed 100
+	# damage: 100 * (1 - 20% resist) = 80, ten short of a one-shot kill (see
+	# battle_controller.gd's damage formula) -- unlike every sandbox/tier
+	# enemy this file's other tests one-shot. apply_super_power()'s 100
+	# action points leaves ample AP for a second attack in the same turn, so
+	# this clicks the Ogre's tile twice rather than once.
+	var warrior_start: Vector2i = BattleControllerScript.PLAYER_START_POSITIONS[0]
+	var ogre_start: Vector2i = BattleControllerScript.ENEMY_START_POSITIONS[0]
+	var adjacent_to_ogre: Vector2i = ogre_start + Vector2i.UP
+	battlefield.grid._handle_tile_click(warrior_start)
+	battlefield.grid._handle_tile_click(adjacent_to_ogre)
+	battlefield.grid._handle_tile_click(ogre_start)
+	battlefield.grid._handle_tile_click(ogre_start)
+
+	# The eleven earlier nodes were completed via GameSession directly above
+	# (never through Battlefield), so the warrior enters this fight without
+	# any of their clear/kill XP -- the Ogre's own 350 XP (150 kill + 200
+	# clear) then jumps it several levels in one battle, crossing a
+	# PERK_LEVEL_INTERVAL boundary a normal incremental playthrough would
+	# spread across many separate battles. level_up.gd's own Continue button
+	# is disabled while a perk choice is pending (see is_perk_choice_pending()),
+	# so this dismiss loop must pick a perk option whenever one is offered,
+	# not just press Continue.
+	var settle_frames := 0
+	while GameSession.selected_encounter != "" and settle_frames < 30:
+		if battlefield.level_up.visible:
+			if GameSession.is_perk_choice_pending(battlefield.level_up.adventurer_id):
+				var perk_options: VBoxContainer = battlefield.level_up.perk_options_container
+				if perk_options.get_child_count() > 0:
+					perk_options.get_child(0).emit_signal("pressed")
+			else:
+				battlefield.level_up.continue_button.emit_signal("pressed")
+		await get_tree().process_frame
+		settle_frames += 1
+	assert_eq(GameSession.selected_encounter, "", "The final battle must resolve before the frame budget ran out")
+	assert_true(GameSession.is_campaign_completed, "Defeating the Ogre must flip campaign completion")
+	assert_true(GameSession.is_free_play_active)
+
+	# Battlefield._finish_victory() must route the final boss's own victory
+	# straight to the Campaign Victory screen -- unlike every earlier node,
+	# never by way of BattleResult (see that function's just_won_campaign
+	# branch) -- so settle only for VictoryScreen, the same real get_tree().
+	# change_scene_to_file() chain the other real-transition tests in this
+	# file already exercise.
+	var victory_settle_frames := 0
+	while (get_tree().current_scene == null or get_tree().current_scene.name != "VictoryScreen") and victory_settle_frames < 10:
+		await get_tree().process_frame
+		victory_settle_frames += 1
+	assert_eq(
+		get_tree().current_scene.name, "VictoryScreen",
+		"Defeating the final boss must route directly to the real Campaign Victory screen"
+	)
+
+	var victory_screen: Control = get_tree().current_scene
+	var summary := GameSession.get_campaign_victory_summary()
+	assert_eq(victory_screen.get_node("Center/VBox/TurnsLabel").text, tr("victory.stat.turns") % int(summary.world_turns))
+	assert_eq(victory_screen.get_node("Center/VBox/BattlesLabel").text, tr("victory.stat.battles_won") % int(summary.battles_won))
+	assert_eq(victory_screen.get_node("Center/VBox/CasualtiesLabel").text, tr("victory.stat.casualties") % int(summary.casualties))
+	assert_eq(victory_screen.get_node("Center/VBox/GoldLabel").text, tr("victory.stat.gold_banked") % int(summary.gold_banked))
+	assert_eq(victory_screen.get_node("Center/VBox/UpgradesLabel").text, tr("victory.stat.upgrades") % int(summary.upgrades_completed))
+
+	# Press the real Continue button through the scene's own .tscn signal
+	# wiring (pressed -> _on_continue_pressed), not a direct method call.
+	# ContinueButton's own .text property holds the raw translation key set
+	# in victory_screen.tscn (unlike the summary labels above, which
+	# victory_screen.gd's _refresh() explicitly assigns already-tr()'d
+	# strings to) -- Godot's Control auto-translation resolves it for
+	# on-screen display without mutating the property itself, so this must
+	# tr() the button's own text the same way the real render does, rather
+	# than comparing the raw key directly.
+	var continue_button: Button = victory_screen.get_node("Center/VBox/ContinueButton")
+	assert_eq(tr(continue_button.text), tr("victory.continue_free_play"))
+	continue_button.emit_signal("pressed")
+
+	var encampment_settle_frames := 0
+	while (get_tree().current_scene == null or get_tree().current_scene.name != "Encampment") and encampment_settle_frames < 10:
+		await get_tree().process_frame
+		encampment_settle_frames += 1
+	assert_eq(get_tree().current_scene.name, "Encampment", "Continue must route to the real Encampment")
+
+	var live_encampment: Node = get_tree().current_scene
+	var free_play_label: Label = live_encampment.get_node("CampaignObjectiveBanner/Content/FreePlayLabel")
+	assert_true(free_play_label.visible, "The Encampment must visibly announce free play once the campaign is won")
+	assert_eq(free_play_label.text, tr("campaign.free_play.active_label"))
+
+	var completed_after_victory: Array = GameSession.completed_objectives.duplicate(true)
+
+	# Post-victory repeatable vacancy activity (a sandbox site, not an
+	# authored one) must never reopen the authored ladder.
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.complete_current_encounter()
+
+	assert_eq(GameSession.completed_objectives, completed_after_victory, "Sandbox vacancy activity must not touch the authored ladder")
+	for objective_id in chain:
+		assert_false(GameSession.can_enter_encounter(objective_id), "%s must never reopen after victory" % objective_id)
+	assert_false(GameSession.can_enter_encounter("obj_boss_borderlands_ogre"), "The final boss node itself must never reopen after victory")

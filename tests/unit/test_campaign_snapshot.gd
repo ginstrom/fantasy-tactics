@@ -191,6 +191,74 @@ func test_a_withdrawn_partys_state_round_trips_through_the_real_game_session_sna
 	assert_eq(GameSession.pending_gear, pending_gear_before)
 
 
+## Step 3 (docs/plans/2026-08-22-stage-3-campaign-assembly/03-final-victory-
+## and-free-play-boundaries.md): once GameSession.set_campaign_victory() has
+## fired, the durable campaign_objective_id=""/completed_objectives(full)/
+## is_campaign_completed=true/is_free_play_active=true boundary must survive
+## a real export -> import round trip exactly as GameSession left it.
+func test_post_victory_boundary_round_trips_through_the_real_game_session_snapshot() -> void:
+	GameSession.reset()
+	GameSession.completed_objectives.assign(GameSession.CAMPAIGN_OBJECTIVES.keys())
+	GameSession.campaign_objective_id = ""
+	GameSession.set_campaign_victory()
+	var data := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.campaign_objective_id, "")
+	assert_eq(GameSession.completed_objectives.size(), GameSession.CAMPAIGN_OBJECTIVES.size())
+	assert_true(GameSession.is_campaign_completed)
+	assert_true(GameSession.is_free_play_active)
+
+
+## A hand-edited or corrupted save claiming free play is active while the
+## campaign itself is not marked complete describes a state real play can
+## never produce -- set_campaign_victory() flips is_campaign_completed and
+## is_free_play_active atomically together (see GameSession), so nothing in
+## the real game ever leaves one true and the other false. Import must
+## reject that combination rather than silently granting free play to an
+## incomplete campaign.
+func test_import_rejects_free_play_active_without_campaign_completed() -> void:
+	GameSession.reset()
+	var data := GameSession.export_campaign_snapshot()
+	data.is_free_play_active = true
+	data.is_campaign_completed = false
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_false(result.ok, "An incomplete campaign must never import as free play")
+
+
+## export_campaign_snapshot()/import_campaign_snapshot() only ever carry the
+## transient battle_reward/battle_gear/battle_mana_crystals store across
+## exactly as it stands (see both functions' own doc comments) -- import
+## must never fold it into pending_reward/gold the way merge_battle_loot_
+## into_party()/deposit_pending_reward() do.
+func test_import_never_settles_transient_battle_loot() -> void:
+	GameSession.reset()
+	GameSession.set_campaign_victory()
+	GameSession.battle_reward = 37
+	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.battle_mana_crystals = {1: 2}
+	var gold_before := GameSession.gold
+	var pending_reward_before := GameSession.pending_reward
+	var pending_gear_before := GameSession.pending_gear.duplicate(true)
+	var data := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(data)
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.battle_reward, 37, "Transient battle loot must round-trip untouched")
+	assert_eq(GameSession.battle_gear, {"dagger_iron": 1})
+	assert_eq(GameSession.battle_mana_crystals, {1: 2})
+	assert_eq(GameSession.pending_reward, pending_reward_before, "Import must never settle transient loot into pending")
+	assert_eq(GameSession.pending_gear, pending_gear_before)
+	assert_eq(GameSession.gold, gold_before, "Import must never bank transient loot into gold")
+
+
 ## Step 3 of docs/plans/2026-08-18-core-loop-and-engagement: temple_level
 ## serializes/deserializes like any other durable building level, and a
 ## fresh (never-built) snapshot defaults to 0 -- see GameSession.temple_level's

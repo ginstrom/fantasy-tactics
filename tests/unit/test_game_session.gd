@@ -371,6 +371,55 @@ func test_completing_every_authored_encounter_in_order_wins_the_campaign() -> vo
 	assert_signal_emitted(session, "campaign_victory")
 
 
+## Step 3 (docs/plans/2026-08-22-stage-3-campaign-assembly/03-final-victory-
+## and-free-play-boundaries.md): once the final boss node is complete, the
+## durable victory boundary must be inert to everything that can happen
+## afterward -- a duplicate completion attempt on the boss's own objective
+## id, and ordinary repeatable-vacancy play (clearing a sandbox template
+## like the Goblin Camp, which free play explicitly still permits). Neither
+## may double-append/re-unlock the authored ladder's own state or re-fire
+## campaign_victory a second time.
+func test_post_victory_duplicate_completion_and_vacancy_activity_never_reopen_the_ladder() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var chain: Array = []
+	var id: String = "obj_tier1_1_goblin_outpost"
+	while id != "":
+		chain.append(id)
+		id = GameSessionScript.CAMPAIGN_OBJECTIVES[id].next_objective_id
+	for objective_id in chain:
+		session.enter_encounter(objective_id)
+		session.complete_current_encounter()
+	assert_true(session.is_campaign_completed)
+	assert_true(session.is_free_play_active)
+
+	var completed_after_victory: Array = session.completed_objectives.duplicate(true)
+	var unlocked_after_victory: Array = session.unlocked_authored_encounters.duplicate(true)
+
+	watch_signals(session)
+
+	# Duplicate completion attempt on the already-completed final node.
+	session.complete_campaign_objective("obj_boss_borderlands_ogre")
+
+	assert_eq(session.completed_objectives, completed_after_victory, "A duplicate final completion must not double-append")
+	assert_eq(session.campaign_objective_id, "", "The current objective must stay empty after victory")
+	assert_eq(session.unlocked_authored_encounters, unlocked_after_victory, "A duplicate completion must not re-unlock anything")
+	assert_signal_not_emitted(session, "campaign_victory")
+
+	# Repeatable vacancy activity: clearing a sandbox template during free
+	# play must never touch the authored ladder's own durable state.
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(session.completed_objectives, completed_after_victory, "Sandbox vacancy activity must not change the authored ladder's completed ids")
+	assert_eq(session.campaign_objective_id, "", "Sandbox vacancy activity must leave the current objective empty")
+	assert_eq(session.unlocked_authored_encounters, unlocked_after_victory, "Sandbox vacancy activity must not re-unlock any authored node")
+	for objective_id in chain:
+		assert_false(session.can_enter_encounter(objective_id), "%s must never reopen after victory" % objective_id)
+	assert_signal_not_emitted(session, "campaign_victory")
+
+
 ## --- Step 5: dynamic 1-5 star threat pacing ---------------------------------
 
 
