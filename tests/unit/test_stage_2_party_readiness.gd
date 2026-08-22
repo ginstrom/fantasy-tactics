@@ -153,14 +153,23 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 	# durable fields battle aftermath itself writes), then advance many
 	# encamped World Map Turns: recovery must climb but never overshoot
 	# either effective max, and must actually reach it given enough turns.
+	# The over-cap check below reads the *raw stored* record (get_adventurer()
+	# duplicates adventurers[] verbatim, unclamped) rather than get_current_
+	# health()/get_current_mp() -- those two getters clamp on every read
+	# (game_session.gd's own clampi() in each), so asserting through them
+	# could never actually catch a broken (or deleted) clamp inside _apply_
+	# natural_recovery() itself; the getters would silently launder an
+	# over-cap stored value back into range before this test ever saw it.
 	assert_true(GameSession.set_adventurer_health(scout_id, 1))
 	assert_true(GameSession.set_adventurer_mp(cleric_id, 0))
 	var scout_max_hp: int = GameSession.get_effective_max_health(scout_id)
 	var cleric_max_mp: int = GameSession.get_effective_max_mp(cleric_id)
 	for _turn in 20:
 		GameSession.end_world_turn()
-		assert_lte(GameSession.get_current_health(scout_id), scout_max_hp, "Recovery must never exceed effective max HP")
-		assert_lte(GameSession.get_current_mp(cleric_id), cleric_max_mp, "Recovery must never exceed effective max MP")
+		var scout_raw_hp: int = int(GameSession.get_adventurer(scout_id).get("health", 0))
+		var cleric_raw_mp: int = int(GameSession.get_adventurer(cleric_id).get("mp_current", 0))
+		assert_lte(scout_raw_hp, scout_max_hp, "The raw stored HP itself must never exceed effective max -- not just the clamped-on-read getter")
+		assert_lte(cleric_raw_mp, cleric_max_mp, "The raw stored MP itself must never exceed effective max -- not just the clamped-on-read getter")
 	assert_eq(GameSession.get_current_health(scout_id), scout_max_hp, "20 encamped turns must be enough to cap HP recovery")
 	assert_eq(GameSession.get_current_mp(cleric_id), cleric_max_mp, "20 encamped turns must be enough to cap MP recovery")
 
@@ -174,7 +183,37 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 	GameSession.enter_encounter(objective_id)
 	assert_eq(GameSession.selected_encounter, objective_id)
 
+	# Deliberately drop the Cleric to a *partial* durable MP (1 of 3) before
+	# this battle -- BattleStateFactory defaults an unhydrated player unit's
+	# mp_remaining to its own mp_max whenever a scenario spec omits mp_current
+	# entirely (battle_state_factory.gd:250), so threading a *full* value (as
+	# recovery just capped it to, above) would be indistinguishable from not
+	# threading anything at all: the hydration assertion below could pass
+	# even if the mp_current wiring were deleted. A partial value makes it a
+	# real, falsifiable proof that durable state -- not the factory's own
+	# default -- drove hydration.
+	assert_true(GameSession.set_adventurer_mp(cleric_id, 1))
 	var cleric_mp_before_battle: int = GameSession.get_current_mp(cleric_id)
+	assert_eq(cleric_mp_before_battle, 1, "Setup: the Cleric must enter this battle at partial, not full, durable MP")
+
+	# Thread the Warrior's real durable level and Juggernaut-inclusive
+	# effective max health into the scenario too (via "level" and a "modifiers.
+	# max_health" delta -- both real ScenarioContract fields, see scenario_
+	# contract.gd:249/87), so the battle-local unit's stats actually match the
+	# durable Warrior instead of silently defaulting to a level-1 (and
+	# perk-less) 10 HP stand-in. Without this, the post-retreat HP assertion
+	# below would be comparing a tiny scenario-local max_health against the
+	# much larger durable effective max and could never meaningfully fail.
+	var warrior_level: int = int(GameSession.get_adventurer(GameSession.WARRIOR_ID).level)
+	var warrior_effective_max_health: int = GameSession.get_effective_max_health(GameSession.WARRIOR_ID)
+	var warrior_vitality: int = int(GameSessionScript.CLASS_DEFINITIONS.warrior.base_stats.vitality)
+	var warrior_scenario_base_max_health: int = warrior_vitality * warrior_level
+	var warrior_max_health_modifier: int = warrior_effective_max_health - warrior_scenario_base_max_health
+	assert_eq(
+		GameSession.get_current_health(GameSession.WARRIOR_ID), warrior_effective_max_health,
+		"Setup: the Warrior must enter this battle at full durable HP for the retreat-loss math below to be exact"
+	)
+
 	var scenario := _scenario({
 		"scenario_id": "party_readiness_tier1_retreat",
 		"board": {"width": 6, "height": 6},
@@ -184,6 +223,8 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 					"id": GameSession.WARRIOR_ID, "template_id": "warrior",
 					"weapon_id": "longsword_iron", "armor_id": "chainmail_armor",
 					"position": {"x": 3, "y": 4},
+					"level": warrior_level,
+					"modifiers": {"max_health": warrior_max_health_modifier},
 				},
 				{
 					"id": scout_id, "template_id": "scout",
@@ -214,11 +255,16 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 
 	var controller: Node2D = BattleStateFactory.build(scenario, 7)
 	autofree(controller)
+	var battle_warrior = controller.get_unit_at(Vector2i(3, 4))
+	assert_eq(
+		battle_warrior.max_health, warrior_effective_max_health,
+		"The battle-local Warrior's max health must match the durable, Juggernaut-inclusive effective max exactly"
+	)
 	var battle_cleric = controller.get_unit_at(Vector2i(5, 4))
 	assert_eq(battle_cleric.mp_max, GameSession.get_effective_max_mp(cleric_id))
 	assert_eq(
 		battle_cleric.mp_remaining, cleric_mp_before_battle,
-		"Battle start must hydrate from the Cleric's own durable current MP"
+		"Battle start must hydrate from the Cleric's own durable current (partial) MP, not the factory's full-MP default"
 	)
 
 	# Every board distance on a 6x6 board is "near" or "mid" per _retreat_
@@ -252,13 +298,22 @@ func test_full_readiness_sequence_forms_equips_perks_heals_recovers_retreats_and
 
 	assert_eq(GameSession.selected_encounter, "")
 	assert_true(GameSession.can_enter_encounter(objective_id), "A retreat must never complete or lock the objective")
-	assert_lt(
-		GameSession.get_current_health(GameSession.WARRIOR_ID), GameSession.get_effective_max_health(GameSession.WARRIOR_ID),
-		"The pinned ten_percent retreat outcome must have cost the Warrior real HP"
+	# Exact, falsifiable expected value -- not a loose "< max" inequality --
+	# now that the scenario's max_health was threaded to match the durable
+	# (Juggernaut-inclusive) effective max exactly (see setup above): the
+	# pinned "ten_percent" outcome must cost precisely ceil(max_health * 0.10)
+	# HP (battle_controller.gd's own _retreat_hp_loss() formula), written back
+	# durably through the same resolve_battle_deaths()/apply_battle_aftermath()
+	# calls production uses.
+	var expected_ten_percent_hp_loss: int = int(ceil(warrior_effective_max_health * 0.10))
+	var expected_warrior_hp_after_retreat: int = warrior_effective_max_health - expected_ten_percent_hp_loss
+	assert_eq(
+		GameSession.get_current_health(GameSession.WARRIOR_ID), expected_warrior_hp_after_retreat,
+		"The pinned ten_percent retreat outcome must cost exactly ceil(max_health * 0.10) HP, written back durably"
 	)
 	assert_eq(
 		GameSession.get_current_mp(cleric_id), cleric_mp_before_battle,
-		"No spell was cast during the retreat -- MP aftermath must preserve the pre-battle durable value"
+		"No spell was cast during the retreat -- MP aftermath must preserve the pre-battle partial durable value"
 	)
 	assert_true(GameSession.get_adventurer(GameSession.WARRIOR_ID).has("id"), "The Warrior must have survived the ten_percent retreat")
 	assert_true(GameSession.get_adventurer(scout_id).has("id"), "The Scout must have survived the ten_percent retreat")
