@@ -163,7 +163,7 @@ func _populate_selected(unit) -> void:
 	# repeating). The selected unit is always the player's own (see this
 	# file's own _populate_selected() doc comment), so this is never an
 	# enemy-stat spoiler the way an exact HP number would be.
-	selected_defense_label.text = tr("battle.unit_info.defense") % [unit.guard, unit.resistance]
+	selected_defense_label.text = tr("battle.unit_info.guard") % [unit.guard, unit.resistance]
 	# Spellcasting only shows for a unit that actually has some (Cleric
 	# today) -- a non-caster's unit.spellcasting is always 0, and showing
 	# "Spellcasting: 0%" for every Warrior/Scout would expose a stat that

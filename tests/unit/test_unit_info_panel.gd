@@ -254,7 +254,7 @@ func test_selected_section_shows_guard_and_resistance() -> void:
 
 	var panel := _panel(battlefield)
 	var defense_label: Label = panel.get_node("Content/SelectedSection/DefenseLabel")
-	assert_eq(defense_label.text, tr("battle.unit_info.defense") % [warrior.guard, warrior.resistance])
+	assert_eq(defense_label.text, tr("battle.unit_info.guard") % [warrior.guard, warrior.resistance])
 	assert_eq(defense_label.text, "Guard: 10% — Resistance: 10%", "A fresh starter Warrior has Guard 10 / Resistance 10")
 
 

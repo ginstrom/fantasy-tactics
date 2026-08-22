@@ -223,7 +223,7 @@ messages = {
 "battle.unit_info.hp": "HP: %d/%d",
 "battle.unit_info.ap": "AP: %d/%d",
 "battle.unit_info.weapon": "Weapon: %s",
-"battle.unit_info.defense": "Guard: %d%% — Resistance: %d%%",
+"battle.unit_info.guard": "Guard: %d%% — Resistance: %d%%",
 "battle.unit_info.spellcasting": "Spellcasting: %d%%",
 "battle.unit_info.healthy": "Healthy",
 "battle.unit_info.wounded": "Wounded",
