@@ -105,6 +105,107 @@ func test_run_campaign_reaches_victory_on_the_representative_seed_set() -> void:
 		assert_true(GameSession.is_campaign_completed)
 
 
+## --- Step 2 (docs/plans/2026-08-22-stage-3-campaign-assembly/02-campaign-
+## telemetry-and-comparison.md), Task 1-3: ordered per-objective record ------
+
+## Locks the new evidence contract: run_campaign()'s telemetry must expose an
+## ordered `objective_records` array -- one entry per objective actually
+## attempted (recruited, traveled to, and fought), each carrying enough
+## detail for a reviewer to reconstruct "what happened at this node" without
+## reading simulator source (see this step's own manual-check requirement).
+## Existing top-level telemetry fields (record.victory, record.world_turns,
+## etc. -- see test_run_campaign_initializes_a_fresh_session_and_advances_
+## through_objectives() above) are untouched by this test on purpose: this is
+## purely an additive field.
+func test_run_campaign_records_an_ordered_per_objective_record_with_full_evidence() -> void:
+	var sim := CampaignSimScript.new()
+
+	var record := sim.run_campaign(CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS[0])
+
+	assert_true(record.has("objective_records"), "Telemetry must expose an ordered objective_records array")
+	var objective_records: Array = record.get("objective_records", [])
+	assert_gt(objective_records.size(), 0, "At least one objective must have been attempted on a representative victory seed")
+
+	# "Ordered" is checked, not assumed: world_turn_start must never regress
+	# across the list, and every objective id in it must be a real, authored
+	# CAMPAIGN_OBJECTIVES entry -- not an invented placeholder.
+	var previous_turn := -1
+	for entry in objective_records:
+		assert_true(
+			int(entry.get("world_turn_start", -1)) >= previous_turn,
+			"objective_records must be in non-decreasing world-turn order"
+		)
+		previous_turn = int(entry.world_turn_start)
+		assert_true(
+			GameSession.CAMPAIGN_OBJECTIVES.has(String(entry.get("objective_id", ""))),
+			"objective_id must be a real, authored campaign objective"
+		)
+
+	var first: Dictionary = objective_records[0]
+	for key in [
+		"objective_id", "outcome", "world_turn_start", "world_turn_end",
+		"party_losses", "hp_recovered", "mp_recovered", "gold_before", "gold_after",
+		"upgrades_purchased", "party_composition", "level_summary",
+	]:
+		assert_true(first.has(key), "objective_records entry must include '%s'" % key)
+
+	assert_true(
+		String(first.outcome) in ["victory", "defeat", "stalemate", "error"],
+		"outcome must be a real battle-resolution verdict, not a placeholder"
+	)
+	assert_true(int(first.world_turn_end) >= int(first.world_turn_start), "world_turn_end must not precede world_turn_start")
+	assert_false(bool(first.party_composition.is_empty()), "party_composition must record who was actually fielded for this objective")
+	assert_true(
+		first.level_summary.has("levels") and first.level_summary.has("average"),
+		"level_summary must report both per-member levels and the party average"
+	)
+
+	# Byte-identical determinism must hold for the new field too, exactly
+	# like every other telemetry field (see test_run_campaign_is_fully_
+	# deterministic_for_a_fixed_seed() above) -- a per-objective record built
+	# from anything but the run's own seeded RNG/state would break this.
+	GameSession.reset()
+	GameSession.reset_injectable_rolls()
+	var second := CampaignSimScript.new().run_campaign(CampaignSimScript.REPRESENTATIVE_VICTORY_SEEDS[0])
+	assert_eq(objective_records, second.get("objective_records", []), "objective_records must be byte-identical for a repeated seed")
+
+
+## Review follow-up (Finding 2 fix verification): directly exercises
+## _vitals_recovered()'s recruit-exclusion behavior with hand-built synthetic
+## before/after snapshots -- not a real campaign run, mirroring how the
+## aggregate/JSON tests above isolate CampaignSimMetrics from CampaignSim
+## itself. Locks in the real bug the review caught from live `make
+## campaign-sim` output: a member id present in `after`'s hp_by_member/
+## mp_by_member but absent from `before` (exactly what a same-cycle recruit
+## looks like, since _party_vitals_snapshot() only ever records currently
+## fielded member ids) must never have their HP/MP counted toward the
+## computed recovery delta -- or a reviewer reading hp_recovered/mp_recovered
+## off a saved report would mistake roster growth for rest recovery.
+func test_vitals_recovered_excludes_a_member_present_only_in_the_after_snapshot() -> void:
+	var sim := CampaignSimScript.new()
+
+	var before := {
+		"hp_by_member": {"warrior_a": 10, "cleric_a": 4},
+		"mp_by_member": {"cleric_a": 2},
+	}
+	var after := {
+		# warrior_a and cleric_a rested (present in both snapshots): +8 HP,
+		# +2 HP, +1 MP -- genuine recovery that must count. scout_b is a
+		# brand-new id absent from `before` -- a same-cycle recruit joining
+		# at full HP/MP -- and must be excluded entirely, from both totals.
+		"hp_by_member": {"warrior_a": 18, "cleric_a": 6, "scout_b": 20},
+		"mp_by_member": {"cleric_a": 3, "scout_b": 5},
+	}
+
+	var recovered := sim._vitals_recovered(before, after)
+
+	assert_eq(
+		int(recovered.hp), 10,
+		"Only warrior_a's +8 and cleric_a's +2 (both present in both snapshots) may count -- scout_b's 20 starting HP must be excluded"
+	)
+	assert_eq(int(recovered.mp), 1, "Only cleric_a's +1 MP (present in both snapshots) may count -- scout_b's 5 starting MP must be excluded")
+
+
 ## --- Review Finding 1 fix: XP splits across the pre-death roster -----------
 
 ## award_party_xp() divides evenly across GameSession's party.member_ids at
@@ -460,3 +561,75 @@ func test_metric_output_labels_sweep_mode_as_a_sample_not_a_universal_claim() ->
 	assert_true(summary.contains("Sweep seeds: 100-102"), "Summary must identify the contiguous sweep range")
 	assert_true(summary.contains("Sample victory rate:"), "Summary must label the percentage as a sample, not a universal rate")
 	assert_false(summary.contains("Representative seeds:"), "Sweep mode must not claim to be the representative set")
+
+
+## --- Step 2, Task 4: failed-seed details and per-objective summary ranges --
+
+## aggregate() must report more than a bare failing seed *number* -- a
+## reviewer comparing seeds needs the reason and headline stats of each
+## failure without re-running the sim. Uses hand-built synthetic records
+## (not real run_campaign() calls) so this test is fast, deterministic, and
+## isolated to aggregate()'s own field-shaping logic -- exactly the same
+## "records in, one summary Dictionary out" contract campaign_sim_metrics.gd's
+## own header comment describes, independent of what the sim itself produces
+## (that end-to-end wiring is covered by test_run_campaign_records_an_
+## ordered_per_objective_record_with_full_evidence() above).
+func test_metrics_aggregate_reports_failed_seed_details_and_per_objective_summary_ranges() -> void:
+	var records: Array = [
+		{
+			"seed": 1, "victory": true, "reason": "victory", "world_turns": 10,
+			"battles_fought": 2, "battles_won": 2, "party_wipes": 0,
+			"objective_records": [
+				{"objective_id": "obj_tier1_1_goblin_outpost", "outcome": "victory", "world_turn_start": 1, "world_turn_end": 4, "hp_recovered": 2, "mp_recovered": 0},
+				{"objective_id": "obj_tier1_2_kobold_warren", "outcome": "victory", "world_turn_start": 4, "world_turn_end": 10, "hp_recovered": 6, "mp_recovered": 1},
+			],
+		},
+		{
+			"seed": 2, "victory": false, "reason": "max_attempts_exceeded", "world_turns": 55,
+			"battles_fought": 3, "battles_won": 1, "party_wipes": 2,
+			"objective_records": [
+				{"objective_id": "obj_tier1_1_goblin_outpost", "outcome": "defeat", "world_turn_start": 1, "world_turn_end": 8, "hp_recovered": 0, "mp_recovered": 0},
+			],
+		},
+	]
+
+	var report := CampaignSimMetricsScript.aggregate(records, CampaignSimMetricsScript.MODE_SWEEP, [1, 2])
+
+	# Failed-seed details: a Dictionary per failure, not a bare seed int.
+	assert_eq(report.failed_seeds.size(), 1)
+	var failure: Dictionary = report.failed_seeds[0]
+	assert_true(failure is Dictionary, "failed_seeds entries must be detail dictionaries, not bare seed ints")
+	assert_eq(int(failure.seed), 2)
+	assert_eq(String(failure.reason), "max_attempts_exceeded")
+	assert_eq(int(failure.world_turns), 55)
+	assert_eq(int(failure.battles_fought), 3)
+	assert_eq(int(failure.battles_won), 1)
+	assert_eq(int(failure.party_wipes), 2)
+
+	# Per-objective summary ranges: attempts/victories plus a world-turn-span
+	# min/mean/max range per objective across every run, not a single
+	# averaged number that hides how much a node's pacing actually varies.
+	assert_true(report.has("per_objective_summary"), "aggregate() must report a per-objective summary")
+	var per_objective: Dictionary = report.per_objective_summary
+	assert_true(per_objective.has("obj_tier1_1_goblin_outpost"))
+	var outpost: Dictionary = per_objective.obj_tier1_1_goblin_outpost
+	assert_eq(int(outpost.attempts), 2, "obj_tier1_1_goblin_outpost was attempted in both records")
+	assert_eq(int(outpost.victories), 1, "obj_tier1_1_goblin_outpost was only won in the seed-1 record")
+	assert_almost_eq(float(outpost.world_turn_span_min), 3.0, 0.001, "min(4-1, 8-1) == 3")
+	assert_almost_eq(float(outpost.world_turn_span_max), 7.0, 0.001, "max(3, 7) == 7")
+	assert_almost_eq(float(outpost.world_turn_span_mean), 5.0, 0.001, "(3+7)/2 == 5")
+
+	assert_true(per_objective.has("obj_tier1_2_kobold_warren"))
+	var warren: Dictionary = per_objective.obj_tier1_2_kobold_warren
+	assert_eq(int(warren.attempts), 1)
+	assert_eq(int(warren.victories), 1)
+
+	# Both new fields must survive JSON round-tripping and the mode label
+	# must stay correct alongside them -- the new fields must never come at
+	# the cost of the existing mode-aware, self-describing contract.
+	var json_text := CampaignSimMetricsScript.to_json(report)
+	var parsed = JSON.parse_string(json_text)
+	assert_not_null(parsed, "to_json() output must still be valid, parseable JSON with the new fields present")
+	assert_true(parsed.has("per_objective_summary"), "JSON report must include per_objective_summary")
+	assert_true(parsed.has("failed_seeds"))
+	assert_eq(String(parsed.mode), CampaignSimMetricsScript.MODE_SWEEP)

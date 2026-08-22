@@ -46,12 +46,33 @@ static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 	var upgrade_turn_counts := {}
 	var total_spell_casts := 0
 	var runs_with_full_triad := 0
+	# Per-objective summary ranges (docs/plans/2026-08-22-stage-3-campaign-
+	# assembly/02-campaign-telemetry-and-comparison.md, Task 4): objective_id
+	# -> {attempts, victories, world_turn_span_min/_max, a running sum for
+	# the mean computed below}. Sourced from each record's own CampaignSim.
+	# objective_records (see that file's run_campaign() hook) -- a run
+	# produced by an older telemetry shape with no objective_records key
+	# simply contributes nothing here (record.get(..., []) below), not an
+	# error, so this stays compatible with any pre-existing saved record.
+	var per_objective: Dictionary = {}
 
 	for record in records:
 		if bool(record.get("victory", false)):
 			victories += 1
 		else:
-			failed_seeds.append(record.get("seed", -1))
+			# A bare seed number tells a reviewer *which* run failed but not
+			# *why* -- pairing it with the run's own reason/headline stats
+			# (still available on `record` at this point) lets a reviewer
+			# read a failure's shape straight off the aggregate report
+			# without re-running that seed.
+			failed_seeds.append({
+				"seed": record.get("seed", -1),
+				"reason": record.get("reason", ""),
+				"world_turns": int(record.get("world_turns", 0)),
+				"battles_fought": int(record.get("battles_fought", 0)),
+				"battles_won": int(record.get("battles_won", 0)),
+				"party_wipes": int(record.get("party_wipes", 0)),
+			})
 		total_spell_casts += int(record.get("spell_casts", 0))
 		if bool(record.get("fielded_full_triad", false)):
 			runs_with_full_triad += 1
@@ -78,12 +99,36 @@ static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 			upgrade_turn_sums[key] = int(upgrade_turn_sums.get(key, 0)) + int(upgrade_turns[key])
 			upgrade_turn_counts[key] = int(upgrade_turn_counts.get(key, 0)) + 1
 
+		var objective_records: Array = record.get("objective_records", [])
+		for entry in objective_records:
+			var objective_id := String(entry.get("objective_id", ""))
+			if not per_objective.has(objective_id):
+				per_objective[objective_id] = {
+					"attempts": 0, "victories": 0,
+					"world_turn_span_min": INF, "world_turn_span_max": -INF, "world_turn_span_sum": 0.0,
+				}
+			var bucket: Dictionary = per_objective[objective_id]
+			bucket.attempts = int(bucket.attempts) + 1
+			if String(entry.get("outcome", "")) == "victory":
+				bucket.victories = int(bucket.victories) + 1
+			var span := float(int(entry.get("world_turn_end", 0)) - int(entry.get("world_turn_start", 0)))
+			bucket.world_turn_span_min = minf(float(bucket.world_turn_span_min), span)
+			bucket.world_turn_span_max = maxf(float(bucket.world_turn_span_max), span)
+			bucket.world_turn_span_sum = float(bucket.world_turn_span_sum) + span
+
 	var level_curve_avg := {}
 	for key in level_curve_sums:
 		level_curve_avg[key] = float(level_curve_sums[key]) / float(level_curve_counts[key])
 	var upgrade_turn_avg := {}
 	for key in upgrade_turn_sums:
 		upgrade_turn_avg[key] = float(upgrade_turn_sums[key]) / float(upgrade_turn_counts[key])
+
+	# world_turn_span_mean added as a final pass (not accumulated inline
+	# above) so the running sum stays a plain float the whole time, mirroring
+	# level_curve_avg/upgrade_turn_avg's identical sum-then-divide shape.
+	for objective_id in per_objective:
+		var bucket: Dictionary = per_objective[objective_id]
+		bucket.world_turn_span_mean = float(bucket.world_turn_span_sum) / float(maxi(1, int(bucket.attempts)))
 
 	return {
 		"mode": mode,
@@ -117,6 +162,12 @@ static func aggregate(records: Array, mode: String, seeds: Array) -> Dictionary:
 		# the Cleric loop happened, not just whether the campaign was won.
 		"runs_with_full_triad": runs_with_full_triad,
 		"total_spell_casts": total_spell_casts,
+		# Per-objective summary ranges (see this function's own comment
+		# above): objective_id -> {attempts, victories, world_turn_span_min/
+		# _mean/_max}. A reviewer uses this to see how much a single node's
+		# pacing actually varies across the aggregated runs, not just one
+		# hidden-variance averaged number.
+		"per_objective_summary": per_objective,
 	}
 
 
@@ -162,7 +213,17 @@ static func format_summary(report: Dictionary) -> String:
 	)
 	var failed_seeds: Array = report.get("failed_seeds", [])
 	if not failed_seeds.is_empty():
-		lines.append("  Failed seeds: %s" % str(failed_seeds))
+		lines.append("  Failed seeds:")
+		for failure in failed_seeds:
+			var detail: Dictionary = failure
+			lines.append(
+				"    seed=%s reason=%s (world_turns=%s, battles=%s/%s won, wipes=%s)"
+				% [
+					str(detail.get("seed", "?")), str(detail.get("reason", "")),
+					str(detail.get("world_turns", 0)), str(detail.get("battles_won", 0)),
+					str(detail.get("battles_fought", 0)), str(detail.get("party_wipes", 0)),
+				]
+			)
 	lines.append("  Mean world turns to resolution: %.1f" % float(report.get("mean_world_turns", 0.0)))
 	lines.append(
 		"  Mean battles fought / won: %.1f / %.1f"
@@ -183,4 +244,17 @@ static func format_summary(report: Dictionary) -> String:
 	)
 	lines.append("  Mean party level curve: %s" % str(report.get("mean_party_level_curve", {})))
 	lines.append("  Mean upgrade progression turns: %s" % str(report.get("mean_upgrade_progression_turns", {})))
+	var per_objective: Dictionary = report.get("per_objective_summary", {})
+	if not per_objective.is_empty():
+		lines.append("  Per-objective world-turn span (min/mean/max), attempts, victories:")
+		for objective_id in per_objective:
+			var bucket: Dictionary = per_objective[objective_id]
+			lines.append(
+				"    %s: %.0f/%.1f/%.0f turns, %d/%d victories"
+				% [
+					String(objective_id), float(bucket.get("world_turn_span_min", 0.0)),
+					float(bucket.get("world_turn_span_mean", 0.0)), float(bucket.get("world_turn_span_max", 0.0)),
+					int(bucket.get("victories", 0)), int(bucket.get("attempts", 0)),
+				]
+			)
 	return "\n".join(lines)

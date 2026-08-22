@@ -86,6 +86,23 @@ func _run() -> void:
 	var report: Dictionary = metrics_script.aggregate(records, mode, seeds)
 	print(metrics_script.format_summary(report))
 
+	# Raw per-seed telemetry (each including CampaignSim.run_campaign()'s own
+	# ordered objective_records -- see that file's header comment) is
+	# attached to the saved report, not just the aggregate summary above, so
+	# a single saved terminal/JSON report is self-sufficient for the step's
+	# own manual check: a reviewer must be able to identify a setback,
+	# recovery interval, objective reached, upgrade timing, and final
+	# outcome for one run without reading simulator source. Attached here
+	# (not inside CampaignSimMetrics.aggregate(), which stays a pure
+	# records-in/summary-out aggregator per its own header comment) since
+	# this is report-assembly, not aggregation. Named "run_records", not
+	# "runs" -- CampaignSimMetrics.aggregate() already returns an integer
+	# "runs" field (the run *count*, read back by format_summary() as
+	# int(report.get("runs", 0))); reusing that key here would silently
+	# overwrite it with this Array in the persisted JSON (the terminal
+	# summary above is unaffected since it's built and printed before this
+	# line runs, from the pre-overwrite `report`).
+	report["run_records"] = records
 	var report_file := FileAccess.open(report_path, FileAccess.WRITE)
 	if report_file != null:
 		report_file.store_string(metrics_script.to_json(report))

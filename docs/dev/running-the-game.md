@@ -329,13 +329,37 @@ Verification below.
     1-10 (10 runs)`) and calls its percentage `Sample victory rate` --
     a labelled sample, never evidence that the campaign is completable on
     every seed.
-  - Both modes list `Failed seeds` when any run didn't reach victory.
+  - Both modes list `Failed seeds` when any run didn't reach victory, now
+    with each failure's own reason and headline stats (`seed=<n>
+    reason=<...> (world_turns=..., battles=.../... won, wipes=...)`) --
+    not just the bare seed number.
+  - A `Per-objective world-turn span (min/mean/max), attempts, victories`
+    block follows, one line per authored objective id actually attempted
+    across the aggregated runs -- how much a single node's pacing varies
+    run to run, not a single hidden-variance average.
 - The terminal ends with `[campaign_sim] done: N campaigns logged, report
   written to <path>` (default `user://campaign_sim_report.json`, i.e.
   `find ~/.local/share/godot -name campaign_sim_report.json` on Linux). The
-  JSON report includes `mode`, `seeds`, and `failed_seeds` fields alongside
-  the existing aggregate telemetry (`victory_rate`, `mean_world_turns`,
-  `gold`, `mean_party_level_curve`, `mean_upgrade_progression_turns`, ...).
+  JSON report includes `mode`, `seeds`, `failed_seeds` (now seed/reason/
+  stats detail objects), and `per_objective_summary` alongside the existing
+  aggregate telemetry (`victory_rate`, `mean_world_turns`, `gold`,
+  `mean_party_level_curve`, `mean_upgrade_progression_turns`, ...).
+  It also carries a `run_records` array (deliberately not named `runs` --
+  `runs` is already the integer run *count* field above): every seed's own
+  raw telemetry, each with an ordered `objective_records` list (one entry
+  per objective actually fought -- `objective_id`, `outcome`,
+  `world_turn_start`/`world_turn_end`, `party_losses`, `hp_recovered`/
+  `mp_recovered` (rest recovered between objectives -- a member recruited
+  mid-cycle never counts toward this; see `CampaignSim._vitals_recovered()`),
+  `gold_before`/`gold_after`, `upgrades_purchased`, `party_composition`,
+  `level_summary`). This is what makes one saved report self-sufficient for
+  manual review: a reviewer can read a single seed's `objective_records` top
+  to bottom and see exactly where a setback happened (`party_losses`
+  non-empty), how much the party recovered before the next objective
+  (`hp_recovered`/`mp_recovered` and the
+  `world_turn_start`/`world_turn_end` gap), when an upgrade landed
+  (`upgrades_purchased`), and the run's final outcome (`victory`/`reason`
+  at that run's own top level) -- without reading any simulator source.
   Generated reports are local evidence and must not be committed.
 
 ### Troubleshooting

@@ -131,7 +131,24 @@ func run_campaign(seed: int) -> Dictionary:
 		and attempts < MAX_OBJECTIVE_ATTEMPTS
 	):
 		attempts += 1
-		_run_encampment_phase(telemetry)
+
+		# Per-objective-record hooks start here (docs/plans/2026-08-22-stage-
+		# 3-campaign-assembly/02-campaign-telemetry-and-comparison.md): every
+		# value captured below is read-only evidence gathered at existing
+		# public transition points, never a second rules model -- battle
+		# state itself is still built exclusively through _fight_objective()'s
+		# own ScenarioContract/BattleStateFactory call. A record is only ever
+		# appended to telemetry.objective_records once an objective is
+		# actually fought (see the append below); a cycle that breaks out
+		# early (campaign already completed, no objective left, or no
+		# fieldable member could be recruited) has nothing to report and
+		# leaves these locals discarded.
+		var record_world_turn_start: int = GameSession.world_turn
+		var record_gold_before: int = GameSession.gold
+		var record_vitals_before := _party_vitals_snapshot()
+		var record_upgrades_purchased: Array[String] = []
+
+		_run_encampment_phase(telemetry, record_upgrades_purchased)
 		if GameSession.is_campaign_completed:
 			break
 
@@ -147,8 +164,39 @@ func run_campaign(seed: int) -> Dictionary:
 
 		_record_level_curve(telemetry, encounter_id)
 		_travel_to_objective(encounter_id, telemetry)
-		_fight_objective(encounter_id, telemetry)
+
+		# Snapshotting party composition/level/vitals here (after travel,
+		# immediately before combat) captures who was actually fielded for
+		# this fight and how much HP/MP the world-turns spent waiting and
+		# traveling since the previous objective recovered -- the exact
+		# "recovery interval" the step's manual check asks a reviewer to be
+		# able to identify from the report alone. _vitals_recovered() excludes
+		# any member recruited mid-cycle (present in `after`, absent from
+		# `before`) so a recruit's full starting HP/MP is never misread as
+		# rest recovery -- see that function's own doc comment.
+		var record_vitals_after := _party_vitals_snapshot()
+		var record_party_composition := _party_composition_snapshot()
+		var record_level_summary := _party_level_summary()
+		var record_vitals_recovered := _vitals_recovered(record_vitals_before, record_vitals_after)
+
+		var record_party_losses: Array[String] = []
+		var outcome := _fight_objective(encounter_id, telemetry, record_party_losses)
 		_return_to_encampment(telemetry)
+
+		telemetry.objective_records.append({
+			"objective_id": encounter_id,
+			"outcome": outcome,
+			"world_turn_start": record_world_turn_start,
+			"world_turn_end": GameSession.world_turn,
+			"party_losses": record_party_losses,
+			"hp_recovered": int(record_vitals_recovered.hp),
+			"mp_recovered": int(record_vitals_recovered.mp),
+			"gold_before": record_gold_before,
+			"gold_after": GameSession.gold,
+			"upgrades_purchased": record_upgrades_purchased,
+			"party_composition": record_party_composition,
+			"level_summary": record_level_summary,
+		})
 
 	telemetry.victory = GameSession.is_campaign_completed
 	telemetry.world_turns = GameSession.world_turn
@@ -196,18 +244,38 @@ func _new_telemetry(seed: int) -> Dictionary:
 		# BattleBot.take_player_turn() returns (see _run_battle_to_
 		# resolution()) -- never a separate hand-counted mechanism.
 		"spell_casts": 0,
+		# Ordered (append-only, one entry per objective actually fought) --
+		# see run_campaign()'s own per-objective-record hooks and this file's
+		# _party_vitals_snapshot()/_party_composition_snapshot()/_party_
+		# level_summary() helpers. Each entry: objective_id, outcome,
+		# world_turn_start/world_turn_end, party_losses (adventurer ids that
+		# died this fight), hp_recovered/mp_recovered (observed since the
+		# previous objective), gold_before/gold_after, upgrades_purchased
+		# (first purchased during this cycle's encampment phase),
+		# party_composition (fielded class ids), and level_summary
+		# ({levels, average}) -- the full-arc evidence docs/plans/2026-08-22-
+		# stage-3-campaign-assembly/02-campaign-telemetry-and-comparison.md
+		# requires (see that step's own manual-check requirement: identify a
+		# setback, recovery interval, objective reached, upgrade timing, and
+		# final outcome from the report alone).
+		"objective_records": [],
 	}
 
 
 ## --- Encampment phase: recruit, upgrade, gear, wait for viability ---------
 
-func _run_encampment_phase(telemetry: Dictionary) -> void:
+## `upgrades_out`, if supplied, collects the upgrade keys first purchased
+## during this call (see _mark_upgrade()) -- run_campaign()'s per-objective-
+## record hook uses this to report which upgrade(s) landed during this
+## objective's own encampment cycle. Optional (defaults to a throwaway
+## Array) so every other caller/test keeps working unchanged.
+func _run_encampment_phase(telemetry: Dictionary, upgrades_out: Array[String] = []) -> void:
 	_refill_party(telemetry)
-	_purchase_affordable_upgrades(telemetry)
+	_purchase_affordable_upgrades(telemetry, upgrades_out)
 	_equip_best_gear(telemetry)
 	_refill_party(telemetry)
 	_wait_for_ready_party(telemetry)
-	_purchase_affordable_upgrades(telemetry)
+	_purchase_affordable_upgrades(telemetry, upgrades_out)
 	_equip_best_gear(telemetry)
 
 
@@ -404,7 +472,9 @@ func _record_full_triad(telemetry: Dictionary) -> void:
 ## matched priority per pass, looped until a pass buys nothing, so a
 ## windfall can chain multiple tiers in one encampment visit without this
 ## policy trying to be any smarter than "buy what's next and affordable."
-func _purchase_affordable_upgrades(telemetry: Dictionary) -> void:
+## `upgrades_out` -- see _run_encampment_phase()'s identical parameter doc
+## comment; threaded through unchanged to _mark_upgrade().
+func _purchase_affordable_upgrades(telemetry: Dictionary, upgrades_out: Array[String] = []) -> void:
 	var iterations := 0
 	var purchased := true
 	while purchased and iterations < 10:
@@ -414,37 +484,45 @@ func _purchase_affordable_upgrades(telemetry: Dictionary) -> void:
 		if GameSession.can_upgrade_guild_hall() and GameSession.upgrade_guild_hall():
 			purchased = true
 			telemetry.gold_spent_upgrades += before - GameSession.gold
-			_mark_upgrade(telemetry, "guild_hall_level_%d" % GameSession.guild_hall_level)
+			_mark_upgrade(telemetry, "guild_hall_level_%d" % GameSession.guild_hall_level, upgrades_out)
 			continue
 		before = GameSession.gold
 		if GameSession.can_build_temple() and GameSession.build_temple():
 			purchased = true
 			telemetry.gold_spent_upgrades += before - GameSession.gold
-			_mark_upgrade(telemetry, "temple")
+			_mark_upgrade(telemetry, "temple", upgrades_out)
 			continue
 		before = GameSession.gold
 		if GameSession.can_upgrade_shop() and GameSession.upgrade_shop():
 			purchased = true
 			telemetry.gold_spent_upgrades += before - GameSession.gold
-			_mark_upgrade(telemetry, "shop_level_%d" % GameSession.shop_level)
+			_mark_upgrade(telemetry, "shop_level_%d" % GameSession.shop_level, upgrades_out)
 			continue
 		before = GameSession.gold
 		if GameSession.can_build_blacksmith() and GameSession.build_blacksmith():
 			purchased = true
 			telemetry.gold_spent_upgrades += before - GameSession.gold
-			_mark_upgrade(telemetry, "blacksmith")
+			_mark_upgrade(telemetry, "blacksmith", upgrades_out)
 			continue
 		before = GameSession.gold
 		if GameSession.can_upgrade_blacksmith() and GameSession.upgrade_blacksmith():
 			purchased = true
 			telemetry.gold_spent_upgrades += before - GameSession.gold
-			_mark_upgrade(telemetry, "blacksmith_level_%d" % GameSession.blacksmith_level)
+			_mark_upgrade(telemetry, "blacksmith_level_%d" % GameSession.blacksmith_level, upgrades_out)
 			continue
 
 
-func _mark_upgrade(telemetry: Dictionary, key: String) -> void:
+## `upgrades_out`, if supplied, also receives `key` -- but only the first
+## time this particular key is ever marked for the whole run (mirrors the
+## telemetry.upgrade_progression_turns guard immediately below), so a caller
+## reusing the same Array across multiple _purchase_affordable_upgrades()
+## calls within one objective's encampment phase (see _run_encampment_
+## phase()) only records an upgrade once, at the cycle it actually first
+## landed.
+func _mark_upgrade(telemetry: Dictionary, key: String, upgrades_out: Array[String] = []) -> void:
 	if not telemetry.upgrade_progression_turns.has(key):
 		telemetry.upgrade_progression_turns[key] = GameSession.world_turn
+		upgrades_out.append(key)
 
 
 ## Equips each fielded party member with the best owned (banked) weapon of
@@ -546,6 +624,75 @@ func _average_party_level() -> float:
 	return float(total) / float(ids.size())
 
 
+## Records current HP and current MP -- the same durable roster values
+## get_effective_max_mp()/get_current_mp() already read elsewhere in this
+## file, not a battle Unit's transient state -- per fielded (Warrior/Scout/
+## Cleric) member id, at the instant this is called. Keyed by member id
+## (rather than pre-summed) so _vitals_recovered() below can compute a
+## before/after delta restricted to members who were actually present at
+## BOTH snapshots -- a member recruited between the two snapshots (see
+## _refill_party(), called during the encampment phase between run_
+## campaign()'s "before" and "after" calls) must never have their full
+## starting HP/MP counted as "recovered": that would be roster growth, not
+## downtime healing, and would corrupt the recovery-interval evidence a
+## reviewer reads from objective_records (see this step's own manual-check
+## requirement). MP only recorded for a class that actually has one
+## (get_effective_max_mp() returns 0 for a non-caster) -- mirrors _build_
+## player_units()'s identical mp_current guard.
+func _party_vitals_snapshot() -> Dictionary:
+	var hp_by_member := {}
+	var mp_by_member := {}
+	for member_id in _fieldable_member_ids():
+		hp_by_member[member_id] = GameSession.get_current_health(member_id)
+		if GameSession.get_effective_max_mp(member_id) > 0:
+			mp_by_member[member_id] = GameSession.get_current_mp(member_id)
+	return {"hp_by_member": hp_by_member, "mp_by_member": mp_by_member}
+
+
+## HP/MP actually recovered between two _party_vitals_snapshot() calls,
+## summed only across member ids present in BOTH `before` and `after` --
+## see _party_vitals_snapshot()'s own doc comment for why a same-cycle
+## recruit (present in `after` but not `before`) must be excluded rather
+## than having their starting HP/MP misread as recovery. A member present
+## only in `before` (e.g. lost mid-cycle, which does not happen on this
+## snapshot pair today since no combat occurs between them) is excluded the
+## same way. Clamped at 0 per resource: natural recovery only ever restores
+## HP/MP toward max, never below the "before" reading, for any member this
+## delta actually counts.
+func _vitals_recovered(before: Dictionary, after: Dictionary) -> Dictionary:
+	var hp_delta := 0
+	var before_hp: Dictionary = before.hp_by_member
+	for member_id in after.hp_by_member:
+		if before_hp.has(member_id):
+			hp_delta += maxi(0, int(after.hp_by_member[member_id]) - int(before_hp[member_id]))
+	var mp_delta := 0
+	var before_mp: Dictionary = before.mp_by_member
+	for member_id in after.mp_by_member:
+		if before_mp.has(member_id):
+			mp_delta += maxi(0, int(after.mp_by_member[member_id]) - int(before_mp[member_id]))
+	return {"hp": hp_delta, "mp": mp_delta}
+
+
+## Ordered (party.member_ids order, via _fieldable_member_ids()) class ids of
+## the currently fielded party -- e.g. ["warrior", "warrior", "cleric"] --
+## for an objective_records entry's party_composition field.
+func _party_composition_snapshot() -> Array[String]:
+	var classes: Array[String] = []
+	for member_id in _fieldable_member_ids():
+		classes.append(String(GameSession.get_adventurer(member_id).get("class", "")))
+	return classes
+
+
+## Per-member level list (same order as _party_composition_snapshot()) plus
+## the average _average_party_level() already computes, for an objective_
+## records entry's level_summary field.
+func _party_level_summary() -> Dictionary:
+	var levels: Array[int] = []
+	for member_id in _fieldable_member_ids():
+		levels.append(int(GameSession.get_adventurer(member_id).get("level", 1)))
+	return {"levels": levels, "average": _average_party_level()}
+
+
 func _record_level_curve(telemetry: Dictionary, encounter_id: String) -> void:
 	var tier := int(GameSession.CAMPAIGN_OBJECTIVES.get(encounter_id, {}).get("tier", 0))
 	if tier == 0:
@@ -582,7 +729,14 @@ func _advance_world_turn(telemetry: Dictionary) -> void:
 ## test_battle_controller.gd's _build_four_warriors_vs_ogre_controller()/
 ## _run_to_resolution() -----------------------------------------------------
 
-func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
+## `party_losses_out`, if supplied, receives the adventurer ids permadeath
+## removed this specific fight (see _persist_battle_state()'s own dead_ids
+## return) -- run_campaign()'s per-objective-record hook uses this to report
+## which member(s), if any, were lost at this objective. Optional (defaults
+## to a throwaway Array) so the existing direct call in test_campaign_sim.gd
+## (test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors())
+## keeps working unchanged.
+func _fight_objective(encounter_id: String, telemetry: Dictionary, party_losses_out: Array[String] = []) -> String:
 	GameSession.enter_encounter(encounter_id)
 	var expedition := GameSession.get_expedition(encounter_id)
 	var scenario := _build_scenario(encounter_id, expedition)
@@ -626,12 +780,14 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
 			var leveled_up := GameSession.award_party_xp(GameSession.selected_party_id, total_xp)
 			var dead_ids := _persist_battle_state(controller)
 			telemetry.unit_deaths += dead_ids.size()
+			party_losses_out.append_array(dead_ids)
 			_resolve_pending_perks(leveled_up)
 			GameSession.complete_current_encounter()
 			GameSession.merge_battle_loot_into_party()
 		"defeat":
 			var dead_ids := _persist_battle_state(controller)
 			telemetry.unit_deaths += dead_ids.size()
+			party_losses_out.append_array(dead_ids)
 			var lost: int = GameSession.gold + GameSession.pending_reward + GameSession.battle_reward
 			GameSession.abandon_current_encounter()
 			GameSession.resolve_party_wipe()
@@ -640,6 +796,7 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary) -> String:
 		_:
 			var dead_ids := _persist_battle_state(controller)
 			telemetry.unit_deaths += dead_ids.size()
+			party_losses_out.append_array(dead_ids)
 			telemetry.stalemates += 1
 			GameSession.abandon_current_encounter()
 			GameSession.discard_battle_loot()
