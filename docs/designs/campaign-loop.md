@@ -189,6 +189,75 @@ rows this table left "not yet defined," each traceable to the measured
 report and the new regression test that now locks it, per this row's
 "Source" column.
 
+## Stage 4 evidence and presentation contract
+
+Stage 4 tunes pacing, comprehension, and presentation against the proven
+Stage 3 campaign. This section is the approved measurement standard: what a
+manual play session must record, how a repeated finding is decided, what
+automated evidence is pinned alongside it, and what "readable 3/4
+presentation and purposeful audio" (D9) means. No baseline collection or
+tuning may begin until the user has explicitly accepted this section.
+
+### Play-session protocol
+
+| Decision | Value |
+|---|---|
+| Minimum complete fresh campaigns | Three, covering the whole Stage 4 arc (Step 2's baseline plus any Step 3–5 rechecks); record more whenever a finding needs a second independent confirmation before it counts as repeated |
+| Who may play | The user (project owner) is the primary player. Any additional playtester requires the user's explicit approval per session and is recorded only under an anonymous session label (e.g. `S1`, `S2`) — no name, account, or other personal data is captured |
+| Assistive settings permitted | The shipped in-game audio settings (Master/Music/SFX sliders and mute toggles, `scripts/ui/audio_settings.gd`) and ordinary OS-level accessibility features (e.g. display zoom, screen reader) that do not alter game state |
+| Dev tools permitted | None during a counted session. The debug menu (`F9`), Super Power, and Recruit Adventurer are dev-only state shortcuts that would contaminate comprehension/pacing evidence; a session that used one is not a valid fresh-campaign record. The debug menu may only be used to abort and restart a session from New Game, never mid-session |
+| Required checkpoints | New Game; each objective (entry and resolution); recovery/upgrade actions at the Encampment; Withdraw or Battle Retreat, when it occurs; defeat/wipe, when it occurs; save/load; victory; free play |
+| Durable facts per checkpoint | Session label, build commit (`git rev-parse --short HEAD`), in-game World Map Turn, objective id (when applicable), the player's stated understanding of "what do I do next" and "what just happened" *before* being told, the observable outcome (win/loss/roll result/screen shown), and a screenshot or report path if one was captured |
+
+Anonymous session labels only. No personal data (real names, accounts,
+screen recordings of the player, etc.) is ever recorded in a session record
+or finding.
+
+### Automated comparison evidence
+
+Every manual-session round is accompanied by the fixed, deterministic
+`make campaign-sim` run over the representative seed set (`4, 9, 10, 12,
+14`, `CampaignSim.REPRESENTATIVE_VICTORY_SEEDS`) — see [Stage 3 approval
+bands](#stage-3-approval-bands). The Stage 3 5/5-victory requirement and its
+gold/resource and upgrade-count bands must continue to hold; a regression is
+a Stage 4 finding, not something Stage 4 is allowed to loosen. Preserve
+every representative-mode report field this contract already relies on:
+`gold_earned`, `hp_recovered`, `mean_party_level_curve`,
+`mean_upgrade_progression_turns`, and `per_objective_summary`. A
+`make campaign-sim-sweep` run is exploratory, labelled evidence only — it
+never substitutes for the named representative-mode proof above.
+
+### D9 — Presentation proof standard
+
+D9 is an approval table, not an asset wish list. It states what a
+first-time player must be able to identify at normal play scale, on the
+named surface, using only what the shipped game already shows or plays —
+never asset counts or art-direction preferences. Steps 3–5 may only change
+implementation in service of the acceptance observation already approved
+here; a new comprehension requirement is a new decision-log row, not an
+inline addition during tuning.
+
+| Player must identify | Surface | Acceptance observation |
+|---|---|---|
+| Party vs. enemy unit, and each unit's facing | Battlefield | Without hovering, the player can tell ally from enemy and read each unit's facing well enough to predict whether an attack would land as a flank |
+| Hovered unit, selected unit, and which side is currently acting | Battlefield | The player can tell which unit the cursor is over, which unit is selected/queued to act, and — during the enemy phase — that the enemy is acting, without opening a separate panel to confirm |
+| Range, target legality, and current action mode | Battlefield | Before committing, the player can tell move-and-attack range from dash-only range, which enemies are directly attackable vs. reachable only via move-and-attack, and whether Move/Attack/Contextual mode is active |
+| Hit / miss / critical / heal / retreat result | Battlefield | Without reading the scrolling combat log, the player can tell an action just resolved as a hit, miss, critical, heal, or retreat, and roughly how much HP changed |
+| Wound tier | Battlefield, Encampment | The player can read a unit's wound tier (Healthy/Wounded/Critical/Slain) for both allies and enemies at a glance, with the same tier meaning on both surfaces |
+| Current objective, next unlock, and encounter threat | World Map, Encampment | Without opening a menu, the player can state the current objective, what unlocks next, and the relative threat of an available encounter |
+| Music/SFX state | World Map, Battlefield, Encampment | By ear alone, the player notices the transition between exploration, combat, victory, and defeat music, and hears a distinct SFX for hit, miss, critical, heal, and retreat |
+
+Settings requirement: the Master/Music/SFX sliders and mute toggles must
+stay reachable from every screen a checkpoint above occurs on, and muting
+audio must never remove the only signal for a gameplay-critical result.
+
+Non-audio/non-colour-only cue requirement: every gameplay-critical result
+above must pair colour with a text label, glyph, or icon — colour or audio
+alone is never sufficient. This is already true of the shipped hit/miss/
+critical floating text and the wound-tier glyph badges; Steps 3–5 must
+preserve that pairing in any change and may not introduce a new
+colour-only or audio-only signal for an item in this table.
+
 ## Encampment progression and economy floor
 
 The Encampment is a fast, card-like strategic layer. Every building level must
@@ -298,10 +367,11 @@ The following are intentionally not implementation contracts yet:
   arc contract: the twelve authored
   nodes](#stage-3-arc-contract-the-twelve-authored-nodes)'s "Final encounter
   and free-play presentation" subsection above.
-- **Presentation proof standard (D9):** 3/4 top-down perspective, hybrid
-  placeholder-to-custom assets, and audio/visual feedback are roadmap goals;
-  their acceptance standard remains to be decided after the campaign loop is
-  proven.
+- **Presentation proof standard (D9):** resolved — see [Stage 4 evidence and
+  presentation contract § D9 — Presentation proof
+  standard](#d9--presentation-proof-standard). 3/4 top-down perspective and
+  hybrid placeholder-to-custom assets remain roadmap goals; their concrete
+  asset/audio implementation is a Step 5 decision, not this table.
 
 ## Related design documents
 

@@ -379,6 +379,62 @@ make scenario SCENARIO=scenarios/battle/baseline-party-viability.json SEED=20260
 
 The command writes a fresh directory under `user://battle-scenarios/` (or the exact `OUTPUT_DIR` supplied) with `records.jsonl` and `report.json`. Records are deterministic for a fixed scenario, seed, iteration count, and game configuration; generated results are local evidence and must not be committed.
 
+## Run a Stage 4 play session
+
+Records one complete fresh manual campaign against the protocol in
+[campaign-loop.md § Stage 4 evidence and presentation contract](../designs/campaign-loop.md#stage-4-evidence-and-presentation-contract),
+for comparison with a fixed `make campaign-sim` run.
+
+### Steps
+
+1. Copy [`stage-4-play-session-template.md`](stage-4-play-session-template.md)
+   to a new file *outside this repository* (this repo has no gitignored
+   scratch directory for session records), named with an anonymous session
+   label, e.g. `stage-4-session-S1.md`.
+2. Run `make play` and start a fresh campaign from the Start Menu — New
+   Game only. Do not open the debug menu (`F9`) or use Super Power/Recruit
+   Adventurer during the session; doing so invalidates the session as a
+   fresh-campaign record (see the protocol's "Dev tools permitted" row).
+3. Fill in the session header and one checkpoint row per required
+   checkpoint as it happens, recording the player's stated expectation
+   *before* being told the outcome.
+4. Log any finding in the session's Findings table as it's noticed, using
+   the field list in the template.
+5. Keep the completed session file, and any screenshots it references,
+   local — do not commit them.
+
+### Verification
+
+- The session file has a filled session header, a checkpoint row for every
+  required checkpoint that occurred, and every finding numbered against the
+  template's field list.
+
+## Review a local campaign report
+
+Compares a manual session against the fixed deterministic evidence.
+
+### Steps
+
+1. Run `make campaign-sim` (representative mode; no arguments) to produce
+   `user://campaign_sim_report.json` — see
+   [Run full headless campaigns](#run-full-headless-campaigns) above.
+2. Open the report and the session file side by side. For each objective
+   the manual session reached, compare its checkpoint row against that
+   objective's entry in the report's `run_records[].objective_records`
+   (`world_turn_start`/`world_turn_end`, `party_losses`, `hp_recovered`/
+   `mp_recovered`, `gold_before`/`gold_after`, `upgrades_purchased`).
+3. Note any manual-session finding that the deterministic report also
+   shows (e.g. a pacing gap visible in `world_turn_start`/`world_turn_end`)
+   as sim-corroborated in the session's Findings table — this counts toward
+   "repeated" without needing a second manual session.
+4. Keep the JSON report local — do not commit it.
+
+### Verification
+
+- Every objective checkpoint in the session file has been checked against
+  the matching `objective_records` entry, and any corroborated finding is
+  marked as such in the session file.
+
 ## Open the project in the editor
 
 ### Steps
