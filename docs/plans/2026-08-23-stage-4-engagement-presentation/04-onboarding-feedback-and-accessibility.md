@@ -1,5 +1,15 @@
 # Step 4 — Onboarding, Feedback, and Accessibility
 
+**Status (2026-08-23): closed, no-op.** Step 2's baseline study surfaced no
+comprehension, feedback, or accessibility finding — see Step 3's status
+note for the shared evidence. One related item (no on-battlefield highlight
+for the hovered unit) was flagged during Step 1's D9 research, but no
+manual session reported it as a comprehension problem, so it is not logged
+as a Step 4 finding under the protocol's evidence rule; it is carried into
+Step 5 instead, since D9 already requires the hovered unit to be
+identifiable without opening a panel. Re-open this step if a future session
+surfaces a qualifying finding.
+
 **Branch:** `feat/stage-4-clarity-feedback`
 
 **Depends on:** Step 2 finding(s) approved; Step 3 merged when the issue affects a tuned player decision

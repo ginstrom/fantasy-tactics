@@ -28,14 +28,14 @@ What is intentionally unresolved:
 
 ## Sequence
 
-| Step | Document | Objective | Branch | Depends on |
-|---|---|---|---|---|
-| 1 | [01-stage-4-evidence-and-presentation-contract.md](01-stage-4-evidence-and-presentation-contract.md) | Define the decision log, reproducible play-session protocol, evidence ledger, D9 presentation/accessibility standard, and approval gates. | `docs/stage-4-evidence-contract` | clean `main` with Stage 3 complete |
-| 2 | [02-baseline-campaign-study.md](02-baseline-campaign-study.md) | Capture the initial deterministic comparison and multiple complete manual-campaign records without changing runtime behavior. | `test/stage-4-baseline-study` | Step 1 merged and user accepts the protocol |
-| 3 | [03-pacing-and-counterplay-iteration.md](03-pacing-and-counterplay-iteration.md) | Repair only approved, evidence-backed pacing or dominant-strategy findings through config/authored-content changes. | `feat/stage-4-pacing-iteration` | Step 2 findings prioritized and approved |
-| 4 | [04-onboarding-feedback-and-accessibility.md](04-onboarding-feedback-and-accessibility.md) | Repair the highest-priority player-comprehension, feedback, and accessibility findings with real-scene regression tests. | `feat/stage-4-clarity-feedback` | Step 2 findings prioritized and approved |
-| 5 | [05-world-map-battle-presentation-and-audio.md](05-world-map-battle-presentation-and-audio.md) | Meet the approved 3/4-view, targeting, hit/heal/retreat, wound, and Music/SFX evidence standard without changing logical grid or rules ownership. | `feat/stage-4-presentation` | Step 4 merged; licensed asset/provenance decision approved if assets change |
-| 6 | [06-stage-4-exit-gate.md](06-stage-4-exit-gate.md) | Re-run the fixed evidence set and obtain user signoff that the campaign experience is clear and has no unaddressed repeated finding. | `test/stage-4-exit-gate` | Steps 3–5 merged |
+| Step | Document | Objective | Branch | Depends on | Status |
+|---|---|---|---|---|---|
+| 1 | [01-stage-4-evidence-and-presentation-contract.md](01-stage-4-evidence-and-presentation-contract.md) | Define the decision log, reproducible play-session protocol, evidence ledger, D9 presentation/accessibility standard, and approval gates. | `docs/stage-4-evidence-contract` | clean `main` with Stage 3 complete | Merged 2026-08-23 |
+| 2 | [02-baseline-campaign-study.md](02-baseline-campaign-study.md) | Capture the initial deterministic comparison and multiple complete manual-campaign records without changing runtime behavior. | `test/stage-4-baseline-study` | Step 1 merged and user accepts the protocol | Merged 2026-08-23 — 5/5 representative seeds, zero findings from three-plus manual sessions |
+| 3 | [03-pacing-and-counterplay-iteration.md](03-pacing-and-counterplay-iteration.md) | Repair only approved, evidence-backed pacing or dominant-strategy findings through config/authored-content changes. | `feat/stage-4-pacing-iteration` | Step 2 findings prioritized and approved | **Closed, no-op** — no findings to act on |
+| 4 | [04-onboarding-feedback-and-accessibility.md](04-onboarding-feedback-and-accessibility.md) | Repair the highest-priority player-comprehension, feedback, and accessibility findings with real-scene regression tests. | `feat/stage-4-clarity-feedback` | Step 2 findings prioritized and approved | **Closed, no-op** — no findings to act on |
+| 5 | [05-world-map-battle-presentation-and-audio.md](05-world-map-battle-presentation-and-audio.md) | Meet the approved 3/4-view, targeting, hit/heal/retreat, wound, and Music/SFX evidence standard without changing logical grid or rules ownership. | `feat/stage-4-presentation` | Step 4 merged; licensed asset/provenance decision approved if assets change | Not started |
+| 6 | [06-stage-4-exit-gate.md](06-stage-4-exit-gate.md) | Re-run the fixed evidence set and obtain user signoff that the campaign experience is clear and has no unaddressed repeated finding. | `test/stage-4-exit-gate` | Steps 3–5 merged | Not started |
 
 Steps are serial. Step 1 is an explicit product-decision gate. Steps 3–5 may contain more than one small commit only when each commit resolves a separately logged finding; re-run Step 6 after the final merged iteration.
 
