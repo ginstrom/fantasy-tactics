@@ -215,6 +215,7 @@ than re-deciding it.
 | Dodge chance | Flat 10% for all units | Matches the design doc's "small chance" wording without inventing a new per-unit stat; consistent order of magnitude with the existing 5% crit chance and -10% off-balance/opportunity penalties already in the design |
 | Parry chance | Flat 10% for all units (melee-eligible attacks only) | Same basis as Dodge |
 | Opportunity-attack trigger scope | One opportunity attack per adjacent enemy per move action, however many times the mover departs/re-enters that enemy's adjacency within one move; the move completes regardless of whether the attack hits | Matches the design doc's per-departure wording read at the move-action grain, avoids stacking multiple free attacks from a single repositioning decision |
+| Opportunity-attack reactor eligibility (clarified 2026-08-23) | Melee-capable enemies only (`attack_max_range == 1`); ranged enemies never trigger an opportunity attack | Step 3 implementation review found legacy ranged enemy templates carry one flat `hit_chance` stat with no melee/missile split — applying the documented -10% *melee* to-hit penalty to it would mislabel their ranged accuracy as melee. User confirmed melee-only scope rather than extending the mechanic to cover this gap. |
 
 ### D3 — Mage: first spell/counter encounter
 
