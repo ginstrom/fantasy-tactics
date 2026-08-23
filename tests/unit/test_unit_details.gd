@@ -363,14 +363,19 @@ func test_promote_button_appears_once_eligible_and_promotes_on_press() -> void:
 
 	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
 	assert_true(container.visible)
-	assert_eq(container.get_child_count(), 1)
+	# Both Warrior specializations (Knight and, as of Stage 5 D4's second
+	# branch, Archer) are eligible the instant both root perks are chosen --
+	# one button each, since a fully-perked Warrior may promote into either.
+	assert_eq(container.get_child_count(), 2)
 	var button: Button = container.get_node("PromoteButton_knight")
 	assert_eq(button.text, tr("unit_details.promote_button") % tr("class.knight"))
+	var archer_button: Button = container.get_node("PromoteButton_archer")
+	assert_eq(archer_button.text, tr("unit_details.promote_button") % tr("class.archer"))
 
 	button.pressed.emit()
 
 	assert_eq(GameSession.get_adventurer_specialization(GameSession.WARRIOR_ID), "knight")
-	assert_false(container.visible, "Already promoted -- the button disappears on refresh")
+	assert_false(container.visible, "Already promoted -- both buttons disappear on refresh")
 	assert_eq(container.get_child_count(), 0)
 
 
@@ -409,6 +414,62 @@ func test_perks_label_shows_a_chosen_knight_perk_with_its_effect() -> void:
 		"* %s (%s)" % [
 			tr("perk.knight_shield_bash.name"),
 			tr("perk.knight_shield_bash.effect") % GameSession.OFF_BALANCE_GUARD_PENALTY,
+		]
+	)
+
+
+## --- Archer specialization promotion (Stage 5 D4) ---------------------------
+## Mirrors the Knight section immediately above -- proves the promotion UI is
+## a genuinely general mechanism, not Knight-specific.
+
+func test_archer_promote_button_promotes_on_press() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)  # level 6
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	var button: Button = container.get_node("PromoteButton_archer")
+
+	button.pressed.emit()
+
+	assert_eq(GameSession.get_adventurer_specialization(GameSession.WARRIOR_ID), "archer")
+	assert_false(container.visible, "Already promoted -- both buttons disappear on refresh")
+	assert_eq(container.get_child_count(), 0)
+
+
+func test_class_label_shows_archer_specialization_once_promoted() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "archer")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/ClassLabel").text,
+		tr("information.class") % (tr("unit_details.class_specialized") % [tr("class.warrior"), tr("class.archer")])
+	)
+
+
+func test_perks_label_shows_a_chosen_archer_perk_with_its_effect() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "archer")
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.ARCHER_LOCK_ON_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_string_contains(
+		screen.get_node("Body/Center/VBox/PerksLabel").text,
+		"* %s (%s)" % [
+			tr("perk.archer_lock_on.name"),
+			tr("perk.archer_lock_on.effect") % int(round(GameSession.ARCHER_LOCK_ON_HIT_CHANCE_BONUS * 100)),
 		]
 	)
 

@@ -903,6 +903,15 @@ const CLERIC_DEVOUT_PERK_ID := "cleric_devout"
 ## rejected.
 const KNIGHT_SHIELD_BASH_PERK_ID := "knight_shield_bash"
 const KNIGHT_CHAIN_BLOW_PERK_ID := "knight_chain_blow"
+## Archer (Stage 5 D4, decision-ledger.md): the second Warrior specialization
+## -- verified against docs/designs/class-system.md's own roadmap table
+## ("Warrior becomes Knight or Archer") rather than Scout, despite the
+## thematic "ranged" name. Sits on the exact same perk-tree mechanism as
+## Knight's two ids above; Piercing Arrow is deliberately absent (the user's
+## explicit selection excluded it from this slice, see the ledger's "Archer's
+## perks" row).
+const ARCHER_LOCK_ON_PERK_ID := "archer_lock_on"
+const ARCHER_CALLED_SHOT_PERK_ID := "archer_called_shot"
 ## Class id -> ordered Array of that class's own ROOT perk ids (Stage 2's
 ## locked set). The order here is purely presentational (get_available_
 ## perks() returns eligible ids in this order); selection has no
@@ -920,24 +929,32 @@ const CLASS_PERKS: Dictionary = {
 ## Specialization id -> ordered Array of that specialization's OWN perk ids,
 ## unlocked only once an adventurer has promoted into it (adventurer.
 ## specialization -- see promote_adventurer()). Mirrors CLASS_PERKS' own
-## shape/ordering convention exactly; a specialization id absent here
-## (should not happen for "knight") simply offers no perks. Only "knight"
-## ships data this slice (Stage 5 D4) -- Archer/Battle Mage/Paladin add
-## their own entries in later Stage 5 slices reusing this same mechanism,
-## per the ledger's explicit "implement as a general mechanism" instruction.
+## shape/ordering convention exactly; a specialization id absent here simply
+## offers no perks. "knight" shipped in the prior slice; "archer" is this
+## slice's addition (Stage 5 D4) -- Battle Mage/Paladin add their own entries
+## in later Stage 5 slices reusing this same mechanism, per the ledger's
+## explicit "implement as a general mechanism" instruction. Both "knight" and
+## "archer" share the same "warrior" root (see SPECIALIZATION_ROOT_CLASS
+## immediately below) -- a fully-perked Warrior sees BOTH offered by
+## get_available_specializations() and may promote into only one (promotion
+## is at most once per adventurer, see that function's own doc comment).
 const SPECIALIZATION_PERKS: Dictionary = {
 	"knight": [KNIGHT_SHIELD_BASH_PERK_ID, KNIGHT_CHAIN_BLOW_PERK_ID],
+	"archer": [ARCHER_LOCK_ON_PERK_ID, ARCHER_CALLED_SHOT_PERK_ID],
 }
 ## Specialization id -> the root CLASS_DEFINITIONS id an adventurer must
 ## already belong to (with both that root's own CLASS_PERKS already chosen,
 ## see get_available_specializations()) to promote into it. Existing root
 ## CLASS_DEFINITIONS entries/ids are never renamed or duplicated -- a
 ## promoted adventurer keeps adventurer.class == "warrior" forever; only its
-## new adventurer.specialization field changes. General mechanism: Archer
-## also promotes from "warrior" in a later slice, so this is keyed by
-## specialization id (1:1), not the other way around.
+## new adventurer.specialization field changes. General mechanism: "archer"
+## also keys to "warrior" (verified against docs/designs/class-system.md's
+## roadmap table -- Archer is a Warrior specialization, not Scout, despite
+## its ranged theme), so this dict is keyed by specialization id (1:1), not
+## the other way around, letting more than one specialization share a root.
 const SPECIALIZATION_ROOT_CLASS: Dictionary = {
 	"knight": "warrior",
+	"archer": "warrior",
 }
 ## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
 ## name and effect description through this catalog (get_perk_definition(),
@@ -956,6 +973,8 @@ const PERK_DEFINITIONS: Dictionary = {
 	"cleric_devout": {"class": "cleric", "name_key": "perk.cleric_devout.name", "effect_key": "perk.cleric_devout.effect"},
 	"knight_shield_bash": {"class": "warrior", "name_key": "perk.knight_shield_bash.name", "effect_key": "perk.knight_shield_bash.effect"},
 	"knight_chain_blow": {"class": "warrior", "name_key": "perk.knight_chain_blow.name", "effect_key": "perk.knight_chain_blow.effect"},
+	"archer_lock_on": {"class": "warrior", "name_key": "perk.archer_lock_on.name", "effect_key": "perk.archer_lock_on.effect"},
+	"archer_called_shot": {"class": "warrior", "name_key": "perk.archer_called_shot.name", "effect_key": "perk.archer_called_shot.effect"},
 }
 # Stage 2 locked balance values (see docs/designs/class-system.md and
 # config/game_config.json's "progression" section) -- loaded from config in
@@ -976,6 +995,18 @@ var CLERIC_DEVOUT_HP_PERCENT: int = 10
 ## No new balance value -- see BattleController.try_shield_bash_selected_
 ## unit()'s own doc comment for the mechanical reuse.
 var OFF_BALANCE_GUARD_PENALTY: int = 10
+## Archer's Lock On/Called Shot perk descriptions (Stage 5 D4): cached here
+## purely for get_perk_effect_description()'s own formatting, same "cache
+## every config value into a var" convention as OFF_BALANCE_GUARD_PENALTY
+## immediately above -- BattleController reads the SAME GameConfig keys
+## directly and independently (its own established inline-GameConfig
+## convention), so both call sites always agree without either one caching
+## the other's value. Stored as floats (fractional hit-chance deltas,
+## matching combat.parry_counter_melee_hit_bonus/opportunity_attack_melee_
+## hit_penalty's own existing representation) and converted to a whole
+## percent only at display time.
+var ARCHER_LOCK_ON_HIT_CHANCE_BONUS: float = 0.10
+var ARCHER_CALLED_SHOT_TO_HIT_PENALTY: float = 0.10
 # Base (pre-perk) ranges the two Keen Eyes/Meditation perks add to. Named
 # here rather than left as a bare "3" at each call site (get_party_scouting_
 # intel()'s scout range, BattleController.try_cast_spell()'s spell range) so
@@ -1585,6 +1616,8 @@ func _load_balance_config() -> void:
 	CLERIC_MEDITATION_SPELL_RANGE_BONUS = GameConfig.get_int("progression", "cleric_meditation_spell_range_bonus", CLERIC_MEDITATION_SPELL_RANGE_BONUS)
 	CLERIC_DEVOUT_HP_PERCENT = GameConfig.get_int("progression", "cleric_devout_hp_percent", CLERIC_DEVOUT_HP_PERCENT)
 	OFF_BALANCE_GUARD_PENALTY = GameConfig.get_int("combat", "off_balance_guard_penalty", OFF_BALANCE_GUARD_PENALTY)
+	ARCHER_LOCK_ON_HIT_CHANCE_BONUS = GameConfig.get_float("combat", "lock_on_hit_chance_bonus", ARCHER_LOCK_ON_HIT_CHANCE_BONUS)
+	ARCHER_CALLED_SHOT_TO_HIT_PENALTY = GameConfig.get_float("combat", "called_shot_to_hit_penalty", ARCHER_CALLED_SHOT_TO_HIT_PENALTY)
 	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_LEVEL_3_PARTY_CAP = GameConfig.get_int("guild_hall", "level_3_party_cap", GUILD_HALL_LEVEL_3_PARTY_CAP)
@@ -4224,6 +4257,10 @@ func get_perk_effect_description(perk_id: String) -> String:
 			return tr("perk.knight_shield_bash.effect") % OFF_BALANCE_GUARD_PENALTY
 		KNIGHT_CHAIN_BLOW_PERK_ID:
 			return tr("perk.knight_chain_blow.effect")
+		ARCHER_LOCK_ON_PERK_ID:
+			return tr("perk.archer_lock_on.effect") % int(round(ARCHER_LOCK_ON_HIT_CHANCE_BONUS * 100))
+		ARCHER_CALLED_SHOT_PERK_ID:
+			return tr("perk.archer_called_shot.effect") % int(round(ARCHER_CALLED_SHOT_TO_HIT_PENALTY * 100))
 		BONUS_MOVE_PERK_ID:
 			return tr("perk.bonus_move.effect")
 		_:

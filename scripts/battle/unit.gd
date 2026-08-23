@@ -145,6 +145,20 @@ var perks: Array = []
 # again. Cleared alongside PARALYZED_STATUS_ID/SLEEPING_STATUS_ID at the same
 # round boundary -- see BattleController._clear_expired_statuses().
 var chain_blow_used_this_round: bool = false
+# Archer's Lock On perk (Stage 5 D4): which enemy this unit last attacked
+# (any direct attack, hit or miss -- see BattleController._execute_direct_
+# attack()), and on which Round number that attack happened (Battle
+# Controller.current_round at the time). Compared against the CURRENT round
+# number in _compute_effective_attack_chances(): a match on both the target
+# AND "current_round - 1" means this unit also attacked the same target on
+# the immediately preceding Round, granting Lock On's +10% to-hit. Tracked
+# for every attacker unconditionally (cheap, and mirrors chain_blow_used_
+# this_round/off_balance_pending's own "track universally, gate at the
+# formula" convention) -- only a unit that actually owns archer_lock_on ever
+# sees it change the to-hit formula. null/-1 defaults mean "no attack yet",
+# never a real Round number or a valid target.
+var last_attacked_target = null
+var last_attacked_round: int = -1
 
 
 func _init(

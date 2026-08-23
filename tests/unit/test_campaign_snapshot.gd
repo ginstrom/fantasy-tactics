@@ -968,6 +968,33 @@ func test_a_knight_perk_validates_only_alongside_the_matching_specialization_fie
 	)
 
 
+## Archer's own validation (Stage 5 D4): mirrors the Knight test immediately
+## above exactly -- _validate_specialization_field()/_validate_perks_field()
+## are a general mechanism, not Knight-specific.
+func test_an_archer_perk_validates_only_alongside_the_matching_specialization_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"specialization": "archer",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {
+				"xp": 200.0,
+				"perks": ["warrior_juggernaut", "warrior_bulwark", "archer_lock_on", "archer_called_shot"],
+			},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].specialization, "archer")
+	assert_eq(
+		result.snapshot.adventurers[0].progression.perks,
+		["warrior_juggernaut", "warrior_bulwark", "archer_lock_on", "archer_called_shot"]
+	)
+
+
 func test_a_knight_perk_without_the_specialization_field_is_rejected_atomically() -> void:
 	var data := _full_snapshot().to_dictionary()
 	data.adventurers = [

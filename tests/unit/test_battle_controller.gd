@@ -4855,3 +4855,284 @@ func test_chain_blow_still_finds_the_second_target_after_the_primary_target_dies
 	assert_eq(controller.last_chain_blow_result.defender, second)
 	assert_true(controller.last_chain_blow_result.hit)
 	assert_eq(second.health, 30, "Chain Blow's own strike must land on the correct second target, not on the erased primary")
+
+
+## --- Archer specialization: Called Shot/Lock On (Stage 5 D4) ----------------
+## Unit.perks (Stage 5 D4) is what gates both perks -- set directly on a
+## manually-constructed Unit here, the same way the Knight section above
+## constructs its own fixture state rather than going through GameSession.
+
+func test_called_shot_is_rejected_for_a_unit_without_the_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_false(controller.try_called_shot_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 6, "A rejected Called Shot must not spend any AP")
+
+
+func test_called_shot_costs_the_same_ap_as_a_plain_attack() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.ARCHER_CALLED_SHOT_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_called_shot_selected_unit(defender.grid_position))
+
+	assert_eq(
+		attacker.action_points_remaining, 6 - BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST,
+		"Called Shot must cost exactly the same AP as a normal attack"
+	)
+
+
+## The ledger's exact wording: "ignores the defender's Guard entirely for
+## that one attack, at a flat -10% to-hit penalty." A 90-Guard defender would
+## reduce a plain attack to a 10% effective hit chance (1.0 - 0.90); Called
+## Shot instead ignores that 90 Guard outright and nets 1.0 - 0.10 = 90%.
+## The 0.5 stubbed roll below is specifically chosen to land ONLY once Guard
+## is bypassed -- proving this changes a real combat outcome, not just a
+## displayed stat.
+func test_called_shot_ignores_the_defenders_guard_entirely_and_flips_a_stubbed_miss_to_a_hit() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.ARCHER_CALLED_SHOT_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 1.0, "Attack", "", 90)
+	defender.facing = Vector2i.UP  # facing the attacker directly above it -- a front attack, no flank penalty
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.5
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_false(controller.last_attack_result.hit, "Precondition: a plain attack against 90 Guard misses this same 0.5 roll (10% effective hit chance)")
+
+	controller.selected_unit = attacker
+	attacker.action_points_remaining = 6
+	assert_true(controller.try_called_shot_selected_unit(defender.grid_position))
+
+	assert_eq(controller.last_attack_result.effective_defense, 0, "Called Shot ignores the defender's Guard entirely")
+	assert_almost_eq(controller.last_attack_result.effective_hit_chance, 0.90, 0.001)
+	assert_true(controller.last_attack_result.hit, "The exact same 0.5 roll now hits once Guard is bypassed")
+	assert_true(controller.last_attack_result.called_shot)
+
+
+func test_called_shot_applies_a_flat_10_percent_to_hit_penalty_even_against_a_defenseless_target() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.ARCHER_CALLED_SHOT_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_called_shot_selected_unit(defender.grid_position))
+
+	assert_almost_eq(
+		controller.last_attack_result.effective_hit_chance, 0.90, 0.001,
+		"1.0 raw hit_chance - 0 Guard - the flat 10% Called Shot penalty = 90%"
+	)
+
+
+func test_a_missed_called_shot_still_reports_called_shot_true() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.ARCHER_CALLED_SHOT_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99  # guaranteed miss
+
+	assert_true(controller.try_called_shot_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.hit)
+	assert_true(
+		controller.last_attack_result.called_shot,
+		"Called Shot's Guard-bypass is a fact about the ATTEMPT (already baked into the roll above), not the outcome"
+	)
+
+
+## --- Lock On (Stage 5 D4) ----------------------------------------------------
+
+func test_lock_on_grants_no_bonus_without_the_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 1.0
+	# Pre-seed the round-1 attack this attacker "already made" against
+	# `defender`, bypassing try_attack_selected_unit() so only the bonus
+	# formula itself is under test here.
+	attacker.last_attacked_target = defender
+	attacker.last_attacked_round = controller.current_round - 1
+
+	controller.hit_roll = func() -> float: return 0.55
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_almost_eq(
+		controller.last_attack_result.effective_hit_chance, 0.5, 0.001,
+		"No archer_lock_on perk -- the same-target/last-round match must never grant the bonus"
+	)
+	assert_false(controller.last_attack_result.hit)
+	assert_false(controller.last_attack_result.lock_on_applied)
+
+
+func test_lock_on_grants_no_bonus_on_a_units_very_first_attack() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5)
+	attacker.perks = [GameSession.ARCHER_LOCK_ON_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.55
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_almost_eq(controller.last_attack_result.effective_hit_chance, 0.5, 0.001, "No prior attack -- last_attacked_target defaults to null")
+	assert_false(controller.last_attack_result.lock_on_applied)
+	assert_eq(attacker.last_attacked_target, defender, "This attack itself must still stamp the tracking for a FUTURE round's check")
+	assert_eq(attacker.last_attacked_round, controller.current_round)
+
+
+## The decision-contract shape task 1 asks for: a stubbed roll that would
+## miss at the base 50% hit chance flips to a hit purely because Lock On's
+## +10% applied -- a real combat-outcome change, not just a displayed stat.
+func test_lock_on_grants_a_bonus_against_the_same_target_attacked_the_immediately_preceding_round() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5)
+	attacker.perks = [GameSession.ARCHER_LOCK_ON_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 1.0
+
+	# Round 1: first attack against `defender` -- no bonus yet, but stamps
+	# the tracking this second attack will read.
+	controller.hit_roll = func() -> float: return 0.99  # deliberately misses; only the tracking matters here
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+	assert_eq(controller.current_round, 1)
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	controller.end_turn()  # ENEMY -> PLAYER: Round 2 begins
+	assert_eq(controller.current_round, 2)
+	controller.selected_unit = attacker
+	attacker.action_points_remaining = 6
+
+	# Round 2: same target -- Lock On's +10% applies (0.5 + 0.10 = 0.6). 0.55
+	# misses the un-bonused 50% chance but hits the bonused 60% one.
+	controller.hit_roll = func() -> float: return 0.55
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.lock_on_applied)
+	assert_almost_eq(controller.last_attack_result.effective_hit_chance, 0.6, 0.001)
+	assert_true(controller.last_attack_result.hit, "The exact same 0.55 roll now hits once Lock On's +10% applies")
+
+
+func test_lock_on_grants_no_bonus_against_a_different_target() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5)
+	attacker.perks = [GameSession.ARCHER_LOCK_ON_PERK_ID]
+	# Both enemies adjacent to the attacker (no move-and-attack fallback,
+	# keeping the geometry simple) -- previous_target directly below (front
+	# when facing UP), new_target directly to the right (front when facing
+	# LEFT). See get_flank_type()'s own offset/dot-product convention.
+	var previous_target = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var new_target = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	new_target.facing = Vector2i.LEFT
+	controller.units = [attacker, previous_target, new_target]
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 1.0
+
+	controller.hit_roll = func() -> float: return 0.99
+	assert_true(controller.try_attack_selected_unit(previous_target.grid_position))
+
+	controller.end_turn()
+	controller.end_turn()
+	controller.selected_unit = attacker
+	attacker.action_points_remaining = 6
+
+	controller.hit_roll = func() -> float: return 0.55
+	assert_true(controller.try_attack_selected_unit(new_target.grid_position))
+
+	assert_false(
+		controller.last_attack_result.lock_on_applied,
+		"A target that isn't the immediately preceding round's target must never grant Lock On's bonus"
+	)
+	assert_almost_eq(controller.last_attack_result.effective_hit_chance, 0.5, 0.001)
+	assert_false(controller.last_attack_result.hit)
+
+
+func test_lock_on_grants_no_bonus_if_a_round_is_skipped_against_the_same_target() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5)
+	attacker.perks = [GameSession.ARCHER_LOCK_ON_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.crit_roll = func() -> float: return 1.0
+	# Directly pin the tracking to two Rounds ago, rather than the immediately
+	# preceding one -- e.g. the Archer attacked another target last Round.
+	attacker.last_attacked_target = defender
+	attacker.last_attacked_round = controller.current_round - 2
+
+	controller.hit_roll = func() -> float: return 0.55
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.lock_on_applied, "Two Rounds ago is not \"the immediately preceding Round\"")
+	assert_almost_eq(controller.last_attack_result.effective_hit_chance, 0.5, 0.001)
+
+
+## Lock On's tracking (Stage 5 D4): stamped for every attacker unconditionally
+## regardless of perk ownership -- mirrors Chain Blow's own once-per-round
+## flag being tracked universally and only gated at the formula, not at the
+## tracking site (see Unit.last_attacked_target's own doc comment).
+func test_last_attacked_target_and_round_are_tracked_even_without_the_lock_on_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_eq(attacker.last_attacked_target, null, "Precondition: no attack made yet")
+	assert_eq(attacker.last_attacked_round, -1)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(attacker.last_attacked_target, defender)
+	assert_eq(attacker.last_attacked_round, controller.current_round)
+
+
+func test_current_round_increments_only_on_the_enemy_to_player_boundary() -> void:
+	var controller := _make_controller(3, 3)
+	assert_eq(controller.current_round, 1)
+
+	controller.end_turn()  # PLAYER -> ENEMY: no increment
+	assert_eq(controller.current_round, 1)
+
+	controller.end_turn()  # ENEMY -> PLAYER: Round 2 begins
+	assert_eq(controller.current_round, 2)
+
+	controller.end_turn()  # PLAYER -> ENEMY: no increment
+	assert_eq(controller.current_round, 2)
+
+	controller.end_turn()  # ENEMY -> PLAYER: Round 3 begins
+	assert_eq(controller.current_round, 3)
