@@ -271,15 +271,66 @@ than re-deciding it.
 
 ### D4 — Specializations: delivery order and promotion eligibility
 
-**Status: Blocked** — required before `feat/stage-5-specializations` (Step 5) starts.
+**Status: Approved 2026-08-23 (user).**
 
-- **Player decision:** TBD — which root's specialization branch ships
-  first, and the eligibility rule for promoting into it.
-- **Counterplay:** TBD.
-- **Encounter use:** TBD.
-- **Durable-state/snapshot change:** TBD.
-- **Deterministic scenario assertion:** TBD.
-- **Manual acceptance check:** TBD.
+- **Player decision:** Whether to promote an eligible root adventurer
+  (Warrior→Knight, Warrior→Archer, Mage→Battle Mage, Cleric→Paladin) once
+  both its root perks are chosen, trading its root's two-perk tree for the
+  specialization's own perk(s)/spell and (for Paladin only) a built Temple
+  requirement, versus keeping it in its root class.
+- **Counterplay:** Every new ability reuses an already-shipped magnitude
+  rather than adding a strictly-dominant option: Shield Bash/Lock On/Called
+  Shot/Temporary Guard/Fire Bolt/the boon all cost the same AP (and, for
+  spells, MP) as their existing analogs and share the same -10%/+10%/2-8/
+  double-Bless order of magnitude already present elsewhere in combat, so a
+  promoted adventurer gains a new tactical choice, not a flat power bump.
+  Called Shot's Guard-bypass costs a flat -10% to-hit, matching the existing
+  opportunity-attack accuracy/power trade-off. Fire Bolt is still subject to
+  the existing `magic_resistance` halving roll like any other spell.
+- **Encounter use:** Each branch's task 5 (per the step file) adds one
+  encounter/monster counter and two fixed-seed scenarios per shipped
+  ability, demonstrating both a favorable and an unfavorable use, before
+  that branch merges.
+- **Durable-state/snapshot change:** `GameSession` gains a `specialization`
+  (or equivalent) field per adventurer, set only once both root perks are
+  chosen (and, for Paladin, only once the Temple Encampment upgrade is
+  built); existing root `CLASS_DEFINITIONS` entries and perk ids are
+  unchanged, migration-safe for adventurers who never promote. Knight/Archer
+  gain their two named perks on the existing perk-tree/`perk_tree_size`
+  mechanism (no re-implementation of Step 3's universal Parry primitive).
+  Battle Mage gains a `temporary_guard` perk plus a granted `"fire_bolt"`
+  spell entry (mirroring how Sleep was granted to base Mage). Paladin gains
+  a granted stronger self-castable Bless variant, not a new perk-tree entry.
+- **Deterministic scenario assertion:** One `ScenarioContract`/
+  `BattleStateFactory` fixture per shipped ability proving its outcome (the
+  off-balance application, the second-target strike, the to-hit bonus, the
+  Guard-bypass, the Guard buff, Fire Bolt's damage/resist halving, the
+  doubled Bless bonus) replays byte-identically for a fixed seed, plus a
+  promotion-eligibility test proving the ability is unavailable before
+  promotion and persists through a snapshot round trip after.
+- **Manual acceptance check:** Per the step file's documented manual check,
+  repeated once per branch as it merges: promote one eligible root
+  character, compare it with the unpromoted alternative, use its defining
+  ability in its authored/repeatable encounter, observe its counter,
+  save/load, and confirm the decision remains clear without developer help.
+
+**Approved values:**
+
+| Parameter | Value | Basis |
+|---|---|---|
+| Delivery order | Knight → Archer → Battle Mage → Paladin | Matches class-system.md's own roadmap table order (line 196) |
+| Promotion eligibility (Knight/Archer/Battle Mage) | Available once both of the root class's two Stage 2 perks are chosen | Specialization perks/spells become additional entries on the same perk-tree mechanism once the root tree is exhausted; no new eligibility gate invented |
+| Promotion eligibility (Paladin only) | Same perk-exhaustion rule, plus the Encampment's Temple upgrade must already be built | Reuses campaign-loop.md's existing built Temple upgrade to satisfy class-system.md's "Temple-gated recruitment" note for Paladin specifically, without inventing new gating |
+| Knight's two perks | Shield Bash, Chain Blow (not Parry) | Step 3 already shipped a universal flat-10% Parry primitive for every unit; re-implementing it as a Knight-only perk would require inventing a new numeric upgrade. Shield Bash + Chain Blow are Knight's remaining two design-doc perks, keeping the existing "exactly two perks per class" pattern |
+| Shield Bash effect | Melee attack that, on a hit, also applies the existing off-balance status (-10% Guard next round, the same status Dodge/Parry already apply) to the target; normal attack AP cost | Reuses Step 3's off-balance status/magnitude exactly |
+| Chain Blow effect | Once per round, a landed melee attack also strikes one additional adjacent enemy using the same to-hit roll and damage formula; no extra AP cost | New multi-target resolution, but reuses the existing single-attack roll/formula twice rather than inventing a new damage model |
+| Archer's perks | Lock On, Called Shot (not Piercing Arrow) | User's explicit selection from the three design-doc-named Archer perks |
+| Lock On effect | +10% to-hit against a target the Archer also attacked last round | Same order of magnitude as the existing off-balance/opportunity-attack penalties |
+| Called Shot effect | Normal attack AP cost; ignores the defender's Guard entirely for that one attack, at a flat -10% to-hit penalty | Mirrors the opportunity-attack's existing accuracy-for-power trade-off exactly |
+| Battle Mage's ability set | Temporary Guard perk + a granted `"fire_bolt"` spell (not enchanted weapon penetration) | The roadmap table places "penetration" in Step 6 (advanced perk branches), not Step 5; Fire Bolt's resisted-damage formula is already specified in combat-system.md |
+| Temporary Guard effect | Self-cast, +10 Guard (same magnitude as the existing Bulwark perk) until the start of next round (same round-boundary Sleep/Paralyzed already clear on); costs Sleep's 3 AP/1 MP economy | Reuses Bulwark's existing Guard magnitude and Sleep's existing cast economy/round-boundary clear |
+| Fire Bolt cost/range/damage | 3 AP / 1 MP, 0-3 tile LOS range (reusing Sleep's exact cast economy); deals 2-8 damage (same magnitude as Heal's roll), halved on a successful `magic_resistance` roll | No new action economy invented; damage magnitude reuses Heal's existing roll range; resistance handling matches combat-system.md's literal "Fire Bolt damage reduced by half" wording |
+| Paladin's ability | Grants the existing Bless spell (already self-castable today — its ally-only gate includes the caster) at double its current bonus: 20% hit chance / 1.20x damage, vs. Bless's existing 10%/1.10x | "Self-castable" was already true of shipped Bless; "stronger" is the only new magnitude, set as a direct doubling of the existing bonus rather than an arbitrarily chosen new value |
 
 Rogue is explicitly deferred within this row until its own counterplay is
 separately accepted, per the plan index.
