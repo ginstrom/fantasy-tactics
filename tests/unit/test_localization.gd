@@ -327,7 +327,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("campaign.victory.goal_label"), "Campaign Goal: Defeat the Borderlands Ogre")
 	assert_eq(tr("campaign.obj.tier1_1.title"), "Scout the Perimeter")
 	assert_eq(tr("campaign.obj.tier1_1.desc"), "Form a party and clear the Goblin Outpost.")
-	assert_eq(tr("campaign.obj.tier1_1.reward"), "50 Gold, Iron Weapon")
+	assert_eq(tr("campaign.obj.tier1_1.reward"), "Modest gold and salvage from the cleared site")
 	assert_eq(tr("campaign.free_play.active_label"), "Free Play Mode Active")
 
 	# Step 5 (docs/plans/2026-08-18-core-loop-and-engagement/

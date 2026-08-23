@@ -141,6 +141,20 @@ func test_full_arc_survives_checkpoint_export_reset_import_to_final_victory_and_
 		GameSession.completed_objectives.size(), GameSession.CAMPAIGN_OBJECTIVES.size(),
 		"Every one of the 12 authored nodes, and nothing else, must be recorded complete at victory"
 	)
+	# Step 6 (docs/plans/2026-08-22-stage-3-campaign-assembly/
+	# 06-stage-3-exit-gate.md): the size check above alone cannot catch a
+	# duplicated node silently displacing a missing one (still 12 entries
+	# either way) or the twelve nodes landing out of authored order -- only a
+	# full array comparison against CAMPAIGN_OBJECTIVES' own key order (which
+	# is authored in, and exactly mirrors, prerequisite_id/next_objective_id
+	# chain order -- see that const's own header comment) proves "all twelve
+	# authored IDs complete exactly once, in order" as its own literal claim,
+	# independent of trusting complete_campaign_objective()'s internal
+	# duplicate-append guard to never regress.
+	assert_eq(
+		GameSession.completed_objectives, GameSession.CAMPAIGN_OBJECTIVES.keys(),
+		"All twelve authored objective IDs must be recorded complete exactly once, in authored order"
+	)
 	assert_eq(GameSession.campaign_objective_id, "", "Victory must leave no further objective queued")
 	assert_true(GameSession.is_free_play_active, "Victory must flip free play the instant set_campaign_victory() runs")
 
@@ -163,9 +177,15 @@ func test_full_arc_survives_checkpoint_export_reset_import_to_final_victory_and_
 	GameSession.enter_encounter(free_play_encounter_id)
 	GameSession.abandon_current_encounter()
 	assert_eq(GameSession.campaign_objective_id, "", "Entering repeatable free play must not change campaign_objective_id")
+	# Step 6: compared against the full ledger captured moments ago at
+	# checkpoint 3 (post_victory_expected.completed_objectives), not merely
+	# its size -- a free-play action that somehow reordered or duplicated an
+	# authored id while holding the count at 12 would pass a size-only check
+	# but must fail this one, closing this step's "repeatable post-victory
+	# activity leaves the authored ledger unchanged" requirement for real.
 	assert_eq(
-		GameSession.completed_objectives.size(), GameSession.CAMPAIGN_OBJECTIVES.size(),
-		"Entering repeatable free play must not change completed_objectives"
+		GameSession.completed_objectives, post_victory_expected.completed_objectives,
+		"Entering repeatable free play must not change completed_objectives, including their order"
 	)
 
 
