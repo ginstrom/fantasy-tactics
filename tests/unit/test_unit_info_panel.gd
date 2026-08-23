@@ -291,3 +291,72 @@ func test_selected_section_shows_spellcasting_for_a_cleric() -> void:
 	var spellcasting_label: Label = panel.get_node("Content/SelectedSection/SpellcastingLabel")
 	assert_true(spellcasting_label.visible)
 	assert_eq(spellcasting_label.text, "Spellcasting: 55%")
+
+
+## --- Stage 5 D2 tactical primitives: Cover and off-balance/counter-bonus ---
+
+func test_selected_section_hides_the_cover_label_on_an_uncovered_tile() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	assert_false(panel.get_node("Content/SelectedSection/CoverLabel").visible)
+
+
+func test_selected_section_shows_the_cover_label_for_a_unit_standing_on_a_cover_tile() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	warrior.grid_position = Vector2i(3, 2)  # the Goblin Camp's own authored Low Cover tile
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	var cover_label: Label = panel.get_node("Content/SelectedSection/CoverLabel")
+	assert_true(cover_label.visible)
+	assert_eq(cover_label.text, "Cover: Low")
+
+
+func test_hovered_section_shows_the_cover_label_too_since_terrain_is_public_information() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.grid_position = Vector2i(4, 3)  # the Goblin Camp's own authored High Cover tile
+
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel := _panel(battlefield)
+	var cover_label: Label = panel.get_node("Content/HoveredSection/CoverLabel")
+	assert_true(cover_label.visible)
+	assert_eq(cover_label.text, "Cover: High")
+
+
+func test_selected_section_shows_off_balance_status_as_readable_text() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	warrior.off_balance_active = true
+
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	var status_label: Label = panel.get_node("Content/SelectedSection/StatusLabel")
+	assert_true(status_label.visible)
+	assert_string_contains(status_label.text, "Off-Balance (-10% Guard)")
+
+
+func test_selected_section_shows_the_counter_bonus_status_naming_its_target() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	warrior.counter_bonus_active_against = goblin
+
+	battlefield.grid._select_unit(warrior)
+
+	var panel := _panel(battlefield)
+	var status_label: Label = panel.get_node("Content/SelectedSection/StatusLabel")
+	assert_true(status_label.visible)
+	assert_string_contains(status_label.text, "Countering " + goblin.display_name + " (+10% melee)")

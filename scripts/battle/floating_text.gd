@@ -21,6 +21,14 @@ const TYPE_MISS := "miss"
 ## play. Supported here (color, animation) so the type is ready the moment
 ## such a mechanic exists, and so it stays independently testable now.
 const TYPE_BLOCKED := "blocked"
+## Stage 5 D2 tactical primitives (docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/03-tactical-depth-primitives.md): a successful Dodge or
+## Parry is a distinct outcome from a plain Guard-driven miss (TYPE_MISS) --
+## always its own text ("DODGED!"/"PARRIED!"), never colour-only feedback
+## (Stage 4's accessibility carryover). See battle_controller.gd's
+## try_attack_selected_unit()/_resolve_opportunity_attack().
+const TYPE_DODGE := "dodge"
+const TYPE_PARRY := "parry"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -28,6 +36,8 @@ const COLORS := {
 	TYPE_HEAL: Color(0.3, 0.9, 0.4),
 	TYPE_MISS: Color(0.7, 0.7, 0.7),
 	TYPE_BLOCKED: Color(0.35, 0.6, 0.95),
+	TYPE_DODGE: Color(0.4, 0.85, 0.9),
+	TYPE_PARRY: Color(0.95, 0.75, 0.35),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6

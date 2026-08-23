@@ -30,6 +30,22 @@ func test_loads_flanking_config_values_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_float("combat", "rear_flank_crit_bonus", -1.0), 0.50)
 
 
+## Stage 5 Step 3 (docs/plans/2026-08-23-stage-5-strategic-roster-expansion/
+## 03-tactical-depth-primitives.md, decision-ledger.md's D2 "Approved
+## values" table): Cover's missile-only Guard bonus, flat Dodge/Parry
+## chances, the off-balance Guard penalty, Parry's counter-bonus, and the
+## Attack-of-Opportunity melee to-hit penalty (see battle_controller.gd's
+## try_attack_selected_unit()/_resolve_opportunity_attack()).
+func test_loads_tactical_depth_combat_config_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("combat", "cover_low_missile_guard_bonus", -1), 25)
+	assert_eq(GameConfig.get_int("combat", "cover_high_missile_guard_bonus", -1), 50)
+	assert_eq(GameConfig.get_float("combat", "dodge_chance", -1.0), 0.10)
+	assert_eq(GameConfig.get_float("combat", "parry_chance", -1.0), 0.10)
+	assert_eq(GameConfig.get_int("combat", "off_balance_guard_penalty", -1), 10)
+	assert_eq(GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", -1.0), 0.10)
+	assert_eq(GameConfig.get_float("combat", "opportunity_attack_melee_hit_penalty", -1.0), 0.10)
+
+
 ## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: passive Shop
 ## income tiers (see game_session.gd's _shop_income_per_turn()).
 func test_loads_shop_income_tiers_from_the_real_config_file() -> void:

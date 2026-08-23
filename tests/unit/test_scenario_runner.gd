@@ -151,6 +151,12 @@ class ScriptedFlankPolicy extends RefCounted:
 				defender = unit
 		controller.selected_unit = attacker
 		controller.hit_roll = func() -> float: return _hit_roll
+		# Stage 5 D2: this policy exists to prove flanking's crit math via a
+		# guaranteed, unmitigated hit -- pin Dodge/Parry off so neither can
+		# convert the injected hit into an evasion the flank assertions below
+		# don't expect.
+		controller.dodge_roll = func() -> float: return 1.0
+		controller.parry_roll = func() -> float: return 1.0
 		controller.crit_roll = func() -> float: return _crit_roll
 		controller.damage_roll = func(_min_value: int, _max_value: int) -> int: return _damage
 		if not controller.try_attack_selected_unit(defender.grid_position):
@@ -249,3 +255,274 @@ func test_flanking_tactics_fixture_reproduces_byte_identical_records_for_the_sam
 	assert_eq(first.size(), 20)
 	for record in first:
 		assert_ne(record.outcome, "error", "The flanking-tactics fixture must be a valid, runnable scenario")
+
+
+## --- Stage 5 D2 tactical primitives: scripted scenario-contract fixtures ---
+## (docs/plans/2026-08-23-stage-5-strategic-roster-expansion/
+## 03-tactical-depth-primitives.md, task 7: "prove both sides of each
+## choice ... and replay identically for a fixed seed"). Same test-only
+## mutate-after-expand() policy-override pattern as ScriptedFlankPolicy
+## above -- every fixture drives the real public try_attack_selected_unit()/
+## try_move_selected_unit() surface after injecting deterministic rolls,
+## never bypassing it or asserting on private state.
+
+class ScriptedAttackPolicy extends RefCounted:
+	var recorded: Array = []
+	var _hit_roll: float
+	var _dodge_roll: float
+	var _parry_roll: float
+	var _crit_roll: float
+	var _damage: int
+
+	func _init(hit_roll: float, dodge_roll: float, parry_roll: float, crit_roll: float, damage: int) -> void:
+		_hit_roll = hit_roll
+		_dodge_roll = dodge_roll
+		_parry_roll = parry_roll
+		_crit_roll = crit_roll
+		_damage = damage
+
+	func take_turn(controller, _rng) -> Dictionary:
+		var attacker = null
+		var defender = null
+		for unit in controller.units:
+			if unit.side == 0:
+				attacker = unit
+			else:
+				defender = unit
+		controller.selected_unit = attacker
+		controller.hit_roll = func() -> float: return _hit_roll
+		controller.dodge_roll = func() -> float: return _dodge_roll
+		controller.parry_roll = func() -> float: return _parry_roll
+		controller.crit_roll = func() -> float: return _crit_roll
+		controller.damage_roll = func(_min_value: int, _max_value: int) -> int: return _damage
+		if not controller.try_attack_selected_unit(defender.grid_position):
+			return {"ok": false, "error": {"code": "attack_rejected"}}
+		recorded.append(controller.last_attack_result.duplicate())
+		return {"ok": true, "steps": [controller.last_attack_result]}
+
+
+class ScriptedMovePolicy extends RefCounted:
+	var recorded_reactions: Array = []
+	var _move_target: Vector2i
+	var _hit_roll: float
+
+	func _init(move_target: Vector2i, hit_roll: float) -> void:
+		_move_target = move_target
+		_hit_roll = hit_roll
+
+	func take_turn(controller, _rng) -> Dictionary:
+		var mover = null
+		for unit in controller.units:
+			if unit.side == 0:
+				mover = unit
+		controller.selected_unit = mover
+		controller.hit_roll = func() -> float: return _hit_roll
+		if not controller.try_move_selected_unit(_move_target):
+			return {"ok": false, "error": {"code": "move_rejected"}}
+		recorded_reactions = controller.last_reaction_results.duplicate(true)
+		var steps: Array = [{"type": "move", "to": _move_target}]
+		steps.append_array(controller.last_reaction_results)
+		return {"ok": true, "steps": steps}
+
+
+## A boosted max_health keeps the goblin alive through the scripted attack so
+## round_limit's own cap (not a kill) ends the case -- this fixture is about
+## the attack's resolved outcome, not about winning the battle.
+func _one_v_one_melee_case(case_id: String) -> Dictionary:
+	return _case({
+		"scenario_id": case_id,
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}}]},
+		"enemy": {
+			"units": [{"id": "goblin", "template_id": "goblin", "position": {"x": 1, "y": 0}, "modifiers": {"max_health": 500}}],
+		},
+		"rules": {"round_limit": 1},
+	})
+
+
+func test_scripted_fixture_proves_dodge_converts_a_would_be_hit_into_a_miss() -> void:
+	var case := _one_v_one_melee_case("dodge_succeeds")
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 0.0, 1.0, 1.0, 4)  # hit would land; dodge (0.0 < flat 10%) intercepts it
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	assert_eq(policy.recorded.size(), 1)
+	var result: Dictionary = policy.recorded[0]
+	assert_false(result.hit)
+	assert_true(result.dodged)
+	assert_eq(result.outcome, "dodged")
+	assert_eq(result.damage, 0)
+
+
+func test_scripted_fixture_proves_a_dodge_roll_at_or_above_the_flat_chance_lets_the_hit_land() -> void:
+	var case := _one_v_one_melee_case("dodge_fails")
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 0.99, 1.0, 1.0, 4)
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	var result: Dictionary = policy.recorded[0]
+	assert_true(result.hit)
+	assert_false(result.dodged)
+	assert_eq(result.damage, 4)
+
+
+func test_scripted_fixture_proves_parry_converts_a_would_be_hit_into_a_miss() -> void:
+	var case := _one_v_one_melee_case("parry_succeeds")
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 1.0, 0.0, 1.0, 4)  # dodge never; parry (0.0 < flat 10%) intercepts it
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	var result: Dictionary = policy.recorded[0]
+	assert_false(result.hit)
+	assert_true(result.parried)
+	assert_eq(result.outcome, "parried")
+
+
+func test_scripted_fixture_proves_a_parry_roll_at_or_above_the_flat_chance_lets_the_hit_land() -> void:
+	var case := _one_v_one_melee_case("parry_fails")
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 1.0, 0.99, 1.0, 4)
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	var result: Dictionary = policy.recorded[0]
+	assert_true(result.hit)
+	assert_false(result.parried)
+	assert_eq(result.damage, 4)
+
+
+## A Scout's shortbow (missile, min/max range covering the 3-tile gap here)
+## against a Goblin standing on a High Cover tile -- board.cover (Stage 5 D2)
+## normalized/validated by ScenarioContract and hydrated onto the real Grid
+## by BattleStateFactory.build().
+func _cover_case(case_id: String, defender_facing: String) -> Dictionary:
+	return _case({
+		"scenario_id": case_id,
+		"board": {"cover": [{"position": {"x": 0, "y": 3}, "tier": "high"}]},
+		"player": {
+			"units": [{"id": "archer", "template_id": "scout", "weapon_id": "shortbow_iron", "position": {"x": 0, "y": 0}}],
+		},
+		"enemy": {
+			"units": [
+				{
+					"id": "goblin", "template_id": "goblin", "position": {"x": 0, "y": 3},
+					"facing": defender_facing, "modifiers": {"max_health": 500},
+				},
+			],
+		},
+		"rules": {"round_limit": 1},
+	})
+
+
+func test_scripted_fixture_proves_cover_adds_guard_against_a_front_facing_missile_attack() -> void:
+	var case := _cover_case("cover_applies", "up")  # goblin faces the archer directly -- a front attack
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 1.0, 1.0, 1.0, 4)
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	var result: Dictionary = policy.recorded[0]
+	assert_eq(result.flank, "front")
+	assert_true(result.cover_applied)
+	assert_eq(result.cover_tile, "high")
+
+
+func test_scripted_fixture_proves_flanking_bypasses_cover_entirely() -> void:
+	var case := _cover_case("cover_bypassed_by_flank", "right")  # a side flank on the same covered tile
+	case.scenario.policies.player = "scripted_attack"
+	var policy := ScriptedAttackPolicy.new(0.0, 1.0, 1.0, 1.0, 4)
+	var runner := ScenarioRunner.new({"scripted_attack": policy})
+
+	runner.run_case(case)
+
+	var result: Dictionary = policy.recorded[0]
+	assert_ne(result.flank, "front")
+	assert_false(result.cover_applied, "Flanking bypasses Cover's Guard bonus even though the tile has High Cover")
+
+
+## Diagonally adjacent (Chebyshev distance 1) at the start -- Grid.
+## is_attack_adjacent()'s own eight-directional contract, matching ordinary
+## melee attack range.
+func _adjacency_departure_case(case_id: String, enemy_template: String) -> Dictionary:
+	return _case({
+		"scenario_id": case_id,
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 1, "y": 1}}]},
+		"enemy": {"units": [{"id": "threat", "template_id": enemy_template, "position": {"x": 0, "y": 0}}]},
+		"rules": {"round_limit": 1},
+	})
+
+
+func test_scripted_fixture_proves_departing_adjacency_triggers_an_opportunity_attack() -> void:
+	var case := _adjacency_departure_case("aoo_triggers", "goblin")
+	case.scenario.policies.player = "scripted_move"
+	var policy := ScriptedMovePolicy.new(Vector2i(4, 1), 0.0)
+	var runner := ScenarioRunner.new({"scripted_move": policy})
+
+	runner.run_case(case)
+
+	assert_eq(policy.recorded_reactions.size(), 1)
+	assert_eq(policy.recorded_reactions[0].type, "reaction")
+
+
+## The mirror case: a ranged threat (attack_max_range > 1) never makes an
+## opportunity attack, even departing its adjacency exactly the same way.
+func test_scripted_fixture_proves_a_ranged_threat_never_makes_an_opportunity_attack() -> void:
+	var case := _adjacency_departure_case("aoo_ranged_never_triggers", "goblin_archer")
+	case.scenario.policies.player = "scripted_move"
+	var policy := ScriptedMovePolicy.new(Vector2i(4, 1), 0.0)
+	var runner := ScenarioRunner.new({"scripted_move": policy})
+
+	runner.run_case(case)
+
+	assert_true(policy.recorded_reactions.is_empty())
+
+
+## --- Reproducibility and RNG-isolation proof for the new mechanics ---------
+
+func _tactical_case(case_id: String, root_seed: int) -> Dictionary:
+	return _case({
+		"scenario_id": case_id,
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+		"randomness": {"root_seed": root_seed, "iterations": 10},
+	})
+
+
+func test_tactical_primitives_case_replays_byte_identically_for_a_fixed_seed() -> void:
+	var case := _tactical_case("tactical_primitives_repro", 777)
+	var runner := ScenarioRunner.new()
+
+	var first: Array = runner.run_case(case)
+	var second: Array = runner.run_case(case)
+
+	assert_eq(
+		first, second,
+		"Identical iteration seeds must reproduce byte-identical records even with Dodge/Parry/Opportunity now in play"
+	)
+
+
+## Task 7's explicit RNG-isolation check: an unrelated case run before AND
+## after this one must never change its own recorded result -- proving
+## Dodge/Parry draw only from BattleStateFactory's per-iteration seeded RNG
+## (see battle_state_factory.gd's build()), never from any hidden global
+## randomness that a differently-seeded run could perturb.
+func test_tactical_primitives_case_is_unaffected_by_an_unrelated_seed_run_before_and_after_it() -> void:
+	var case_a := _tactical_case("tactical_primitives_no_coupling", 777)
+	var case_b := _tactical_case("tactical_primitives_unrelated", 55555)
+	var runner := ScenarioRunner.new()
+
+	var baseline: Array = runner.run_case(case_a)
+	runner.run_case(case_b)
+	var after_unrelated: Array = runner.run_case(case_a)
+
+	assert_eq(
+		baseline, after_unrelated,
+		"Running an unrelated seed before/after must never change this case's own result -- no hidden global RNG coupling"
+	)

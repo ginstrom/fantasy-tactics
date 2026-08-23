@@ -11,6 +11,11 @@ const BattleStateFactory := preload("res://scripts/tools/battle_scenarios/battle
 func _make_controller(width: int = 6, height: int = 6) -> Node2D:
 	var controller: Node2D = BattleControllerScript.new()
 	controller.grid = GridScript.new(width, height)
+	# Stage 5 D2: pin Dodge/Parry off so every pre-existing guaranteed-hit
+	# test in this file stays deterministic -- see test_battle_controller.gd's
+	# own _make_controller() for the identical fix and its full rationale.
+	controller.dodge_roll = func() -> float: return 1.0
+	controller.parry_roll = func() -> float: return 1.0
 	autofree(controller)
 	return controller
 

@@ -8,6 +8,12 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 func _make_controller(width: int, height: int) -> Node2D:
 	var controller: Node2D = BattleControllerScript.new()
 	controller.grid = GridScript.new(width, height)
+	# Stage 5 D2 tactical primitives: pin Dodge/Parry off so every guaranteed-
+	# hit assertion in this file stays deterministic -- see
+	# test_battle_controller.gd's own _make_controller() for the identical
+	# fix and its full rationale.
+	controller.dodge_roll = func() -> float: return 1.0
+	controller.parry_roll = func() -> float: return 1.0
 	autofree(controller)
 	return controller
 

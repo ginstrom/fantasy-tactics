@@ -15,6 +15,8 @@ script = ExtResource("2_battle")
 
 [node name="Tiles" type="Node2D" parent="Grid"]
 
+[node name="Terrain" type="Node2D" parent="Grid"]
+
 [node name="Highlights" type="Node2D" parent="Grid"]
 
 [node name="Shadows" type="Node2D" parent="Grid"]
@@ -115,6 +117,10 @@ layout_mode = 2
 [node name="FacingLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 
+[node name="CoverLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+visible = false
+
 [node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
 layout_mode = 2
 visible = false
@@ -157,6 +163,10 @@ layout_mode = 2
 
 [node name="FacingLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2
+
+[node name="CoverLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
+layout_mode = 2
+visible = false
 
 [node name="ClassLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/SelectedSection"]
 layout_mode = 2

@@ -156,3 +156,67 @@ func test_is_attack_adjacent_is_false_for_the_same_tile_or_anything_two_tiles_aw
 	assert_false(grid.is_attack_adjacent(Vector2i(2, 2), Vector2i(2, 2)), "A tile is not adjacent to itself")
 	assert_false(grid.is_attack_adjacent(Vector2i(2, 2), Vector2i(4, 2)), "Two cardinal tiles away")
 	assert_false(grid.is_attack_adjacent(Vector2i(2, 2), Vector2i(4, 4)), "Two diagonal tiles away")
+
+
+## --- Terrain: Cover tiles (Stage 5 D2) --------------------------------------
+
+func test_a_tile_with_no_authored_cover_reports_cover_none() -> void:
+	var grid = GridScript.new(6, 6)
+
+	assert_eq(grid.get_cover(Vector2i(2, 2)), GridScript.COVER_NONE)
+
+
+func test_get_cover_reports_the_authored_tier_for_a_cover_tile() -> void:
+	var grid = GridScript.new(6, 6)
+	grid.cover_tiles[Vector2i(1, 1)] = GridScript.COVER_LOW
+	grid.cover_tiles[Vector2i(2, 2)] = GridScript.COVER_HIGH
+
+	assert_eq(grid.get_cover(Vector2i(1, 1)), GridScript.COVER_LOW)
+	assert_eq(grid.get_cover(Vector2i(2, 2)), GridScript.COVER_HIGH)
+	assert_eq(grid.get_cover(Vector2i(3, 3)), GridScript.COVER_NONE, "An unauthored tile is never treated as cover")
+
+
+## --- Visibility: get_visible_tiles() (Stage 5 D2) ---------------------------
+
+func test_get_visible_tiles_includes_the_viewers_own_tile() -> void:
+	var grid = GridScript.new(6, 6)
+
+	var visible: Dictionary = grid.get_visible_tiles([Vector2i(2, 2)], [])
+
+	assert_true(visible.has(Vector2i(2, 2)))
+
+
+func test_get_visible_tiles_includes_every_tile_with_an_unobstructed_line_when_nothing_blocks() -> void:
+	var grid = GridScript.new(4, 4)
+
+	var visible: Dictionary = grid.get_visible_tiles([Vector2i(0, 0)], [])
+
+	assert_true(visible.has(Vector2i(3, 3)), "The farthest tile is still visible with no blockers")
+	assert_eq(visible.size(), 16, "Every tile on a small, empty board is visible from one viewer")
+
+
+func test_get_visible_tiles_excludes_a_tile_whose_only_line_is_blocked() -> void:
+	var grid = GridScript.new(4, 4)
+
+	var visible: Dictionary = grid.get_visible_tiles([Vector2i(0, 0)], [Vector2i(0, 1)])
+
+	assert_false(visible.has(Vector2i(0, 3)), "Every straight line to (0,3) from (0,0) passes through the blocker at (0,1)")
+	assert_true(visible.has(Vector2i(0, 1)), "The blocking tile itself is still visible -- it is the line's destination there")
+	assert_true(visible.has(Vector2i(3, 0)), "An unrelated direction is unaffected by the blocker")
+
+
+func test_get_visible_tiles_unions_across_multiple_viewers() -> void:
+	var grid = GridScript.new(6, 6)
+
+	var visible: Dictionary = grid.get_visible_tiles([Vector2i(0, 0), Vector2i(5, 5)], [])
+
+	assert_true(visible.has(Vector2i(0, 0)))
+	assert_true(visible.has(Vector2i(5, 5)))
+
+
+func test_get_visible_tiles_ignores_an_out_of_bounds_viewer_without_crashing() -> void:
+	var grid = GridScript.new(4, 4)
+
+	var visible: Dictionary = grid.get_visible_tiles([Vector2i(-1, -1)], [])
+
+	assert_eq(visible, {})

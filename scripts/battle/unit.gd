@@ -111,6 +111,25 @@ var mp_remaining: int = 0
 # never derive action legality, saved state, simulation output, or RNG from
 # it, and never serialize it.
 var visual_key := ""
+# Stage 5 D2 tactical primitives (docs/plans/2026-08-23-stage-5-strategic-
+# roster-expansion/decision-ledger.md's "Approved values" table): off-balance
+# is a defensive Guard penalty this unit suffers for the whole of its own
+# NEXT turn, incurred by whiffing an attack against a Dodge or Parry (see
+# BattleController.try_attack_selected_unit()/_resolve_opportunity_attack()).
+# *_pending is set the instant the evasion happens; BattleController.end_turn()'s
+# _advance_reaction_timers() promotes *_pending to *_active exactly once, at
+# the start of THIS unit's own next turn, and clears *_active at the start of
+# the turn after that -- giving exactly one full "their next round" window,
+# never longer. Never read directly for display -- BattleController is the
+# only reader (see its effective_defense computation).
+var off_balance_pending: bool = false
+var off_balance_active: bool = false
+# Parry's counter-bonus (+10% melee to-hit) applies only against the SAME
+# attacker who was parried, only during the parrying unit's own next turn --
+# same pending/active timing as off_balance above, but tracks which attacker
+# it applies against (null means "no counter-bonus") rather than a bare bool.
+var counter_bonus_pending_against = null
+var counter_bonus_active_against = null
 
 
 func _init(

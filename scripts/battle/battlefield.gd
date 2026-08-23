@@ -84,6 +84,11 @@ var _leveled_up_ids: Array[String] = []
 # reference identity alone already distinguishes "already logged this" from
 # "a genuinely new attack" -- no need to compare field-by-field.
 var _last_logged_attack_result: Dictionary = {}
+# Stage 5 D2: dedup guard for Attack-of-Opportunity log lines, mirroring
+# _last_logged_attack_result's own is_same()-based pattern -- a reaction is a
+# side effect of a move (see grid.last_reaction_results), not the move's own
+# primary result, so it needs its own dedup list rather than sharing that var.
+var _logged_reaction_results: Array = []
 
 
 func _ready() -> void:
@@ -99,6 +104,7 @@ func _ready() -> void:
 	grid.retreat_resolved.connect(_on_retreat_resolved)
 	level_up.resolved.connect(_on_level_up_resolved)
 	portrait_panel.grid = grid
+	unit_info_panel.grid = grid
 	_on_board_changed()
 	# BattleController._ready() already selects the first living party member
 	# (selected_unit/inspected_unit), but that happens before this node's own
@@ -250,6 +256,7 @@ func _on_board_changed() -> void:
 	round_label.text = tr("battle.round") % round_number
 	end_turn_button.tooltip_text = tr("battle.end_turn.reminder")
 	_update_health_labels()
+	_log_reactions()
 	# AP spent on a move/attack (and any resulting damage) reaches here via
 	# board_changed even though the focused unit itself hasn't changed, so the
 	# dual hover/selected panel must resync here too, not only from
@@ -610,6 +617,13 @@ func _describe_step(step: Dictionary) -> String:
 			if step.get("critical", false):
 				return tr("battle.status.critical_hit") % [attacker_name, step.damage]
 			return tr("battle.status.hit") % [attacker_name, step.damage]
+		# Dodge/Parry (Stage 5 D2) are a distinct outcome from a plain
+		# Guard-driven miss -- distinct text, never colour-only feedback
+		# (Stage 4's accessibility carryover).
+		if step.get("dodged", false):
+			return tr("battle.status.dodged") % tr(SIDE_NAME_KEYS[step.defender.side])
+		if step.get("parried", false):
+			return tr("battle.status.parried") % tr(SIDE_NAME_KEYS[step.defender.side])
 		return tr("battle.status.miss") % attacker_name
 
 	if step.type == "potion":
@@ -667,6 +681,45 @@ func _log_attack(step: Dictionary) -> void:
 ## two distinct result Dictionaries regardless of type), a persistent line
 ## for Heal/Bless casts rather than only the transient status text
 ## _describe_step() already provides.
+## Attacks of Opportunity (Stage 5 D2): logs every reaction the most recent
+## move action triggered (see BattleController.last_reaction_results), each
+## exactly once. A reaction is a side effect of a move, not the move's own
+## primary result -- unlike _log_attack()/_log_spell(), which key off the
+## single last_attack_result, this drains a whole array and keeps its own
+## dedup list (is_same() per entry) since more than one reaction can follow
+## a single move.
+func _log_reactions() -> void:
+	for reaction in grid.last_reaction_results:
+		var already_logged := false
+		for logged in _logged_reaction_results:
+			if is_same(logged, reaction):
+				already_logged = true
+				break
+		if already_logged:
+			continue
+		_logged_reaction_results.append(reaction)
+		_append_log_line(_describe_reaction_entry(reaction))
+
+
+func _describe_reaction_entry(reaction: Dictionary) -> String:
+	var reactor_name: String = reaction.reactor.display_name
+	var mover_name: String = reaction.mover.display_name
+	if reaction.get("dodged", false):
+		return tr("battle.log.reaction.dodged") % [reactor_name, mover_name, mover_name]
+	if reaction.get("parried", false):
+		return tr("battle.log.reaction.parried") % [reactor_name, mover_name, mover_name]
+	if not reaction.hit:
+		return tr("battle.log.reaction.miss") % [reactor_name, mover_name]
+	var line: String = (
+		tr("battle.log.reaction.critical_hit") % [reactor_name, mover_name, reaction.damage]
+		if reaction.get("critical", false)
+		else tr("battle.log.reaction.hit") % [reactor_name, mover_name, reaction.damage]
+	)
+	if reaction.defeated:
+		line += " " + tr("battle.log.defeated") % mover_name
+	return line
+
+
 func _log_spell(step: Dictionary) -> void:
 	if is_same(_last_logged_attack_result, step):
 		return
@@ -683,6 +736,14 @@ func _describe_log_entry(step: Dictionary) -> String:
 	var attacker_name: String = step.attacker.display_name
 	var defender_name: String = step.defender.display_name
 	if not step.hit:
+		# Dodge/Parry (Stage 5 D2) get their own log line, distinct from a
+		# plain Guard-driven miss -- see last_attack_result's "outcome" field
+		# (battle_controller.gd's _outcome_for()), which already distinguishes
+		# "blocked"/"dodged"/"parried" the same way this log line does.
+		if step.get("dodged", false):
+			return tr("battle.log.dodged") % [attacker_name, defender_name, defender_name]
+		if step.get("parried", false):
+			return tr("battle.log.parried") % [attacker_name, defender_name, defender_name]
 		return tr("battle.log.miss") % [attacker_name, defender_name]
 	var critical: bool = step.get("critical", false)
 	var line_key: String = _log_key_for_flank(String(step.get("flank", "front")), critical)

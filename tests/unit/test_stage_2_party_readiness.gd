@@ -461,6 +461,14 @@ func test_tier_one_fixture_hydrates_class_resources_and_demonstrates_the_authore
 	# unchanged with the extra idle Scout/Cleric present.
 	var rear_controller: Node2D = BattleStateFactory.build(_tier_one_readiness_fixture_scenario({"x": 2, "y": 3}), 1)
 	autofree(rear_controller)
+	# Stage 5 D2: pin Dodge/Parry off so the seeded RNG stream this fixture's
+	# own doc comment probes (front lands a plain hit, rear lands a critical)
+	# still lands on crit_roll as its second draw, exactly as before Dodge/
+	# Parry existed -- this fixture is about flanking's crit math, not
+	# evasion.
+	for evasion_controller in [front_controller, rear_controller]:
+		evasion_controller.dodge_roll = func() -> float: return 1.0
+		evasion_controller.parry_roll = func() -> float: return 1.0
 	var front_warrior = front_controller.get_unit_at(Vector2i(4, 3))
 	var rear_warrior = rear_controller.get_unit_at(Vector2i(2, 3))
 	front_controller.selected_unit = front_warrior
@@ -635,6 +643,11 @@ func test_tier_three_fixture_hydrates_class_resources_and_demonstrates_the_gobli
 
 	for controller in [shaman_controller, bruiser_controller, elite_controller]:
 		controller.selected_unit = controller.get_unit_at(Vector2i(3, 4))  # the Warrior
+		# Stage 5 D2: pin Dodge/Parry off so seed 90's probed roll sequence (a
+		# plain, non-critical hit in every matchup) reproduces unchanged --
+		# this fixture is about resistance/damage math, not evasion.
+		controller.dodge_roll = func() -> float: return 1.0
+		controller.parry_roll = func() -> float: return 1.0
 
 	var shaman_attacked: bool = shaman_controller.try_attack_selected_unit(Vector2i(3, 3))
 	var bruiser_attacked: bool = bruiser_controller.try_attack_selected_unit(Vector2i(3, 3))

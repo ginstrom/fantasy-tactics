@@ -477,11 +477,25 @@ func test_refill_party_prefers_an_already_owned_missing_class_member_over_a_dupl
 ## NOTE on party size at first-triad: _purchase_affordable_upgrades()'s
 ## unmodified priority order (Guild Hall upgrade before Temple, per its own
 ## doc comment quoting the technical design verbatim) means gold routes to
-## Guild Hall upgrades well before a Temple gets built in nearly every run --
-## seed 2 itself lands at the level-3 cap of 5. full_triad_party_size is
-## still recorded and asserted to be a sane value (>= 3, the floor of
-## get_max_party_size()) rather than hardcoded to a single observed number.
-const CLERIC_TRIAD_SEED := 2
+## Guild Hall upgrades well before a Temple gets built in nearly every run.
+## full_triad_party_size is recorded and asserted to be a sane value (>= 3,
+## the floor of get_max_party_size()) rather than hardcoded to a single
+## observed number.
+##
+## Re-probed for Stage 5 D2 (docs/plans/2026-08-23-stage-5-strategic-roster-
+## expansion/03-tactical-depth-primitives.md): Dodge, Parry, and Attacks of
+## Opportunity are new possibilities in every simulated battle (Battle
+## StateFactory.build() now seeds dodge_roll/parry_roll from the same per-
+## iteration RNG hit_roll/crit_roll/damage_roll already draw from), which
+## shifts individual battle outcomes (damage/rounds/deaths) enough to change
+## _refill_party()'s death-driven recruitment pacing on a per-seed basis --
+## seed 2 stopped fielding the triad or casting a spell once these
+## mechanics actually apply, the same class of effect this constant's own
+## history above already documents twice for earlier balance changes. Seed 5
+## is the first hit (ascending order, not cherry-picked) of a fresh 1-59
+## throwaway-probe sweep re-run against the corrected mechanics; 20 of the
+## first 59 seeds in that sweep still satisfy victory + triad + spell-cast.
+const CLERIC_TRIAD_SEED := 5
 
 
 func test_run_campaign_fields_the_full_triad_and_records_a_cleric_spell_cast() -> void:
