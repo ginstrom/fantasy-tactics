@@ -22,6 +22,7 @@ extends Control
 @onready var status_label: Label = $Body/Center/VBox/StatusLabel
 @onready var skills_label: Label = $Body/Center/VBox/SkillsLabel
 @onready var perks_label: Label = $Body/Center/VBox/PerksLabel
+@onready var promotion_options_container: VBoxContainer = $Body/Center/VBox/PromotionOptionsContainer
 @onready var stats_label: Label = $Body/Center/VBox/StatsLabel
 @onready var mp_label: Label = $Body/Center/VBox/MpLabel
 @onready var equipment_label: Label = $Body/Center/VBox/EquipmentLabel
@@ -70,7 +71,17 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	not_found_label.visible = false
 
 	name_label.text = adventurer["name"]
-	class_label.text = tr("information.class") % tr("class.%s" % adventurer["class"])
+	# Stage 5 D4: a promoted adventurer shows its specialization alongside its
+	# unchanged root class (adventurer.class stays "warrior" forever -- see
+	# GameSession.promote_adventurer()'s own doc comment) rather than only
+	# the root, so promotion is visible here without reading Perks below.
+	var specialization_id: String = GameSession.get_adventurer_specialization(str(adventurer["id"]))
+	class_label.text = (
+		tr("information.class") % (
+			tr("unit_details.class_specialized") % [tr("class.%s" % adventurer["class"]), tr("class.%s" % specialization_id)]
+		) if not specialization_id.is_empty()
+		else tr("information.class") % tr("class.%s" % adventurer["class"])
+	)
 	level_label.text = tr("information.level") % adventurer["level"]
 	status_label.text = tr("unit_details.status") % tr("availability.%s" % adventurer["availability_status"])
 
@@ -150,6 +161,7 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 
 	_refresh_equipment_sections(adventurer)
 	_refresh_heal_section(adventurer_id, effective_max_mp)
+	_refresh_promotion_section(adventurer_id)
 
 
 	for label in [
@@ -169,6 +181,43 @@ func _show_not_found() -> void:
 	mp_label.visible = false
 	_hide_heal_section()
 	_hide_assignment_section()
+	_hide_promotion_section()
+
+
+## Stage 5 D4 (Knight specialization): renders one button per specialization
+## GameSession.get_available_specializations() currently offers -- rebuilt
+## from scratch every refresh, same remove_child()-then-queue_free() pattern
+## _populate_inventory_list()/level_up.gd's _refresh_perk_options() already
+## use so a synchronous re-refresh (pressing a promote button calls refresh()
+## with no frame in between) never counts a stale button still parented
+## here. Renders nothing (fully hidden) once already promoted or not yet
+## eligible -- mirrors level_up.gd's own "no empty-tree state needed" choice
+## for perk options.
+func _refresh_promotion_section(adventurer_id: String) -> void:
+	for child in promotion_options_container.get_children():
+		promotion_options_container.remove_child(child)
+		child.queue_free()
+
+	var available: Array[String] = GameSession.get_available_specializations(adventurer_id)
+	promotion_options_container.visible = not available.is_empty()
+	for specialization_id in available:
+		var button := Button.new()
+		button.name = "PromoteButton_%s" % specialization_id
+		button.text = tr("unit_details.promote_button") % tr("class.%s" % specialization_id)
+		button.pressed.connect(_on_promote_option_pressed.bind(specialization_id))
+		promotion_options_container.add_child(button)
+
+
+func _hide_promotion_section() -> void:
+	promotion_options_container.visible = false
+	for child in promotion_options_container.get_children():
+		promotion_options_container.remove_child(child)
+		child.queue_free()
+
+
+func _on_promote_option_pressed(specialization_id: String) -> void:
+	GameSession.promote_adventurer(unit_id, specialization_id)
+	refresh()
 
 
 ## Rebuilds one slot's row list from scratch on every refresh — item_ids is

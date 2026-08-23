@@ -130,6 +130,21 @@ var off_balance_active: bool = false
 # it applies against (null means "no counter-bonus") rather than a bare bool.
 var counter_bonus_pending_against = null
 var counter_bonus_active_against = null
+# Stage 5 D4 (Knight specialization): the exact perk ids this unit's owning
+# adventurer has chosen (root CLASS_PERKS entries plus, once promoted, its
+# specialization's own SPECIALIZATION_PERKS entries) -- BattleController
+# reads this to gate Shield Bash/Chain Blow (see try_shield_bash_selected_
+# unit()/_resolve_chain_blow_strike()) the same way unit.spells already
+# gates spell casting. Empty for every unit with no perks (every enemy, and
+# any player unit built before this list is hydrated -- see BattleController.
+## _ready() and BattleStateFactory._build_player_unit()).
+var perks: Array = []
+# Once-per-round bookkeeping for the Chain Blow perk (Stage 5 D4): true once
+# this unit's Chain Blow has already triggered a bonus second strike this
+# Round, so a second landed melee attack the same Round cannot trigger it
+# again. Cleared alongside PARALYZED_STATUS_ID/SLEEPING_STATUS_ID at the same
+# round boundary -- see BattleController._clear_expired_statuses().
+var chain_blow_used_this_round: bool = false
 
 
 func _init(

@@ -939,6 +939,106 @@ func test_the_legacy_bonus_move_perk_id_still_validates_for_any_class() -> void:
 	assert_eq(result.snapshot.adventurers[0].progression.perks, ["bonus_move"])
 
 
+## Knight specialization (Stage 5 D4, decision-ledger.md): a promoted
+## record's "specialization" field gates which extra perk ids validate --
+## see _validate_specialization_field()/_validate_perks_field() in
+## campaign_snapshot.gd.
+
+func test_a_knight_perk_validates_only_alongside_the_matching_specialization_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"specialization": "knight",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {
+				"xp": 200.0,
+				"perks": ["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash", "knight_chain_blow"],
+			},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].specialization, "knight")
+	assert_eq(
+		result.snapshot.adventurers[0].progression.perks,
+		["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash", "knight_chain_blow"]
+	)
+
+
+func test_a_knight_perk_without_the_specialization_field_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {"xp": 200.0, "perks": ["knight_shield_bash"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "A Knight perk on a never-promoted record must be rejected")
+	assert_eq(result.snapshot, {})
+
+
+func test_an_unknown_specialization_id_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 6,
+			"specialization": "not_a_real_specialization",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {"xp": 200.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+
+
+func test_a_specialization_with_a_mismatched_root_class_is_rejected_atomically() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "scout_test", "name": "Scout", "class": "scout", "level": 6,
+			"specialization": "knight",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {"xp": 200.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "Knight requires root class warrior, not scout")
+	assert_eq(result.snapshot, {})
+
+
+## A save with no "specialization" field at all (every pre-Stage-5-D4 save)
+## must import cleanly as not promoted, not a partial/corrupt state -- the
+## field is simply absent from the normalized record, exactly like every
+## other optional field this file's other tests already cover (mp_current,
+## temple_level, etc.).
+func test_a_record_with_no_specialization_field_imports_cleanly_as_not_promoted() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 1,
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 10},
+			"progression": {"xp": 0.0, "perks": []},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_false(result.snapshot.adventurers[0].has("specialization"))
+
+
 ## Durable Cleric MP (docs/plans/2026-08-21-stage-2-party-readiness/
 ## 03-persistent-mp-temple-and-details-healing.md): "mp_current" round-trips
 ## like health, a missing field migrates to full, and an invalid shape/range

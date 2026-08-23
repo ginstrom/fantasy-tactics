@@ -285,6 +285,17 @@ static func _normalize_side(raw_side: Dictionary, side_label: String) -> Diction
 			# factory.gd's _build_player_unit() for where this is consumed.
 			var raw_perks: Array = raw_unit.get("perks", [])
 			unit["perks"] = raw_perks.duplicate(true)
+			# Explicit optional specialization field (Stage 5 D4, mirrors perks'
+			# own precedent immediately above): a deterministic scenario must
+			# never rely on ambient GameSession adventurer.specialization state
+			# either. Defaults to "" (not promoted). Only meaningful together
+			# with a "perks" entry naming one of that specialization's own
+			# SPECIALIZATION_PERKS ids -- see _validate_side()'s perk-ownership
+			# check just below, which is what actually gives it mechanical
+			# effect (a Knight's Shield Bash/Chain Blow perks only validate,
+			# and therefore only mechanically apply, when this field names
+			# "knight").
+			unit["specialization"] = String(raw_unit.get("specialization", ""))
 		var default_position: Vector2i = (
 			default_positions[index] if index < default_positions.size() else Vector2i(-1, -1)
 		)
@@ -363,11 +374,27 @@ static func _validate_side(
 					)
 
 			# Each named perk must be a real id belonging to this unit's own
-			# template_id's class (GameSession.CLASS_PERKS) -- mirrors choose_
-			# perk()'s own class-gating so an authoring typo or a perk from the
-			# wrong class fails fast at validate() time instead of silently
-			# having zero effect in BattleStateFactory._build_player_unit().
-			var class_perks: Array = GameSession.CLASS_PERKS.get(template_id, [])
+			# template_id's class (GameSession.CLASS_PERKS), OR -- once
+			# promoted, Stage 5 D4 -- its own "specialization" field's
+			# SPECIALIZATION_PERKS (e.g. Knight's Shield Bash/Chain Blow).
+			# Mirrors choose_perk()'s own class/specialization-gating so an
+			# authoring typo or a perk from the wrong class/specialization
+			# fails fast at validate() time instead of silently having zero
+			# effect in BattleStateFactory._build_player_unit().
+			var specialization_id := String(unit.get("specialization", ""))
+			if not specialization_id.is_empty() and not GameSession.SPECIALIZATION_ROOT_CLASS.has(specialization_id):
+				errors.append(
+					"unknown_specialization: %s unit %s has unknown specialization \"%s\""
+					% [side_label, unit_id, specialization_id]
+				)
+			elif not specialization_id.is_empty() and GameSession.SPECIALIZATION_ROOT_CLASS[specialization_id] != template_id:
+				errors.append(
+					"unknown_specialization: %s unit %s has specialization \"%s\" which requires root class \"%s\", not \"%s\""
+					% [side_label, unit_id, specialization_id, GameSession.SPECIALIZATION_ROOT_CLASS[specialization_id], template_id]
+				)
+			var class_perks: Array = (GameSession.CLASS_PERKS.get(template_id, []) as Array).duplicate()
+			if not specialization_id.is_empty():
+				class_perks.append_array(GameSession.SPECIALIZATION_PERKS.get(specialization_id, []))
 			for perk_id in unit.get("perks", []):
 				if not class_perks.has(String(perk_id)):
 					errors.append(

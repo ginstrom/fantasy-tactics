@@ -35,6 +35,14 @@ const TYPE_PARRY := "parry"
 ## "sleep" match arm, the only spawn site for either type.
 const TYPE_SLEEP := "sleep"
 const TYPE_RESISTED := "resisted"
+## Knight specialization (Stage 5 D4): Shield Bash's off-balance application
+## ("OFF-BALANCE!") is a distinct outcome from a plain hit, and Chain Blow's
+## bonus second strike ("CHAIN BLOW!") is a distinct outcome from an ordinary
+## attack -- always their own text, never colour-only feedback (Stage 4's
+## accessibility carryover). See battle_controller.gd's _execute_direct_
+## attack()/_resolve_chain_blow_strike().
+const TYPE_OFF_BALANCE := "off_balance"
+const TYPE_CHAIN_BLOW := "chain_blow"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -46,6 +54,8 @@ const COLORS := {
 	TYPE_PARRY: Color(0.95, 0.75, 0.35),
 	TYPE_SLEEP: Color(0.6, 0.4, 0.95),
 	TYPE_RESISTED: Color(0.7, 0.7, 0.7),
+	TYPE_OFF_BALANCE: Color(0.95, 0.6, 0.2),
+	TYPE_CHAIN_BLOW: Color(0.85, 0.3, 0.9),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6

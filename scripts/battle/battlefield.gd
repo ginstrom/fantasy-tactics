@@ -22,6 +22,7 @@ const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 @onready var retreat_button: Button = %RetreatButton
 @onready var move_button: Button = %MoveButton
 @onready var attack_button: Button = %AttackButton
+@onready var shield_bash_button: Button = %ShieldBashButton
 @onready var heal_button: Button = %HealButton
 @onready var bless_button: Button = %BlessButton
 @onready var sleep_button: Button = %SleepButton
@@ -90,6 +91,13 @@ var _last_logged_attack_result: Dictionary = {}
 # side effect of a move (see grid.last_reaction_results), not the move's own
 # primary result, so it needs its own dedup list rather than sharing that var.
 var _logged_reaction_results: Array = []
+# Stage 5 D4: dedup guard for Chain Blow's own log line, same is_same()-based
+# pattern as _last_logged_attack_result -- Chain Blow's bonus second strike
+# (see grid.last_chain_blow_result) is a side effect of the primary attack,
+# not the primary result itself, so it needs its own var rather than sharing
+# _last_logged_attack_result (which would suppress the primary strike's own
+# log line the moment both share one Dictionary reference by coincidence).
+var _last_logged_chain_blow_result: Dictionary = {}
 
 
 func _ready() -> void:
@@ -156,6 +164,14 @@ func _on_attack_button_pressed() -> void:
 	_on_action_mode_changed(grid.action_mode)
 
 
+## Stage 5 D4 (Knight specialization): identical shape to _on_attack_button_
+## pressed() above, just its own ActionMode -- try_shield_bash_selected_
+## unit() (not this handler) is what actually rejects a non-Knight.
+func _on_shield_bash_button_pressed() -> void:
+	grid.set_action_mode(BattleControllerScript.ActionMode.SHIELD_BASH)
+	_on_action_mode_changed(grid.action_mode)
+
+
 ## Heal/Bless/Sleep all share the same begin_spell_targeting() entry point
 ## (see BattleController's own doc comment) -- only pending_spell_id differs.
 func _on_heal_button_pressed() -> void:
@@ -183,6 +199,7 @@ func _on_sleep_button_pressed() -> void:
 func _on_action_mode_changed(mode: int) -> void:
 	move_button.button_pressed = mode == BattleControllerScript.ActionMode.MOVE
 	attack_button.button_pressed = mode == BattleControllerScript.ActionMode.ATTACK
+	shield_bash_button.button_pressed = mode == BattleControllerScript.ActionMode.SHIELD_BASH
 	var spell_mode: bool = mode == BattleControllerScript.ActionMode.SPELL
 	heal_button.button_pressed = spell_mode and grid.pending_spell_id == "heal"
 	bless_button.button_pressed = spell_mode and grid.pending_spell_id == "bless"
@@ -211,6 +228,18 @@ func _update_action_bar() -> void:
 	)
 	move_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.MOVE_ACTION_POINT_COST
 	attack_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+
+	# Shield Bash (Stage 5 D4): shown only for a unit that actually owns the
+	# knight_shield_bash perk -- every other unit (including an unpromoted
+	# Warrior) keeps this button hidden entirely, the same "don't offer an
+	# action this unit doesn't own" rule Heal/Bless/Sleep already follow
+	# below for spells.
+	var has_shield_bash: bool = selected_unit != null and selected_unit.perks.has(GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	shield_bash_button.visible = has_shield_bash
+	if has_shield_bash:
+		shield_bash_button.disabled = (
+			not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+		)
 
 	var is_caster: bool = selected_unit != null and not selected_unit.spells.is_empty()
 	var knows_heal: bool = is_caster and selected_unit.spells.has("heal")
@@ -277,6 +306,7 @@ func _on_board_changed() -> void:
 	end_turn_button.tooltip_text = tr("battle.end_turn.reminder")
 	_update_health_labels()
 	_log_reactions()
+	_log_chain_blow()
 	# AP spent on a move/attack (and any resulting damage) reaches here via
 	# board_changed even though the focused unit itself hasn't changed, so the
 	# dual hover/selected panel must resync here too, not only from
@@ -634,9 +664,17 @@ func _describe_step(step: Dictionary) -> String:
 	if step.type == "attack":
 		var attacker_name: String = tr(SIDE_NAME_KEYS[step.attacker.side])
 		if step.hit:
-			if step.get("critical", false):
-				return tr("battle.status.critical_hit") % [attacker_name, step.damage]
-			return tr("battle.status.hit") % [attacker_name, step.damage]
+			var line: String = (
+				tr("battle.status.critical_hit") % [attacker_name, step.damage] if step.get("critical", false)
+				else tr("battle.status.hit") % [attacker_name, step.damage]
+			)
+			# Shield Bash (Stage 5 D4): a landed hit that also off-balanced the
+			# target gets its own distinct clause, never colour-only feedback
+			# (Stage 4's accessibility carryover) -- see BattleController.
+			# _execute_direct_attack()'s "off_balance_applied" field.
+			if step.get("off_balance_applied", false):
+				line += " " + tr("battle.status.off_balance_applied") % tr(SIDE_NAME_KEYS[step.defender.side])
+			return line
 		# Dodge/Parry (Stage 5 D2) are a distinct outcome from a plain
 		# Guard-driven miss -- distinct text, never colour-only feedback
 		# (Stage 4's accessibility carryover).
@@ -756,6 +794,40 @@ func _describe_reaction_entry(reaction: Dictionary) -> String:
 	return line
 
 
+## Chain Blow's own log line (Stage 5 D4), mirroring _log_reactions()'s
+## dedup-and-append shape -- a Chain Blow strike is a side effect of the
+## primary attack action, not that action's own primary result, so it gets
+## its own persistent log line rather than overwriting the primary strike's.
+## No status-line treatment (unlike a primary attack): Attacks of Opportunity
+## set the same precedent -- see _describe_step()'s own doc comment, which
+## never renders a reaction as the transient status text either.
+func _log_chain_blow() -> void:
+	var result: Dictionary = grid.last_chain_blow_result
+	if result.is_empty() or is_same(_last_logged_chain_blow_result, result):
+		return
+	_last_logged_chain_blow_result = result
+	_append_log_line(_describe_chain_blow_entry(result))
+
+
+func _describe_chain_blow_entry(result: Dictionary) -> String:
+	var attacker_name: String = result.attacker.display_name
+	var defender_name: String = result.defender.display_name
+	if not result.hit:
+		if result.get("dodged", false):
+			return tr("battle.log.chain_blow.dodged") % [attacker_name, defender_name, defender_name]
+		if result.get("parried", false):
+			return tr("battle.log.chain_blow.parried") % [attacker_name, defender_name, defender_name]
+		return tr("battle.log.chain_blow.miss") % [attacker_name, defender_name]
+	var line: String = (
+		tr("battle.log.chain_blow.critical_hit") % [attacker_name, defender_name, result.damage]
+		if result.get("critical", false)
+		else tr("battle.log.chain_blow.hit") % [attacker_name, defender_name, result.damage]
+	)
+	if result.defeated:
+		line += " " + tr("battle.log.defeated") % defender_name
+	return line
+
+
 func _log_spell(step: Dictionary) -> void:
 	if is_same(_last_logged_attack_result, step):
 		return
@@ -789,6 +861,9 @@ func _describe_log_entry(step: Dictionary) -> String:
 	var line: String = tr(line_key) % [attacker_name, defender_name, step.damage]
 	if step.defeated:
 		line += " " + tr("battle.log.defeated") % defender_name
+	# Shield Bash (Stage 5 D4): see _describe_step()'s identical clause.
+	if step.get("off_balance_applied", false):
+		line += " " + tr("battle.log.off_balance_applied") % defender_name
 	return line
 
 

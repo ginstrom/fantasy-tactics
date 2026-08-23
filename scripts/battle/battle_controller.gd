@@ -117,7 +117,11 @@ enum Side { PLAYER, ENEMY }
 ## call for whichever spell pending_spell_id names, on an ally tile
 ## (including the caster's own, for a self-cast) rather than the ally-
 ## reselect behavior every other mode gives an ally click.
-enum ActionMode { CONTEXTUAL, MOVE, ATTACK, SPELL }
+## SHIELD_BASH is Stage 5 D4's addition (Knight specialization): behaves
+## exactly like ATTACK mode (enemy click only, no free move on an empty
+## tile -- see _handle_tile_click()) except it dispatches to try_shield_
+## bash_selected_unit() instead of try_attack_selected_unit().
+enum ActionMode { CONTEXTUAL, MOVE, ATTACK, SPELL, SHIELD_BASH }
 
 const GROUP := "battle_controller"
 
@@ -232,6 +236,15 @@ var sleep_resist_roll: Callable = func() -> float: return randf()
 var retreat_roll: Callable = func() -> float: return randf()
 var last_attack_result: Dictionary = {}
 var last_targeting_failure: Dictionary = {}
+## Chain Blow's bonus second strike result (Stage 5 D4), populated only when
+## it actually triggers this action -- {} otherwise. Kept separate from
+## last_attack_result (the primary strike's own result) rather than
+## overwritten by it, the same "a reaction is a side effect, not the
+## action's own primary result" pattern last_reaction_results already uses
+## for Attacks of Opportunity -- see Battlefield's own log line for this.
+## Cleared at the start of every direct attack/Shield Bash action, same as
+## last_attack_result/last_targeting_failure.
+var last_chain_blow_result: Dictionary = {}
 ## A player-side unit defeated in real combat is erased from `units`
 ## immediately (see try_attack_selected_unit()) so its tile frees up and it
 ## stops rendering. Battlefield still needs its final (0) health at battle
@@ -304,6 +317,14 @@ func _ready() -> void:
 		player_unit.guard = player_unit.defense
 		player_unit.spellcasting = GameSession.get_effective_spellcasting(adventurer_id)
 		player_unit.magic_resistance = GameSession.get_effective_magic_resistance(adventurer_id)
+		# Stage 5 D4: hydrated so Shield Bash/Chain Blow gate correctly for a
+		# promoted Knight (see Unit.perks' own doc comment/_unit_has_perk()) --
+		# the same adventurer.progression.perks list get_effective_defense()/
+		# get_effective_max_health() already read for Bulwark/Juggernaut, just
+		# copied onto the battle-local unit directly rather than pre-folded
+		# into a stat, since these two perks are active abilities, not stat
+		# bonuses.
+		player_unit.perks = (GameSession.get_adventurer(adventurer_id).progression.get("perks", []) as Array).duplicate()
 		player_unit.health = max(1, GameSession.get_current_health(adventurer_id))
 		player_unit.display_name = GameSession.get_adventurer(adventurer_id).get("name", "")
 		var armor_instance_id := str(GameSession.get_adventurer(adventurer_id).equipment.armor)
@@ -942,6 +963,84 @@ func _apply_evasion_reactions(attacker, defender, dodged: bool, parried: bool) -
 		defender.counter_bonus_pending_against = attacker
 
 
+## Shared per-defender modifier computation for a direct melee/ranged attack
+## (flank, Cover, off-balance, Bless, Parry's counter-bonus, and the
+## resulting effective_defense/effective_hit_chance/effective_crit_chance) --
+## factored out of try_attack_selected_unit()'s original inline body so
+## Chain Blow's second strike (Stage 5 D4, _resolve_chain_blow_strike()) can
+## compute the exact same formula fresh against a DIFFERENT defender, rather
+## than reusing the primary target's own numeric chances (each defender's
+## own Guard/flank/off-balance status must apply to it, not to whichever
+## defender happened to be attacked first). `attacker`'s facing/position are
+## read as they stand at call time -- callers that also move/reposition the
+## attacker must do so before calling this, same as the original inline code
+## required.
+func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool) -> Dictionary:
+	# Flanking geometry (docs/plans/2026-08-18-critical-hits-and-flanking/
+	# 03-flanking-tactics-and-combat-resolution.md): a side or rear flank
+	# reduces the defender's effective Guard (raising hit chance) and adds to
+	# the base critical chance Step 2 introduced.
+	var flank_type: String = get_flank_type(attacker.grid_position, defender.grid_position, defender.facing)
+	var guard_penalty: int = 0
+	var crit_bonus: float = 0.0
+	if flank_type == "side":
+		guard_penalty = GameConfig.get_int("combat", "side_flank_guard_penalty", 20)
+		crit_bonus = GameConfig.get_float("combat", "side_flank_crit_bonus", 0.20)
+	elif flank_type == "rear":
+		guard_penalty = GameConfig.get_int("combat", "rear_flank_guard_penalty", 50)
+		crit_bonus = GameConfig.get_float("combat", "rear_flank_crit_bonus", 0.50)
+
+	# Cover (Stage 5 D2's Approved values table): a missile-only Guard bonus
+	# for the defender's tile, applied only against a front-facing attack --
+	# flanking (side/rear) bypasses it entirely per the decision ledger's own
+	# Counterplay note, so it is never added alongside a flank guard_penalty.
+	var cover_tile: String = grid.get_cover(defender.grid_position)
+	var cover_applied: bool = not is_melee_attack and flank_type == "front" and cover_tile != GridScript.COVER_NONE
+	var cover_bonus: int = _cover_missile_guard_bonus(defender.grid_position) if cover_applied else 0
+	# Off-balance (Stage 5 D2, extended by Stage 5 D4's Shield Bash): a
+	# defender who whiffed against a Dodge/Parry on their own last attack, OR
+	# who was Shield-Bashed, loses Guard for the whole of their current
+	# marked turn -- see Unit.gd's own doc comment and end_turn()'s
+	# _advance_reaction_timers(), which is the sole place off_balance_active
+	# is ever set or cleared.
+	var off_balance_penalty: int = (
+		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if defender.off_balance_active else 0
+	)
+
+	var effective_defense: int = maxi(0, defender.defense - guard_penalty - off_balance_penalty + cover_bonus)
+	var effective_hit_chance: float = clampf(
+		attacker.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+	)
+	# Bless (see try_cast_spell()): +10 percentage points to the attacker's
+	# already-computed final hit chance, composed on top of every other
+	# modifier above and still re-clamped to the same cap/floor rather than
+	# bypassing them.
+	if has_status(attacker, BLESSED_STATUS_ID):
+		effective_hit_chance = clampf(
+			effective_hit_chance + BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
+	# Parry's counter-bonus (Stage 5 D2): +10% melee to-hit for the attacker
+	# ONLY against the same defender who parried them last time, only during
+	# the attacker's own marked turn -- see Unit.gd's counter_bonus_active_
+	# against doc comment.
+	if attacker.counter_bonus_active_against == defender:
+		effective_hit_chance = clampf(
+			effective_hit_chance + GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10),
+			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
+	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
+	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
+
+	return {
+		"flank_type": flank_type,
+		"cover_tile": cover_tile,
+		"cover_applied": cover_applied,
+		"effective_defense": effective_defense,
+		"effective_hit_chance": effective_hit_chance,
+		"effective_crit_chance": effective_crit_chance,
+	}
+
+
 ## Deterministic outcome label for logs/UI (Stage 5 D2 task 5's accessibility
 ## requirement: outcomes must be distinguishable by text/icon, not colour
 ## alone). Mutually exclusive: "critical"/"hit" on a landed blow, "dodged"/
@@ -983,6 +1082,7 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	mover.set_facing(path[-1] - path[-2])
 	last_attack_result = {}
 	last_targeting_failure = {}
+	last_chain_blow_result = {}
 	_refresh_battlefield_memory()
 	return true
 
@@ -993,6 +1093,34 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 ## attack (any return false past the early guards) leaves the attacker's
 ## position, AP, last_attack_result, and the target's health untouched.
 func try_attack_selected_unit(target_pos: Vector2i) -> bool:
+	return _execute_direct_attack(target_pos, false)
+
+
+## Stage 5 D4's Shield Bash perk: identical action to a plain attack (same AP
+## cost, same to-hit/damage resolution, same move-and-attack fallback --
+## reuses _execute_direct_attack() with is_shield_bash=true) except a landed
+## hit ALSO applies the exact same off-balance status Dodge/Parry already
+## apply (see _execute_direct_attack()'s own doc comment on the reuse).
+## Rejects outright (no AP spent, no state touched) for a unit that does not
+## own the knight_shield_bash perk -- mirrors try_cast_spell()'s own
+## adventurer_knows_spell()-style gate, just read from Unit.perks instead.
+func try_shield_bash_selected_unit(target_pos: Vector2i) -> bool:
+	if selected_unit == null or not _unit_has_perk(selected_unit, GameSession.KNIGHT_SHIELD_BASH_PERK_ID):
+		return false
+	return _execute_direct_attack(target_pos, true)
+
+
+## Shared body for try_attack_selected_unit()/try_shield_bash_selected_unit()
+## (Stage 5 D4): only is_shield_bash differs between the two callers, gating
+## (a) whether a landed hit also off-balances the defender and (b) nothing
+## else -- AP cost, targeting, move-and-attack fallback, and the to-hit/
+## damage formula are identical on purpose (Shield Bash is a normal melee
+## attack with a bonus effect on hit, not a separate action economy). Chain
+## Blow (also Stage 5 D4) is independent of is_shield_bash: it triggers off
+## ANY landed melee attack from either entry point, at most once per Round
+## per attacker (see Unit.chain_blow_used_this_round, cleared in
+## _clear_expired_statuses()).
+func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
 		return false
 	var target = get_unit_at(target_pos)
@@ -1020,6 +1148,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 
 	last_targeting_failure = {}
 	last_reaction_results = []
+	last_chain_blow_result = {}
 	if move_tile != null:
 		var move_range: int = selected_unit.action_points_remaining / MOVE_ACTION_POINT_COST
 		var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
@@ -1048,68 +1177,31 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
 
-	# Flanking geometry (docs/plans/2026-08-18-critical-hits-and-flanking/
-	# 03-flanking-tactics-and-combat-resolution.md): a side or rear flank
-	# reduces the defender's effective Guard (raising hit chance) and adds to
-	# the base critical chance Step 2 introduced. Read against the defender's
-	# facing and both units' now-final positions, so a move-and-attack that
-	# repositioned the attacker above is already reflected here.
-	var flank_type: String = get_flank_type(selected_unit.grid_position, target.grid_position, target.facing)
-	var guard_penalty: int = 0
-	var crit_bonus: float = 0.0
-	if flank_type == "side":
-		guard_penalty = GameConfig.get_int("combat", "side_flank_guard_penalty", 20)
-		crit_bonus = GameConfig.get_float("combat", "side_flank_crit_bonus", 0.20)
-	elif flank_type == "rear":
-		guard_penalty = GameConfig.get_int("combat", "rear_flank_guard_penalty", 50)
-		crit_bonus = GameConfig.get_float("combat", "rear_flank_crit_bonus", 0.50)
-
-	# Cover (Stage 5 D2's Approved values table): a missile-only Guard bonus
-	# for the defender's tile, applied only against a front-facing attack --
-	# flanking (side/rear) bypasses it entirely per the decision ledger's own
-	# Counterplay note, so it is never added alongside a flank guard_penalty.
 	var is_melee_attack: bool = selected_unit.attack_max_range == 1
-	var cover_tile: String = grid.get_cover(target.grid_position)
-	var cover_applied: bool = not is_melee_attack and flank_type == "front" and cover_tile != GridScript.COVER_NONE
-	var cover_bonus: int = _cover_missile_guard_bonus(target.grid_position) if cover_applied else 0
-	# Off-balance (Stage 5 D2): a defender who whiffed against a Dodge/Parry
-	# on their own last attack loses Guard for the whole of their current
-	# marked turn -- see Unit.gd's own doc comment and end_turn()'s
-	# _advance_reaction_timers(), which is the sole place off_balance_active
-	# is ever set or cleared.
-	var off_balance_penalty: int = (
-		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if target.off_balance_active else 0
-	)
-
-	var effective_defense: int = maxi(0, target.defense - guard_penalty - off_balance_penalty + cover_bonus)
-	var effective_hit_chance: float = clampf(
-		selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
-	)
-	# Bless (see try_cast_spell()): +10 percentage points to the attacker's
-	# already-computed final hit chance, composed on top of every other
-	# modifier above and still re-clamped to the same cap/floor rather than
-	# bypassing them.
-	if has_status(selected_unit, BLESSED_STATUS_ID):
-		effective_hit_chance = clampf(
-			effective_hit_chance + BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
-		)
-	# Parry's counter-bonus (Stage 5 D2): +10% melee to-hit for the attacker
-	# ONLY against the same defender who parried them last time, only during
-	# the attacker's own marked turn -- see Unit.gd's counter_bonus_active_
-	# against doc comment.
-	if selected_unit.counter_bonus_active_against == target:
-		effective_hit_chance = clampf(
-			effective_hit_chance + GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10),
-			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
-		)
-	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
-	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
+	var chances := _compute_effective_attack_chances(selected_unit, target, is_melee_attack)
+	var flank_type: String = chances.flank_type
+	var cover_tile: String = chances.cover_tile
+	var cover_applied: bool = chances.cover_applied
+	var effective_defense: int = chances.effective_defense
+	var effective_hit_chance: float = chances.effective_hit_chance
+	var effective_crit_chance: float = chances.effective_crit_chance
 
 	var core := _resolve_attack_core(selected_unit, target, effective_hit_chance, effective_crit_chance, is_melee_attack)
 	_apply_evasion_reactions(selected_unit, target, core.dodged, core.parried)
 	var hit: bool = core.hit
 	var is_critical: bool = core.critical
 	var damage: int = core.damage
+
+	# Shield Bash (Stage 5 D4): on a landed hit ONLY (never a miss/dodge/
+	# parry), also off-balances the defender for the whole of ITS own next
+	# turn -- the exact same off_balance_pending/off_balance_active state
+	# machine Dodge/Parry already drive (see _apply_evasion_reactions()'s own
+	# doc comment), just set on the DEFENDER here instead of the attacker.
+	# Reuses the mechanism byte-for-byte: no new status id, no new magnitude.
+	var off_balance_applied: bool = false
+	if hit and is_shield_bash:
+		target.off_balance_pending = true
+		off_balance_applied = true
 
 	if hit:
 		if is_critical:
@@ -1126,6 +1218,10 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.parry"), FloatingTextScript.TYPE_PARRY)
 	else:
 		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
+	if off_balance_applied:
+		_spawn_combat_text(
+			_floating_text_anchor(target), tr("battle.floating.off_balance"), FloatingTextScript.TYPE_OFF_BALANCE
+		)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
 		AudioManager.play_sfx("sfx_unit_death")
@@ -1158,6 +1254,8 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"cover_applied": cover_applied,
 		"outcome": _outcome_for(core),
 		"is_reaction": false,
+		"shield_bash": is_shield_bash,
+		"off_balance_applied": off_balance_applied,
 	}
 	if hit:
 		if _dispatch_completed_hit(selected_unit, target):
@@ -1165,8 +1263,117 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		completed_hit.emit(last_attack_result)
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit(target)
+
+	# Chain Blow (Stage 5 D4): triggers off ANY landed melee attack from this
+	# same action (a plain Attack or a Shield Bash both count -- is_shield_
+	# bash plays no role here), at most once per Round per attacker. Must run
+	# after the primary strike's own bookkeeping above so a defeated primary
+	# target is already erased from `units` before the second-target search
+	# below (which reads `units`) runs.
+	if hit and is_melee_attack and _unit_has_perk(selected_unit, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID):
+		if not selected_unit.chain_blow_used_this_round:
+			var second_target = _find_chain_blow_second_target(selected_unit, target)
+			if second_target != null:
+				selected_unit.chain_blow_used_this_round = true
+				last_chain_blow_result = _resolve_chain_blow_strike(selected_unit, second_target, is_melee_attack)
+
 	_refresh_battlefield_memory()
 	return true
+
+
+## Stage 5 D4's Chain Blow perk: the second, bonus target -- the first living
+## enemy of `attacker` (any unit not on attacker's own side, per this file's
+## existing two-side model) other than `primary_target` itself that is melee-
+## adjacent (Grid.is_attack_adjacent(), the same 8-directional check Attacks
+## of Opportunity use) to attacker's OWN position, scanned in `units`' own
+## stable build order for deterministic, byte-identical replay under a fixed
+## seed. Adjacent to the ATTACKER (a cleave at the swing's origin), not to
+## primary_target -- the design doc's "also strikes one additional adjacent
+## enemy" reads naturally as "another enemy your swing can also reach", not
+## an enemy standing next to the enemy you just hit. Returns null if none
+## qualifies (e.g. a solitary enemy, or every other enemy already dead).
+func _find_chain_blow_second_target(attacker, primary_target):
+	for candidate in units:
+		if candidate == primary_target or candidate.side == attacker.side or not candidate.is_alive():
+			continue
+		if grid.is_attack_adjacent(attacker.grid_position, candidate.grid_position):
+			return candidate
+	return null
+
+
+## Resolves Chain Blow's bonus second strike (Stage 5 D4): reuses the exact
+## same to-hit/damage formula the primary attack just used --
+## _compute_effective_attack_chances() then _resolve_attack_core(), called a
+## second time against `second_target` (its own Guard/flank/cover/off-balance
+## read fresh, since it is a different defender than the primary target) --
+## rather than reusing the primary target's own numeric chances. No AP cost
+## (Chain Blow is free), no move (the second target must already be
+## attacker-adjacent to have been found at all). Feeds the same downstream
+## bookkeeping (Thorn rune dispatch, kill XP, defeat cleanup, floating text)
+## as a primary strike so a Chain Blow kill is never XP- or rune-invisible.
+func _resolve_chain_blow_strike(attacker, second_target, is_melee_attack: bool) -> Dictionary:
+	var chances := _compute_effective_attack_chances(attacker, second_target, is_melee_attack)
+	var core := _resolve_attack_core(
+		attacker, second_target, chances.effective_hit_chance, chances.effective_crit_chance, is_melee_attack
+	)
+	_apply_evasion_reactions(attacker, second_target, core.dodged, core.parried)
+
+	# Marked distinctly from an ordinary attack's own hit/miss/dodge/parry
+	# text (spawned unconditionally, whatever this strike's own outcome is)
+	# so this second strike never reads as an unexplained duplicate hit --
+	# never colour-only feedback (Stage 4's accessibility carryover).
+	_spawn_combat_text(_floating_text_anchor(second_target), tr("battle.floating.chain_blow"), FloatingTextScript.TYPE_CHAIN_BLOW)
+
+	if core.hit:
+		if core.critical:
+			_spawn_combat_text(
+				_floating_text_anchor(second_target), tr("battle.floating.critical") % core.damage, FloatingTextScript.TYPE_CRITICAL
+			)
+		else:
+			_spawn_combat_text(
+				_floating_text_anchor(second_target), tr("battle.floating.damage") % core.damage, FloatingTextScript.TYPE_DAMAGE
+			)
+	elif core.dodged:
+		_spawn_combat_text(_floating_text_anchor(second_target), tr("battle.floating.dodge"), FloatingTextScript.TYPE_DODGE)
+	elif core.parried:
+		_spawn_combat_text(_floating_text_anchor(second_target), tr("battle.floating.parry"), FloatingTextScript.TYPE_PARRY)
+	else:
+		_spawn_combat_text(_floating_text_anchor(second_target), tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
+
+	var defeated: bool = core.hit and not second_target.is_alive()
+	if defeated:
+		AudioManager.play_sfx("sfx_unit_death")
+		units.erase(second_target)
+		if second_target.side == Side.PLAYER and second_target.adventurer_id != "":
+			defeated_player_health_by_id[second_target.adventurer_id] = second_target.health
+
+	var result := {
+		"type": "attack",
+		"attacker": attacker,
+		"defender": second_target,
+		"hit": core.hit,
+		"damage": core.damage,
+		"critical": core.critical,
+		"defeated": defeated,
+		"flank": chances.flank_type,
+		"effective_defense": chances.effective_defense,
+		"effective_hit_chance": chances.effective_hit_chance,
+		"effective_crit_chance": chances.effective_crit_chance,
+		"dodged": core.dodged,
+		"parried": core.parried,
+		"cover_tile": chances.cover_tile,
+		"cover_applied": chances.cover_applied,
+		"outcome": _outcome_for(core),
+		"is_reaction": false,
+		"is_chain_blow": true,
+	}
+	if core.hit:
+		if _dispatch_completed_hit(attacker, second_target):
+			result["thorn_triggered"] = true
+		completed_hit.emit(result)
+	if defeated and second_target.side == Side.ENEMY:
+		enemy_defeated.emit(second_target)
+	return result
 
 
 ## --- Attacks of Opportunity (Stage 5 D2) -------------------------------------
@@ -1592,6 +1799,7 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 	_apply_move_along_path(selected_unit, [selected_unit.grid_position, target])
 	last_attack_result = {}
 	last_targeting_failure = {}
+	last_chain_blow_result = {}
 	_refresh_battlefield_memory()
 	return true
 
@@ -1769,6 +1977,17 @@ func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
 	return grid.has_line_of_sight(from_pos, target.grid_position, blocking_tiles)
 
 
+## Stage 5 D4 (Knight specialization): true iff `unit` carries perk_id among
+## its own hydrated perks (see Unit.perks' own doc comment -- populated from
+## GameSession.get_adventurer(...).progression.perks in _ready(), or from a
+## scenario's explicit "perks" field in BattleStateFactory._build_player_
+## unit()). Gates Shield Bash/Chain Blow the same way is_caster/knows_*
+## already gate spellcasting in Battlefield._update_action_bar(), just read
+## here instead since these two abilities are melee actions, not spells.
+func _unit_has_perk(unit, perk_id: String) -> bool:
+	return unit != null and (unit.perks as Array).has(perk_id)
+
+
 func apply_status(unit, status_id: String) -> bool:
 	if unit == null or status_id.is_empty() or has_status(unit, status_id):
 		return false
@@ -1798,6 +2017,10 @@ func _clear_expired_statuses() -> void:
 	for unit in units:
 		unit.statuses.erase(PARALYZED_STATUS_ID)
 		unit.statuses.erase(SLEEPING_STATUS_ID)
+		# Chain Blow (Stage 5 D4): resets at the exact same Round boundary as
+		# every other round-scoped state cleared in this loop, so it triggers
+		# at most once per Round per Knight, however many attacks they make.
+		unit.chain_blow_used_this_round = false
 
 
 ## Returns true iff the Thorn rune actually triggered (and paralyzed
@@ -1924,6 +2147,17 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			board_changed.emit()
 			return
 
+		# Stage 5 D4: SHIELD_BASH mode is attack-only, exactly like ATTACK mode
+		# below, but dispatches to try_shield_bash_selected_unit() instead.
+		if action_mode == ActionMode.SHIELD_BASH:
+			if selected_unit != null and try_shield_bash_selected_unit(tile_pos):
+				_draw_units()
+				_select_unit_after_action()
+				return
+			_set_inspected_unit(clicked_unit)
+			board_changed.emit()
+			return
+
 		# CONTEXTUAL and ATTACK modes both attempt direct/auto move-and-attack
 		# on an enemy click.
 		if selected_unit != null and try_attack_selected_unit(tile_pos):
@@ -1937,9 +2171,10 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		board_changed.emit()
 		return
 
-	if action_mode == ActionMode.ATTACK:
-		# ATTACK mode never moves -- an empty-tile click is a no-op that
-		# reports attack-mode feedback (Action Mode State Machine, index.md).
+	if action_mode == ActionMode.ATTACK or action_mode == ActionMode.SHIELD_BASH:
+		# ATTACK/SHIELD_BASH mode never moves -- an empty-tile click is a
+		# no-op that reports attack-mode feedback (Action Mode State Machine,
+		# index.md), same reason as ATTACK's own case above.
 		last_targeting_failure = {"reason": "attack_mode_no_target"}
 		board_changed.emit()
 		return

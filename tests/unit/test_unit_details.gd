@@ -336,6 +336,82 @@ func test_perks_label_shows_a_legacy_bonus_move_perk_with_its_effect() -> void:
 	)
 
 
+## --- Knight specialization promotion (Stage 5 D4) ---------------------------
+
+func test_no_promote_button_shows_before_both_root_perks_are_chosen() -> void:
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_false(container.visible)
+	assert_eq(container.get_child_count(), 0)
+
+
+## The decision-contract shape task 1 of the step file asks for, at the UI
+## layer: promotion is unavailable (no button) until both root perks are
+## chosen, becomes available (a button appears) once they are, and pressing
+## it actually promotes through GameSession.promote_adventurer() -- never
+## deciding eligibility itself (this screen re-reads GameSession.get_
+## available_specializations() fresh every refresh(), same as every other
+## section on this screen).
+func test_promote_button_appears_once_eligible_and_promotes_on_press() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)  # level 6
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_true(container.visible)
+	assert_eq(container.get_child_count(), 1)
+	var button: Button = container.get_node("PromoteButton_knight")
+	assert_eq(button.text, tr("unit_details.promote_button") % tr("class.knight"))
+
+	button.pressed.emit()
+
+	assert_eq(GameSession.get_adventurer_specialization(GameSession.WARRIOR_ID), "knight")
+	assert_false(container.visible, "Already promoted -- the button disappears on refresh")
+	assert_eq(container.get_child_count(), 0)
+
+
+func test_class_label_shows_the_specialization_once_promoted() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/ClassLabel").text,
+		tr("information.class") % (tr("unit_details.class_specialized") % [tr("class.warrior"), tr("class.knight")])
+	)
+
+
+## Knight's own two perks (Shield Bash/Chain Blow) render through the exact
+## same generic Perks list every other class's perks already use -- no
+## unit_details.gd code change was needed for this once GameSession's own
+## get_available_perks()/choose_perk() were extended to include a promoted
+## adventurer's specialization perks (see PerksLabel's existing rendering).
+func test_perks_label_shows_a_chosen_knight_perk_with_its_effect() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	assert_string_contains(
+		screen.get_node("Body/Center/VBox/PerksLabel").text,
+		"* %s (%s)" % [
+			tr("perk.knight_shield_bash.name"),
+			tr("perk.knight_shield_bash.effect") % GameSession.OFF_BALANCE_GUARD_PENALTY,
+		]
+	)
+
 
 ## --- Durable MP row and "Heal party member" (docs/plans/2026-08-21-
 ## stage-2-party-readiness/03-persistent-mp-temple-and-details-healing.md) ---

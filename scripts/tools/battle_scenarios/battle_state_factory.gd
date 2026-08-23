@@ -255,6 +255,12 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	unit.melee = melee
 	unit.missile = missile
 	unit.guard = defense
+	# Stage 5 D4: mirrors BattleController._ready()'s own perks hydration --
+	# this scenario's own explicit "perks" field (never ambient GameSession
+	# state, see this function's own doc comment above) is the sole source
+	# for whether a scenario-built Knight can Shield Bash/Chain Blow (see
+	# BattleController._unit_has_perk()).
+	unit.perks = perks.duplicate()
 	# spellcasting only grows for a class whose skills_def actually owns it
 	# (Cleric today) -- mirrors missile_min_gain/melee_min_gain's pattern
 	# above, but guarded so a class with no spellcasting skill (Warrior/

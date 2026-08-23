@@ -518,6 +518,127 @@ func test_same_seed_sleep_scenario_reproduces_identical_outcomes() -> void:
 	)
 
 
+## --- Deterministic Knight scenarios (Stage 5 D4 task 5) --------------------
+## Proves Shield Bash's off-balance application and Chain Blow's bonus second
+## strike both replay byte-identically for a fixed seed, built entirely
+## through the production ScenarioContract/BattleStateFactory path. The
+## favorable scenario clusters two Kobolds adjacent to the Knight (mirrors
+## the real ruined_fortress encounter's own clustered Kobold swarm, see
+## EXPEDITIONS.ruined_fortress) so Chain Blow has a second target to strike;
+## the countered scenario fields a single, solitary Kobold (mirrors the real
+## goblin_camp encounter's own solitary enemy, see EXPEDITIONS.goblin_camp)
+## so Chain Blow -- present on the Knight either way -- never finds one.
+## Kobold's 0 Guard/25 melee keeps both to-hit rolls favorable without
+## inventing new stats.
+
+func _knight_vs_clustered_kobolds_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "knight_shield_bash_and_chain_blow_favorable",
+		"player": {
+			"units": [
+				{
+					"id": "knight", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 6,
+					"specialization": "knight",
+					"perks": [
+						GameSession.WARRIOR_JUGGERNAUT_PERK_ID, GameSession.WARRIOR_BULWARK_PERK_ID,
+						GameSession.KNIGHT_SHIELD_BASH_PERK_ID, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID,
+					],
+				},
+			],
+		},
+		"enemy": {"units": [
+			{"id": "kobold_primary", "template_id": "kobold", "position": {"x": 1, "y": 0}},
+			{"id": "kobold_second", "template_id": "kobold", "position": {"x": 1, "y": 1}},
+		]},
+	})
+
+
+func _knight_vs_solitary_kobold_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "knight_chain_blow_countered_by_a_solitary_enemy",
+		"player": {
+			"units": [
+				{
+					"id": "knight", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 6,
+					"specialization": "knight",
+					"perks": [
+						GameSession.WARRIOR_JUGGERNAUT_PERK_ID, GameSession.WARRIOR_BULWARK_PERK_ID,
+						GameSession.KNIGHT_SHIELD_BASH_PERK_ID, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID,
+					],
+				},
+			],
+		},
+		"enemy": {"units": [
+			{"id": "kobold_solo", "template_id": "kobold", "position": {"x": 1, "y": 0}},
+		]},
+	})
+
+
+func test_seeded_shield_bash_lands_and_chain_blow_strikes_the_adjacent_kobold_on_seed_1() -> void:
+	var controller: Node2D = BattleStateFactory.build(_knight_vs_clustered_kobolds_scenario(), 1)
+	autofree(controller)
+	var knight = controller.get_unit_at(Vector2i(0, 0))
+	var primary = controller.get_unit_at(Vector2i(1, 0))
+	var second = controller.get_unit_at(Vector2i(1, 1))
+	controller.selected_unit = knight
+
+	assert_true(controller.try_shield_bash_selected_unit(primary.grid_position))
+
+	assert_true(controller.last_attack_result.hit, "Seed 1's roll lands the primary Shield Bash hit")
+	assert_true(primary.off_balance_pending, "A landed Shield Bash hit must off-balance the primary target")
+	assert_false(controller.last_chain_blow_result.is_empty(), "Chain Blow must find the adjacent second Kobold")
+	assert_eq(controller.last_chain_blow_result.defender, second)
+	assert_true(controller.last_chain_blow_result.hit, "Seed 1's roll also lands the Chain Blow strike")
+	assert_true(knight.chain_blow_used_this_round)
+
+
+## Regression: a same-seed factory build must reproduce identical outcomes
+## for both Shield Bash's off-balance application and Chain Blow's bonus
+## strike -- CampaignSim's own "100% reproducible from sim_seed alone"
+## contract, extended to Stage 5 D4's two new stochastic checks.
+func test_same_seed_knight_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_knight_vs_clustered_kobolds_scenario(), 1)
+	var controller_b: Node2D = BattleStateFactory.build(_knight_vs_clustered_kobolds_scenario(), 1)
+	autofree(controller_a)
+	autofree(controller_b)
+	controller_a.selected_unit = controller_a.get_unit_at(Vector2i(0, 0))
+	controller_b.selected_unit = controller_b.get_unit_at(Vector2i(0, 0))
+
+	controller_a.try_shield_bash_selected_unit(Vector2i(1, 0))
+	controller_b.try_shield_bash_selected_unit(Vector2i(1, 0))
+
+	assert_eq(controller_a.last_attack_result.hit, controller_b.last_attack_result.hit)
+	assert_eq(controller_a.last_chain_blow_result.hit, controller_b.last_chain_blow_result.hit)
+	assert_eq(controller_a.last_chain_blow_result.damage, controller_b.last_chain_blow_result.damage)
+
+
+## The countered case: Chain Blow is present on the Knight but a solitary
+## enemy composition denies it a second target -- Shield Bash still applies
+## normally (the counter is specific to Chain Blow's adjacency requirement,
+## not Shield Bash), demonstrating why a party facing scattered/solitary
+## enemies gets less value from Chain Blow than from a composition that
+## clusters enemies together.
+func test_seeded_chain_blow_finds_no_second_target_against_a_solitary_kobold_on_seed_1() -> void:
+	var controller: Node2D = BattleStateFactory.build(_knight_vs_solitary_kobold_scenario(), 1)
+	autofree(controller)
+	var knight = controller.get_unit_at(Vector2i(0, 0))
+	var solo = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = knight
+
+	assert_true(controller.try_shield_bash_selected_unit(solo.grid_position))
+
+	assert_true(controller.last_attack_result.hit, "Seed 1's roll still lands the primary Shield Bash hit")
+	assert_true(solo.off_balance_pending, "Shield Bash's off-balance is unaffected by Chain Blow's own counter")
+	assert_true(
+		controller.last_chain_blow_result.is_empty(),
+		"A solitary enemy composition denies Chain Blow a second target even though the Knight owns the perk"
+	)
+	assert_false(
+		knight.chain_blow_used_this_round,
+		"Chain Blow's once-per-round flag is only spent when it actually finds a second target"
+	)
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)
@@ -599,6 +720,31 @@ func test_build_applies_warrior_bulwarks_flat_guard_bonus() -> void:
 		"warrior_bulwark must add its configured flat Guard bonus on top of armor defense"
 	)
 	assert_eq(hero.guard, hero.defense, "The shared tactical Guard field must track the perk-inclusive defense exactly")
+
+
+## Stage 5 D4: Unit.perks is what gates Shield Bash/Chain Blow in
+## BattleController (see its own _unit_has_perk()) -- mirrors mp_current's/
+## perks-bonus' own "explicit scenario field, never ambient GameSession
+## state" precedent immediately above.
+func test_build_hydrates_a_units_perks_list_including_specialization_perks() -> void:
+	var scenario := _normalized({
+		"scenario_id": "knight_perks_hydration",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "specialization": "knight",
+					"perks": [GameSession.WARRIOR_BULWARK_PERK_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID],
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(hero.perks, [GameSession.WARRIOR_BULWARK_PERK_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID])
 
 
 func test_build_applies_scout_quickdraws_flat_action_point_bonus() -> void:
