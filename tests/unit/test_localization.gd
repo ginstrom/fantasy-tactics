@@ -324,6 +324,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("guild_hall.upgrade") % 50, "Upgrade to Level 2 — 50 gold")
 	assert_eq(tr("guild_hall.max_level"), "Max Level")
 	assert_eq(tr("campaign.objective.label"), "Active Objective:")
+	assert_eq(tr("campaign.objective.next_label") % "Clear the Kobold Warren", "Next: Clear the Kobold Warren")
+	assert_eq(tr("campaign.objective.final_label"), "This is the final objective.")
 	assert_eq(tr("campaign.victory.goal_label"), "Campaign Goal: Defeat the Borderlands Ogre")
 	assert_eq(tr("campaign.obj.tier1_1.title"), "Scout the Perimeter")
 	assert_eq(tr("campaign.obj.tier1_1.desc"), "Form a party and clear the Goblin Outpost.")

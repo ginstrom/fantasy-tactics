@@ -36,6 +36,11 @@ show_percentage = false
 layout_mode = 2
 text = "campaign.victory.goal_label"
 
+[node name="NextObjectiveLabel" type="Label" parent="Content"]
+layout_mode = 2
+text = "campaign.objective.next_label"
+autowrap_mode = 2
+
 [node name="FreePlayLabel" type="Label" parent="Content"]
 layout_mode = 2
 text = "campaign.free_play.active_label"

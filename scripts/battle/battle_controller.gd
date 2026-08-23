@@ -52,6 +52,13 @@ const GRID_HEIGHT := 6
 const TILE_SIZE := 64
 
 const SELECTION_RING_COLOR := Color(1, 1, 1, 0.6)
+## On-tile cue for hovered_unit (see _set_hovered_unit()/_update_highlights()) --
+## a cyan hue distinct from SELECTION_RING_COLOR's white so a unit that is
+## simultaneously hovered and selected, or hovered while a *different* unit
+## is selected, still reads as two separate cues (D9 presentation-standard
+## gap fix, docs/designs/campaign-loop.md). Purely presentational: never read
+## by selection, targeting, or click-geometry logic.
+const HOVER_RING_COLOR := Color(0.2, 0.9, 1.0, 0.75)
 ## Move-and-attack (green) tier: reachable tiles that still leave enough AP
 ## for a basic attack after moving there. Supersedes the old single-tier
 ## LEGAL_MOVE_COLOR fill (see get_move_and_attack_tiles()).
@@ -458,6 +465,7 @@ func _set_hovered_unit(unit) -> void:
 	if unit == hovered_unit:
 		return
 	hovered_unit = unit
+	_update_highlights()
 	_emit_focus_changed()
 
 
@@ -1634,60 +1642,72 @@ func _update_highlights() -> void:
 	for child in highlight_container.get_children():
 		child.queue_free()
 
-	if selected_unit == null:
-		return
+	if selected_unit != null:
+		var ring_margin := TILE_SIZE * 0.05
+		var ring := ColorRect.new()
+		ring.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(ring_margin, ring_margin) * 2
+		ring.position = Vector2(selected_unit.grid_position) * TILE_SIZE + Vector2(ring_margin, ring_margin)
+		ring.color = SELECTION_RING_COLOR
+		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		highlight_container.add_child(ring)
 
-	var ring_margin := TILE_SIZE * 0.05
-	var ring := ColorRect.new()
-	ring.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(ring_margin, ring_margin) * 2
-	ring.position = Vector2(selected_unit.grid_position) * TILE_SIZE + Vector2(ring_margin, ring_margin)
-	ring.color = SELECTION_RING_COLOR
-	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	highlight_container.add_child(ring)
+		# Two-tier movement fill: green (move-and-attack) and yellow (dash) partition
+		# get_legal_moves() exactly, and neither ever contains the origin (see
+		# get_move_and_attack_tiles()/get_dash_tiles()).
+		var move_and_attack_tiles := get_move_and_attack_tiles(selected_unit)
+		for move in move_and_attack_tiles:
+			_add_highlight(move, LEGAL_MOVE_AND_ATTACK_COLOR)
 
-	# Two-tier movement fill: green (move-and-attack) and yellow (dash) partition
-	# get_legal_moves() exactly, and neither ever contains the origin (see
-	# get_move_and_attack_tiles()/get_dash_tiles()).
-	var move_and_attack_tiles := get_move_and_attack_tiles(selected_unit)
-	for move in move_and_attack_tiles:
-		_add_highlight(move, LEGAL_MOVE_AND_ATTACK_COLOR)
+		var dash_tiles := get_dash_tiles(selected_unit)
+		for move in dash_tiles:
+			_add_highlight(move, DASH_MOVE_COLOR)
 
-	var dash_tiles := get_dash_tiles(selected_unit)
-	for move in dash_tiles:
-		_add_highlight(move, DASH_MOVE_COLOR)
+		var legal_moves := get_legal_moves(selected_unit)
 
-	var legal_moves := get_legal_moves(selected_unit)
+		if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not has_status(selected_unit, PARALYZED_STATUS_ID):
+			var attackable_tiles := get_attackable_tiles_for_unit(selected_unit)
+			var legal_targets := get_legal_attack_targets(selected_unit)
+			var target_positions: Array[Vector2i] = []
+			for target in legal_targets:
+				target_positions.append(target.grid_position)
 
-	if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not has_status(selected_unit, PARALYZED_STATUS_ID):
-		var attackable_tiles := get_attackable_tiles_for_unit(selected_unit)
-		var legal_targets := get_legal_attack_targets(selected_unit)
-		var target_positions: Array[Vector2i] = []
-		for target in legal_targets:
-			target_positions.append(target.grid_position)
+			# Red direct targets and the attack-range fill render after the
+			# movement fills so they stay visible on top of them.
+			for tile in attackable_tiles:
+				if tile == selected_unit.grid_position:
+					continue
+				var occupant = get_unit_at(tile)
+				if occupant != null and occupant.side == selected_unit.side:
+					continue
+				if target_positions.has(tile):
+					_add_highlight(tile, TARGET_ATTACK_COLOR)
+				elif not legal_moves.has(tile):
+					_add_highlight(tile, ATTACK_RANGE_COLOR)
 
-		# Red direct targets and the attack-range fill render after the
-		# movement fills so they stay visible on top of them.
-		for tile in attackable_tiles:
-			if tile == selected_unit.grid_position:
-				continue
-			var occupant = get_unit_at(tile)
-			if occupant != null and occupant.side == selected_unit.side:
-				continue
-			if target_positions.has(tile):
-				_add_highlight(tile, TARGET_ATTACK_COLOR)
-			elif not legal_moves.has(tile):
-				_add_highlight(tile, ATTACK_RANGE_COLOR)
+			# Orange indirect targets: enemies not directly attackable from the
+			# current position, but attackable after moving to a green
+			# move-and-attack tile first. Rendered last so it stays visible on
+			# top of the movement fills and the plain attack-range fill.
+			for target in units:
+				if target.side == selected_unit.side or not target.is_alive():
+					continue
+				if target_positions.has(target.grid_position):
+					continue
+				for candidate in move_and_attack_tiles:
+					if _can_attack_target_from(selected_unit, candidate, target):
+						_add_highlight(target.grid_position, MOVE_AND_ATTACK_TARGET_COLOR)
+						break
 
-		# Orange indirect targets: enemies not directly attackable from the
-		# current position, but attackable after moving to a green
-		# move-and-attack tile first. Rendered last so it stays visible on
-		# top of the movement fills and the plain attack-range fill.
-		for target in units:
-			if target.side == selected_unit.side or not target.is_alive():
-				continue
-			if target_positions.has(target.grid_position):
-				continue
-			for candidate in move_and_attack_tiles:
-				if _can_attack_target_from(selected_unit, candidate, target):
-					_add_highlight(target.grid_position, MOVE_AND_ATTACK_TARGET_COLOR)
-					break
+	# Hover ring: rendered independently of selected_unit (so it still shows,
+	# e.g., between the enemy turn clearing selected_unit and the player's
+	# next selection) and last, so it stays visible on top of every other
+	# highlight_container fill even when the hovered tile is also a legal-move
+	# or attack-target tile.
+	if hovered_unit != null and hovered_unit.is_alive():
+		var hover_margin := TILE_SIZE * 0.05
+		var hover_ring := ColorRect.new()
+		hover_ring.size = Vector2(TILE_SIZE, TILE_SIZE) - Vector2(hover_margin, hover_margin) * 2
+		hover_ring.position = Vector2(hovered_unit.grid_position) * TILE_SIZE + Vector2(hover_margin, hover_margin)
+		hover_ring.color = HOVER_RING_COLOR
+		hover_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		highlight_container.add_child(hover_ring)

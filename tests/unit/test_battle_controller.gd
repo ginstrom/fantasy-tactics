@@ -2393,6 +2393,124 @@ func test_hovering_empty_ground_clears_hovered_unit() -> void:
 	assert_null(controller.hovered_unit)
 
 
+## D9 presentation-standard gap fix (docs/designs/campaign-loop.md): hovering
+## a unit must show an on-tile cue distinct from the selection ring
+## (SELECTION_RING_COLOR), since a unit can be hovered while a *different*
+## unit stays selected. Uses the real battlefield.tscn (not _make_controller())
+## so highlight_container is actually populated -- see _update_highlights()'s
+## own is_inside_tree() guard.
+func test_hovering_a_unit_renders_a_hover_ring_distinct_from_the_selection_ring() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	for stale_child in controller.highlight_container.get_children():
+		stale_child.free()
+
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, enemy]
+	controller._select_unit(scout)
+
+	controller._set_hovered_unit(enemy)
+
+	var hover_ring_found := false
+	var selection_ring_found := false
+	for child in controller.highlight_container.get_children():
+		if not (child is ColorRect):
+			continue
+		# Both rings are inset by a small margin (see _update_highlights()), so
+		# recover the tile via floor division rather than expecting an exact
+		# position match against the raw grid_position * TILE_SIZE.
+		var tile := Vector2i(child.position / BattleControllerScript.TILE_SIZE)
+		if tile == Vector2i(2, 2) and child.color == BattleControllerScript.HOVER_RING_COLOR:
+			hover_ring_found = true
+		if child.color == BattleControllerScript.SELECTION_RING_COLOR:
+			selection_ring_found = true
+
+	assert_true(hover_ring_found, "Hovering a unit must render a distinct hover ring on its tile")
+	assert_true(selection_ring_found, "The selection ring for the still-selected unit must remain visible")
+	assert_ne(
+		BattleControllerScript.HOVER_RING_COLOR,
+		BattleControllerScript.SELECTION_RING_COLOR,
+		"Hover ring must be visually distinct from the selection ring"
+	)
+
+
+func test_hover_ring_disappears_when_hover_clears_or_moves_to_another_unit() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	for stale_child in controller.highlight_container.get_children():
+		stale_child.free()
+
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var first_enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	var second_enemy = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, first_enemy, second_enemy]
+	controller._select_unit(scout)
+	controller._set_hovered_unit(first_enemy)
+
+	controller._set_hovered_unit(null)
+
+	var hover_ring_found := false
+	# _update_highlights() queue_free()s the previous highlight batch, which
+	# defers actual removal to end-of-frame -- filter those out rather than
+	# treating their continued presence in get_children() as a live ring
+	# (mirrors the existing "stale_child" precedent above in this file).
+	for child in controller.highlight_container.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		if child is ColorRect and child.color == BattleControllerScript.HOVER_RING_COLOR:
+			hover_ring_found = true
+	assert_false(hover_ring_found, "Hover ring must disappear once hover clears")
+
+	controller._set_hovered_unit(second_enemy)
+
+	var hover_ring_at_first_tile := false
+	var hover_ring_at_second_tile := false
+	for child in controller.highlight_container.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		if not (child is ColorRect and child.color == BattleControllerScript.HOVER_RING_COLOR):
+			continue
+		var tile := Vector2i(child.position / BattleControllerScript.TILE_SIZE)
+		if tile == Vector2i(2, 2):
+			hover_ring_at_first_tile = true
+		if tile == Vector2i(4, 4):
+			hover_ring_at_second_tile = true
+	assert_false(hover_ring_at_first_tile, "Hover ring must not remain on the previously hovered unit's tile")
+	assert_true(hover_ring_at_second_tile, "Hover ring must follow hover to the newly hovered unit's tile")
+
+
+## A defeated unit's death never fires a mouse-motion event, so hovered_unit
+## stays pointed at it (matching unit_info_panel.gd's identical, pre-existing
+## gap). The hover ring itself must still self-clear on the next highlight
+## rebuild rather than staying pinned to the now-empty tile.
+func test_hover_ring_does_not_render_on_a_hovered_unit_that_died() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller = battlefield.grid
+	for stale_child in controller.highlight_container.get_children():
+		stale_child.free()
+
+	var scout = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var enemy = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6)
+	controller.units = [scout, enemy]
+	controller._select_unit(scout)
+	controller._set_hovered_unit(enemy)
+
+	enemy.take_damage(999)
+	controller._update_highlights()
+
+	var hover_ring_found := false
+	for child in controller.highlight_container.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		if child is ColorRect and child.color == BattleControllerScript.HOVER_RING_COLOR:
+			hover_ring_found = true
+	assert_false(hover_ring_found, "Hover ring must not render on a hovered unit's tile once that unit has died")
+
+
 func test_clicking_an_out_of_range_enemy_pins_it_without_attacking() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3)

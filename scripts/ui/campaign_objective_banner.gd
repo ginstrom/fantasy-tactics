@@ -15,6 +15,7 @@ extends PanelContainer
 @onready var desc_label: Label = $Content/DescLabel
 @onready var progress_bar: ProgressBar = $Content/ProgressBar
 @onready var goal_label: Label = $Content/GoalLabel
+@onready var next_objective_label: Label = $Content/NextObjectiveLabel
 @onready var free_play_label: Label = $Content/FreePlayLabel
 
 
@@ -33,6 +34,7 @@ func refresh() -> void:
 	desc_label.visible = not free_play
 	progress_bar.visible = not free_play
 	goal_label.visible = not free_play
+	next_objective_label.visible = not free_play
 	free_play_label.visible = free_play
 
 	if free_play:
@@ -46,3 +48,10 @@ func refresh() -> void:
 	goal_label.text = tr("campaign.victory.goal_label")
 	progress_bar.max_value = GameSession.CAMPAIGN_OBJECTIVES.size()
 	progress_bar.value = GameSession.completed_objectives.size()
+
+	var next_objective_id: String = objective.get("next_objective_id", "")
+	if next_objective_id.is_empty():
+		next_objective_label.text = tr("campaign.objective.final_label")
+	else:
+		var next_objective: Dictionary = GameSession.CAMPAIGN_OBJECTIVES.get(next_objective_id, {})
+		next_objective_label.text = tr("campaign.objective.next_label") % tr(next_objective.get("title_key", ""))
