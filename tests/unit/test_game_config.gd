@@ -80,6 +80,45 @@ func test_loads_stage_2_perk_magnitudes_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_int("progression", "cleric_devout_hp_percent", -1), 10)
 
 
+## Stage 5 Step 2 (docs/designs/intelligence.md, decision-ledger.md's D1):
+## Watchtower tier costs/detection, quest duration/reward/posting-cadence
+## inputs, the Guild Hall tier -> eligible-quest-tier cap table, and the flat
+## Scout Scouting skill that scales every detection/intel-accumulation
+## chance -- every approved/placed tunable this step introduces (see
+## game_session.gd's _load_balance_config()).
+func test_loads_intelligence_and_quest_balance_values_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_1_cost", -1), 50)
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_2_cost", -1), 100)
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_3_cost", -1), 200)
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_1_detection", -1), 50)
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_2_detection", -1), 65)
+	assert_eq(GameConfig.get_int("intelligence", "watchtower_tier_3_detection", -1), 75)
+	assert_eq(GameConfig.get_int("intelligence", "base_encampment_detection", -1), 25)
+	assert_eq(GameConfig.get_int("intelligence", "quest_duration_turns_per_tier", -1), 10)
+	assert_eq(GameConfig.get_int("intelligence", "quest_posting_block_turns_per_tier", -1), 5)
+	assert_eq(GameConfig.get_int("intelligence", "quest_reward_percent", -1), 50)
+	assert_eq(GameConfig.get_int("intelligence", "quest_posting_chance_percent", -1), 50)
+	assert_eq(GameConfig.get_int("intelligence", "quest_tier_cap_level_1", -1), 1)
+	assert_eq(GameConfig.get_int("intelligence", "quest_tier_cap_level_2", -1), 2)
+	assert_eq(GameConfig.get_int("intelligence", "quest_tier_cap_level_3", -1), 4)
+	assert_eq(GameConfig.get_int("intelligence", "quest_tier_cap_level_4", -1), 5)
+	assert_eq(GameConfig.get_int("intelligence", "scout_scouting_skill", -1), 20)
+
+
+## Fallback-default coverage for the same key, matching
+## test_malformed_json_falls_back_to_defaults()'s own pattern: a corrupt
+## config file must silently revert this value (like every other section) to
+## GameConfig.DEFAULTS's copy rather than crash or drop the key.
+func test_scout_scouting_skill_falls_back_to_the_default_on_malformed_config() -> void:
+	var config = GameConfigScript.new()
+	autofree(config)
+
+	var parsed: Dictionary = config._parse_or_default("{not valid json")
+
+	assert_eq(int(parsed.intelligence.scout_scouting_skill), 20)
+	assert_push_error("is not valid JSON, using built-in defaults")
+
+
 ## Step 1 of docs/plans/2026-08-21-stage-2-party-readiness: durable Cleric MP
 ## and capped HP/MP natural recovery, split by mode, plus the Temple HP bonus
 ## (see docs/designs/campaign-loop.md's natural-recovery paragraph). Replaces

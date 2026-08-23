@@ -896,6 +896,48 @@ var GUILD_HALL_LEVEL_2_ROSTER_CAP: int = 15
 var GUILD_HALL_LEVEL_3_ROSTER_CAP: int = 20
 var GUILD_HALL_LEVEL_2_OFFER_CAP: int = 8
 var GUILD_HALL_LEVEL_3_OFFER_CAP: int = 10
+# Intelligence & Guild Hall quests (docs/designs/intelligence.md, Stage 5
+# decision-ledger.md's D1, approved 2026-08-23). Watchtower tier costs and
+# their Encampment detection scores are the design doc's own table,
+# implemented verbatim (no re-derivation). Quest duration/reward/posting
+# are D1's approved formula inputs: duration = encounter_tier *
+# QUEST_DURATION_TURNS_PER_TIER World Map Turns; a missed quest blocks new
+# postings for encounter_tier * QUEST_POSTING_BLOCK_TURNS_PER_TIER turns;
+# reward is QUEST_REWARD_PERCENT of get_encounter_expected_gold_value(tier);
+# posting is a one-time QUEST_POSTING_CHANCE_PERCENT roll at live-instance
+# creation only (no periodic re-roll -- time-based escalation is deferred).
+# The QUEST_TIER_CAP_LEVEL_* table is the design doc's own Guild Hall
+# tier -> eligible encounter tier table (1/1-2/1-4/1-5); level 4 is
+# forward-looking since GUILD_HALL_MAX_LEVEL caps at 3 today.
+var WATCHTOWER_TIER_1_COST: int = 50
+var WATCHTOWER_TIER_2_COST: int = 100
+var WATCHTOWER_TIER_3_COST: int = 200
+var WATCHTOWER_TIER_1_DETECTION: int = 50
+var WATCHTOWER_TIER_2_DETECTION: int = 65
+var WATCHTOWER_TIER_3_DETECTION: int = 75
+var BASE_ENCAMPMENT_DETECTION: int = 25
+var QUEST_DURATION_TURNS_PER_TIER: int = 10
+var QUEST_POSTING_BLOCK_TURNS_PER_TIER: int = 5
+var QUEST_REWARD_PERCENT: int = 50
+var QUEST_POSTING_CHANCE_PERCENT: int = 50
+var QUEST_TIER_CAP_LEVEL_1: int = 1
+var QUEST_TIER_CAP_LEVEL_2: int = 2
+var QUEST_TIER_CAP_LEVEL_3: int = 4
+var QUEST_TIER_CAP_LEVEL_4: int = 5
+## Flat Scouting skill applied to every Scout-class adventurer for the
+## Intelligence system's detection/intel formulas (docs/designs/
+## intelligence.md's own worked example: "no Watchtower plus a Scout with
+## Scouting 20"). No per-adventurer Scouting stat/progression exists in this
+## codebase yet and D1's approved parameter table does not define one, but it
+## directly scales every detection/intel-accumulation chance the same way the
+## sibling Watchtower/quest tunables above do, so it is GameConfig-backed
+## like the rest of this step's approved values rather than a plain constant.
+var SCOUT_SCOUTING_SKILL: int = 20
+## Watchtower has exactly three tiers in the design's own table above --
+## a plain constant (not GameConfig-backed) for the same reason
+## THREAT_TURN_INTERVAL is: it names how many rows the approved table has,
+## not a tunable balance number.
+const WATCHTOWER_MAX_LEVEL := 3
 # Temple build cost (see docs/plans/2026-08-18-core-loop-and-engagement/03-
 # encampment-buildings-and-tier-model.md): Level 1 ("consecrated") unlocks
 # Cleric recruitment candidate generation only. Temple level 2
@@ -1231,6 +1273,18 @@ var loot_gear_roll: Callable = func() -> float: return randf()
 ## (see heal_party_member()) instead of depending on real randomness -- the
 ## same pattern as loot_gold_roll immediately above. Never reset by reset().
 var heal_amount_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+## Injectable percentage rolls (0.0-100.0) for the Intelligence system (see
+## docs/designs/intelligence.md) -- same pattern/never-reset-by-reset()
+## convention as loot_gold_roll/heal_amount_roll immediately above.
+## detection_roll drives both encampment_detection_chance and
+## party_detection_chance (_resolve_detection() calls it once per eligible
+## source, independently); intel_tier_roll drives the single per-turn
+## accumulating-intelligence check (_resolve_intel_tier()); quest_posting_roll
+## drives the one-time 50% posting roll at live-instance creation
+## (_register_encounter_intel_and_quest()).
+var detection_roll: Callable = func() -> float: return randf() * 100.0
+var intel_tier_roll: Callable = func() -> float: return randf() * 100.0
+var quest_posting_roll: Callable = func() -> float: return randf() * 100.0
 
 # Durable campaign milestone progression -- separate from the repeatable
 # sandbox encounter/vacancy state below (completed_encounters, active_
@@ -1276,6 +1330,46 @@ var _used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+# Ordered information tiers accumulating scouting intelligence reveals, in
+# the design doc's own order: Tier level, then Main monster, then All
+# monsters, then Monster counts. INTEL_TIER_MODIFIERS is the doc's
+# information_modifier table (x2/x1/x0.75/x0.5), keyed by the tier it takes
+# to *reach* that information (e.g. reaching INTEL_TIER_LEVEL uses modifier
+# 2.0).
+const INTEL_TIER_NONE := 0
+const INTEL_TIER_LEVEL := 1
+const INTEL_TIER_MAIN_MONSTER := 2
+const INTEL_TIER_ALL_MONSTERS := 3
+const INTEL_TIER_MONSTER_COUNTS := 4
+const INTEL_TIER_MODIFIERS: Dictionary = {1: 2.0, 2: 1.0, 3: 0.75, 4: 0.5}
+const QUEST_STATUS_POSTED := "posted"
+const QUEST_STATUS_ACTIVE := "active"
+const QUEST_STATUS_COMPLETED := "completed"
+const QUEST_STATUS_EXPIRED := "expired"
+# Intelligence & Guild Hall quests (docs/designs/intelligence.md). Per-live-
+# encounter-instance record keyed by the same id space active_encounters/
+# CAMPAIGN_OBJECTIVES use ({"discovered": bool, "known_tier": int (0-4, see
+# INTEL_TIER_* consts), "quest_id": String ("" when none)}). A record exists
+# only for a currently-live encounter; clearing/removing it removes the
+# record too (see _settle_encounter_intelligence()) -- knowledge itself never
+# decays, but it never outlives the encounter it describes either. An
+# authored obj_* node's record starts "discovered": true the instant it
+# unlocks (see _ensure_authored_intel_record()) -- discovery is never gated
+# by detection for those, only its own progressive info tiers are.
+var encounter_intel: Dictionary = {}
+# Guild Hall quest records keyed by their own generated id: {"id",
+# "encounter_id" (the live instance/authored id this quest targets), "tier"
+# (the encounter's star tier at posting), "status" ("posted" until accepted,
+# then "active", "completed", or "expired"), "posted_turn", "accepted_turn"
+# (-1 until accepted), "expires_turn" (-1 until accepted), "reward_gold"}.
+var quests: Dictionary = {}
+## No new quest may be posted (see _register_encounter_intel_and_quest())
+## before this World Map Turn -- set by _advance_quest_timers() whenever an
+## accepted quest's timer lapses uncleared. 0 means no active block.
+var quest_posting_blocked_until_turn: int = 0
+## Watchtower tier: 0 (unbuilt, BASE_ENCAMPMENT_DETECTION applies) through
+## WATCHTOWER_MAX_LEVEL (see WATCHTOWER_TIER_*_COST/_DETECTION above).
+var watchtower_level: int = 0
 # Temple hub level: 0 (unbuilt), 1 (consecrated -- unlocks Cleric recruitment
 # candidate generation). Level 2 ("sanctified") and any blessing state are
 # out of scope for this step (see TEMPLE_BUILD_COST/TEMPLE_MAX_LEVEL above).
@@ -1370,6 +1464,22 @@ func _load_balance_config() -> void:
 	DETAILS_HEAL_MIN = GameConfig.get_int("cleric", "details_heal_min", DETAILS_HEAL_MIN)
 	DETAILS_HEAL_MAX = GameConfig.get_int("cleric", "details_heal_max", DETAILS_HEAL_MAX)
 	CLERIC_MP_MAX = GameConfig.get_int("cleric", "mp_max", CLERIC_MP_MAX)
+	WATCHTOWER_TIER_1_COST = GameConfig.get_int("intelligence", "watchtower_tier_1_cost", WATCHTOWER_TIER_1_COST)
+	WATCHTOWER_TIER_2_COST = GameConfig.get_int("intelligence", "watchtower_tier_2_cost", WATCHTOWER_TIER_2_COST)
+	WATCHTOWER_TIER_3_COST = GameConfig.get_int("intelligence", "watchtower_tier_3_cost", WATCHTOWER_TIER_3_COST)
+	WATCHTOWER_TIER_1_DETECTION = GameConfig.get_int("intelligence", "watchtower_tier_1_detection", WATCHTOWER_TIER_1_DETECTION)
+	WATCHTOWER_TIER_2_DETECTION = GameConfig.get_int("intelligence", "watchtower_tier_2_detection", WATCHTOWER_TIER_2_DETECTION)
+	WATCHTOWER_TIER_3_DETECTION = GameConfig.get_int("intelligence", "watchtower_tier_3_detection", WATCHTOWER_TIER_3_DETECTION)
+	BASE_ENCAMPMENT_DETECTION = GameConfig.get_int("intelligence", "base_encampment_detection", BASE_ENCAMPMENT_DETECTION)
+	QUEST_DURATION_TURNS_PER_TIER = GameConfig.get_int("intelligence", "quest_duration_turns_per_tier", QUEST_DURATION_TURNS_PER_TIER)
+	QUEST_POSTING_BLOCK_TURNS_PER_TIER = GameConfig.get_int("intelligence", "quest_posting_block_turns_per_tier", QUEST_POSTING_BLOCK_TURNS_PER_TIER)
+	QUEST_REWARD_PERCENT = GameConfig.get_int("intelligence", "quest_reward_percent", QUEST_REWARD_PERCENT)
+	QUEST_POSTING_CHANCE_PERCENT = GameConfig.get_int("intelligence", "quest_posting_chance_percent", QUEST_POSTING_CHANCE_PERCENT)
+	QUEST_TIER_CAP_LEVEL_1 = GameConfig.get_int("intelligence", "quest_tier_cap_level_1", QUEST_TIER_CAP_LEVEL_1)
+	QUEST_TIER_CAP_LEVEL_2 = GameConfig.get_int("intelligence", "quest_tier_cap_level_2", QUEST_TIER_CAP_LEVEL_2)
+	QUEST_TIER_CAP_LEVEL_3 = GameConfig.get_int("intelligence", "quest_tier_cap_level_3", QUEST_TIER_CAP_LEVEL_3)
+	QUEST_TIER_CAP_LEVEL_4 = GameConfig.get_int("intelligence", "quest_tier_cap_level_4", QUEST_TIER_CAP_LEVEL_4)
+	SCOUT_SCOUTING_SKILL = GameConfig.get_int("intelligence", "scout_scouting_skill", SCOUT_SCOUTING_SKILL)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -1411,6 +1521,17 @@ func reset() -> void:
 	world_turn = 1
 	gold = 0
 	guild_hall_level = 1
+	encounter_intel = {}
+	quests = {}
+	quest_posting_blocked_until_turn = 0
+	watchtower_level = 0
+	for instance in active_encounters:
+		_register_encounter_intel_and_quest(instance)
+	# The campaign's first authored objective starts unlocked (see
+	# unlocked_authored_encounters above) -- it is permanently discovered from
+	# turn one, matching complete_campaign_objective()'s own guarantee for
+	# every later node (see _ensure_authored_intel_record()).
+	_ensure_authored_intel_record("obj_tier1_1_goblin_outpost")
 	temple_level = 0
 	blacksmith_level = 0
 	blacksmith_craft_job = {}
@@ -1808,6 +1929,7 @@ func end_world_turn() -> bool:
 	_apply_natural_recovery()
 	if has_deployed_party():
 		parties[_get_selected_party_index()].movement_spent = false
+	_advance_intelligence_and_quests()
 	_advance_encounter_vacancies()
 	_advance_recruitment_vacancies()
 	return auto_moved
@@ -1968,6 +2090,7 @@ func complete_current_encounter() -> void:
 		else:
 			_roll_and_queue_loot(expedition.get("enemy", {}))
 		battle_reward += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
+		_settle_encounter_intelligence(selected_encounter)
 		_clear_active_encounter(selected_encounter)
 		# An authored node's own encounter_id is exactly its CAMPAIGN_
 		# OBJECTIVES key (see that catalog's own doc comment) -- clearing it
@@ -2090,6 +2213,7 @@ func complete_campaign_objective(id: String) -> void:
 		return
 	if not unlocked_authored_encounters.has(next_id):
 		unlocked_authored_encounters.append(next_id)
+	_ensure_authored_intel_record(next_id)
 	campaign_objective_id = next_id
 	campaign_progress_changed.emit()
 
@@ -2692,6 +2816,420 @@ func get_party_scouting_intel(party_id: String, encounter_id: String) -> Diction
 	}
 
 
+## ---------------------------------------------------------------------
+## Intelligence & Guild Hall quests (docs/designs/intelligence.md, Stage 5
+## decision-ledger.md's D1). Distinct from get_party_scouting_intel() above:
+## that function is the pre-existing, still-shipped binary Scout-in-range
+## reveal (docs/plans/2026-08-18-core-loop-and-engagement/
+## 04-cleric-class-and-scout-reconnaissance.md's locked decision) which this
+## step deliberately leaves untouched to avoid regressing its own dedicated
+## test coverage. The system below is additive: it drives its own new state
+## (encounter_intel/quests), and World Map/InformationPanel surface whichever
+## of the two systems has revealed more for a given encounter (see
+## world_map.gd's _get_marker_star_text() and information_panel.gd's
+## refresh_encounter()).
+## ---------------------------------------------------------------------
+
+## distance_retention = clamp(1.0 - (turn_distance * 0.1), 0.0, 1.0) --
+## intelligence.md's own formula. "turn_distance" here is exactly
+## _grid_distance() (Manhattan, cardinal-only steps) rather than a separate
+## Euclidean "straight-line" measure: it is the same metric build_route()/
+## take_next_route_step() already use for actual travel time, so a location
+## shown as "N turns away" always falls off intelligence at that same N.
+func _distance_retention(turn_distance: int) -> float:
+	return clampf(1.0 - (turn_distance * 0.1), 0.0, 1.0)
+
+
+## The Encampment's current detection score before distance falloff: a
+## Watchtower tier's own value replaces BASE_ENCAMPMENT_DETECTION entirely
+## (never stacks with it) once built (docs/designs/intelligence.md's table).
+func _current_watchtower_detection() -> int:
+	if watchtower_level >= 3:
+		return WATCHTOWER_TIER_3_DETECTION
+	if watchtower_level >= 2:
+		return WATCHTOWER_TIER_2_DETECTION
+	if watchtower_level >= 1:
+		return WATCHTOWER_TIER_1_DETECTION
+	return BASE_ENCAMPMENT_DETECTION
+
+
+## Best SCOUT_SCOUTING_SKILL among roster Scouts not currently part of a
+## deployed party ("Scouts currently at the Encampment" per the design doc).
+## 0 when no such Scout exists.
+func _best_encamped_scout_scouting() -> int:
+	var deployed_member_ids: Dictionary = {}
+	for party in parties:
+		if bool(party.get("deployed", false)):
+			for member_id in party.member_ids:
+				deployed_member_ids[str(member_id)] = true
+	for adventurer in adventurers:
+		if str(adventurer.get("class", "")) == "scout" and not deployed_member_ids.has(str(adventurer.id)):
+			return SCOUT_SCOUTING_SKILL
+	return 0
+
+
+## Best SCOUT_SCOUTING_SKILL among party's own members who are Scouts. 0 when
+## the party has none (the design's "every deployed party containing at
+## least one Scout" eligibility gate).
+func _best_party_scout_scouting(party: Dictionary) -> int:
+	for member_id in party.member_ids:
+		var member := get_adventurer(str(member_id))
+		if not member.is_empty() and str(member.get("class", "")) == "scout":
+			return SCOUT_SCOUTING_SKILL
+	return 0
+
+
+## encampment_detection_chance = clamp((encampment_detection +
+## best_encamped_scout_scouting) * distance_retention, 0, 100).
+func _encampment_detection_chance(position: Vector2i) -> float:
+	var distance := _grid_distance(STARTING_SETTLEMENT_WORLD_POSITION, position)
+	var chance := (_current_watchtower_detection() + _best_encamped_scout_scouting()) * _distance_retention(distance)
+	return clampf(chance, 0.0, 100.0)
+
+
+## party_detection_chance = clamp(best_party_scout_scouting *
+## distance_retention, 0, 100). 0 for a party with no Scout (never eligible).
+func _party_detection_chance(party: Dictionary, position: Vector2i) -> float:
+	var best_scouting := _best_party_scout_scouting(party)
+	if best_scouting <= 0:
+		return 0.0
+	var distance := _grid_distance(party.world_position, position)
+	return clampf(best_scouting * _distance_retention(distance), 0.0, 100.0)
+
+
+## Every eligible source (the Encampment, always; each deployed party with a
+## Scout) gets its own independent detection_roll call this World Map Turn --
+## one success is enough to permanently discover the encounter. Every source
+## is always rolled (never short-circuited) so "independent" holds even when
+## an earlier source already succeeded.
+func _resolve_detection(position: Vector2i) -> bool:
+	var detected: bool = float(detection_roll.call()) < _encampment_detection_chance(position)
+	for party in parties:
+		if not bool(party.get("deployed", false)):
+			continue
+		if _best_party_scout_scouting(party) <= 0:
+			continue
+		if detection_roll.call() < _party_detection_chance(party, position):
+			detected = true
+	return detected
+
+
+## The best available chance to advance to the next info tier this turn,
+## across every eligible source (the Encampment's best encamped Scout, each
+## deployed party's best Scout): "use the highest eligible Scouting skill...
+## then apply distance retention" is implemented as the best resulting chance
+## after distance falloff, rather than picking a single source by raw skill
+## alone and only then applying its distance -- with every Scout sharing the
+## same flat SCOUT_SCOUTING_SKILL, raw-skill ties would otherwise need an
+## arbitrary tiebreak; maximizing the final chance is the strictly more
+## player-favorable (and unambiguous) reading of the same sentence.
+func _best_intel_chance(position: Vector2i, information_modifier: float) -> float:
+	var best := 0.0
+	var encampment_scouting := _best_encamped_scout_scouting()
+	if encampment_scouting > 0:
+		var distance := _grid_distance(STARTING_SETTLEMENT_WORLD_POSITION, position)
+		best = maxf(best, encampment_scouting * information_modifier * _distance_retention(distance))
+	for party in parties:
+		if not bool(party.get("deployed", false)):
+			continue
+		var party_scouting := _best_party_scout_scouting(party)
+		if party_scouting <= 0:
+			continue
+		var distance := _grid_distance(party.world_position, position)
+		best = maxf(best, party_scouting * information_modifier * _distance_retention(distance))
+	return clampf(best, 0.0, 100.0)
+
+
+## Attempts only the next unknown tier (design: "The check attempts only the
+## next unknown information tier, so information accumulates in order over
+## time") -- one attempted tier per World Map Turn, never more.
+func _resolve_intel_tier(position: Vector2i, record: Dictionary) -> void:
+	var next_tier: int = int(record.known_tier) + 1
+	if next_tier > INTEL_TIER_MONSTER_COUNTS:
+		return
+	var modifier: float = INTEL_TIER_MODIFIERS[next_tier]
+	var chance := _best_intel_chance(position, modifier)
+	if chance <= 0.0:
+		return
+	if intel_tier_roll.call() < chance:
+		record.known_tier = next_tier
+
+
+func _quest_tier_cap_for_guild_hall(level: int) -> int:
+	if level >= 4:
+		return QUEST_TIER_CAP_LEVEL_4
+	if level == 3:
+		return QUEST_TIER_CAP_LEVEL_3
+	if level == 2:
+		return QUEST_TIER_CAP_LEVEL_2
+	return QUEST_TIER_CAP_LEVEL_1
+
+
+## Expected gold value of clearing an encounter of the given star tier,
+## derived from the exact base-gold formula complete_current_encounter()
+## itself rolls (loot_gold_roll(18, 22) * difficulty -- the per-kill
+## ENEMY_LOOT_TABLES rolls are excluded since their expected value varies by
+## enemy composition, not tier alone) rather than a newly authored table
+## (D1, decision-ledger.md). This is the same formula CampaignSim's own
+## gold_earned telemetry (campaign_sim_metrics.gd) sums across representative
+## seeds.
+func get_encounter_expected_gold_value(tier: int) -> int:
+	return int(round(20.0 * tier))
+
+
+## Registers a brand-new live encounter instance's intelligence record
+## (always) and, for a non-authored instance only, rolls whether it becomes a
+## postable Guild Hall quest (design: "a new live encounter instance is
+## created" -- authored obj_* nodes never reach this function in normal play,
+## see world_map.gd's own doc comment on why they never enter
+## active_encounters). A one-time QUEST_POSTING_CHANCE_PERCENT roll, gated on
+## the encounter's own star tier being eligible for the current Guild Hall
+## tier and no active posting block -- never re-rolled later (time-based
+## escalation is explicitly deferred).
+func _register_encounter_intel_and_quest(instance: Dictionary) -> void:
+	var instance_id: String = instance.id
+	encounter_intel[instance_id] = {
+		"discovered": false,
+		"known_tier": INTEL_TIER_NONE,
+		"quest_id": "",
+	}
+	var tier: int = int(instance.get("difficulty", 1))
+	if world_turn < quest_posting_blocked_until_turn:
+		return
+	if tier > _quest_tier_cap_for_guild_hall(guild_hall_level):
+		return
+	if quest_posting_roll.call() >= QUEST_POSTING_CHANCE_PERCENT:
+		return
+
+	var quest_id := _new_instance_id()
+	var reward := int(round(get_encounter_expected_gold_value(tier) * (QUEST_REWARD_PERCENT / 100.0)))
+	quests[quest_id] = {
+		"id": quest_id,
+		"encounter_id": instance_id,
+		"tier": tier,
+		"status": QUEST_STATUS_POSTED,
+		"posted_turn": world_turn,
+		"accepted_turn": -1,
+		"expires_turn": -1,
+		"reward_gold": reward,
+	}
+	var record: Dictionary = encounter_intel[instance_id]
+	record.quest_id = quest_id
+	encounter_intel[instance_id] = record
+
+
+## An authored obj_* node's discovery guarantee: called the instant it
+## unlocks (see complete_campaign_objective()) and once more at a fresh
+## campaign's start for the initially-unlocked first node (see reset()).
+## Never rolls a quest -- authored objectives are never quest-eligible (D1:
+## "Optional (non-authored) live encounter instances only"). Idempotent: a
+## record that already exists (should not happen in practice, since each
+## authored id unlocks exactly once) is left alone rather than reset to
+## undiscovered.
+func _ensure_authored_intel_record(encounter_id: String) -> void:
+	if encounter_intel.has(encounter_id):
+		return
+	encounter_intel[encounter_id] = {
+		"discovered": true,
+		"known_tier": INTEL_TIER_NONE,
+		"quest_id": "",
+	}
+
+
+## Backward-compatible migration safety net for import_campaign_snapshot():
+## a snapshot exported before this system shipped (format version < 3) --
+## or any snapshot otherwise carrying a live encounter/unlocked authored node
+## with no matching encounter_intel entry -- would otherwise be permanently
+## stuck with no data for it. _advance_intelligence_and_quests() only ever
+## iterates encounter_intel's own keys, and _register_encounter_intel_and_
+## quest() only ever runs at instance-creation time, never at import, so a
+## missing record can never self-heal on its own. A backfilled sandbox
+## instance never rolls a retroactive quest (conservative: the player never
+## had that instance-creation-time roll's chance to begin with); a backfilled
+## authored node goes through the same discovery guarantee every other
+## authored node gets.
+func _backfill_missing_intel_records() -> void:
+	for instance in active_encounters:
+		if not encounter_intel.has(instance.id):
+			encounter_intel[instance.id] = {"discovered": false, "known_tier": INTEL_TIER_NONE, "quest_id": ""}
+	for encounter_id in unlocked_authored_encounters:
+		_ensure_authored_intel_record(encounter_id)
+
+
+## Runs once per World Map Turn (see end_world_turn()): for every currently
+## live encounter record, attempts detection (if undiscovered) or the next
+## info tier (if discovered and not yet fully known) -- never both the same
+## turn. Then advances every active quest's timer.
+func _advance_intelligence_and_quests() -> void:
+	for encounter_id in encounter_intel.keys():
+		var record: Dictionary = encounter_intel[encounter_id]
+		var expedition := get_expedition(encounter_id)
+		if expedition.is_empty():
+			continue
+		if not bool(record.discovered):
+			if _resolve_detection(expedition.position):
+				record.discovered = true
+		elif int(record.known_tier) < INTEL_TIER_MONSTER_COUNTS:
+			_resolve_intel_tier(expedition.position, record)
+		encounter_intel[encounter_id] = record
+	_advance_quest_timers()
+
+
+## Expires any "active" (accepted) quest whose timer has lapsed and opens a
+## new posting block for encounter_tier * QUEST_POSTING_BLOCK_TURNS_PER_TIER
+## World Map Turns (design: "new quest postings are blocked... already
+## posted quests remain visible but are expired and award no quest reward").
+## An already-"posted" (never accepted) quest has no timer and is left alone.
+func _advance_quest_timers() -> void:
+	for quest_id in quests.keys():
+		var quest: Dictionary = quests[quest_id]
+		if quest.status != QUEST_STATUS_ACTIVE:
+			continue
+		if world_turn > int(quest.expires_turn):
+			quest.status = QUEST_STATUS_EXPIRED
+			quests[quest_id] = quest
+			var block_turns: int = int(quest.tier) * QUEST_POSTING_BLOCK_TURNS_PER_TIER
+			quest_posting_blocked_until_turn = maxi(quest_posting_blocked_until_turn, world_turn + block_turns)
+
+
+## Removes the cleared encounter's intelligence/quest records (design:
+## "Clearing or removing an encounter removes its record"). Called from
+## complete_current_encounter() before the instance itself is cleared. An
+## "active" (accepted, unexpired) quest completes here: its reward_gold folds
+## into battle_reward alongside normal loot, so it flows through the exact
+## same battle_reward -> pending_reward (merge_battle_loot_into_party()) ->
+## gold (deposit_pending_reward()) pipeline every other reward already uses --
+## actual gold is only banked once the party reaches the Encampment, matching
+## "a quest completes only when its target clears AND the party returns to
+## the Encampment" without a parallel reward path. A "posted" (never
+## accepted) or "expired" quest is simply dropped: no reward.
+func _settle_encounter_intelligence(encounter_id: String) -> void:
+	if not encounter_intel.has(encounter_id):
+		return
+	var quest_id: String = str(encounter_intel[encounter_id].get("quest_id", ""))
+	if quest_id != "" and quests.has(quest_id):
+		if str(quests[quest_id].status) == QUEST_STATUS_ACTIVE:
+			battle_reward += int(quests[quest_id].reward_gold)
+		quests.erase(quest_id)
+	encounter_intel.erase(encounter_id)
+
+
+## Public read of one encounter's current intelligence, resolved into the
+## exact fields UI needs -- always safe to call for an unknown/absent id
+## (returns the fully-unknown shape, matching get_party_scouting_intel()'s
+## own not-found convention). enemy_types/enemy_counts are populated
+## progressively exactly like get_party_scouting_intel()'s own fields: one
+## entry for INTEL_TIER_MAIN_MONSTER (first composition group only), every
+## group from INTEL_TIER_ALL_MONSTERS on, and enemy_counts only once
+## INTEL_TIER_MONSTER_COUNTS is reached.
+func get_encounter_intel(encounter_id: String) -> Dictionary:
+	var not_found := {
+		"discovered": false,
+		"known_tier": INTEL_TIER_NONE,
+		"tier_stars": 0,
+		"enemy_types": [] as Array[String],
+		"enemy_counts": [] as Array[int],
+		"quest_id": "",
+	}
+	if not encounter_intel.has(encounter_id):
+		return not_found
+	var record: Dictionary = encounter_intel[encounter_id]
+	if not bool(record.discovered):
+		return not_found
+
+	var known_tier: int = int(record.known_tier)
+	var result := {
+		"discovered": true,
+		"known_tier": known_tier,
+		"tier_stars": get_threat_stars(encounter_id) if known_tier >= INTEL_TIER_LEVEL else 0,
+		"enemy_types": [] as Array[String],
+		"enemy_counts": [] as Array[int],
+		"quest_id": str(record.quest_id),
+	}
+	if known_tier < INTEL_TIER_MAIN_MONSTER:
+		return result
+
+	var expedition := get_expedition(encounter_id)
+	var groups: Array = []
+	if expedition.has("enemies"):
+		for group in expedition.enemies:
+			groups.append({"stats": group.get("enemy", {}), "count": int(group.get("count", 1))})
+	else:
+		var enemy: Dictionary = expedition.get("enemy", {})
+		groups.append({"stats": enemy, "count": int(enemy.get("count", 0))})
+
+	var group_limit: int = groups.size() if known_tier >= INTEL_TIER_ALL_MONSTERS else 1
+	for index in group_limit:
+		var group: Dictionary = groups[index]
+		result.enemy_types.append(tr(str(group.stats.get("name_key", ""))))
+		if known_tier >= INTEL_TIER_MONSTER_COUNTS:
+			result.enemy_counts.append(group.count)
+	return result
+
+
+func get_quests() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for quest_id in quests:
+		result.append(quests[quest_id].duplicate(true))
+	return result
+
+
+func get_quest(quest_id: String) -> Dictionary:
+	if not quests.has(quest_id):
+		return {}
+	return quests[quest_id].duplicate(true)
+
+
+## Accepting a quest permanently discovers its target and reveals its Tier
+## level and Main monster (INTEL_TIER_MAIN_MONSTER) -- never downgrades an
+## already-higher known_tier. Only a "posted" (not yet accepted) quest can be
+## accepted; false for an unknown id or any other status.
+func accept_quest(quest_id: String) -> bool:
+	if not quests.has(quest_id):
+		return false
+	var quest: Dictionary = quests[quest_id]
+	if quest.status != QUEST_STATUS_POSTED:
+		return false
+
+	quest.status = QUEST_STATUS_ACTIVE
+	quest.accepted_turn = world_turn
+	quest.expires_turn = world_turn + int(quest.tier) * QUEST_DURATION_TURNS_PER_TIER
+	quests[quest_id] = quest
+
+	var encounter_id: String = str(quest.encounter_id)
+	if encounter_intel.has(encounter_id):
+		var record: Dictionary = encounter_intel[encounter_id]
+		record.discovered = true
+		record.known_tier = maxi(int(record.known_tier), INTEL_TIER_MAIN_MONSTER)
+		encounter_intel[encounter_id] = record
+	return true
+
+
+## Cost to purchase (level 0 -> 1) or upgrade the Watchtower to the next
+## tier; -1 once WATCHTOWER_MAX_LEVEL is already reached (mirrors
+## _guild_hall_upgrade_cost()'s pattern for an analogous tiered building).
+func get_watchtower_upgrade_cost() -> int:
+	if watchtower_level >= WATCHTOWER_MAX_LEVEL:
+		return -1
+	if watchtower_level == 0:
+		return WATCHTOWER_TIER_1_COST
+	if watchtower_level == 1:
+		return WATCHTOWER_TIER_2_COST
+	return WATCHTOWER_TIER_3_COST
+
+
+func can_upgrade_watchtower() -> bool:
+	return watchtower_level < WATCHTOWER_MAX_LEVEL and gold >= get_watchtower_upgrade_cost()
+
+
+func upgrade_watchtower() -> bool:
+	if not can_upgrade_watchtower():
+		return false
+	gold -= get_watchtower_upgrade_cost()
+	watchtower_level += 1
+	return true
+
+
 ## Looks up an item id in WEAPONS then ARMORS, returning a safe copy either
 ## way (an empty Dictionary for an unknown id, matching get_adventurer()'s
 ## and get_party()'s not-found convention).
@@ -3144,7 +3682,9 @@ func _spawn_next_encounter_instance() -> Dictionary:
 	var position := _choose_encounter_position(template_id)
 	if not _used_encounter_template_ids.has(template_id):
 		_used_encounter_template_ids.append(template_id)
-	return _make_encounter_instance(_mint_encounter_instance_id(), template_id, position)
+	var instance := _make_encounter_instance(_mint_encounter_instance_id(), template_id, position)
+	_register_encounter_intel_and_quest(instance)
+	return instance
 
 
 ## Weighted-random by star tier, favoring higher tiers as the player's
@@ -4121,6 +4661,10 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.world_turn = world_turn
 	snapshot.gold = gold
 	snapshot.guild_hall_level = guild_hall_level
+	snapshot.encounter_intel = encounter_intel.duplicate(true)
+	snapshot.quests = quests.duplicate(true)
+	snapshot.quest_posting_blocked_until_turn = quest_posting_blocked_until_turn
+	snapshot.watchtower_level = watchtower_level
 	snapshot.temple_level = temple_level
 	snapshot.blacksmith_level = blacksmith_level
 	snapshot.blacksmith_craft_job = blacksmith_craft_job.duplicate(true)
@@ -4205,6 +4749,10 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	world_turn = snapshot.world_turn
 	gold = snapshot.gold
 	guild_hall_level = snapshot.guild_hall_level
+	encounter_intel = snapshot.encounter_intel.duplicate(true)
+	quests = snapshot.quests.duplicate(true)
+	quest_posting_blocked_until_turn = snapshot.quest_posting_blocked_until_turn
+	watchtower_level = snapshot.watchtower_level
 	temple_level = snapshot.temple_level
 	blacksmith_level = snapshot.blacksmith_level
 	blacksmith_craft_job = snapshot.blacksmith_craft_job.duplicate(true)
@@ -4228,6 +4776,7 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	shop_gold = snapshot.shop_gold
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
+	_backfill_missing_intel_records()
 	return result
 
 

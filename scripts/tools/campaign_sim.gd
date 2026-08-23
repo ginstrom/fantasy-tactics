@@ -987,6 +987,21 @@ func _wire_deterministic_rolls(rng: RandomNumberGenerator) -> void:
 	GameSession.recruitment_class_roll = func() -> String: return "scout" if rng.randi() % 2 == 0 else "warrior"
 	GameSession.cleric_offer_roll = func() -> bool: return rng.randf() < 0.25
 	GameSession.skill_gain_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
+	# Intelligence & Guild Hall quests (Stage 5 Step 2, docs/designs/
+	# intelligence.md) are deliberately NOT wired to this shared seeded
+	# source: campaign_sim never calls accept_quest() or otherwise lets a
+	# quest/intel outcome influence its own scripted decisions, so wiring
+	# detection_roll/intel_tier_roll/quest_posting_roll here would only add
+	# three unconsumed-by-the-sim RNG draws per relevant turn/instance --
+	# shifting every *other* shared-stream roll's sequence downstream (loot,
+	# enemy composition, vacancy timing, ...) and, in testing, broke the
+	# Stage 3 seed-locked "party level at Ogre entry" balance band
+	# (test_campaign_sim.gd) for no corresponding benefit. The dedicated
+	# GameSession-level tests in test_game_session.gd already prove
+	# detection/intel/quest determinism via direct injected-roll sequences,
+	# satisfying decision-ledger.md's D1 deterministic-scenario requirement
+	# without perturbing this shared stream. Both real play and campaign_sim
+	# alike fall back to these three rolls' own real-random defaults.
 	# Deterministic but collision-free: a per-run counter mixed with the
 	# campaign seed, rather than reproducing production's GUID/time-fragment
 	# format (which this simulator has no use for beyond uniqueness).

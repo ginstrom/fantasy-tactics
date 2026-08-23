@@ -374,6 +374,188 @@ func test_refresh_encounter_shows_the_full_per_type_breakdown_for_a_mixed_author
 	)
 
 
+## Regression for a Step 2 review finding: world_map.gd's real
+## _refresh_information_panel() calls refresh_encounter() (legacy
+## Scout-in-range) and then refresh_encounter_intel() (Stage 5 Intelligence)
+## back-to-back for the same hovered encounter every refresh. When a
+## deployed Scout is within the legacy binary range of an encounter AND the
+## new accumulating-intel system has already learned the same facts (e.g.
+## via a Watchtower or a Guild Hall quest), both used to render their own
+## Danger/Enemies row, showing each fact twice in one panel. The new
+## Intelligence system must be the single source of truth once it has
+## learned a fact, so exactly one row per fact may render here.
+func test_refresh_encounter_then_refresh_encounter_intel_never_duplicates_the_danger_or_enemies_row() -> void:
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	_deploy_party_with_scout_at(goblin_camp.position)
+	# Both conditions true at once: the legacy Scout-in-range reveal (set up
+	# above) AND a populated Stage 5 encounter_intel record that already
+	# knows the main monster (which also implies Tier level is known, since
+	# INTEL_TIER_MAIN_MONSTER > INTEL_TIER_LEVEL).
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MAIN_MONSTER, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	# Matches world_map.gd's own _refresh_information_panel() call order.
+	panel.refresh_encounter(GameSession.FIRST_PARTY_ID, GameSession.GOBLIN_CAMP_ID)
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	var danger_label: Label = panel.get_node("Content/EncounterDanger")
+	var intel_tier_label: Label = panel.get_node("Content/EncounterIntelTier")
+	var danger_rows_visible := int(danger_label.visible) + int(intel_tier_label.visible)
+	assert_eq(danger_rows_visible, 1, "Exactly one Danger row must be visible, never zero or both")
+	assert_true(intel_tier_label.visible, "The Stage 5 Intelligence row is the single source of truth once it has learned the tier")
+	assert_false(danger_label.visible, "The legacy Scout-range row must be suppressed once the new system already knows the same fact")
+
+	var enemies_label: Label = panel.get_node("Content/EncounterEnemies")
+	var intel_enemies_label: Label = panel.get_node("Content/EncounterIntelEnemies")
+	var enemies_rows_visible := int(enemies_label.visible) + int(intel_enemies_label.visible)
+	assert_eq(enemies_rows_visible, 1, "Exactly one Enemies row must be visible, never zero or both")
+	assert_true(intel_enemies_label.visible, "The Stage 5 Intelligence row is the single source of truth once it has learned the main monster")
+	assert_false(enemies_label.visible, "The legacy Scout-range row must be suppressed once the new system already knows the same fact")
+
+
+## --- Intelligence system rows (Stage 5 Step 2, docs/designs/intelligence.md) ---
+## Deliberately exercised through refresh_encounter_intel() alone (never
+## refresh_encounter(), the pre-existing Scout-in-range path above) so these
+## tests can never accidentally depend on -- or be satisfied by -- the
+## legacy reveal.
+
+
+func test_refresh_encounter_intel_hides_every_row_for_an_undiscovered_encounter() -> void:
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_false(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_false(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_false(panel.get_node("Content/EncounterIntelQuest").visible)
+
+
+## World Map exposes only known details: Tier level known alone shows the
+## star row but withholds the enemy row entirely.
+func test_refresh_encounter_intel_shows_only_the_tier_stars_once_tier_level_is_known() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_LEVEL, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelTier").text,
+		tr("information.encounter_danger") % "★".repeat(GameSession.get_threat_stars(GameSession.GOBLIN_CAMP_ID))
+	)
+	assert_false(panel.get_node("Content/EncounterIntelEnemies").visible, "Enemy composition is not known until Main monster")
+	assert_false(panel.get_node("Content/EncounterIntelQuest").visible)
+
+
+## Main monster known shows the enemy type with no count yet.
+func test_refresh_encounter_intel_shows_the_enemy_type_without_a_count_at_main_monster_tier() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MAIN_MONSTER, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelEnemies").text,
+		tr("information.encounter_enemy_type_only") % tr("battle.enemy.goblin")
+	)
+
+
+## Monster counts known shows the full "type x count" breakdown.
+func test_refresh_encounter_intel_shows_enemy_counts_once_the_monster_counts_tier_is_known() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MONSTER_COUNTS, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_eq(
+		panel.get_node("Content/EncounterIntelEnemies").text,
+		tr("information.encounter_enemies") % [tr("battle.enemy.goblin"), 1]
+	)
+
+
+## Accepting a quest reveals only its documented initial information (Tier
+## level + Main monster) -- driven end-to-end through GameSession.accept_quest(),
+## not a hand-built intel record.
+func test_an_accepted_quests_row_reveals_only_tier_level_and_main_monster() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0
+	GameSession.reset()
+	var quest_id: String = String(GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID].quest_id)
+	GameSession.accept_quest(quest_id)
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_true(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelEnemies").text,
+		tr("information.encounter_enemy_type_only") % tr("battle.enemy.goblin"),
+		"Accepting reveals the main monster's type only, never its count"
+	)
+	assert_true(panel.get_node("Content/EncounterIntelQuest").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelQuest").text,
+		tr("information.encounter_quest") % [tr("guild_hall.quests.status.active"), int(GameSession.get_quest(quest_id).reward_gold)]
+	)
+
+
+## Expired quests remain visible but reward nothing: the quest row keeps
+## showing "Expired" rather than disappearing, and its target's own info
+## tiers stay exactly as they were at expiry (no reward-related side effect
+## on intel).
+func test_an_expired_quests_row_stays_visible_with_an_expired_status() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0
+	GameSession.reset()
+	var quest_id: String = String(GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID].quest_id)
+	GameSession.accept_quest(quest_id)
+	for _turn in GameSession.QUEST_DURATION_TURNS_PER_TIER + 1:
+		GameSession.end_world_turn()
+	assert_eq(GameSession.get_quest(quest_id).status, GameSession.QUEST_STATUS_EXPIRED, "Setup: the quest must have expired")
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/EncounterIntelQuest").visible, "An expired quest must remain visible, not disappear")
+	assert_eq(
+		panel.get_node("Content/EncounterIntelQuest").text,
+		tr("information.encounter_quest") % [tr("guild_hall.quests.status.expired"), int(GameSession.get_quest(quest_id).reward_gold)]
+	)
+
+
+func test_refresh_encounter_intel_hides_the_quest_row_when_the_encounter_has_no_quest() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 100.0  # no quest posts
+	GameSession.reset()
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_false(panel.get_node("Content/EncounterIntelQuest").visible)
+
+
+func test_a_bare_refresh_hides_the_stale_intel_section() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MONSTER_COUNTS, "quest_id": "",
+	}
+	var panel := _make_panel()
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
+
+	panel.refresh()
+
+	assert_false(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_false(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_false(panel.get_node("Content/EncounterIntelQuest").visible)
+
+
 func test_the_recruit_button_emits_recruit_selected_with_the_candidate_id_instead_of_purchasing() -> void:
 	GameSession.gold = 25
 	var candidate_id: String = _template_candidate("warrior_002").id

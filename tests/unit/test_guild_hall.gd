@@ -95,6 +95,99 @@ func test_back_button_returns_to_buildings() -> void:
 	assert_string_contains(source, "GameManager.go_to_buildings()")
 
 
+## ---------------------------------------------------------------------
+## Watchtower purchase (Stage 5 Step 2, docs/designs/intelligence.md).
+## ---------------------------------------------------------------------
+
+
+func test_watchtower_starts_unbuilt_and_the_upgrade_button_shows_tier_one_cost() -> void:
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_eq(screen.get_node("Body/Center/VBox/WatchtowerLevelLabel").text, tr("guild_hall.watchtower.level") % 0)
+	var upgrade_button: Button = screen.get_node("Body/Center/VBox/WatchtowerUpgradeButton")
+	assert_true(upgrade_button.visible)
+	assert_true(upgrade_button.disabled, "No gold yet")
+	assert_eq(upgrade_button.text, tr("guild_hall.watchtower.upgrade") % GameSession.WATCHTOWER_TIER_1_COST)
+	assert_false(screen.get_node("Body/Center/VBox/WatchtowerMaxLevelLabel").visible)
+
+
+func test_pressing_watchtower_upgrade_raises_its_level_and_deducts_gold() -> void:
+	GameSession.gold = GameSession.WATCHTOWER_TIER_1_COST
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+	var upgrade_button: Button = screen.get_node("Body/Center/VBox/WatchtowerUpgradeButton")
+
+	upgrade_button.emit_signal("pressed")
+
+	assert_eq(GameSession.watchtower_level, 1)
+	assert_eq(GameSession.gold, 0)
+	assert_eq(screen.get_node("Body/Center/VBox/WatchtowerLevelLabel").text, tr("guild_hall.watchtower.level") % 1)
+	assert_eq(upgrade_button.text, tr("guild_hall.watchtower.upgrade") % GameSession.WATCHTOWER_TIER_2_COST)
+
+
+func test_watchtower_at_max_level_hides_the_upgrade_button_and_shows_max_level() -> void:
+	GameSession.watchtower_level = GameSession.WATCHTOWER_MAX_LEVEL
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("Body/Center/VBox/WatchtowerUpgradeButton").visible)
+	assert_true(screen.get_node("Body/Center/VBox/WatchtowerMaxLevelLabel").visible)
+
+
+## ---------------------------------------------------------------------
+## Guild Hall quest board (Stage 5 Step 2, docs/designs/intelligence.md).
+## ---------------------------------------------------------------------
+
+
+func test_the_empty_label_shows_when_no_quests_are_posted() -> void:
+	# quest_posting_roll defaults to real randomness; force it off so a fresh
+	# reset() never posts a quest, keeping this assertion deterministic.
+	GameSession.quest_posting_roll = func() -> float: return 100.0
+	GameSession.reset()
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_true(screen.get_node("Body/Center/VBox/QuestsEmptyLabel").visible)
+	assert_eq(screen.get_node("Body/Center/VBox/QuestList").get_child_count(), 0)
+
+
+func test_a_posted_quest_renders_a_row_with_an_accept_button() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0  # guarantee goblin_camp posts a quest
+	GameSession.reset()
+	var quest: Dictionary = GameSession.get_quests()[0]
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_false(screen.get_node("Body/Center/VBox/QuestsEmptyLabel").visible)
+	var row: Node = screen.get_node("Body/Center/VBox/QuestList/Quest_%s" % quest.id)
+	assert_not_null(row)
+	assert_eq(
+		row.get_node("Label").text,
+		tr("guild_hall.quests.row") % [1, tr("guild_hall.quests.status.posted"), int(quest.reward_gold)]
+	)
+	assert_true(row.get_node("AcceptButton").visible)
+
+
+func test_pressing_accept_on_a_quest_row_activates_it_and_hides_the_accept_button() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0
+	GameSession.reset()
+	var quest_id: String = String(GameSession.get_quests()[0].id)
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+	var row: Node = screen.get_node("Body/Center/VBox/QuestList/Quest_%s" % quest_id)
+
+	row.get_node("AcceptButton").emit_signal("pressed")
+
+	assert_eq(GameSession.get_quest(quest_id).status, GameSession.QUEST_STATUS_ACTIVE)
+	var refreshed_row: Node = screen.get_node("Body/Center/VBox/QuestList/Quest_%s" % quest_id)
+	assert_false(refreshed_row.get_node("AcceptButton").visible, "An already-accepted quest offers no further Accept action")
+	assert_true(
+		GameSession.get_encounter_intel(GameSession.GOBLIN_CAMP_ID).discovered,
+		"Accepting must permanently discover the quest's target"
+	)
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = GuildHallScene.instantiate()
 	add_child_autofree(screen)

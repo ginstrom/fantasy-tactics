@@ -94,3 +94,15 @@ visible = false
 [node name="EncounterEnemies" type="Label" parent="Content"]
 layout_mode = 2
 visible = false
+
+[node name="EncounterIntelTier" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="EncounterIntelEnemies" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="EncounterIntelQuest" type="Label" parent="Content"]
+layout_mode = 2
+visible = false

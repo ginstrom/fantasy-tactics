@@ -925,12 +925,24 @@ func test_world_map_scene_reveals_an_authored_tier_two_markers_star_and_composit
 	)
 
 
-## Companion to the reveal test above: moving the deployed party back out of
-## range hides both the marker's star and the hover preview again -- proving
-## "moving out of range removes the view" against the real scene's own redraw
-## path (_draw_markers()/_update_hovered_encounter()), not just a second
-## GameSession.get_party_scouting_intel() call in isolation.
-func test_world_map_scene_hides_an_authored_tier_two_markers_star_and_composition_after_moving_out_of_range() -> void:
+## Companion to the reveal test above, updated for Stage 5 Step 2 (docs/
+## designs/intelligence.md line 7-8: "Knowledge does not decay or become
+## stale"). Before Stage 5, moving the deployed party back out of legacy
+## Scout range hid both the marker's star and the hover preview again; that
+## is no longer correct once the persistent Intelligence system has learned
+## this encounter's tier. This test now proves the opposite of its
+## pre-Stage-5 self: once GameSession.encounter_intel has recorded a
+## known_tier for this encounter, moving out of legacy range must NOT hide
+## the marker's star or the hover preview -- both must keep showing the same
+## persistent info, against the real scene's own redraw path
+## (_draw_markers()/_update_hovered_encounter()), not just a second
+## GameSession.get_encounter_intel() call in isolation. See
+## test_world_map_scene_still_hides_an_authored_tier_two_markers_star_and_
+## composition_after_moving_out_of_range_when_no_stage_5_intel_was_learned()
+## below for the companion case this rename left uncovered: moving away
+## still hides everything when Stage 5 has not learned anything yet (the
+## legacy fallback path in _get_marker_star_text()/refresh_encounter()).
+func test_world_map_scene_keeps_an_authored_tier_two_markers_star_and_composition_visible_after_moving_out_of_range_once_stage_5_intel_is_learned() -> void:
 	# Async: _draw_markers() queue_free()s the prior call's marker children
 	# rather than freeing them synchronously, so a second _draw_markers() call
 	# within the same test needs a process frame to elapse before searching
@@ -948,6 +960,17 @@ func test_world_map_scene_hides_an_authored_tier_two_markers_star_and_compositio
 	GameSession.campaign_objective_id = "obj_tier2_1_orc_outpost"
 	var orc_outpost: Dictionary = GameSession.get_expedition("obj_tier2_1_orc_outpost")
 	GameSession.set_deployed_party_position(orc_outpost.position)
+	# Stage 5's own persistent record -- seeded directly rather than
+	# simulating turns of RNG-driven detection, matching the pattern
+	# test_world_map_scene_hover_shows_only_the_intelligence_systems_
+	# currently_known_details() above already uses. INTEL_TIER_MONSTER_COUNTS
+	# so the persistent composition row below can assert the exact same
+	# "type, count" text the pre-Stage-5 legacy row used to assert, proving
+	# the persistent system shows equivalent info, not just a truncated
+	# stand-in.
+	GameSession.encounter_intel["obj_tier2_1_orc_outpost"] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MONSTER_COUNTS, "quest_id": "",
+	}
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	var panel: Control = world_map.get_node("%InformationPanel")
@@ -955,6 +978,64 @@ func test_world_map_scene_hides_an_authored_tier_two_markers_star_and_compositio
 	# a real transition rather than vacuously passing against a marker that was
 	# never revealed in the first place.
 	assert_eq(_find_expedition_label_by_position(world_map, orc_outpost.position).text, "★★")
+
+	# Manhattan distance from (6, 6) to (1, 1) is 10, well beyond even the
+	# scout_keen_eyes-extended range of 4 -- mirrors how a real move commits
+	# (GameSession.set_deployed_party_position()) followed by the screen's own
+	# redraw of markers and the hover preview. This puts the party outside the
+	# legacy Scout-in-range check entirely -- only the persistent Stage 5
+	# record can be keeping the marker/preview visible below.
+	GameSession.set_deployed_party_position(Vector2i(6, 6))
+	world_map._draw_markers()
+	await get_tree().process_frame
+	world_map._update_hovered_encounter(orc_outpost.position)
+
+	var label := _find_expedition_label_by_position(world_map, orc_outpost.position)
+	assert_not_null(label, "The marker itself (bare location) must still exist")
+	assert_eq(
+		label.text, "★★",
+		"Knowledge does not decay (docs/designs/intelligence.md) -- once Stage 5 has learned this encounter's tier, moving out of legacy Scout range must not withhold the star again"
+	)
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_true(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelEnemies").text,
+		"%s, %s" % [
+			tr("information.encounter_enemies") % [tr("battle.enemy.orc_bruiser"), 1],
+			tr("information.encounter_enemies") % [tr("battle.enemy.goblin_archer"), 1],
+		],
+		"The persistent Intelligence system's own row must keep showing both groups after the party leaves legacy range"
+	)
+
+
+## Companion to the test above: the legacy Scout-in-range fallback in
+## _get_marker_star_text()/refresh_encounter() only applies while Stage 5 has
+## not learned anything about this encounter yet (known_tier ==
+## GameSession.INTEL_TIER_NONE). This is the case the rename above left
+## uncovered -- proves that pre-Stage-5 behavior (moving out of range hides
+## the marker's star and the hover preview) is unchanged when there is no
+## persistent record to fall back on.
+func test_world_map_scene_still_hides_an_authored_tier_two_markers_star_and_composition_after_moving_out_of_range_when_no_stage_5_intel_was_learned() -> void:
+	# Async: see the sibling test above for why a process frame must elapse
+	# before re-querying marker_container after a second _draw_markers() call.
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
+	GameSession.adventurers.append(scout)
+	GameSession.assign_adventurer_to_selected_party("scout_test")
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	GameSession.campaign_objective_id = "obj_tier2_1_orc_outpost"
+	var orc_outpost: Dictionary = GameSession.get_expedition("obj_tier2_1_orc_outpost")
+	GameSession.set_deployed_party_position(orc_outpost.position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+	# Confirm the reveal actually happened first, so the assertions below prove
+	# a real transition rather than vacuously passing against a marker that was
+	# never revealed in the first place.
+	assert_eq(_find_expedition_label_by_position(world_map, orc_outpost.position).text, "★★")
+	assert_eq(int(GameSession.get_encounter_intel("obj_tier2_1_orc_outpost").known_tier), GameSession.INTEL_TIER_NONE)
 
 	# Manhattan distance from (6, 6) to (1, 1) is 10, well beyond even the
 	# scout_keen_eyes-extended range of 4 -- mirrors how a real move commits
@@ -967,9 +1048,72 @@ func test_world_map_scene_hides_an_authored_tier_two_markers_star_and_compositio
 
 	var label := _find_expedition_label_by_position(world_map, orc_outpost.position)
 	assert_not_null(label, "The marker itself (bare location) must still exist")
-	assert_eq(label.text, "", "Out of range must withhold the star again")
+	assert_eq(label.text, "", "With no Stage 5 intel learned, out of range must still withhold the star")
 	assert_false(panel.get_node("Content/EncounterDanger").visible)
 	assert_false(panel.get_node("Content/EncounterEnemies").visible)
+	assert_false(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_false(panel.get_node("Content/EncounterIntelEnemies").visible)
+
+
+## World Map exposes only known details (Stage 5 Step 2, docs/designs/
+## intelligence.md): a real scene test proving _update_hovered_encounter()
+## drives InformationPanel.refresh_encounter_intel() -- via the Intelligence
+## system's own GameSession.encounter_intel state, entirely independent of
+## the legacy Scout-in-range path both tests above exercise (no scout, no
+## deployed party at all here).
+func test_world_map_scene_hover_shows_only_the_intelligence_systems_currently_known_details() -> void:
+	GameSession.reset()
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_MAIN_MONSTER, "quest_id": "",
+	}
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+
+	world_map._update_hovered_encounter(goblin_camp.position)
+
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
+	assert_true(panel.get_node("Content/EncounterIntelEnemies").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterIntelEnemies").text,
+		tr("information.encounter_enemy_type_only") % tr("battle.enemy.goblin"),
+		"Main monster known must show the type without a count"
+	)
+
+
+## Second symptom from Stage 5 Step 2 playtesting (docs/designs/
+## intelligence.md): before this fix, GameSession.get_encounter_intel() (used
+## by the Information Panel) and the marker's own star glyph
+## (_get_marker_star_text(), which used to call only the legacy
+## get_party_scouting_intel()) could disagree -- the panel could show
+## tier-level intel for an encounter the party had never approached (e.g.
+## learned via Encampment-based detection, which has a base 25 detection
+## score even with no Scout/Watchtower per the design doc), while the map
+## marker showed nothing for that same encounter. This test seeds Stage 5
+## intel exactly as Encampment-based detection would -- no deployed party at
+## all, mirroring the seeding the sibling test just above already uses -- and
+## proves the marker's own star Label now agrees with the Information Panel
+## instead of staying blank.
+func test_world_map_scene_marker_star_shows_stage_5_intel_learned_with_no_deployed_party_nearby() -> void:
+	GameSession.reset()
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_LEVEL, "quest_id": "",
+	}
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%InformationPanel")
+
+	var label := _find_expedition_label_by_position(world_map, goblin_camp.position)
+	world_map._update_hovered_encounter(goblin_camp.position)
+
+	assert_not_null(label, "Goblin Camp label should exist")
+	assert_eq(
+		label.text, "★",
+		"The marker star must reflect Stage 5's persistent intel even with no party ever deployed near this encounter"
+	)
+	assert_true(panel.get_node("Content/EncounterIntelTier").visible)
 
 
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
@@ -1563,6 +1707,34 @@ func test_no_current_objective_marker_renders_once_the_campaign_is_complete() ->
 	var world_map := _make_world_map()
 
 	assert_eq(world_map._current_campaign_objective_marker(), {})
+
+
+## Authored objective UI must identify the required route regardless of
+## intel/quest state (Stage 5 Step 2, docs/designs/intelligence.md):
+## _expedition_id_at()/try_activate_current_tile() never consult GameSession.
+## get_encounter_intel()/get_quests() at all, so the current objective's own
+## marker/route works identically whether an unrelated sandbox encounter
+## carries a fully-expired quest and full intelligence alongside it.
+func test_the_current_objectives_marker_and_route_are_unaffected_by_intel_or_quest_state() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0
+	GameSession.reset()
+	_deploy_warrior_party()  # reset() above cleared before_each()'s own deployed party
+	var quest_id: String = String(GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID].quest_id)
+	assert_false(quest_id.is_empty(), "Setup: goblin_camp should have posted a quest")
+	GameSession.accept_quest(quest_id)
+	for _turn in GameSession.QUEST_DURATION_TURNS_PER_TIER + 1:
+		GameSession.end_world_turn()
+	assert_eq(GameSession.get_quest(quest_id).status, GameSession.QUEST_STATUS_EXPIRED, "Setup: the quest must have expired")
+
+	var world_map := _make_world_map()
+	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+
+	assert_eq(world_map._expedition_id_at(tier1_1.position), "obj_tier1_1_goblin_outpost")
+	world_map.party_position = tier1_1.position
+	assert_true(
+		world_map.try_activate_current_tile(),
+		"The current authored objective must always be enterable, independent of any quest/intel state elsewhere"
+	)
 
 
 ## World Map isn't an encampment screen -- the persistent left nav belongs

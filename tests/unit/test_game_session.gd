@@ -5816,6 +5816,22 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"SCOUT_KEEN_EYES_INTEL_RANGE_BONUS": true,
 		"CLERIC_MEDITATION_SPELL_RANGE_BONUS": true,
 		"CLERIC_DEVOUT_HP_PERCENT": true,
+		"WATCHTOWER_TIER_1_COST": true,
+		"WATCHTOWER_TIER_2_COST": true,
+		"WATCHTOWER_TIER_3_COST": true,
+		"WATCHTOWER_TIER_1_DETECTION": true,
+		"WATCHTOWER_TIER_2_DETECTION": true,
+		"WATCHTOWER_TIER_3_DETECTION": true,
+		"BASE_ENCAMPMENT_DETECTION": true,
+		"QUEST_DURATION_TURNS_PER_TIER": true,
+		"QUEST_POSTING_BLOCK_TURNS_PER_TIER": true,
+		"QUEST_REWARD_PERCENT": true,
+		"QUEST_POSTING_CHANCE_PERCENT": true,
+		"QUEST_TIER_CAP_LEVEL_1": true,
+		"QUEST_TIER_CAP_LEVEL_2": true,
+		"QUEST_TIER_CAP_LEVEL_3": true,
+		"QUEST_TIER_CAP_LEVEL_4": true,
+		"SCOUT_SCOUTING_SKILL": true,
 	}
 
 
@@ -6323,4 +6339,465 @@ func test_tier_2_encounter_completion_reward_averages_50_gold() -> void:
 
 	# 40 base completion bonus (difficulty 2 * ~20) + 6 kill loot = 46 gold
 	assert_between(session.battle_reward, 44, 52, "Tier 2 encounter reward should average ~50 gold")
+
+
+## ---------------------------------------------------------------------
+## Intelligence & Guild Hall quests (Stage 5 Step 2, docs/designs/
+## intelligence.md, decision-ledger.md's D1). Every test below uses a bare
+## GameSessionScript instance (see the pattern established by the tier-
+## reward tests immediately above) rather than the GameSession singleton, so
+## injected rolls/world_turn advances in one test can never leak into
+## another. Private helpers (_distance_retention, _encampment_detection_
+## chance, _spawn_next_encounter_instance) are called directly per this
+## codebase's "private methods are fair game" convention (see docs/dev/
+## testing.md).
+## ---------------------------------------------------------------------
+
+
+func test_distance_retention_matches_the_design_docs_formula() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_almost_eq(float(session._distance_retention(0)), 1.0, 0.0001, "Zero distance retains the full chance")
+	assert_almost_eq(float(session._distance_retention(1)), 0.9, 0.0001, "Distance 1 retains 90% -- the design doc's own worked example")
+	assert_almost_eq(float(session._distance_retention(5)), 0.5, 0.0001)
+	assert_almost_eq(float(session._distance_retention(10)), 0.0, 0.0001, "Distance 10 clamps retention to zero")
+	assert_almost_eq(float(session._distance_retention(20)), 0.0, 0.0001, "Retention never goes negative past the clamp")
+
+
+## goblin_camp sits at (4, 4), turn distance 2 from the Encampment (3, 3):
+## base 25 detection * distance_retention(2) (0.8) = 20.0 exactly. No
+## Watchtower and no encamped Scout in either case below.
+func test_encampment_detection_chance_falls_off_with_turn_distance() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.detection_roll = func() -> float: return 19.9
+	session.end_world_turn()
+	assert_true(
+		bool(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).discovered),
+		"A roll just under the computed 20.0%% chance must succeed"
+	)
+
+	session.reset()
+	session.detection_roll = func() -> float: return 20.1
+	session.end_world_turn()
+	assert_false(
+		bool(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).discovered),
+		"A roll at/above the computed chance must fail"
+	)
+
+
+## Every eligible source rolls independently and unconditionally each World
+## Map Turn -- one success (from any source) is enough to discover the
+## encounter, and a source's own roll is never skipped just because an
+## earlier source already succeeded (or failed).
+func test_detection_rolls_independently_per_eligible_source_each_turn() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	# Isolate the assertion to exactly one undiscovered encounter -- a fresh
+	# campaign seeds two (goblin_camp, orc_outpost), and each undiscovered
+	# encounter gets its own pair of source rolls every turn.
+	session.active_encounters = session.active_encounters.filter(
+		func(instance: Dictionary) -> bool: return instance.id == GameSessionScript.GOBLIN_CAMP_ID
+	)
+	session.encounter_intel.erase(GameSessionScript.ORC_OUTPOST_ID)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.depart_selected_party()
+	# Turn distance 0 from the goblin camp -- a guaranteed-success party_
+	# detection_chance (SCOUT_SCOUTING_SKILL * 1.0) regardless of the roll
+	# threshold, while the Encampment's own base-25 check (turn distance 2)
+	# is forced to fail on the first call.
+	session.set_deployed_party_position(session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID).position)
+
+	var call_count := [0]
+	session.detection_roll = func() -> float:
+		call_count[0] += 1
+		return 50.0 if call_count[0] == 1 else 0.0
+
+	session.end_world_turn()
+
+	assert_eq(call_count[0], 2, "Both the Encampment and the deployed Scout party must roll independently")
+	assert_true(bool(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).discovered))
+
+
+## One attempted next tier per World Map Turn, strictly in the design's own
+## order (Tier level, Main monster, All monsters, Monster counts) -- never
+## more than one tier advances per turn, and discovery itself never resolves
+## on the same turn as its first info tier.
+func test_intelligence_accumulates_one_ordered_tier_per_world_map_turn_after_discovery() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.depart_selected_party()
+	session.set_deployed_party_position(session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID).position)
+	session.detection_roll = func() -> float: return 0.0
+	session.intel_tier_roll = func() -> float: return 0.0
+
+	session.end_world_turn()
+	var intel: Dictionary = session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID)
+	assert_true(bool(intel.discovered))
+	assert_eq(int(intel.known_tier), GameSessionScript.INTEL_TIER_NONE, "Discovery and its first info tier never resolve on the same turn")
+
+	session.end_world_turn()
+	assert_eq(int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier), GameSessionScript.INTEL_TIER_LEVEL)
+
+	session.end_world_turn()
+	assert_eq(int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier), GameSessionScript.INTEL_TIER_MAIN_MONSTER)
+
+	session.end_world_turn()
+	assert_eq(int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier), GameSessionScript.INTEL_TIER_ALL_MONSTERS)
+
+	session.end_world_turn()
+	assert_eq(int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier), GameSessionScript.INTEL_TIER_MONSTER_COUNTS)
+
+	session.end_world_turn()
+	assert_eq(
+		int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier),
+		GameSessionScript.INTEL_TIER_MONSTER_COUNTS,
+		"Already-full intelligence must not error or change once every tier is known"
+	)
+
+
+## obj_tier1_1_goblin_outpost starts discovered from turn one (see reset())
+## and fields two composition groups (Goblin + Kobold) -- proving both that
+## an authored node's info tiers still accumulate normally, and that "Main
+## monster" (one group) genuinely differs from "All monsters" (every group).
+func test_authored_objective_intel_accumulates_ordered_tiers_and_reveals_multi_group_composition_progressively() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	# A roster Scout not assigned to any deployed party counts as "at the
+	# Encampment" -- the only eligible intel source this test needs.
+	session.adventurers.append(session.get_default_scout("scout_test", "Test Scout"))
+	session.intel_tier_roll = func() -> float: return 0.0
+
+	assert_true(bool(session.get_encounter_intel(encounter_id).discovered), "Authored objectives start discovered, no detection roll needed")
+	assert_eq(int(session.get_encounter_intel(encounter_id).known_tier), GameSessionScript.INTEL_TIER_NONE)
+
+	session.end_world_turn()  # Tier level
+	assert_eq(int(session.get_encounter_intel(encounter_id).known_tier), GameSessionScript.INTEL_TIER_LEVEL)
+
+	session.end_world_turn()  # Main monster: exactly one group
+	var main_monster_intel: Dictionary = session.get_encounter_intel(encounter_id)
+	assert_eq(int(main_monster_intel.known_tier), GameSessionScript.INTEL_TIER_MAIN_MONSTER)
+	assert_eq((main_monster_intel.enemy_types as Array).size(), 1, "Main monster reveals only the first composition group")
+
+	session.end_world_turn()  # All monsters: every group
+	var all_monsters_intel: Dictionary = session.get_encounter_intel(encounter_id)
+	assert_eq(int(all_monsters_intel.known_tier), GameSessionScript.INTEL_TIER_ALL_MONSTERS)
+	assert_eq((all_monsters_intel.enemy_types as Array).size(), 2, "All monsters reveals every composition group")
+	assert_true((all_monsters_intel.enemy_counts as Array).is_empty(), "Monster counts must stay unknown until earned separately")
+
+	session.end_world_turn()  # Monster counts
+	var counts_intel: Dictionary = session.get_encounter_intel(encounter_id)
+	assert_eq(int(counts_intel.known_tier), GameSessionScript.INTEL_TIER_MONSTER_COUNTS)
+	assert_eq((counts_intel.enemy_counts as Array).size(), 2)
+
+
+## Once learned, known_tier (and discovery itself) must never regress, even
+## once every eligible Scout source disappears from the roster entirely.
+func test_known_intelligence_never_decays_once_learned() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.depart_selected_party()
+	session.set_deployed_party_position(session.get_expedition(GameSessionScript.GOBLIN_CAMP_ID).position)
+	session.detection_roll = func() -> float: return 0.0
+	session.intel_tier_roll = func() -> float: return 0.0
+	session.end_world_turn()  # discovered
+	session.end_world_turn()  # Tier level known
+	assert_eq(int(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).known_tier), GameSessionScript.INTEL_TIER_LEVEL)
+
+	# Remove every Scout from the roster entirely -- no eligible source
+	# (Encampment or party) can ever advance this encounter's intel again.
+	var without_scouts: Array[Dictionary] = []
+	for adventurer in session.adventurers:
+		if String(adventurer.get("class", "")) != "scout":
+			without_scouts.append(adventurer)
+	session.adventurers = without_scouts
+
+	for _turn in 5:
+		session.end_world_turn()
+
+	var intel: Dictionary = session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID)
+	assert_eq(
+		int(intel.known_tier),
+		GameSessionScript.INTEL_TIER_LEVEL,
+		"known_tier must never regress once learned, even with no eligible source left to advance it further"
+	)
+	assert_true(bool(intel.discovered), "Discovery itself must never decay either")
+
+
+## design: "Clearing or removing an encounter removes its record" -- applies
+## to both the intelligence record and any quest it carries, regardless of
+## the quest's own status.
+func test_clearing_an_encounter_removes_its_intelligence_and_quest_records() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.quest_posting_roll = func() -> float: return 0.0  # guarantee goblin_camp posts a quest on reset
+	session.reset()
+	assert_true(session.encounter_intel.has(GameSessionScript.GOBLIN_CAMP_ID))
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	assert_false(quest_id.is_empty(), "Setup: goblin_camp (tier 1) should have posted a quest at Guild Hall level 1")
+	assert_true(session.quests.has(quest_id))
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_false(
+		session.encounter_intel.has(GameSessionScript.GOBLIN_CAMP_ID),
+		"Clearing the encounter must remove its intelligence record"
+	)
+	assert_false(session.quests.has(quest_id), "Clearing the encounter must remove its linked quest record too")
+
+
+## The single most important invariant this step protects: an authored
+## objective's discovery is forced the instant it unlocks -- never gated by
+## a detection roll, quest state, or any intel tier -- while its own further
+## info tiers still accumulate exactly like any other encounter.
+func test_completing_an_authored_objective_immediately_and_permanently_discovers_the_next_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_true(
+		bool(session.get_encounter_intel("obj_tier1_1_goblin_outpost").discovered),
+		"The campaign's first objective starts discovered from turn one"
+	)
+
+	session.enter_encounter("obj_tier1_1_goblin_outpost")
+	session.complete_current_encounter()
+
+	var next_intel: Dictionary = session.get_encounter_intel("obj_tier1_2_kobold_warren")
+	assert_true(
+		bool(next_intel.discovered),
+		"The next authored objective must be discovered the instant it unlocks -- never gated by a detection roll"
+	)
+	assert_eq(
+		int(next_intel.known_tier), GameSessionScript.INTEL_TIER_NONE,
+		"Discovery is guaranteed; its further info tiers are not -- they still accumulate normally"
+	)
+	assert_true(String(next_intel.quest_id).is_empty(), "Authored objectives are never quest-eligible")
+
+
+## D1's own required deterministic scenario assertion: a quest timer of
+## encounter_tier * 10 turns expires and blocks new postings for exactly
+## encounter_tier * 5 turns afterward.
+func test_quest_expires_after_tier_times_ten_turns_and_blocks_new_postings_for_tier_times_five() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.quest_posting_roll = func() -> float: return 0.0
+	session.reset()
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	assert_false(quest_id.is_empty())
+	assert_true(session.accept_quest(quest_id))
+	# goblin_camp is tier 1, accepted at world_turn 1: expires_turn == 1 + 1*10.
+	assert_eq(int(session.get_quest(quest_id).expires_turn), 11)
+
+	for _turn in session.QUEST_DURATION_TURNS_PER_TIER:
+		session.end_world_turn()
+	assert_eq(String(session.get_quest(quest_id).status), "active", "The quest must remain active through its full duration")
+
+	session.end_world_turn()  # one turn past expiry (world_turn now 12)
+	assert_eq(String(session.get_quest(quest_id).status), "expired")
+	assert_eq(int(session.quest_posting_blocked_until_turn), 12 + 1 * session.QUEST_POSTING_BLOCK_TURNS_PER_TIER)
+
+
+## No new quest may post while a posting block is active, even when
+## quest_posting_roll would otherwise always succeed; posting resumes
+## exactly at the blocked-until turn.
+func test_new_quest_postings_are_blocked_until_the_computed_turn() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.quest_posting_roll = func() -> float: return 0.0
+	session.reset()
+	# Guild Hall level 3 (tier cap 4) so the sandbox's only remaining
+	# template (ruined_fortress, tier 3) stays quest-eligible once spawned --
+	# isolating the assertion to the posting block, not tier eligibility.
+	session.guild_hall_level = 3
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	session.accept_quest(quest_id)
+	for _turn in session.QUEST_DURATION_TURNS_PER_TIER + 1:
+		session.end_world_turn()
+	assert_eq(String(session.get_quest(quest_id).status), "expired")
+	var blocked_until: int = session.quest_posting_blocked_until_turn
+
+	session.world_turn = blocked_until - 1
+	var instance: Dictionary = session._spawn_next_encounter_instance()
+	assert_true(
+		String(session.encounter_intel[instance.id].quest_id).is_empty(),
+		"No new quest may post before the block lifts"
+	)
+
+	session.world_turn = blocked_until
+	var instance2: Dictionary = session._spawn_next_encounter_instance()
+	assert_false(
+		String(session.encounter_intel[instance2.id].quest_id).is_empty(),
+		"Posting resumes exactly at the blocked-until turn"
+	)
+
+
+func test_accepting_a_quest_reveals_only_tier_level_and_main_monster() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.quest_posting_roll = func() -> float: return 0.0
+	session.reset()
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	assert_false(bool(session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID).discovered), "Posting alone must not discover the target")
+
+	assert_true(session.accept_quest(quest_id))
+
+	var intel: Dictionary = session.get_encounter_intel(GameSessionScript.GOBLIN_CAMP_ID)
+	assert_true(bool(intel.discovered))
+	assert_eq(int(intel.known_tier), GameSessionScript.INTEL_TIER_MAIN_MONSTER, "Accepting reveals exactly Tier level + Main monster, no further")
+	assert_eq((intel.enemy_types as Array).size(), 1)
+	assert_true((intel.enemy_counts as Array).is_empty(), "Monster counts must stay unknown until earned separately")
+
+
+## A quest completes only when its target clears AND the party returns to
+## the Encampment: the reward folds into battle_reward (alongside normal
+## loot) the moment the target clears, but gold itself is only banked once
+## deposit_pending_reward() runs -- the exact same pipeline every other
+## reward already uses, never a parallel one.
+func test_quest_reward_folds_into_battle_reward_only_when_its_target_clears_while_active() -> void:
+	# Baseline: identical rolls, but quest_posting_roll never succeeds, so
+	# this run's battle_reward is loot alone -- the control value the quest
+	# run below is compared against, rather than a hand-derived loot number.
+	var baseline: Node = GameSessionScript.new()
+	autofree(baseline)
+	baseline.loot_gold_roll = func(min_val: int, _max_val: int) -> int: return min_val
+	baseline.loot_gear_roll = func() -> float: return 1.0
+	baseline.quest_posting_roll = func() -> float: return 100.0
+	baseline.reset()
+	baseline.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	baseline.complete_current_encounter()
+	var loot_only_reward: int = baseline.battle_reward
+
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_val: int, _max_val: int) -> int: return min_val
+	session.loot_gear_roll = func() -> float: return 1.0
+	session.quest_posting_roll = func() -> float: return 0.0
+	session.reset()
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	var expected_reward: int = session.get_encounter_expected_gold_value(1) / 2  # 50% of the tier-1 expected value
+	assert_eq(int(session.get_quest(quest_id).reward_gold), expected_reward)
+	assert_true(session.accept_quest(quest_id))
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(
+		session.battle_reward, loot_only_reward + expected_reward,
+		"An active quest's reward gold must fold into battle_reward alongside normal loot on clear"
+	)
+	assert_eq(session.gold, 0, "Gold is only banked once the party reaches the Encampment, not at the moment of clearing")
+
+
+func test_an_expired_quests_target_clears_without_its_reward() -> void:
+	# Same baseline-comparison approach as the "active quest completes"
+	# test above: the control run never posts a quest at all, isolating the
+	# assertion to "an expired quest contributes nothing" rather than
+	# requiring a hand-derived loot number.
+	var baseline: Node = GameSessionScript.new()
+	autofree(baseline)
+	baseline.loot_gold_roll = func(min_val: int, _max_val: int) -> int: return min_val
+	baseline.loot_gear_roll = func() -> float: return 1.0
+	baseline.quest_posting_roll = func() -> float: return 100.0
+	baseline.reset()
+	baseline.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	baseline.complete_current_encounter()
+	var loot_only_reward: int = baseline.battle_reward
+
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.loot_gold_roll = func(min_val: int, _max_val: int) -> int: return min_val
+	session.loot_gear_roll = func() -> float: return 1.0
+	session.quest_posting_roll = func() -> float: return 0.0
+	session.reset()
+	var quest_id: String = String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id)
+	session.accept_quest(quest_id)
+	for _turn in session.QUEST_DURATION_TURNS_PER_TIER + 1:
+		session.end_world_turn()
+	assert_eq(String(session.get_quest(quest_id).status), "expired")
+
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+	session.complete_current_encounter()
+
+	assert_eq(session.battle_reward, loot_only_reward, "An expired quest awards no reward, even once its target clears")
+	assert_false(session.quests.has(quest_id), "The expired quest's record is still removed once its target clears")
+
+
+func test_watchtower_upgrade_cost_and_detection_scale_by_tier() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	assert_eq(session.get_watchtower_upgrade_cost(), 50)
+	session.gold = 50
+	assert_true(session.can_upgrade_watchtower())
+	assert_true(session.upgrade_watchtower())
+	assert_eq(session.watchtower_level, 1)
+	assert_eq(session.gold, 0)
+
+	session.gold = 100
+	assert_eq(session.get_watchtower_upgrade_cost(), 100)
+	assert_true(session.upgrade_watchtower())
+	assert_eq(session.watchtower_level, 2)
+
+	session.gold = 200
+	assert_eq(session.get_watchtower_upgrade_cost(), 200)
+	assert_true(session.upgrade_watchtower())
+	assert_eq(session.watchtower_level, 3)
+
+	assert_eq(session.get_watchtower_upgrade_cost(), -1, "No further tier exists past WATCHTOWER_MAX_LEVEL")
+	assert_false(session.can_upgrade_watchtower())
+
+	# The Watchtower's own detection value replaces (never stacks with) the
+	# base 25 -- verified through the Encampment's own detection chance at
+	# turn distance 0 from the settlement itself.
+	assert_almost_eq(
+		float(session._encampment_detection_chance(GameSessionScript.STARTING_SETTLEMENT_WORLD_POSITION)),
+		75.0, 0.0001
+	)
+
+
+## A snapshot exported before this system shipped (or any snapshot otherwise
+## missing an encounter_intel entry for a still-live/authored encounter)
+## must not get permanently stuck with no data for it -- import_campaign_
+## snapshot() backfills a fresh record for every such id. A backfilled
+## sandbox instance never gets a retroactive quest roll; a backfilled
+## authored node still gets its usual discovery guarantee.
+func test_importing_a_pre_stage_5_snapshot_backfills_missing_intel_records_for_live_and_authored_encounters() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	var legacy_snapshot: Dictionary = session.export_campaign_snapshot()
+	legacy_snapshot.erase("encounter_intel")
+	legacy_snapshot.erase("quests")
+	legacy_snapshot.erase("quest_posting_blocked_until_turn")
+	legacy_snapshot.erase("watchtower_level")
+	legacy_snapshot.version = 2
+
+	var result: Dictionary = session.import_campaign_snapshot(legacy_snapshot)
+
+	assert_true(bool(result.ok), String(result.get("error", "")))
+	assert_true(session.encounter_intel.has(GameSessionScript.GOBLIN_CAMP_ID))
+	assert_false(
+		bool(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].discovered),
+		"A backfilled sandbox instance starts undiscovered"
+	)
+	assert_true(
+		String(session.encounter_intel[GameSessionScript.GOBLIN_CAMP_ID].quest_id).is_empty(),
+		"A backfilled sandbox instance never gets a retroactive quest roll"
+	)
+	assert_true(session.encounter_intel.has("obj_tier1_1_goblin_outpost"))
+	assert_true(
+		bool(session.encounter_intel["obj_tier1_1_goblin_outpost"].discovered),
+		"A backfilled authored node is still guaranteed discovered"
+	)
 

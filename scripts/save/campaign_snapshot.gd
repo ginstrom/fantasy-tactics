@@ -17,7 +17,13 @@ extends RefCounted
 ## triggers reward-banking side effects (merge_battle_loot_into_party(),
 ## deposit_pending_reward()) -- it only moves values, never settles them.
 
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
+
+## Valid GameSession.QUEST_STATUS_* values (see game_session.gd's own
+## consts) -- duplicated here as plain strings rather than reached via
+## _GameSessionScript since they are simple string literals, not a data
+## table another system also depends on.
+const _QUEST_STATUSES := ["posted", "active", "completed", "expired"]
 
 ## Same EXPEDITIONS template catalog GameSession exposes on its autoload
 ## singleton, reached here via preload of the script itself (a compile-time
@@ -58,6 +64,16 @@ var used_encounter_template_ids: Array[String] = []
 var world_turn: int = 1
 var gold: int = 0
 var guild_hall_level: int = 1
+# Intelligence & Guild Hall quests (see GameSession.encounter_intel/quests'
+# own doc comments) -- introduced in format version 3. A pre-version-3
+# payload has none of these keys; from_dictionary() normalizes them to the
+# same empty/zero defaults these vars themselves default to, matching the
+# temple_level/blacksmith_level "added after an earlier version shipped"
+# migration pattern above rather than rejecting the whole payload.
+var encounter_intel: Dictionary = {}
+var quests: Dictionary = {}
+var quest_posting_blocked_until_turn: int = 0
+var watchtower_level: int = 0
 # Temple hub level (see GameSession.temple_level's own doc comment): 0
 # (unbuilt) or 1 (consecrated). Added after version one shipped, so a
 # version-1 payload normalizes to the harmless unbuilt default rather than
@@ -118,6 +134,10 @@ func to_dictionary() -> Dictionary:
 		"world_turn": world_turn,
 		"gold": gold,
 		"guild_hall_level": guild_hall_level,
+		"encounter_intel": encounter_intel.duplicate(true),
+		"quests": quests.duplicate(true),
+		"quest_posting_blocked_until_turn": quest_posting_blocked_until_turn,
+		"watchtower_level": watchtower_level,
 		"temple_level": temple_level,
 		"blacksmith_level": blacksmith_level,
 		"blacksmith_craft_job": blacksmith_craft_job.duplicate(true),
@@ -156,10 +176,12 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not data.get("version") is int:
 		return _invalid("missing or unsupported snapshot version")
 	# Version 1 predates campaign milestone progression (see
-	# _normalize_campaign_progress()) and migrates gracefully; any other
-	# version besides the current FORMAT_VERSION is unsupported.
+	# _normalize_campaign_progress()) and version 2 predates Intelligence &
+	# Guild Hall quests (see the encounter_intel/quests block below); both
+	# migrate gracefully. Any other version besides the current
+	# FORMAT_VERSION is unsupported.
 	var version: int = int(data.version)
-	if version != 1 and version != FORMAT_VERSION:
+	if version != 1 and version != 2 and version != FORMAT_VERSION:
 		return _invalid("missing or unsupported snapshot version")
 
 	var normalized: Dictionary = {}
@@ -256,6 +278,58 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if not data.get(scalar_key) is int:
 			return _invalid("%s is not an int" % scalar_key)
 		normalized[scalar_key] = int(data[scalar_key])
+
+	# Intelligence & Guild Hall quests (see GameSession.encounter_intel/
+	# quests' own doc comments), added in format version 3 -- a pre-version-3
+	# payload has none of these keys and normalizes to the same empty/zero
+	# defaults a fresh campaign starts with, the same "added after an earlier
+	# version shipped" pattern temple_level below uses.
+	if data.has("encounter_intel") and not data.encounter_intel is Dictionary:
+		return _invalid("encounter_intel is not a dictionary")
+	var encounter_intel_result := _normalize_encounter_intel(data.get("encounter_intel", {}))
+	if not encounter_intel_result.ok:
+		return _invalid(encounter_intel_result.error)
+	normalized["encounter_intel"] = encounter_intel_result.value
+
+	if data.has("quests") and not data.quests is Dictionary:
+		return _invalid("quests is not a dictionary")
+	var quests_result := _normalize_quests(data.get("quests", {}))
+	if not quests_result.ok:
+		return _invalid(quests_result.error)
+	normalized["quests"] = quests_result.value
+
+	# Every encounter_intel record must name a still-live encounter (an
+	# active instance or an unlocked authored node); every quest must name a
+	# record that actually carries its own quest_id back-link -- both
+	# directions of the same relationship _settle_encounter_intelligence()
+	# maintains together at runtime (see game_session.gd).
+	for encounter_id in normalized.encounter_intel.keys():
+		if (
+			not _has_id(normalized.active_encounters, encounter_id)
+			and not _GameSessionScript.CAMPAIGN_OBJECTIVES.has(encounter_id)
+		):
+			return _invalid("encounter_intel references an unknown encounter id: %s" % encounter_id)
+		var linked_quest_id: String = String(normalized.encounter_intel[encounter_id].get("quest_id", ""))
+		if linked_quest_id != "" and not normalized.quests.has(linked_quest_id):
+			return _invalid("encounter_intel entry %s references an unknown quest id: %s" % [encounter_id, linked_quest_id])
+	for quest_id in normalized.quests.keys():
+		var quest: Dictionary = normalized.quests[quest_id]
+		var linked_encounter_id: String = quest.encounter_id
+		var linked_record: Dictionary = normalized.encounter_intel.get(linked_encounter_id, {})
+		if linked_record.is_empty() or String(linked_record.get("quest_id", "")) != quest_id:
+			return _invalid("quest %s does not match its target encounter's intelligence record" % quest_id)
+
+	if data.has("quest_posting_blocked_until_turn") and not data.quest_posting_blocked_until_turn is int:
+		return _invalid("quest_posting_blocked_until_turn is not an int")
+	normalized["quest_posting_blocked_until_turn"] = int(data.get("quest_posting_blocked_until_turn", 0))
+	if normalized.quest_posting_blocked_until_turn < 0:
+		return _invalid("quest_posting_blocked_until_turn is out of range")
+
+	if data.has("watchtower_level") and not data.watchtower_level is int:
+		return _invalid("watchtower_level is not an int")
+	normalized["watchtower_level"] = int(data.get("watchtower_level", 0))
+	if normalized.watchtower_level < 0 or normalized.watchtower_level > _GameSessionScript.WATCHTOWER_MAX_LEVEL:
+		return _invalid("watchtower_level is out of range")
 
 	# Added after version one shipped, so existing snapshots normalize to a
 	# harmless zero casualty count.
@@ -658,6 +732,78 @@ static func _normalize_vacancy_list(raw: Variant, field_name: String) -> Diction
 			return _invalid_list("%s contains an invalid vacancy entry" % field_name)
 		normalized.append({"turns_remaining": int(entry.turns_remaining)})
 	return _valid_list(normalized)
+
+
+## GameSession.encounter_intel: an id -> {discovered, known_tier, quest_id}
+## map (see that field's own doc comment). Every key must be a string
+## (the live encounter/authored-node id it describes); shape/range are
+## policed strictly since, unlike tutorial_progress, a malformed entry here
+## could otherwise silently desync World Map/InformationPanel rendering.
+static func _normalize_encounter_intel(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "encounter_intel is not a dictionary", "value": {}}
+	var normalized: Dictionary = {}
+	for key in (raw as Dictionary).keys():
+		if not key is String:
+			return {"ok": false, "error": "encounter_intel contains a non-string key", "value": {}}
+		var entry: Variant = raw[key]
+		if not entry is Dictionary:
+			return {"ok": false, "error": "encounter_intel entry %s is not a dictionary" % key, "value": {}}
+		if not entry.get("discovered") is bool:
+			return {"ok": false, "error": "encounter_intel entry %s has an invalid discovered flag" % key, "value": {}}
+		if not entry.get("known_tier") is int:
+			return {"ok": false, "error": "encounter_intel entry %s has an invalid known_tier" % key, "value": {}}
+		var known_tier := int(entry.known_tier)
+		if known_tier < 0 or known_tier > 4:
+			return {"ok": false, "error": "encounter_intel entry %s has an out-of-range known_tier" % key, "value": {}}
+		if not entry.get("quest_id") is String:
+			return {"ok": false, "error": "encounter_intel entry %s has an invalid quest_id" % key, "value": {}}
+		normalized[key] = {
+			"discovered": bool(entry.discovered),
+			"known_tier": known_tier,
+			"quest_id": String(entry.quest_id),
+		}
+	return {"ok": true, "error": "", "value": normalized}
+
+
+## GameSession.quests: a quest_id -> quest record map (see that field's own
+## doc comment). Every entry's own "id" must match its dictionary key
+## (mirrors the roster lists' id/key discipline, even though quests is keyed
+## rather than listed).
+static func _normalize_quests(raw: Variant) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "quests is not a dictionary", "value": {}}
+	var normalized: Dictionary = {}
+	for key in (raw as Dictionary).keys():
+		if not key is String:
+			return {"ok": false, "error": "quests contains a non-string key", "value": {}}
+		var entry: Variant = raw[key]
+		if not entry is Dictionary:
+			return {"ok": false, "error": "quest %s is not a dictionary" % key, "value": {}}
+		if not entry.get("id") is String or String(entry.id) != key:
+			return {"ok": false, "error": "quest %s has a mismatched or invalid id" % key, "value": {}}
+		if not entry.get("encounter_id") is String or String(entry.encounter_id).is_empty():
+			return {"ok": false, "error": "quest %s has an invalid encounter_id" % key, "value": {}}
+		if not entry.get("tier") is int or int(entry.tier) < 1:
+			return {"ok": false, "error": "quest %s has an invalid tier" % key, "value": {}}
+		if not entry.get("status") is String or not _QUEST_STATUSES.has(String(entry.status)):
+			return {"ok": false, "error": "quest %s has an invalid status" % key, "value": {}}
+		for turn_key in ["posted_turn", "accepted_turn", "expires_turn"]:
+			if not entry.get(turn_key) is int:
+				return {"ok": false, "error": "quest %s has an invalid %s" % [key, turn_key], "value": {}}
+		if not entry.get("reward_gold") is int or int(entry.reward_gold) < 0:
+			return {"ok": false, "error": "quest %s has an invalid reward_gold" % key, "value": {}}
+		normalized[key] = {
+			"id": String(entry.id),
+			"encounter_id": String(entry.encounter_id),
+			"tier": int(entry.tier),
+			"status": String(entry.status),
+			"posted_turn": int(entry.posted_turn),
+			"accepted_turn": int(entry.accepted_turn),
+			"expires_turn": int(entry.expires_turn),
+			"reward_gold": int(entry.reward_gold),
+		}
+	return {"ok": true, "error": "", "value": normalized}
 
 
 ## Rejects a non-Dictionary field, a non-String key, or a non-bool value --

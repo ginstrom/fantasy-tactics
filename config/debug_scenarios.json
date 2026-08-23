@@ -189,6 +189,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -350,7 +370,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -549,6 +569,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -710,7 +750,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -909,6 +949,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -1070,7 +1130,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1269,6 +1329,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -1448,7 +1528,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1647,6 +1727,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -1824,7 +1924,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -2023,6 +2123,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -2202,7 +2322,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "World",
@@ -2401,6 +2521,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -2580,7 +2720,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Battle",
@@ -2872,6 +3012,26 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -3054,7 +3214,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3336,6 +3496,31 @@
         "encounter_vacancies": [],
         "gold": 200,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "ruined_fortress": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -3517,7 +3702,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3718,6 +3903,26 @@
         "encounter_vacancies": [],
         "gold": 500,
         "guild_hall_level": 1,
+        "encounter_intel": {
+          "goblin_camp": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "orc_outpost": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 0,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -3899,7 +4104,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 1
       },
       "category": "Shop",
@@ -4254,6 +4459,71 @@
         "encounter_vacancies": [],
         "gold": 800,
         "guild_hall_level": 3,
+        "encounter_intel": {
+          "obj_boss_borderlands_ogre": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_preboss_1_borderlands_vanguard": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_preboss_2_borderlands_stronghold": {
+            "discovered": false,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_1_goblin_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_2_kobold_warren": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier1_3_goblin_warcamp": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier2_1_orc_outpost": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier2_2_orc_warband": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier2_3_brute_stronghold": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier3_1_hobgoblin_command": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier3_2_mixed_forces_ambush": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          },
+          "obj_tier3_3_ruined_fortress": {
+            "discovered": true,
+            "known_tier": 0,
+            "quest_id": ""
+          }
+        },
+        "quests": {},
+        "quest_posting_blocked_until_turn": 0,
+        "watchtower_level": 0,
         "temple_level": 1,
         "has_trading_post": true,
         "is_campaign_completed": false,
@@ -4318,7 +4588,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 2,
+        "version": 3,
         "world_turn": 60
       },
       "category": "Battle",

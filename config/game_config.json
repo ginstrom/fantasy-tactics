@@ -66,5 +66,23 @@
 		"details_heal_mp_cost": 1,
 		"details_heal_min": 2,
 		"details_heal_max": 8
+	},
+	"intelligence": {
+		"watchtower_tier_1_cost": 50,
+		"watchtower_tier_2_cost": 100,
+		"watchtower_tier_3_cost": 200,
+		"watchtower_tier_1_detection": 50,
+		"watchtower_tier_2_detection": 65,
+		"watchtower_tier_3_detection": 75,
+		"base_encampment_detection": 25,
+		"quest_duration_turns_per_tier": 10,
+		"quest_posting_block_turns_per_tier": 5,
+		"quest_reward_percent": 50,
+		"quest_posting_chance_percent": 50,
+		"quest_tier_cap_level_1": 1,
+		"quest_tier_cap_level_2": 2,
+		"quest_tier_cap_level_3": 4,
+		"quest_tier_cap_level_4": 5,
+		"scout_scouting_skill": 20
 	}
 }

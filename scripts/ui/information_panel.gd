@@ -29,6 +29,21 @@ signal recruit_selected(candidate_id: String)
 @onready var recruit_button: Button = $Content/RecruitButton
 @onready var encounter_danger_label: Label = $Content/EncounterDanger
 @onready var encounter_enemies_label: Label = $Content/EncounterEnemies
+## Intelligence system rows (Stage 5 Step 2, docs/designs/intelligence.md).
+## Deliberately separate nodes from encounter_danger_label/encounter_enemies_
+## label above rather than a shared rendering path: those two stay reserved
+## for the pre-existing Scout-in-range reveal (GameSession.get_party_
+## scouting_intel(), docs/plans/2026-08-18-core-loop-and-engagement/
+## 04-cleric-class-and-scout-reconnaissance.md's locked decision) with its
+## own dedicated test coverage this step does not touch. The two rendering
+## paths stay separate calls, but they are mutually exclusive *per fact*:
+## once the new encounter_intel record knows a fact, its own row is the sole
+## place that fact renders and refresh_encounter() suppresses the matching
+## legacy row -- see refresh_encounter()'s and refresh_encounter_intel()'s
+## own doc comments for the exact per-row threshold.
+@onready var intel_tier_label: Label = $Content/EncounterIntelTier
+@onready var intel_enemies_label: Label = $Content/EncounterIntelEnemies
+@onready var intel_quest_label: Label = $Content/EncounterIntelQuest
 
 var _selected_party_id: String = ""
 var _selected_adventurer_id: String = ""
@@ -168,6 +183,23 @@ func refresh_recruitment_candidate(candidate_id: String) -> void:
 ## formation (e.g. the pre-boss Gatehouse's 2 Hobgoblin Elite/2 Goblin
 ## Archer/1 Kobold Swarmer) would otherwise misreport as one type times the
 ## total (Step 5 review Finding 5).
+##
+## Mutual exclusion with the Intelligence system (Stage 5 Step 2 review
+## finding): a deployed Scout's binary in-range reveal and the new
+## accumulating encounter_intel record are independent systems that can both
+## be true for the same encounter at once (e.g. a Watchtower or a Guild Hall
+## quest already taught the new system what the Scout also currently sees).
+## Rendering both would show the same fact ("Danger: X" / "Enemies: Y")
+## twice in one panel. Once encounter_intel has learned a fact, its own row
+## in refresh_encounter_intel() becomes that fact's single source of truth,
+## so this method suppresses the matching legacy row rather than showing it
+## a second time: the danger row is suppressed once known_tier reaches
+## INTEL_TIER_LEVEL (the same threshold that unlocks intel_tier_label), and
+## the enemy row is suppressed once known_tier reaches INTEL_TIER_MAIN_
+## MONSTER (the same threshold that unlocks intel_enemies_label). An
+## encounter with no Stage 5 intel yet (known_tier == INTEL_TIER_NONE) is
+## unaffected -- the legacy row is this method's only source for it, exactly
+## as before this fix.
 func refresh_encounter(party_id: String, encounter_id: String) -> void:
 	_refresh_permanent_rows()
 	_clear_party_section()
@@ -180,9 +212,16 @@ func refresh_encounter(party_id: String, encounter_id: String) -> void:
 		return
 
 	_selected_encounter_id = encounter_id
-	var stars := "★".repeat(clampi(GameSession.get_threat_stars(encounter_id), 1, 5))
-	encounter_danger_label.text = tr("information.encounter_danger") % stars
-	encounter_danger_label.visible = true
+	var known_tier: int = int(GameSession.get_encounter_intel(encounter_id).get("known_tier", GameSession.INTEL_TIER_NONE))
+
+	encounter_danger_label.visible = known_tier < GameSession.INTEL_TIER_LEVEL
+	if encounter_danger_label.visible:
+		var stars := "★".repeat(clampi(GameSession.get_threat_stars(encounter_id), 1, 5))
+		encounter_danger_label.text = tr("information.encounter_danger") % stars
+
+	encounter_enemies_label.visible = known_tier < GameSession.INTEL_TIER_MAIN_MONSTER
+	if not encounter_enemies_label.visible:
+		return
 
 	var enemy_types: Array = intel.get("enemy_types", [])
 	var enemy_counts: Array = intel.get("enemy_counts", [])
@@ -191,7 +230,62 @@ func refresh_encounter(party_id: String, encounter_id: String) -> void:
 		var count: int = int(enemy_counts[i]) if i < enemy_counts.size() else int(intel.enemy_count)
 		breakdown.append(tr("information.encounter_enemies") % [String(enemy_types[i]), count])
 	encounter_enemies_label.text = ", ".join(breakdown)
-	encounter_enemies_label.visible = true
+
+
+## Shows the Intelligence system's own progressively-revealed rows for a
+## World Map encounter (docs/designs/intelligence.md, Stage 5 Step 2) --
+## deliberately a separate call from refresh_encounter() above rather than a
+## merged rendering path, so the pre-existing Scout-in-range reveal (and its
+## own dedicated test coverage) is never touched by this step. A caller that
+## wants both systems' available information calls refresh_encounter() first
+## and this second, in that order -- see world_map.gd's
+## _refresh_information_panel(). Renders three independent rows, exactly
+## matching the design's own ordered tiers:
+## - Tier level (stars): visible once known_tier reaches INTEL_TIER_LEVEL.
+## - Enemies: visible once known_tier reaches INTEL_TIER_MAIN_MONSTER, first
+##   as a type-only list (Main monster/All monsters tiers), then with counts
+##   once INTEL_TIER_MONSTER_COUNTS is reached.
+## - Quest: visible only when the encounter carries a quest (posted,
+##   accepted, or expired) -- an accepted quest's "Tier level + Main
+##   monster only" reveal falls naturally out of accept_quest() setting
+##   known_tier to INTEL_TIER_MAIN_MONSTER, not out of any special-casing
+##   here.
+## An undiscovered (or unknown) encounter_id clears the whole section, same
+## as every other refresh_*() method's not-found convention.
+func refresh_encounter_intel(encounter_id: String) -> void:
+	var intel := GameSession.get_encounter_intel(encounter_id)
+	if not bool(intel.get("discovered", false)):
+		_clear_encounter_intel_section()
+		return
+
+	_selected_encounter_id = encounter_id
+	var known_tier: int = int(intel.get("known_tier", 0))
+
+	intel_tier_label.visible = known_tier >= GameSession.INTEL_TIER_LEVEL
+	if intel_tier_label.visible:
+		var stars := "★".repeat(clampi(GameSession.get_threat_stars(encounter_id), 1, 5))
+		intel_tier_label.text = tr("information.encounter_danger") % stars
+
+	var intel_enemy_types: Array = intel.get("enemy_types", [])
+	var intel_enemy_counts: Array = intel.get("enemy_counts", [])
+	intel_enemies_label.visible = not intel_enemy_types.is_empty()
+	if intel_enemies_label.visible:
+		var counts_known: bool = known_tier >= GameSession.INTEL_TIER_MONSTER_COUNTS
+		var intel_breakdown: Array[String] = []
+		for i in intel_enemy_types.size():
+			if counts_known:
+				intel_breakdown.append(tr("information.encounter_enemies") % [String(intel_enemy_types[i]), int(intel_enemy_counts[i])])
+			else:
+				intel_breakdown.append(tr("information.encounter_enemy_type_only") % String(intel_enemy_types[i]))
+		intel_enemies_label.text = ", ".join(intel_breakdown)
+
+	var quest_id := String(intel.get("quest_id", ""))
+	var quest := GameSession.get_quest(quest_id) if quest_id != "" else {}
+	intel_quest_label.visible = not quest.is_empty()
+	if intel_quest_label.visible:
+		intel_quest_label.text = tr("information.encounter_quest") % [
+			tr("guild_hall.quests.status.%s" % String(quest.status)), int(quest.reward_gold)
+		]
 
 
 ## Candidates are resolved fresh from GameSession.get_recruitment_candidates()
@@ -241,6 +335,16 @@ func _clear_encounter_section() -> void:
 	_selected_encounter_id = ""
 	encounter_danger_label.visible = false
 	encounter_enemies_label.visible = false
+	_clear_encounter_intel_section()
+
+
+## Intelligence system rows (see intel_tier_label's own doc comment) --
+## factored out of _clear_encounter_section() so refresh_encounter_intel()
+## can also call it directly without touching the unrelated legacy fields.
+func _clear_encounter_intel_section() -> void:
+	intel_tier_label.visible = false
+	intel_enemies_label.visible = false
+	intel_quest_label.visible = false
 
 
 func _on_party_view_button_pressed() -> void:

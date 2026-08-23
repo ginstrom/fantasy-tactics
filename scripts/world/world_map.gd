@@ -221,20 +221,31 @@ func _get_difficulty_stars(difficulty: int) -> String:
 	return "★".repeat(clamped)
 
 
-## Per index.md's locked decision, an encounter marker's difficulty stars are
-## gated behind Scout reconnaissance exactly like enemy composition -- both
-## are withheld until the deployed party contains a Scout within Manhattan
+## Stage 5's persistent Intelligence system (docs/designs/intelligence.md)
+## takes precedence over the legacy Scout-in-range reveal, mirroring the
+## precedence information_panel.gd's refresh_encounter() already established
+## (see that function's own doc comment): once GameSession.encounter_intel
+## has recorded a known_tier of at least INTEL_TIER_LEVEL for this encounter,
+## the marker's star always reflects that persistent record, which "does not
+## decay or become stale" per the design doc -- it stays visible even after
+## the deployed party leaves Scout range or was never deployed near this
+## encounter at all (e.g. tier learned via Encampment-based detection alone).
+## Only when Stage 5 has not yet learned anything about this encounter
+## (known_tier == GameSession.INTEL_TIER_NONE) does this fall back to the
+## legacy, transient check -- an encounter marker's difficulty stars are
+## withheld until the deployed party contains a Scout within Manhattan
 ## distance 3 of this encounter (see GameSession.get_party_scouting_intel()).
-## Returns "" (no stars drawn) when that intel hasn't been earned yet. Once
-## intel is earned, the rendered star count is GameSession.get_threat_
+## Either way, once a star count is shown, it is GameSession.get_threat_
 ## stars()' dynamic 1-5 rating (docs/plans/2026-08-18-core-loop-and-
 ## engagement/05-authored-encounters-and-final-boss.md) -- which rises with
 ## world turns elapsed on top of the encounter's own base difficulty -- not
-## the static intel.danger_tier value (still used elsewhere, e.g. to decide
-## whether intel has been earned at all).
+## a static difficulty value frozen at first reveal.
 func _get_marker_star_text(encounter_id: String) -> String:
-	var intel := GameSession.get_party_scouting_intel(GameSession.selected_party_id, encounter_id)
-	if intel.is_empty() or not bool(intel.has_intel):
+	var stage_5_intel := GameSession.get_encounter_intel(encounter_id)
+	if int(stage_5_intel.known_tier) >= GameSession.INTEL_TIER_LEVEL:
+		return _get_difficulty_stars(GameSession.get_threat_stars(encounter_id))
+	var legacy_intel := GameSession.get_party_scouting_intel(GameSession.selected_party_id, encounter_id)
+	if legacy_intel.is_empty() or not bool(legacy_intel.has_intel):
 		return ""
 	return _get_difficulty_stars(GameSession.get_threat_stars(encounter_id))
 
@@ -666,6 +677,12 @@ func _refresh_information_panel() -> void:
 		information_panel.refresh_party(GameSession.selected_party_id, GameSession.pending_reward)
 	elif hovered_encounter_id != "":
 		information_panel.refresh_encounter(GameSession.selected_party_id, hovered_encounter_id)
+		# Intelligence system (docs/designs/intelligence.md, Stage 5 Step 2):
+		# a strictly additive second call -- see refresh_encounter_intel()'s
+		# own doc comment for why it is not merged into refresh_encounter()
+		# above. Called second so its own section wins over refresh_
+		# encounter()'s "no legacy intel" branch, which also clears it.
+		information_panel.refresh_encounter_intel(hovered_encounter_id)
 	else:
 		information_panel.refresh()
 

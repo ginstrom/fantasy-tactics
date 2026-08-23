@@ -81,22 +81,22 @@ func _full_snapshot() -> CampaignSnapshot:
 	return snapshot
 
 
-func test_format_version_is_2() -> void:
-	assert_eq(CampaignSnapshot.FORMAT_VERSION, 2)
+func test_format_version_is_3() -> void:
+	assert_eq(CampaignSnapshot.FORMAT_VERSION, 3)
 
 
 func test_to_dictionary_tags_the_format_version() -> void:
 	var data := CampaignSnapshot.new().to_dictionary()
-	assert_eq(data.version, 2)
+	assert_eq(data.version, 3)
 
 
-## Task-list item 3: to_dictionary() exports version 2 with every campaign
-## progression field, at their fresh-campaign defaults for a brand-new
-## (never-mutated) snapshot.
-func test_to_dictionary_exports_version_2_with_all_campaign_progression_fields() -> void:
+## Task-list item 3: to_dictionary() exports the current format version with
+## every campaign progression field, at their fresh-campaign defaults for a
+## brand-new (never-mutated) snapshot.
+func test_to_dictionary_exports_current_version_with_all_campaign_progression_fields() -> void:
 	var data := CampaignSnapshot.new().to_dictionary()
 
-	assert_eq(data.version, 2)
+	assert_eq(data.version, 3)
 	assert_eq(data.campaign_objective_id, "obj_tier1_1_goblin_outpost")
 	assert_eq(data.completed_objectives, [])
 	assert_eq(data.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
@@ -370,7 +370,7 @@ func test_rejects_missing_version() -> void:
 
 func test_rejects_unknown_version() -> void:
 	var data := _full_snapshot().to_dictionary()
-	data.version = 3
+	data.version = 4
 
 	var result := CampaignSnapshot.from_dictionary(data)
 
@@ -401,6 +401,137 @@ func test_version_1_migrates_missing_campaign_fields_to_starting_values() -> voi
 	assert_eq(result.snapshot.is_free_play_active, false)
 	assert_eq(result.snapshot.gold, 42, "Version 1 migration must not drop the payload's own non-campaign state")
 	assert_eq(result.snapshot.guild_hall_level, 2)
+
+
+## Task-list item 4 (Stage 5 Step 2, docs/designs/intelligence.md): format
+## version 3 adds GameSession.encounter_intel/quests/watchtower_level/
+## quest_posting_blocked_until_turn. A round trip through to_dictionary() ->
+## from_dictionary() must preserve every field exactly, including the
+## quest's own back-link to the encounter_intel record that named it.
+func test_to_dictionary_and_from_dictionary_round_trip_intelligence_and_quest_state() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.encounter_intel = {
+		"goblin_camp": {"discovered": true, "known_tier": 2, "quest_id": "quest_001"},
+		"obj_tier1_1_goblin_outpost": {"discovered": true, "known_tier": 0, "quest_id": ""},
+	}
+	snapshot.quests = {
+		"quest_001": {
+			"id": "quest_001",
+			"encounter_id": "goblin_camp",
+			"tier": 1,
+			"status": "active",
+			"posted_turn": 1,
+			"accepted_turn": 2,
+			"expires_turn": 12,
+			"reward_gold": 10,
+		},
+	}
+	snapshot.quest_posting_blocked_until_turn = 30
+	snapshot.watchtower_level = 2
+
+	var data := snapshot.to_dictionary()
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.encounter_intel, snapshot.encounter_intel)
+	assert_eq(result.snapshot.quests, snapshot.quests)
+	assert_eq(result.snapshot.quest_posting_blocked_until_turn, 30)
+	assert_eq(result.snapshot.watchtower_level, 2)
+
+
+## Backward-compatible migration: a pre-Stage-5 (format version 2) payload
+## carries none of the four Intelligence/quest keys at all. from_dictionary()
+## must still import it cleanly, normalizing to the same empty/zero defaults
+## a fresh campaign starts with, rather than rejecting the whole save.
+func test_a_pre_stage_5_payload_migrates_with_no_quest_or_intel_state() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.version = 2
+	data.erase("encounter_intel")
+	data.erase("quests")
+	data.erase("quest_posting_blocked_until_turn")
+	data.erase("watchtower_level")
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.encounter_intel, {})
+	assert_eq(result.snapshot.quests, {})
+	assert_eq(result.snapshot.quest_posting_blocked_until_turn, 0)
+	assert_eq(result.snapshot.watchtower_level, 0)
+	assert_eq(result.snapshot.gold, 42, "Migration must not drop the payload's own non-quest state")
+
+
+func test_rejects_an_encounter_intel_entry_with_an_out_of_range_known_tier() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.encounter_intel = {"goblin_camp": {"discovered": true, "known_tier": 5, "quest_id": ""}}
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {}, "A rejected import returns no partial snapshot")
+
+
+## Transactional import: a malformed encounter_intel entry must reject the
+## entire payload without ever assigning it into a live GameSession, mirroring
+## the existing owned_item_instances/mp_current rejection tests elsewhere in
+## this file. Exercised at the GameSession level (not just CampaignSnapshot's
+## own from_dictionary()) since that is the boundary the "never partially
+## lands" guarantee actually protects.
+func test_import_rejects_a_malformed_encounter_intel_entry_without_mutating_the_live_session() -> void:
+	GameSession.reset()
+	var before := GameSession.export_campaign_snapshot()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.encounter_intel.goblin_camp.known_tier = "not an int"
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_eq(GameSession.export_campaign_snapshot(), before)
+
+
+func test_rejects_an_encounter_intel_entry_referencing_an_unknown_quest_id() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.encounter_intel = {"goblin_camp": {"discovered": true, "known_tier": 1, "quest_id": "ghost_quest"}}
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_quest_that_does_not_reference_an_encounter_id_with_a_matching_intel_record() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.quests = {
+		"quest_001": {
+			"id": "quest_001",
+			"encounter_id": "goblin_camp",
+			"tier": 1,
+			"status": "posted",
+			"posted_turn": 1,
+			"accepted_turn": -1,
+			"expires_turn": -1,
+			"reward_gold": 10,
+		},
+	}
+	# No matching encounter_intel entry with quest_id == "quest_001" -- the
+	# quest's own back-link is left dangling.
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_an_out_of_range_watchtower_level() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.watchtower_level = 4
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
 
 
 func test_rejects_a_version_2_payload_missing_campaign_objective_id() -> void:
