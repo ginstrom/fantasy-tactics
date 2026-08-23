@@ -541,6 +541,29 @@ func test_metrics_aggregate_reports_victory_rate_and_failed_seeds_across_runs() 
 	assert_eq(report.seeds, seeds)
 
 
+## Stage 4 evidence contract (docs/designs/campaign-loop.md § Stage 4
+## evidence and presentation contract) pins mean_upgrade_progression_turns as
+## a report field a manual-session review must be able to read -- lock its
+## presence and shape here so a future metrics refactor can't silently drop
+## it the way only format_summary()'s string interpolation would otherwise
+## notice.
+func test_metrics_aggregate_reports_upgrade_progression_turns() -> void:
+	var sim := CampaignSimScript.new()
+	var seeds: Array[int] = [1, 2]
+	var records: Array = []
+	for seed in seeds:
+		GameSession.reset()
+		records.append(sim.run_campaign(seed))
+
+	var report := CampaignSimMetricsScript.aggregate(records, "sweep", seeds)
+
+	assert_has(report, "mean_upgrade_progression_turns")
+	var upgrade_turns: Dictionary = report.mean_upgrade_progression_turns
+	assert_false(upgrade_turns.is_empty(), "A multi-run aggregate must record at least one upgrade's mean completion turn")
+	for key in upgrade_turns:
+		assert_gt(float(upgrade_turns[key]), 0.0, "A recorded upgrade's mean progression turn must be a real world-turn value, not the empty-run sentinel 0.0")
+
+
 ## Locks in the mode-aware, self-describing evidence requirement (docs/plans/
 ## 2026-08-19-core-loop-verification-remediation/
 ## 02-representative-seed-command.md, Task 2): representative-mode evidence
