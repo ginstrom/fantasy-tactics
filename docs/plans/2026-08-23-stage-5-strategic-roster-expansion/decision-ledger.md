@@ -219,19 +219,55 @@ than re-deciding it.
 
 ### D3 — Mage: first spell/counter encounter
 
-**Status: Blocked** — required before `feat/stage-5-mage-counterplay` (Step 4) starts.
+**Status: Approved 2026-08-23 (user).**
 
-- **Player decision:** TBD — which offensive/control spell ships first and
-  what player choice it creates.
-- **Counterplay:** TBD — the resistant/control-counter monster trait that
-  makes the spell non-dominant.
-- **Encounter use:** TBD.
-- **Durable-state/snapshot change:** TBD — likely a `"mage"` `CLASS_DEFINITIONS`
-  entry plus enemy-side spell/resistance fields.
-- **Deterministic scenario assertion:** TBD — must guarantee spellcasting is
+- **Player decision:** Whether to spend 3 AP/1 MP putting a dangerous enemy
+  to Sleep (skipping its next turn) instead of attacking it directly, weighing
+  that landing any hit on a sleeping target wakes it early (so the rest of
+  the party must choose to leave it alone to bank the full incapacitation),
+  and that a magic-resistant target may simply shrug the cast off outright.
+- **Counterplay:** Player-facing — attacking a sleeping enemy wakes it
+  immediately, so Sleep only pays off if the party holds fire on that target;
+  it can't be combined with focusing it down the same turn. Enemy-facing — a
+  target's `magic_resistance` roll (`(magic_resistance - spellcasting)/100`)
+  can fully negate the cast outright (binary, matching combat-system.md's
+  "negates ... the effect" wording read for a non-numeric status), so Sleep
+  is not a universal free skip against every enemy.
+- **Encounter use:** Step 4 adds one authored/repeatable encounter fielding
+  the new magic-resistant enemy variant, so both the successful-Sleep and
+  resisted-Sleep outcomes are exercised.
+- **Durable-state/snapshot change:** New `"mage"` `CLASS_DEFINITIONS` entry
+  (Intelligence 6-8, class_multiplier 0.5, `spells: ["sleep"]`, skills per
+  class-system.md's shipped table: melee n/a, missile low, spellcasting med)
+  plus a durable `mp_current` field mirrored from Cleric's existing pattern;
+  Sleep's own `SLEEPING_STATUS_ID` battle-local status, scoped to
+  `BattleController`/`Unit`, not `GameSession`. The counter enemy's
+  `magic_resistance` value lives in that one encounter's factory data, not a
+  new monster family.
+- **Deterministic scenario assertion:** Must guarantee spellcasting is
   actually exercised (see D3's supporting evidence above: the existing
-  Cleric spell system is *not* exercised by representative-seed play alone).
-- **Manual acceptance check:** TBD.
+  Cleric spell system is *not* exercised by representative-seed play alone)
+  — a dedicated fixture proving a successful Sleep, a resisted Sleep, and an
+  early wake-on-hit, all replaying byte-identically for a fixed seed.
+- **Manual acceptance check:** In `make play`, recruit a Mage, read its AP/MP
+  and Sleep's cost before casting, cast it in the approved encounter,
+  observe both a successful Sleep (enemy skips its turn) and, if the
+  magic-resistant enemy is targeted, a resisted cast; attack a sleeping
+  enemy and confirm it wakes immediately; finish the encounter and verify
+  MP recovery/save/load preserves Mage state without granting Sleep to
+  another class.
+
+**Approved values:**
+
+| Parameter | Value | Basis |
+|---|---|---|
+| First spell | Sleep (control): applies a new `SLEEPING_STATUS_ID` to one living enemy target, blocking its move/attack/cast exactly like the existing `PARALYZED_STATUS_ID` used by the Thorn rune, until it wakes | User's explicit choice of a control spell over Fire Bolt; a distinct status id (not literally reusing Paralyzed) keeps Thorn's and Sleep's sources conceptually separate while reusing the same `statuses` dict/`has_status()`/`apply_status()` framework and the existing move/attack/cast blocking gates (generalized to check either status) |
+| Cast AP/MP cost, range | 3 AP / 1 MP, 0-3 tile line-of-sight range (4 with the Meditation perk) | Reuses Cleric's exact established `try_cast_spell()`/`spells`/`mp_remaining` economy; no new action economy invented |
+| Mage `mp_max` | 3, same default magnitude as Cleric's config-driven `cleric.mp_max`, via its own `mage.mp_max` GameConfig key | Extends the same "reuse Cleric's exact costs" principle to the resource pool size, not just the per-cast cost — flagged here explicitly since it wasn't its own separate question |
+| Sleep duration/expiry | Blocks the target's next turn's actions; clears automatically at the start of the next player round (same round-boundary timing `_clear_expired_statuses()` already uses for Paralyzed), unless broken early | Reuses the existing round-boundary clear pattern rather than inventing a new duration/counter mechanic |
+| Sleep interruption | Any landed attack against a sleeping unit, from any source, immediately clears `SLEEPING_STATUS_ID` (wakes the target) before its natural expiry | User's explicit requirement |
+| Resistance check | Defender's `magic_resistance` roll (`(magic_resistance - caster's spellcasting)/100`) chance to fully negate the cast — Sleep either applies in full or not at all, no partial/reduced effect | Matches combat-system.md's literal "negates ... the effect" wording, read as the binary case for a status (vs. a damage spell's numeric halving) |
+| Counter enemy | Reuse an existing monster type; author one new/existing encounter where that enemy has `magic_resistance > 0` as immutable per-encounter factory data — no new monster family, art, or lore | Matches Step 3's "hand-authored per encounter" precedent for Cover; avoids monster-manual.md's full new-monster addition checklist for a decision-gate step |
 
 ### D4 — Specializations: delivery order and promotion eligibility
 
