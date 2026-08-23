@@ -65,6 +65,10 @@ visible = false
 layout_mode = 2
 visible = false
 
+[node name="PromotionOptionsContainer" type="VBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+visible = false
+
 [node name="StatsLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 visible = false

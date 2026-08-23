@@ -4606,3 +4606,252 @@ func test_battle_controllers_grid_starts_with_no_cover_by_default() -> void:
 	var controller := _make_controller(6, 6)
 
 	assert_eq(controller.grid.get_cover(Vector2i(3, 3)), GridScript.COVER_NONE)
+
+
+## --- Knight specialization: Shield Bash/Chain Blow (Stage 5 D4) -------------
+## Unit.perks (Stage 5 D4) is what gates both perks -- set directly on a
+## manually-constructed Unit here, the same way every other test in this file
+## constructs its own fixture state rather than going through GameSession.
+
+func test_shield_bash_is_rejected_for_a_unit_without_the_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_false(controller.try_shield_bash_selected_unit(defender.grid_position))
+	assert_eq(attacker.action_points_remaining, 6, "A rejected Shield Bash must not spend any AP")
+	assert_false(defender.off_balance_pending)
+
+
+func test_shield_bash_costs_the_same_ap_as_a_plain_attack() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_SHIELD_BASH_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_shield_bash_selected_unit(defender.grid_position))
+
+	assert_eq(
+		attacker.action_points_remaining, 6 - BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST,
+		"Shield Bash must cost exactly the same AP as a normal attack"
+	)
+
+
+func test_a_landed_shield_bash_off_balances_the_target_using_the_existing_status() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_SHIELD_BASH_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0  # guaranteed hit
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_shield_bash_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.hit)
+	assert_true(controller.last_attack_result.shield_bash)
+	assert_true(controller.last_attack_result.off_balance_applied)
+	assert_true(defender.off_balance_pending, "A landed Shield Bash must set the exact same off_balance_pending field Dodge/Parry use")
+
+
+func test_a_missed_shield_bash_never_off_balances_the_target() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_SHIELD_BASH_PERK_ID]
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99  # guaranteed miss
+
+	assert_true(controller.try_shield_bash_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.hit)
+	assert_false(controller.last_attack_result.off_balance_applied)
+	assert_false(defender.off_balance_pending, "A miss must never off-balance the target")
+
+
+func test_chain_blow_is_never_triggered_for_a_unit_without_the_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, second]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+
+	assert_true(controller.last_chain_blow_result.is_empty(), "No knight_chain_blow perk -- Chain Blow must never fire")
+
+
+func test_a_landed_attack_triggers_chain_blow_against_an_adjacent_second_enemy() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	# Adjacent to the ATTACKER (Vector2i(1,1)), not to the primary target --
+	# see _find_chain_blow_second_target()'s own doc comment on this choice.
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, second]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+
+	assert_false(controller.last_chain_blow_result.is_empty())
+	assert_eq(controller.last_chain_blow_result.attacker, attacker)
+	assert_eq(controller.last_chain_blow_result.defender, second)
+	assert_true(controller.last_chain_blow_result.hit)
+	assert_true(attacker.chain_blow_used_this_round)
+	# No extra AP cost (the ledger's own approved value) -- the primary
+	# attack's own BASIC_ATTACK_ACTION_POINT_COST is the only AP spent.
+	assert_eq(attacker.action_points_remaining, 6 - BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST)
+
+
+func test_chain_blow_never_fires_a_second_time_in_the_same_round() -> void:
+	var controller := _make_controller(4, 4)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var third = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, second, third]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+	assert_false(controller.last_chain_blow_result.is_empty(), "First attack this Round triggers Chain Blow")
+
+	assert_true(controller.try_attack_selected_unit(third.grid_position))
+	assert_true(
+		controller.last_chain_blow_result.is_empty(),
+		"Chain Blow already spent this Round -- a second landed attack must not trigger it again"
+	)
+
+
+func test_chain_blow_resets_at_the_next_player_round() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, second]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	attacker.chain_blow_used_this_round = true
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	controller.end_turn()  # ENEMY -> PLAYER: a new Round starts, clearing round-scoped state
+
+	assert_false(attacker.chain_blow_used_this_round, "_clear_expired_statuses() must reset Chain Blow at the same round boundary as Sleep/Paralyzed")
+
+
+func test_chain_blow_finds_no_second_target_when_the_only_other_enemy_is_not_adjacent_to_the_attacker() -> void:
+	var controller := _make_controller(5, 5)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var far_enemy = UnitScript.new(Vector2i(4, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, far_enemy]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+
+	assert_true(controller.last_chain_blow_result.is_empty(), "The only other enemy is far away -- Chain Blow has nothing to strike")
+	assert_false(attacker.chain_blow_used_this_round, "An unspent Chain Blow (no valid target found) must not consume the once-per-round flag")
+
+
+func test_a_missed_primary_attack_never_triggers_chain_blow() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, primary, second]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.99  # guaranteed miss
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+
+	assert_true(controller.last_chain_blow_result.is_empty(), "A missed primary attack must never trigger Chain Blow")
+
+
+## _resolve_opportunity_attack() (the Attack-of-Opportunity resolver) calls
+## _resolve_attack_core() directly rather than going through _execute_direct_
+## attack() -- the only place Chain Blow's trigger logic lives (see that
+## function's own doc comment) -- so Chain Blow structurally cannot fire from
+## a reaction. This locks that in with a reactor that DOES own the perk and
+## a qualifying second target sitting right next to it, so a future refactor
+## that accidentally routes reactions through the Chain Blow trigger would
+## fail this test immediately.
+func test_chain_blow_never_triggers_from_an_attack_of_opportunity() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	reactor.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	# Adjacent to the REACTOR's own position -- exactly the shape
+	# _find_chain_blow_second_target() looks for from a normal attack (see
+	# its own doc comment: "adjacent to the ATTACKER"). If Chain Blow's
+	# trigger were ever accidentally wired into the opportunity-attack path,
+	# this unit is what it would strike.
+	var second_ally = UnitScript.new(Vector2i(0, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	controller.units = [mover, reactor, second_ally]
+	controller.selected_unit = mover
+	controller.hit_roll = func() -> float: return 0.0  # guaranteed hit on the opportunity attack itself
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_eq(controller.last_reaction_results.size(), 1, "The departure Attack of Opportunity itself must still fire normally")
+	assert_true(controller.last_reaction_results[0].hit)
+	assert_true(
+		controller.last_chain_blow_result.is_empty(),
+		"_resolve_opportunity_attack() bypasses _execute_direct_attack()'s Chain Blow trigger -- Chain Blow must never fire from an Attack of Opportunity, even with a qualifying second target present"
+	)
+	assert_false(reactor.chain_blow_used_this_round, "The once-per-round flag must not be consumed by an opportunity attack either")
+
+
+## units.erase(target) (primary-target death cleanup, in _execute_direct_
+## attack()) runs BEFORE _find_chain_blow_second_target()'s own scan of
+## `units` -- see that function's doc comment: "Must run after the primary
+## strike's own bookkeeping ... so a defeated primary target is already
+## erased from `units` before the second-target search". This proves the
+## erasure doesn't also break or skip the search: the primary target dies
+## from the primary hit, and Chain Blow's second strike still correctly
+## finds and lands on the other adjacent enemy.
+func test_chain_blow_still_finds_the_second_target_after_the_primary_target_dies_from_the_primary_hit() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 1.0)
+	attacker.perks = [GameSession.KNIGHT_CHAIN_BLOW_PERK_ID]
+	var primary = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 1)
+	var second = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 50)
+	controller.units = [attacker, primary, second]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0  # guaranteed hit on both the primary strike and Chain Blow's own
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 20  # kills primary (1 HP), not second (50 HP)
+
+	assert_true(controller.try_attack_selected_unit(primary.grid_position))
+
+	assert_true(controller.last_attack_result.defeated, "Primary target must actually die from the primary hit for this test to exercise the erase-before-search order")
+	assert_false(controller.units.has(primary), "units.erase(target) already removed the dead primary target from `units`")
+	assert_false(
+		controller.last_chain_blow_result.is_empty(),
+		"Chain Blow's second-target search must still find `second` even though `primary` was just erased from units"
+	)
+	assert_eq(controller.last_chain_blow_result.defender, second)
+	assert_true(controller.last_chain_blow_result.hit)
+	assert_eq(second.health, 30, "Chain Blow's own strike must land on the correct second target, not on the erased primary")

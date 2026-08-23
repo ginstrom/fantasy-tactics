@@ -2624,6 +2624,195 @@ func test_legacy_bonus_move_holder_is_not_migrated_and_still_earns_both_class_pe
 	)
 
 
+## Knight specialization (Stage 5 D4, decision-ledger.md): promotion
+## eligibility is a general mechanism, but only Knight has data this slice.
+## get_available_specializations() must offer nothing until BOTH of the
+## Warrior's own two root perks are chosen, then offer exactly "knight".
+
+func test_get_available_specializations_is_empty_until_both_warrior_perks_are_chosen() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)  # level 6: both root slots earned
+	assert_eq(session.get_available_specializations("warrior_001"), [] as Array[String], "No perks chosen yet")
+
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	assert_eq(
+		session.get_available_specializations("warrior_001"), [] as Array[String],
+		"Only one of the two root perks chosen so far"
+	)
+
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	assert_eq(
+		session.get_available_specializations("warrior_001"), ["knight"] as Array[String],
+		"Both root perks are now chosen -- Knight becomes available"
+	)
+	assert_true(session.is_promotion_eligible("warrior_001", "knight"))
+	assert_false(session.is_promotion_eligible("warrior_001", "no_such_specialization"))
+
+
+## The decision-contract shape task 1 of the step file asks for: Shield Bash/
+## Chain Blow are unavailable before promotion, available after a legal
+## promotion, and promotion itself is rejected when ineligible.
+func test_promote_adventurer_unlocks_knight_perks_on_the_existing_perk_tree_mechanism() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)  # level 6
+
+	assert_false(
+		session.promote_adventurer("warrior_001", "knight"), "Not eligible: neither root perk chosen yet"
+	)
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "")
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID),
+		"Shield Bash is unavailable before promotion"
+	)
+
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	assert_true(session.promote_adventurer("warrior_001", "knight"))
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "knight")
+
+	# Level 6 already earns 3 of the 4 total slots (2 root + 1 specialization,
+	# see _pending_perk_slot_count()'s specialization-aware cap) -- both root
+	# perks are already spent, so exactly one Knight perk slot is pending
+	# immediately on promotion, with no further leveling required.
+	assert_true(session.is_perk_choice_pending("warrior_001"))
+	assert_eq(
+		session.get_available_perks("warrior_001"),
+		[GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID, GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID]
+	)
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID))
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID),
+		"Only one Knight slot is pending at level 6 -- the second needs another level-interval"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 250.0)  # level 9: all 4 slots earned
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID))
+	assert_false(session.is_perk_choice_pending("warrior_001"), "All 4 slots (2 root + 2 Knight) are now spent")
+	assert_eq(session.get_available_specializations("warrior_001"), [] as Array[String], "Already promoted")
+	assert_false(session.promote_adventurer("warrior_001", "knight"), "Cannot promote a second time")
+
+
+func test_promote_adventurer_rejects_a_specialization_foreign_to_the_adventurers_class() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.choose_perk("scout_test", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID)
+	session.choose_perk("scout_test", GameSessionScript.SCOUT_KEEN_EYES_PERK_ID)
+
+	assert_eq(
+		session.get_available_specializations("scout_test"), [] as Array[String],
+		"Knight is a Warrior specialization -- a fully-perked Scout never sees it offered"
+	)
+	assert_false(session.promote_adventurer("scout_test", "knight"))
+	assert_eq(session.get_adventurer_specialization("scout_test"), "")
+
+
+## Snapshot round trip (Stage 5 D4's own durable-state requirement): a
+## promoted Knight's specialization and its two chosen perks survive export/
+## reset/import, and a save with no "specialization" field at all (every
+## pre-Stage-5-D4 save) imports cleanly as not promoted rather than a
+## partial/corrupt state.
+func test_specialization_and_knight_perks_persist_through_a_snapshot_round_trip() -> void:
+	GameSession.adventurers[0].level = 6
+	GameSession.adventurers[0].progression.perks = [
+		GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
+	]
+	assert_true(GameSession.promote_adventurer(GameSessionScript.WARRIOR_ID, "knight"))
+	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_adventurer_specialization(GameSessionScript.WARRIOR_ID), "knight")
+	assert_eq(
+		GameSession.get_adventurer(GameSessionScript.WARRIOR_ID).progression.perks,
+		[
+			GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
+			GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID,
+		]
+	)
+
+
+func test_importing_a_save_with_no_specialization_field_normalizes_as_not_promoted() -> void:
+	GameSession.adventurers[0].level = 6
+	var snapshot := GameSession.export_campaign_snapshot()
+	assert_false(
+		(snapshot.adventurers[0] as Dictionary).has("specialization"),
+		"Precondition: a fresh snapshot carries no specialization field at all"
+	)
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_adventurer_specialization(GameSessionScript.WARRIOR_ID), "")
+	assert_eq(session_available_specializations_after_root_perks(), ["knight"] as Array[String])
+
+
+## Small helper for the test immediately above: proves an imported, not-yet-
+## promoted Warrior still correctly becomes promotion-eligible once its root
+## perks are chosen post-import (i.e. nothing about the import path itself
+## left the adventurer in a state where get_available_specializations()
+## could never resolve true again).
+func session_available_specializations_after_root_perks() -> Array[String]:
+	GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	return GameSession.get_available_specializations(GameSessionScript.WARRIOR_ID)
+
+
+func test_importing_an_unknown_specialization_is_rejected_without_mutating_live_state() -> void:
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0]["specialization"] = "no_such_specialization"
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "specialization")
+	assert_eq(_capture_durable_fields(), before)
+
+
+func test_importing_a_specialization_with_a_mismatched_root_class_is_rejected() -> void:
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0]["specialization"] = "knight"
+	snapshot.adventurers[0]["class"] = "scout"
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "specialization")
+	assert_eq(_capture_durable_fields(), before)
+
+
+## A Knight perk on a record that never actually promoted (no "specialization"
+## field at all) must still be rejected atomically -- mirrors test_importing_
+## a_foreign_perk_id_is_rejected_without_mutating_live_state()'s own pattern,
+## proving Knight perks are not simply always-valid the moment their id
+## exists in PERK_DEFINITIONS.
+func test_importing_a_knight_perk_without_a_specialization_field_is_rejected() -> void:
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.adventurers[0].progression["perks"] = [GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID]
+	var before := _capture_durable_fields()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "perk")
+	assert_eq(_capture_durable_fields(), before)
+
+
 func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -5813,6 +6002,14 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"PERK_TREE_SIZE": true,
 		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
 		"WARRIOR_BULWARK_GUARD": true,
+		# Stage 5 D4: a cached copy of GameConfig's combat.off_balance_guard_
+		# penalty key (already durable-free, since it is battle-config balance
+		# data, not player state -- BattleController reads the same key
+		# directly, uncached) that get_perk_effect_description() formats
+		# Shield Bash's display text with. Same non-durable-config-value
+		# reasoning as every other GameConfig-cached var already excluded
+		# above (WARRIOR_BULWARK_GUARD etc.).
+		"OFF_BALANCE_GUARD_PENALTY": true,
 		"SCOUT_QUICKDRAW_ACTION_POINTS": true,
 		"SCOUT_KEEN_EYES_INTEL_RANGE_BONUS": true,
 		"CLERIC_MEDITATION_SPELL_RANGE_BONUS": true,

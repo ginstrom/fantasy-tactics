@@ -891,15 +891,53 @@ const SCOUT_QUICKDRAW_PERK_ID := "scout_quickdraw"
 const SCOUT_KEEN_EYES_PERK_ID := "scout_keen_eyes"
 const CLERIC_MEDITATION_PERK_ID := "cleric_meditation"
 const CLERIC_DEVOUT_PERK_ID := "cleric_devout"
-## Class id -> ordered Array of that class's own perk ids. The order here is
-## purely presentational (get_available_perks() returns eligible ids in this
-## order); selection has no prerequisite relationship between the two
-## entries. A class id absent from this dict (should not happen for
-## warrior/scout/cleric) simply offers no perks.
+## Knight (Stage 5 D4, decision-ledger.md): a Warrior specialization, not a
+## new CLASS_DEFINITIONS root -- these two ids sit on the exact same perk-
+## tree/PERK_TREE_SIZE mechanism CLASS_PERKS already drives, offered only
+## once an adventurer has promoted (see SPECIALIZATION_PERKS/
+## SPECIALIZATION_ROOT_CLASS, get_available_specializations()/promote_
+## adventurer() below, and _pending_perk_slot_count()'s specialization-aware
+## cap). Parry is deliberately absent -- Step 3 already shipped a universal
+## flat-10% Parry for every unit; re-implementing it as a Knight-only perk
+## would require inventing a new numeric upgrade the ledger explicitly
+## rejected.
+const KNIGHT_SHIELD_BASH_PERK_ID := "knight_shield_bash"
+const KNIGHT_CHAIN_BLOW_PERK_ID := "knight_chain_blow"
+## Class id -> ordered Array of that class's own ROOT perk ids (Stage 2's
+## locked set). The order here is purely presentational (get_available_
+## perks() returns eligible ids in this order); selection has no
+## prerequisite relationship between the two entries. A class id absent from
+## this dict (should not happen for warrior/scout/cleric) simply offers no
+## root perks. See SPECIALIZATION_PERKS immediately below for a promoted
+## adventurer's ADDITIONAL perk catalog -- the two dicts are deliberately
+## separate rather than merged, since only a promoted adventurer of the
+## matching root class ever sees a specialization's entries.
 const CLASS_PERKS: Dictionary = {
 	"warrior": [WARRIOR_JUGGERNAUT_PERK_ID, WARRIOR_BULWARK_PERK_ID],
 	"scout": [SCOUT_QUICKDRAW_PERK_ID, SCOUT_KEEN_EYES_PERK_ID],
 	"cleric": [CLERIC_MEDITATION_PERK_ID, CLERIC_DEVOUT_PERK_ID],
+}
+## Specialization id -> ordered Array of that specialization's OWN perk ids,
+## unlocked only once an adventurer has promoted into it (adventurer.
+## specialization -- see promote_adventurer()). Mirrors CLASS_PERKS' own
+## shape/ordering convention exactly; a specialization id absent here
+## (should not happen for "knight") simply offers no perks. Only "knight"
+## ships data this slice (Stage 5 D4) -- Archer/Battle Mage/Paladin add
+## their own entries in later Stage 5 slices reusing this same mechanism,
+## per the ledger's explicit "implement as a general mechanism" instruction.
+const SPECIALIZATION_PERKS: Dictionary = {
+	"knight": [KNIGHT_SHIELD_BASH_PERK_ID, KNIGHT_CHAIN_BLOW_PERK_ID],
+}
+## Specialization id -> the root CLASS_DEFINITIONS id an adventurer must
+## already belong to (with both that root's own CLASS_PERKS already chosen,
+## see get_available_specializations()) to promote into it. Existing root
+## CLASS_DEFINITIONS entries/ids are never renamed or duplicated -- a
+## promoted adventurer keeps adventurer.class == "warrior" forever; only its
+## new adventurer.specialization field changes. General mechanism: Archer
+## also promotes from "warrior" in a later slice, so this is keyed by
+## specialization id (1:1), not the other way around.
+const SPECIALIZATION_ROOT_CLASS: Dictionary = {
+	"knight": "warrior",
 }
 ## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
 ## name and effect description through this catalog (get_perk_definition(),
@@ -916,6 +954,8 @@ const PERK_DEFINITIONS: Dictionary = {
 	"scout_keen_eyes": {"class": "scout", "name_key": "perk.scout_keen_eyes.name", "effect_key": "perk.scout_keen_eyes.effect"},
 	"cleric_meditation": {"class": "cleric", "name_key": "perk.cleric_meditation.name", "effect_key": "perk.cleric_meditation.effect"},
 	"cleric_devout": {"class": "cleric", "name_key": "perk.cleric_devout.name", "effect_key": "perk.cleric_devout.effect"},
+	"knight_shield_bash": {"class": "warrior", "name_key": "perk.knight_shield_bash.name", "effect_key": "perk.knight_shield_bash.effect"},
+	"knight_chain_blow": {"class": "warrior", "name_key": "perk.knight_chain_blow.name", "effect_key": "perk.knight_chain_blow.effect"},
 }
 # Stage 2 locked balance values (see docs/designs/class-system.md and
 # config/game_config.json's "progression" section) -- loaded from config in
@@ -926,6 +966,16 @@ var SCOUT_QUICKDRAW_ACTION_POINTS: int = 1
 var SCOUT_KEEN_EYES_INTEL_RANGE_BONUS: int = 1
 var CLERIC_MEDITATION_SPELL_RANGE_BONUS: int = 1
 var CLERIC_DEVOUT_HP_PERCENT: int = 10
+## Knight's Shield Bash perk description reuses this exact magnitude -- the
+## same GameConfig combat.off_balance_guard_penalty key BattleController
+## already reads directly (its own file's established convention of calling
+## GameConfig inline rather than caching); this cached var exists purely so
+## get_perk_effect_description() can format the perk's display text through
+## this file's own established "cache every config value into a var" pattern
+## instead of calling GameConfig directly the way battle_controller.gd does.
+## No new balance value -- see BattleController.try_shield_bash_selected_
+## unit()'s own doc comment for the mechanical reuse.
+var OFF_BALANCE_GUARD_PENALTY: int = 10
 # Base (pre-perk) ranges the two Keen Eyes/Meditation perks add to. Named
 # here rather than left as a bare "3" at each call site (get_party_scouting_
 # intel()'s scout range, BattleController.try_cast_spell()'s spell range) so
@@ -1534,6 +1584,7 @@ func _load_balance_config() -> void:
 	SCOUT_KEEN_EYES_INTEL_RANGE_BONUS = GameConfig.get_int("progression", "scout_keen_eyes_intel_range_bonus", SCOUT_KEEN_EYES_INTEL_RANGE_BONUS)
 	CLERIC_MEDITATION_SPELL_RANGE_BONUS = GameConfig.get_int("progression", "cleric_meditation_spell_range_bonus", CLERIC_MEDITATION_SPELL_RANGE_BONUS)
 	CLERIC_DEVOUT_HP_PERCENT = GameConfig.get_int("progression", "cleric_devout_hp_percent", CLERIC_DEVOUT_HP_PERCENT)
+	OFF_BALANCE_GUARD_PENALTY = GameConfig.get_int("combat", "off_balance_guard_penalty", OFF_BALANCE_GUARD_PENALTY)
 	GUILD_HALL_LEVEL_1_PARTY_CAP = GameConfig.get_int("guild_hall", "level_1_party_cap", GUILD_HALL_LEVEL_1_PARTY_CAP)
 	GUILD_HALL_LEVEL_2_PARTY_CAP = GameConfig.get_int("guild_hall", "level_2_party_cap", GUILD_HALL_LEVEL_2_PARTY_CAP)
 	GUILD_HALL_LEVEL_3_PARTY_CAP = GameConfig.get_int("guild_hall", "level_3_party_cap", GUILD_HALL_LEVEL_3_PARTY_CAP)
@@ -4077,10 +4128,22 @@ func is_perk_choice_pending(adventurer_id: String) -> bool:
 ## owned perks (CLASS_PERKS' own ids) -- a legacy BONUS_MOVE_PERK_ID entry
 ## (retired from new choices, never migrated away; see choose_perk()'s doc
 ## comment) never consumes a class-owned slot, so an old save holding it
-## still earns both of its class's real perks.
-func _pending_perk_slot_count(adventurer: Dictionary) -> int:
+## still earns both of its class's real perks. A promoted adventurer
+## (adventurer.specialization set, Stage 5 D4) adds its specialization's own
+## perk count on top -- e.g. a promoted Knight's perk_cap is 4 (2 Warrior +
+## 2 Knight), so levels beyond the root tree's own threshold keep opening
+## slots for Shield Bash/Chain Blow exactly like the root tree did.
+func _perk_catalog_perk_cap(adventurer: Dictionary) -> int:
 	var class_id: String = str(adventurer.get("class", ""))
-	var perk_cap: int = mini(PERK_TREE_SIZE, (CLASS_PERKS.get(class_id, []) as Array).size())
+	var cap: int = mini(PERK_TREE_SIZE, (CLASS_PERKS.get(class_id, []) as Array).size())
+	var specialization_id := str(adventurer.get("specialization", ""))
+	if not specialization_id.is_empty():
+		cap += mini(PERK_TREE_SIZE, (SPECIALIZATION_PERKS.get(specialization_id, []) as Array).size())
+	return cap
+
+
+func _pending_perk_slot_count(adventurer: Dictionary) -> int:
+	var perk_cap: int = _perk_catalog_perk_cap(adventurer)
 	var earned_slots: int = mini(adventurer.level / PERK_LEVEL_INTERVAL, perk_cap)
 	var spent_slots := 0
 	for perk_id in adventurer.progression.perks:
@@ -4089,11 +4152,16 @@ func _pending_perk_slot_count(adventurer: Dictionary) -> int:
 	return earned_slots - spent_slots
 
 
-## Returns the still-choosable perk ids for adventurer_id's own class -- its
-## class's CLASS_PERKS entries that are not already in progression.perks, in
-## catalog order. Returns [] for an unknown adventurer or a class with no
-## perk catalog. BONUS_MOVE_PERK_ID never appears here; it is retired from
-## new choices (see choose_perk()).
+## Returns the still-choosable perk ids for adventurer_id -- its class's
+## CLASS_PERKS entries, PLUS (once promoted, Stage 5 D4) its specialization's
+## own SPECIALIZATION_PERKS entries, that are not already in progression.
+## perks, in catalog order (root perks first, then specialization perks).
+## Returns [] for an unknown adventurer or a class with no perk catalog.
+## BONUS_MOVE_PERK_ID never appears here; it is retired from new choices
+## (see choose_perk()). An unpromoted adventurer never sees a specialization
+## perk offered -- this is the sole gate that keeps Shield Bash/Chain Blow
+## unavailable before promotion (see get_available_specializations()/
+## promote_adventurer()).
 func get_available_perks(adventurer_id: String) -> Array[String]:
 	var adventurer := get_adventurer(adventurer_id)
 	var available: Array[String] = []
@@ -4101,7 +4169,11 @@ func get_available_perks(adventurer_id: String) -> Array[String]:
 		return available
 	var class_id := str(adventurer.get("class", ""))
 	var chosen: Array = adventurer.progression.get("perks", [])
-	for perk_id in CLASS_PERKS.get(class_id, []):
+	var catalog: Array = (CLASS_PERKS.get(class_id, []) as Array).duplicate()
+	var specialization_id := str(adventurer.get("specialization", ""))
+	if not specialization_id.is_empty():
+		catalog.append_array(SPECIALIZATION_PERKS.get(specialization_id, []))
+	for perk_id in catalog:
 		if not chosen.has(perk_id):
 			available.append(perk_id)
 	return available
@@ -4144,21 +4216,30 @@ func get_perk_effect_description(perk_id: String) -> String:
 			return tr("perk.cleric_meditation.effect") % CLERIC_MEDITATION_SPELL_RANGE_BONUS
 		CLERIC_DEVOUT_PERK_ID:
 			return tr("perk.cleric_devout.effect") % CLERIC_DEVOUT_HP_PERCENT
+		KNIGHT_SHIELD_BASH_PERK_ID:
+			# Reuses the exact same off-balance magnitude Dodge/Parry already
+			# apply (GameConfig's combat.off_balance_guard_penalty) -- see
+			# BattleController.try_shield_bash_selected_unit()'s own doc
+			# comment. No new balance value invented for this description.
+			return tr("perk.knight_shield_bash.effect") % OFF_BALANCE_GUARD_PENALTY
+		KNIGHT_CHAIN_BLOW_PERK_ID:
+			return tr("perk.knight_chain_blow.effect")
 		BONUS_MOVE_PERK_ID:
 			return tr("perk.bonus_move.effect")
 		_:
 			return ""
 
 
-## Accepts only an id in adventurer_id's own class's CLASS_PERKS (rejecting
-## an unknown id, another class's perk, and -- since BONUS_MOVE_PERK_ID is in
-## no class's list -- BONUS_MOVE_PERK_ID itself: it is retired from new
-## choices, though any adventurer who already holds it from before this slice
-## keeps its effect unchanged, see get_effective_action_points()). Only
-## while is_perk_choice_pending() is true for adventurer_id, and only once
-## per adventurer (a perk already in progression.perks cannot be re-chosen).
-## Every check runs before any mutation, so a rejected call leaves
-## progression.perks untouched.
+## Accepts only an id in adventurer_id's own class's CLASS_PERKS, OR (once
+## promoted, Stage 5 D4) its own specialization's SPECIALIZATION_PERKS
+## (rejecting an unknown id, another class's/specialization's perk, and --
+## since BONUS_MOVE_PERK_ID is in neither list -- BONUS_MOVE_PERK_ID itself:
+## it is retired from new choices, though any adventurer who already holds
+## it from before this slice keeps its effect unchanged, see get_effective_
+## action_points()). Only while is_perk_choice_pending() is true for
+## adventurer_id, and only once per adventurer (a perk already in
+## progression.perks cannot be re-chosen). Every check runs before any
+## mutation, so a rejected call leaves progression.perks untouched.
 func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if adventurer_index == -1:
@@ -4166,7 +4247,12 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 
 	var adventurer: Dictionary = adventurers[adventurer_index]
 	var class_id := str(adventurer.get("class", ""))
-	if not (CLASS_PERKS.get(class_id, []) as Array).has(perk_id):
+	var is_class_perk: bool = (CLASS_PERKS.get(class_id, []) as Array).has(perk_id)
+	var specialization_id := str(adventurer.get("specialization", ""))
+	var is_specialization_perk: bool = (
+		not specialization_id.is_empty() and (SPECIALIZATION_PERKS.get(specialization_id, []) as Array).has(perk_id)
+	)
+	if not is_class_perk and not is_specialization_perk:
 		return false
 	if adventurer.progression.perks.has(perk_id):
 		return false
@@ -4175,6 +4261,72 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 
 	adventurer.progression.perks.append(perk_id)
 	return true
+
+
+## --- Specializations (Stage 5 D4) -------------------------------------------
+
+## Returns the specialization ids adventurer_id may promote into right now:
+## general mechanism (per the D4 ledger row, reused by Archer/Battle Mage/
+## Paladin in later slices) -- a specialization is offered once (a) it is
+## keyed to the adventurer's own current class in SPECIALIZATION_ROOT_CLASS,
+## (b) that root class's own CLASS_PERKS are ALL already chosen (the
+## promotion-eligibility gate), and (c) the adventurer has not already
+## promoted (adventurer.specialization is still empty -- promotion happens
+## at most once). Returns [] for an unknown adventurer. Paladin's later slice
+## adds its own additional built-Temple gate on top of this same check, per
+## the ledger; Knight has no additional gate.
+func get_available_specializations(adventurer_id: String) -> Array[String]:
+	var available: Array[String] = []
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return available
+	if not str(adventurer.get("specialization", "")).is_empty():
+		return available
+	var class_id := str(adventurer.get("class", ""))
+	var root_perks: Array = CLASS_PERKS.get(class_id, [])
+	if root_perks.is_empty():
+		return available
+	var chosen: Array = adventurer.progression.get("perks", [])
+	for perk_id in root_perks:
+		if not chosen.has(perk_id):
+			return available
+	for specialization_id in SPECIALIZATION_ROOT_CLASS:
+		if SPECIALIZATION_ROOT_CLASS[specialization_id] == class_id:
+			available.append(specialization_id)
+	return available
+
+
+## True iff specialization_id is one of adventurer_id's currently legal
+## promotion choices (see get_available_specializations()).
+func is_promotion_eligible(adventurer_id: String, specialization_id: String) -> bool:
+	return get_available_specializations(adventurer_id).has(specialization_id)
+
+
+## Promotes adventurer_id into specialization_id, unlocking that
+## specialization's own SPECIALIZATION_PERKS on the existing perk-tree
+## mechanism (see _pending_perk_slot_count()/get_available_perks()/choose_
+## perk() above). Rejects an ineligible adventurer/specialization pair (see
+## is_promotion_eligible()) atomically -- adventurer.specialization is only
+## ever written on a true return. adventurer.class and every existing
+## CLASS_DEFINITIONS/CLASS_PERKS entry are left completely unchanged --
+## promotion is purely additive state, matching the ledger's migration-
+## safety requirement (an old save with no specialization field imports as
+## "not promoted", see CampaignSnapshot's roster normalization).
+func promote_adventurer(adventurer_id: String, specialization_id: String) -> bool:
+	if not is_promotion_eligible(adventurer_id, specialization_id):
+		return false
+	var adventurer_index := _get_adventurer_index(adventurer_id)
+	if adventurer_index == -1:
+		return false
+	adventurers[adventurer_index]["specialization"] = specialization_id
+	return true
+
+
+## Empty string for an unpromoted (or unknown) adventurer -- see promote_
+## adventurer(). A thin, explicit reader so UI/tests never inline the raw
+## "specialization" dict-key access.
+func get_adventurer_specialization(adventurer_id: String) -> String:
+	return str(get_adventurer(adventurer_id).get("specialization", ""))
 
 
 ## Centralized effective-hit-chance formula: min(raw skill / 100.0, 0.95).

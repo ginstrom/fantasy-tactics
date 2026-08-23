@@ -363,6 +363,90 @@ func test_validate_rejects_an_unknown_perk_id() -> void:
 	assert_true(_has_error_with_prefix(errors, "unknown_perk"), "Expected an unknown_perk error, got: %s" % [errors])
 
 
+## --- specialization (Stage 5 D4): the exact same "explicit field, never
+## ambient GameSession state" precedent perks/mp_current already use ---
+
+func test_normalize_defaults_specialization_to_an_empty_string() -> void:
+	var scenario := ScenarioContract.normalize(_minimal_raw_scenario())
+
+	assert_eq(scenario.player.units[0].specialization, "")
+
+
+func test_normalize_preserves_an_explicit_unit_specialization() -> void:
+	var raw := {
+		"scenario_id": "explicit_specialization",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "specialization": "knight"}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+
+	assert_eq(scenario.player.units[0].specialization, "knight")
+
+
+func test_validate_accepts_a_knight_perk_alongside_the_matching_specialization() -> void:
+	var raw := {
+		"scenario_id": "knight_perk_ok",
+		"player": {
+			"units": [
+				{
+					"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "specialization": "knight",
+					"perks": ["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash", "knight_chain_blow"],
+				},
+			],
+		},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_eq(errors, [], "Knight's own perks must validate cleanly alongside its matching specialization field")
+
+
+func test_validate_rejects_a_knight_perk_without_the_specialization_field() -> void:
+	var raw := {
+		"scenario_id": "knight_perk_missing_specialization",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "perks": ["knight_shield_bash"]}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "unknown_perk"), "Expected an unknown_perk error, got: %s" % [errors])
+
+
+func test_validate_rejects_an_unknown_specialization_id() -> void:
+	var raw := {
+		"scenario_id": "unknown_specialization",
+		"player": {"units": [{"id": "hero", "template_id": "warrior", "position": {"x": 0, "y": 0}, "specialization": "not_a_real_specialization"}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(
+		_has_error_with_prefix(errors, "unknown_specialization"), "Expected an unknown_specialization error, got: %s" % [errors]
+	)
+
+
+func test_validate_rejects_a_specialization_with_a_mismatched_root_class() -> void:
+	var raw := {
+		"scenario_id": "specialization_wrong_root",
+		"player": {"units": [{"id": "hero", "template_id": "scout", "position": {"x": 0, "y": 0}, "specialization": "knight"}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(
+		_has_error_with_prefix(errors, "unknown_specialization"), "Expected an unknown_specialization error, got: %s" % [errors]
+	)
+
+
 func test_validate_rejects_an_unknown_player_template() -> void:
 	var raw := _minimal_raw_scenario()
 	raw.player = {"template_id": "not_a_real_template", "count": 1}

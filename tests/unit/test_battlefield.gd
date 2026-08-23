@@ -293,6 +293,54 @@ func test_sleep_button_pressed_enters_spell_targeting_mode() -> void:
 	assert_true(battlefield.sleep_button.button_pressed)
 
 
+## --- Knight specialization: Shield Bash action-bar button (Stage 5 D4) ------
+
+func _setup_knight_party() -> String:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	GameSession.choose_perk("warrior_001", GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk("warrior_001", GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer("warrior_001", "knight")
+	GameSession.choose_perk("warrior_001", GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	return "warrior_001"
+
+
+func test_action_bar_hides_shield_bash_button_for_an_unpromoted_warrior() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id(GameSession.WARRIOR_ID)
+	battlefield._update_action_bar()
+
+	assert_false(battlefield.shield_bash_button.visible, "An unpromoted Warrior must never see Shield Bash")
+
+
+func test_action_bar_shows_shield_bash_button_for_a_knight_with_the_perk() -> void:
+	var knight_id := _setup_knight_party()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id(knight_id)
+	battlefield._update_action_bar()
+
+	assert_true(battlefield.shield_bash_button.visible)
+
+
+func test_shield_bash_button_pressed_enters_shield_bash_targeting_mode() -> void:
+	var knight_id := _setup_knight_party()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	battlefield.grid.select_unit_by_adventurer_id(knight_id)
+
+	battlefield._on_shield_bash_button_pressed()
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.SHIELD_BASH)
+	assert_true(battlefield.shield_bash_button.button_pressed)
+
+
 ## Task 6: the left-side portrait panel (one row per fielded party member)
 ## and the per-living-enemy HUD list that replaces the old aggregate
 ## PlayerHealth/EnemyHealth labels.

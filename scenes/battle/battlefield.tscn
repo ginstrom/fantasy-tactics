@@ -292,6 +292,13 @@ layout_mode = 2
 toggle_mode = true
 text = "battle.action.attack"
 
+[node name="ShieldBashButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+toggle_mode = true
+text = "battle.action.shield_bash"
+
 [node name="HealButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -365,6 +372,7 @@ layout_mode = 1
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/BlessButton" to="." method="_on_bless_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/SleepButton" to="." method="_on_sleep_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/AttackButton" to="." method="_on_attack_button_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/ShieldBashButton" to="." method="_on_shield_bash_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/TransferButton" to="." method="_on_transfer_button_pressed"]
 [connection signal="board_changed" from="Grid" to="." method="_on_board_changed"]

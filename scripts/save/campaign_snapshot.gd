@@ -190,6 +190,9 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not adventurers_result.ok:
 		return _invalid(adventurers_result.error)
 	normalized["adventurers"] = _normalize_roster_records(adventurers_result.list)
+	var adventurer_specialization_error := _validate_specialization_field(normalized.adventurers, "adventurers")
+	if not adventurer_specialization_error.is_empty():
+		return _invalid(adventurer_specialization_error)
 	var adventurer_perks_error := _validate_perks_field(normalized.adventurers, "adventurers")
 	if not adventurer_perks_error.is_empty():
 		return _invalid(adventurer_perks_error)
@@ -201,6 +204,11 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not candidates_result.ok:
 		return _invalid(candidates_result.error)
 	normalized["recruitment_candidates"] = _normalize_roster_records(candidates_result.list)
+	var candidate_specialization_error := _validate_specialization_field(
+		normalized.recruitment_candidates, "recruitment_candidates"
+	)
+	if not candidate_specialization_error.is_empty():
+		return _invalid(candidate_specialization_error)
 	var candidate_perks_error := _validate_perks_field(normalized.recruitment_candidates, "recruitment_candidates")
 	if not candidate_perks_error.is_empty():
 		return _invalid(candidate_perks_error)
@@ -592,14 +600,17 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 ## _normalize_roster_records()). Each element must be a String naming either
 ## GameSession.BONUS_MOVE_PERK_ID (the retired-but-still-valid legacy
 ## universal perk -- see GameSession.choose_perk()'s doc comment for why it
-## is never migrated away from an existing holder) or one of the record's
-## own class's perk ids (GameSession.CLASS_PERKS); a perk belonging to a
-## different class, or any other unrecognized id, fails the *whole* snapshot
-## atomically here rather than being silently dropped from just that record.
-## A record with no progression field, or a progression with no perks field
-## (legacy pre-progression saves), is left alone -- only a present perks
-## array is checked. Returns "" when every record passes, or the first
-## failure's error message.
+## is never migrated away from an existing holder), one of the record's own
+## class's perk ids (GameSession.CLASS_PERKS), or -- once promoted, Stage 5
+## D4 -- one of the record's own "specialization" field's perk ids
+## (GameSession.SPECIALIZATION_PERKS, e.g. Knight's Shield Bash/Chain Blow);
+## a perk belonging to a different class/specialization, or any other
+## unrecognized id, fails the *whole* snapshot atomically here rather than
+## being silently dropped from just that record. A record with no
+## progression field, or a progression with no perks field (legacy pre-
+## progression saves), is left alone -- only a present perks array is
+## checked. Returns "" when every record passes, or the first failure's
+## error message.
 static func _validate_perks_field(records: Array[Dictionary], field_name: String) -> String:
 	for record in records:
 		var progression: Variant = record.get("progression")
@@ -609,7 +620,10 @@ static func _validate_perks_field(records: Array[Dictionary], field_name: String
 		if not perks is Array:
 			return "%s entry %s has a non-array perks field" % [field_name, record.get("id", "?")]
 		var class_id := str(record.get("class", "warrior"))
-		var valid_ids: Array = _GameSessionScript.CLASS_PERKS.get(class_id, [])
+		var valid_ids: Array = (_GameSessionScript.CLASS_PERKS.get(class_id, []) as Array).duplicate()
+		var specialization_id := str(record.get("specialization", ""))
+		if not specialization_id.is_empty():
+			valid_ids.append_array(_GameSessionScript.SPECIALIZATION_PERKS.get(specialization_id, []))
 		var seen: Dictionary = {}
 		for perk_id in perks as Array:
 			if not perk_id is String:
@@ -620,6 +634,38 @@ static func _validate_perks_field(records: Array[Dictionary], field_name: String
 			if seen.has(id):
 				return "%s entry %s has a duplicate perk id: %s" % [field_name, record.get("id", "?"), id]
 			seen[id] = true
+	return ""
+
+
+## Validates an already-normalized roster record's optional "specialization"
+## field (Stage 5 D4): absent means "not promoted" (the harmless default
+## every getter already reads via .get("specialization", ""), so an old,
+## pre-Stage-5-D4 save imports cleanly with zero code path change here) --
+## only a PRESENT, non-empty value is checked, and it must (a) be a known
+## SPECIALIZATION_ROOT_CLASS id and (b) match the record's own "class" field
+## as that specialization's required root class, exactly mirroring choose_
+## perk()'s own class-gating so a hand-edited or corrupted "specialization"
+## can never claim a mismatched root class. Fails the whole snapshot
+## atomically, same as every other roster field check in this file.
+static func _validate_specialization_field(records: Array[Dictionary], field_name: String) -> String:
+	for record in records:
+		if not record.has("specialization"):
+			continue
+		var raw_specialization: Variant = record.get("specialization")
+		if not raw_specialization is String:
+			return "%s entry %s has a non-string specialization" % [field_name, record.get("id", "?")]
+		var specialization_id := String(raw_specialization)
+		if specialization_id.is_empty():
+			continue
+		if not _GameSessionScript.SPECIALIZATION_ROOT_CLASS.has(specialization_id):
+			return "%s entry %s has an unknown specialization: %s" % [field_name, record.get("id", "?"), specialization_id]
+		var required_root_class: String = _GameSessionScript.SPECIALIZATION_ROOT_CLASS[specialization_id]
+		var class_id := str(record.get("class", "warrior"))
+		if class_id != required_root_class:
+			return (
+				"%s entry %s has specialization %s which requires root class %s, not %s"
+				% [field_name, record.get("id", "?"), specialization_id, required_root_class, class_id]
+			)
 	return ""
 
 
