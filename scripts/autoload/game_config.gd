@@ -19,6 +19,13 @@ const DEFAULTS: Dictionary = {
 		"side_flank_crit_bonus": 0.20,
 		"rear_flank_guard_penalty": 50,
 		"rear_flank_crit_bonus": 0.50,
+		"cover_low_missile_guard_bonus": 25,
+		"cover_high_missile_guard_bonus": 50,
+		"dodge_chance": 0.10,
+		"parry_chance": 0.10,
+		"off_balance_guard_penalty": 10,
+		"parry_counter_melee_hit_bonus": 0.10,
+		"opportunity_attack_melee_hit_penalty": 0.10,
 	},
 	"progression": {
 		"perk_level_interval": 2,

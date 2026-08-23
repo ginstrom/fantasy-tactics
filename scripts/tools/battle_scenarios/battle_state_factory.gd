@@ -56,6 +56,11 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 
 	var board: Dictionary = scenario.board
 	controller.grid = GridScript.new(int(board.width), int(board.height))
+	# Cover terrain (Stage 5 D2): hand-authored per encounter, exactly like
+	# board.blocked -- see grid.gd's own cover_tiles doc comment.
+	for cover_entry in board.get("cover", []):
+		var cover_pos := ScenarioContractScript.position_from_dict(cover_entry.position)
+		controller.grid.cover_tiles[cover_pos] = String(cover_entry.tier)
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = iteration_seed
@@ -67,6 +72,11 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	# rolls would silently fall back to Godot's global, unseeded RNG and
 	# break reproducibility for any scenario that fields one.
 	controller.healing_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
+	# Dodge/Parry (Stage 5 D2 tactical primitives): the same requirement as
+	# every roll above -- a deterministic scenario must never fall back to
+	# Godot's global, unseeded randf() for a new stochastic check either.
+	controller.dodge_roll = func() -> float: return rng.randf()
+	controller.parry_roll = func() -> float: return rng.randf()
 
 	var units: Array = []
 	var player_adventurer_ids: Array[String] = []

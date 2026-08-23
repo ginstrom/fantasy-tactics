@@ -41,6 +41,7 @@ const FACING_KEYS := {
 @onready var hovered_section: VBoxContainer = $Content/HoveredSection
 @onready var hovered_name_label: Label = $Content/HoveredSection/NameLabel
 @onready var hovered_facing_label: Label = $Content/HoveredSection/FacingLabel
+@onready var hovered_cover_label: Label = $Content/HoveredSection/CoverLabel
 @onready var hovered_class_label: Label = $Content/HoveredSection/ClassLabel
 @onready var hovered_hp_label: Label = $Content/HoveredSection/HpLabel
 @onready var hovered_health_fill: ColorRect = $Content/HoveredSection/HealthBar/Fill
@@ -49,6 +50,7 @@ const FACING_KEYS := {
 @onready var selected_section: VBoxContainer = $Content/SelectedSection
 @onready var selected_name_label: Label = $Content/SelectedSection/NameLabel
 @onready var selected_facing_label: Label = $Content/SelectedSection/FacingLabel
+@onready var selected_cover_label: Label = $Content/SelectedSection/CoverLabel
 @onready var selected_class_label: Label = $Content/SelectedSection/ClassLabel
 @onready var selected_level_label: Label = $Content/SelectedSection/LevelLabel
 @onready var selected_hp_label: Label = $Content/SelectedSection/HpLabel
@@ -60,6 +62,13 @@ const FACING_KEYS := {
 @onready var selected_spellcasting_label: Label = $Content/SelectedSection/SpellcastingLabel
 @onready var selected_wound_label: Label = $Content/SelectedSection/WoundLabel
 @onready var selected_status_label: Label = $Content/SelectedSection/StatusLabel
+
+## Set by Battlefield._ready() (mirrors portrait_panel.gd's own `grid` field)
+## so this panel can read battlefield terrain -- Cover today -- through the
+## single authoritative BattleController/Grid query rather than keeping an
+## independent copy of any rule. Null in a bare/unscened test until assigned;
+## every read below is guarded accordingly.
+var grid
 
 ## Independent pulse tweens for the hovered/selected bars (Critical tier) --
 ## kept as separate fields rather than one shared var since both sections
@@ -113,6 +122,7 @@ func clear() -> void:
 func _populate_hovered(unit) -> void:
 	hovered_name_label.text = unit.display_name
 	hovered_facing_label.text = _facing_text(unit)
+	_update_cover_label(hovered_cover_label, unit)
 
 	var is_player: bool = unit.side == BattleControllerScript.Side.PLAYER
 	hovered_class_label.visible = is_player
@@ -135,6 +145,7 @@ func _populate_hovered(unit) -> void:
 func _populate_selected(unit) -> void:
 	selected_name_label.text = unit.display_name
 	selected_facing_label.text = _facing_text(unit)
+	_update_cover_label(selected_cover_label, unit)
 
 	var is_player: bool = unit.side == BattleControllerScript.Side.PLAYER
 	selected_class_label.visible = is_player
@@ -180,9 +191,43 @@ func _populate_selected(unit) -> void:
 	var status_names: Array[String] = []
 	for status_id in unit.statuses:
 		status_names.append(String(status_id).capitalize())
+	# Stage 5 D2 tactical primitives: off-balance/counter-bonus are dedicated
+	# Unit fields (see unit.gd's own doc comment), not entries in the generic
+	# `statuses` dict above -- surfaced here as plain readable text so a
+	# player can see WHY their next roll landed differently, never colour-
+	# only feedback (Stage 4's accessibility carryover).
+	if unit.off_balance_active:
+		status_names.append(
+			tr("battle.unit_info.off_balance") % GameConfig.get_int("combat", "off_balance_guard_penalty", 10)
+		)
+	if unit.counter_bonus_active_against != null:
+		status_names.append(
+			tr("battle.unit_info.countering") % [
+				unit.counter_bonus_active_against.display_name,
+				int(round(GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10) * 100)),
+			]
+		)
 	selected_status_label.visible = not status_names.is_empty()
 	if not status_names.is_empty():
 		selected_status_label.text = ", ".join(status_names)
+
+
+## Cover (Stage 5 D2): reads the single authoritative Grid.get_cover() query
+## through the assigned `grid` (BattleController) reference -- never an
+## independent copy of the rule. Shown for any unit, ally or enemy alike:
+## which tiles have Cover is public battlefield information, not a spoiler
+## the way an enemy's exact HP would be (see _populate_hovered()'s own
+## doc comment on that asymmetry). Hidden entirely for an uncovered tile,
+## and in the bare/unscened tests that never assign `grid`.
+func _update_cover_label(label: Label, unit) -> void:
+	if grid == null:
+		label.visible = false
+		return
+	var tier: String = grid.grid.get_cover(unit.grid_position)
+	label.visible = tier != ""
+	if label.visible:
+		var tier_key: String = "battle.cover.high" if tier == "high" else "battle.cover.low"
+		label.text = tr("battle.unit_info.cover") % tr(tier_key)
 
 
 func _facing_text(unit) -> String:

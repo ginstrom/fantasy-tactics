@@ -30,6 +30,7 @@ func test_normalize_fills_every_default_for_a_sparse_scenario() -> void:
 	assert_eq(scenario.board.width, ScenarioContract.DEFAULT_BOARD_WIDTH)
 	assert_eq(scenario.board.height, ScenarioContract.DEFAULT_BOARD_HEIGHT)
 	assert_eq(scenario.board.blocked, [])
+	assert_eq(scenario.board.cover, [], "Stage 5 D2: no Cover tiles unless the scenario explicitly authors them")
 	assert_eq(scenario.rules.round_limit, ScenarioContract.DEFAULT_ROUND_LIMIT)
 	assert_eq(scenario.rules.victory_condition, ScenarioContract.DEFAULT_VICTORY_CONDITION)
 	assert_eq(scenario.policies.player, ScenarioContract.DEFAULT_PLAYER_POLICY)
@@ -427,6 +428,53 @@ func test_validate_rejects_an_out_of_bounds_position() -> void:
 	var errors := ScenarioContract.validate(scenario)
 
 	assert_true(_has_error_with_prefix(errors, "out_of_bounds"), "Expected an out_of_bounds error, got: %s" % [errors])
+
+
+## --- Cover terrain (Stage 5 D2, decision-ledger.md's "Terrain
+## representation/distribution" row) -------------------------------------
+
+func test_normalize_carries_an_authored_cover_tile_through_with_its_tier() -> void:
+	var raw := _minimal_raw_scenario()
+	raw.board = {"cover": [{"position": {"x": 2, "y": 2}, "tier": "high"}]}
+
+	var scenario := ScenarioContract.normalize(raw)
+
+	assert_eq(scenario.board.cover, [{"position": {"x": 2, "y": 2}, "tier": "high"}])
+
+
+func test_validate_accepts_a_low_and_a_high_cover_tile() -> void:
+	var raw := _minimal_raw_scenario()
+	raw.board = {
+		"cover": [
+			{"position": {"x": 1, "y": 1}, "tier": "low"},
+			{"position": {"x": 2, "y": 2}, "tier": "high"},
+		],
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_eq(errors, [] as Array[String])
+
+
+func test_validate_rejects_a_cover_tile_outside_the_board() -> void:
+	var raw := _minimal_raw_scenario()
+	raw.board = {"width": 6, "height": 6, "cover": [{"position": {"x": 6, "y": 0}, "tier": "low"}]}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "out_of_bounds"), "Expected an out_of_bounds error, got: %s" % [errors])
+
+
+func test_validate_rejects_an_unknown_cover_tier() -> void:
+	var raw := _minimal_raw_scenario()
+	raw.board = {"cover": [{"position": {"x": 1, "y": 1}, "tier": "medium"}]}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_true(_has_error_with_prefix(errors, "invalid_cover_tier"), "Expected an invalid_cover_tier error, got: %s" % [errors])
 
 
 func test_validate_rejects_a_non_positive_board_dimension() -> void:

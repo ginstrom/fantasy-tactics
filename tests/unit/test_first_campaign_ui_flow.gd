@@ -163,6 +163,11 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	# Stage 5 D2: pin Dodge/Parry off so this guaranteed hit_roll actually
+	# lands as a plain hit, not a randomly-evaded one -- see test_battlefield.gd's
+	# _make_battlefield() for the identical fix applied to every test there.
+	battlefield.grid.dodge_roll = func() -> float: return 1.0
+	battlefield.grid.parry_roll = func() -> float: return 1.0
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	battlefield.grid.apply_super_power()
@@ -243,6 +248,11 @@ func test_the_real_post_victory_scene_change_produces_a_selectable_world_map() -
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	# Stage 5 D2: pin Dodge/Parry off so this guaranteed hit_roll actually
+	# lands as a plain hit, not a randomly-evaded one -- see test_battlefield.gd's
+	# _make_battlefield() for the identical fix applied to every test there.
+	battlefield.grid.dodge_roll = func() -> float: return 1.0
+	battlefield.grid.parry_roll = func() -> float: return 1.0
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	battlefield.grid.apply_super_power()
@@ -321,6 +331,11 @@ func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_part
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	# Stage 5 D2: pin Dodge/Parry off so this guaranteed hit_roll actually
+	# lands as a plain hit, not a randomly-evaded one -- see test_battlefield.gd's
+	# _make_battlefield() for the identical fix applied to every test there.
+	battlefield.grid.dodge_roll = func() -> float: return 1.0
+	battlefield.grid.parry_roll = func() -> float: return 1.0
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	battlefield.grid.apply_super_power()
@@ -630,6 +645,11 @@ func test_defeating_the_final_boss_routes_exactly_once_to_the_real_campaign_vict
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
+	# Stage 5 D2: pin Dodge/Parry off so this guaranteed hit_roll actually
+	# lands as a plain hit, not a randomly-evaded one -- see test_battlefield.gd's
+	# _make_battlefield() for the identical fix applied to every test there.
+	battlefield.grid.dodge_roll = func() -> float: return 1.0
+	battlefield.grid.parry_roll = func() -> float: return 1.0
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	battlefield.grid.apply_super_power()

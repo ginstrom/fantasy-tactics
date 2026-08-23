@@ -1,12 +1,35 @@
 extends RefCounted
 
+## Battlefield terrain (Stage 5 D2, docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/decision-ledger.md's "Terrain representation/
+## distribution" row): Cover tiles are hand-authored per encounter, exactly
+## like EXPEDITIONS' own hand-placed positions/compositions -- there is no
+## procedural distribution algorithm here or anywhere else. Whoever builds
+## this Grid (BattleController._ready(), BattleStateFactory.build()) is
+## responsible for populating cover_tiles for the encounters that need it;
+## Grid itself never invents cover. Guard bonuses are missile-only balance
+## numbers read from GameConfig at the point of use (see BattleController's
+## try_attack_selected_unit()) -- Grid only stores which tier a tile has.
+const COVER_NONE := ""
+const COVER_LOW := "low"
+const COVER_HIGH := "high"
+
 var width: int
 var height: int
+## Vector2i tile -> COVER_LOW/COVER_HIGH. A tile absent from this dictionary
+## has no cover (get_cover() below returns COVER_NONE for it).
+var cover_tiles: Dictionary = {}
 
 
 func _init(p_width: int, p_height: int) -> void:
 	width = p_width
 	height = p_height
+
+
+## COVER_NONE/COVER_LOW/COVER_HIGH for `tile`, defaulting to COVER_NONE for
+## any tile no caller ever authored cover on.
+func get_cover(tile: Vector2i) -> String:
+	return String(cover_tiles.get(tile, COVER_NONE))
 
 
 func is_in_bounds(pos: Vector2i) -> bool:
@@ -59,6 +82,34 @@ func has_line_of_sight(start_tile: Vector2i, end_tile: Vector2i, blocking_tiles:
 		if tile != end_tile and blocking_tiles.has(tile):
 			return false
 	return true
+
+
+## Battlefield visibility (Stage 5 D2's "Battlefield visibility" row): every
+## tile with unobstructed 360-degree line of sight from at least one entry in
+## `viewer_positions`, using the exact same has_line_of_sight() primitive
+## already used for ranged targeting/spell range -- this is a second, purely
+## additive query, never a replacement for it (has_line_of_sight() keeps
+## serving range/targeting legality exactly as before; see that function's
+## own doc comment). `blocking_tiles` follows has_line_of_sight()'s existing
+## contract verbatim: a tile that is itself the line's destination never
+## blocks its own line, so every viewer's own tile and every tile actually
+## reachable by an unobstructed line register as visible. Returns a
+## Dictionary used as a tile set (tile -> true), matching get_tile_distances()'
+## own lookup-friendly shape rather than an Array callers would have to scan.
+func get_visible_tiles(viewer_positions: Array[Vector2i], blocking_tiles: Array[Vector2i]) -> Dictionary:
+	var visible := {}
+	for viewer in viewer_positions:
+		if not is_in_bounds(viewer):
+			continue
+		visible[viewer] = true
+		for y in height:
+			for x in width:
+				var tile := Vector2i(x, y)
+				if visible.has(tile):
+					continue
+				if has_line_of_sight(viewer, tile, blocking_tiles):
+					visible[tile] = true
+	return visible
 
 
 func get_attackable_tiles(

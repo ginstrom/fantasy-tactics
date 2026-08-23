@@ -83,6 +83,21 @@ const FACING_INDICATOR_SIZE := 12.0
 ## anchored to each tile's bottom edge so a unit reads as standing "on" the
 ## ground plane rather than floating centered in its cell.
 const SHADOW_COLOR := Color(0, 0, 0, 0.35)
+## Cover terrain markers (Stage 5 D2) -- distinct hues per tier, always paired
+## with an "L"/"H" text badge (see _draw_cover_markers()) so the difference
+## never rests on colour alone.
+const COVER_LOW_MARKER_COLOR := Color(0.45, 0.65, 0.35, 0.9)
+const COVER_HIGH_MARKER_COLOR := Color(0.2, 0.45, 0.2, 0.9)
+## Battlefield visibility (Stage 5 D2): a flat dark tint over any tile
+## outside the player's current line of sight (see get_player_visible_tiles()/
+## _update_visibility_overlay()). Deliberately translucent, not opaque -- a
+## dimmed tile still reads (ground, cover, a stale marker), it is just marked
+## as not currently observed.
+const STALE_TILE_OVERLAY_COLOR := Color(0, 0, 0, 0.45)
+## Last-known-enemy marker (Stage 5 D2): the ghost sprite's own alpha, plus a
+## text badge (never colour-only) marking it as possibly outdated.
+const STALE_UNIT_MODULATE := Color(1, 1, 1, 0.45)
+const STALE_MARKER_BADGE_COLOR := Color(0.9, 0.9, 0.2, 0.9)
 ## Pooled floating-combat-text cap (Technical Design §2) -- this game's
 ## turn-based combat never lands more than a couple of hits in the same
 ## frame, so a small fixed pool comfortably covers every real burst without
@@ -189,6 +204,14 @@ var crit_roll: Callable = func() -> float: return randf()
 var damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var healing_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 var rune_trigger_roll: Callable = func() -> float: return randf()
+## Stage 5 D2 tactical primitives: Dodge is eligible for any incoming attack
+## type, Parry only for a melee one -- both flat-chance, both injectable here
+## exactly like hit_roll/crit_roll above so BattleStateFactory can seed them
+## from the same per-iteration RNG (see that file's build()) and no new
+## stochastic check ever falls back to global randf() in a deterministic
+## scenario. See _resolve_attack_core().
+var dodge_roll: Callable = func() -> float: return randf()
+var parry_roll: Callable = func() -> float: return randf()
 ## Injectable so tests can seed an exact Retreat outcome per unit instead of
 ## depending on real randomness (see hit_roll for the same pattern). Called
 ## once per living player unit in try_retreat(), in the same stable unit
@@ -207,8 +230,23 @@ var defeated_player_health_by_id: Dictionary = {}
 ## _acquire_floating_text()) rather than instantiating/freeing a fresh node
 ## per hit -- populated lazily, capped at FLOATING_TEXT_POOL_SIZE.
 var _floating_text_pool: Array = []
+## Every Attack-of-Opportunity resolved by the most recent move action (see
+## _trigger_opportunity_attacks_along_path()), in trigger order. Cleared at
+## the start of every move action, exactly like last_attack_result/
+## last_targeting_failure -- Battlefield drains and logs these separately
+## (a reaction is a side effect of a move, not the move's own primary
+## result) rather than overwriting last_attack_result with it.
+var last_reaction_results: Array[Dictionary] = []
+## Last-known-position memory for battlefield visibility/staleness (Stage 5
+## D2's "Battlefield visibility" row): Unit (enemy) -> Vector2i, the last
+## tile the player actually saw that enemy occupy. Maintained exclusively by
+## _refresh_battlefield_memory(); see get_stale_enemy_markers() for the
+## single authoritative read of it (rendering/UI must never keep an
+## independent copy of this rule).
+var _last_known_enemy_positions: Dictionary = {}
 
 @onready var tile_container: Node2D = $Tiles
+@onready var terrain_container: Node2D = $Terrain
 @onready var shadow_container: Node2D = $Shadows
 @onready var unit_container: Node2D = $Units
 @onready var highlight_container: Node2D = $Highlights
@@ -218,6 +256,7 @@ var _floating_text_pool: Array = []
 func _ready() -> void:
 	add_to_group(GROUP)
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
+	grid.cover_tiles = _cover_tiles_for_encounter(_current_encounter_id())
 	var expedition := _get_expedition_for_battle()
 	_player_adventurer_ids = _get_player_adventurer_ids()
 	units = []
@@ -347,6 +386,7 @@ func _ready() -> void:
 	# calls _on_board_changed() explicitly for the same reason).
 	selected_unit = _first_living_player_unit()
 	inspected_unit = selected_unit
+	_refresh_battlefield_memory()
 	_draw_tiles()
 	_draw_units()
 	_update_highlights()
@@ -359,6 +399,40 @@ func _get_expedition_for_battle() -> Dictionary:
 		# fall back to the Goblin Camp enemy so those scenarios keep working.
 		expedition = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
 	return expedition
+
+
+## Raw expedition id this battle is being fought over, with the same empty-
+## selection fallback _get_expedition_for_battle() applies (mirrored here,
+## not derived from that function's return value, since a resolved
+## expedition Dictionary carries no "id" field of its own -- see
+## Battlefield._current_expedition()'s identical fallback for the same
+## reason).
+func _current_encounter_id() -> String:
+	var encounter_id: String = GameSession.selected_encounter
+	if encounter_id == "":
+		encounter_id = GameSession.GOBLIN_CAMP_ID
+	return encounter_id
+
+
+## Cover terrain (Stage 5 D2, docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/decision-ledger.md's "Terrain representation/
+## distribution" row): hand-authored per encounter, exactly like
+## PLAYER_START_POSITIONS/ENEMY_START_POSITIONS above -- never procedural.
+## Only the Goblin Camp -- this step's authored demonstration encounter --
+## carries an entry; every other encounter fields no Cover at all, exactly
+## as before this step existed. A Low Cover tile sits in the open ground a
+## player unit can reach before engaging; a High Cover tile sits one tile
+## further in, giving a missile-armed party member (a Scout) a real
+## positional choice on the approach to the Goblin's fixed (5,5) spawn.
+func _cover_tiles_for_encounter(encounter_id: String) -> Dictionary:
+	match encounter_id:
+		GameSession.GOBLIN_CAMP_ID:
+			return {
+				Vector2i(3, 2): GridScript.COVER_LOW,
+				Vector2i(4, 3): GridScript.COVER_HIGH,
+			}
+		_:
+			return {}
 
 
 ## Flattens an expedition's enemy composition into one ordered stat block per
@@ -620,6 +694,85 @@ func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i]
 	return attackable
 
 
+## --- Battlefield visibility (Stage 5 D2) ------------------------------------
+##
+## Single authoritative visibility query for the whole battle domain --
+## rendering (Battlefield/_draw_units()/_update_highlights()) and UI consume
+## this and get_stale_enemy_markers() below rather than keeping any
+## independent fog rule of their own. This never gates move/attack legality;
+## it is purely what the player currently sees vs. remembers.
+
+## Every tile with unobstructed line of sight from at least one living player
+## unit's current position, using the same occupied-tile blocking every
+## other LOS check in this file already uses (see get_legal_attack_targets()'s
+## identical blocking_tiles construction).
+func get_player_visible_tiles() -> Dictionary:
+	var viewers: Array[Vector2i] = []
+	var blocking_tiles: Array[Vector2i] = []
+	for unit in units:
+		if not unit.is_alive():
+			continue
+		blocking_tiles.append(unit.grid_position)
+		if unit.side == Side.PLAYER:
+			viewers.append(unit.grid_position)
+	return grid.get_visible_tiles(viewers, blocking_tiles)
+
+
+## Refreshes _last_known_enemy_positions from the current board state -- call
+## after any action that can change what's on the board or where (see
+## _ready(), _apply_move_along_path(), try_attack_selected_unit()). For every
+## living enemy currently in sight, records its true position as the
+## freshest "last known" one. An enemy that just left sight keeps its
+## existing memory entry untouched -- it goes on showing at the old,
+## possibly-stale tile -- UNLESS the player is now looking straight at that
+## remembered tile and the enemy genuinely isn't there ("proven wrong" per
+## the decision ledger), in which case the stale entry is cleared outright.
+## A memory entry for a unit no longer fielded at all (defeated) is dropped
+## too, so a dead enemy never keeps showing a ghost marker forever.
+func _refresh_battlefield_memory() -> void:
+	var visible := get_player_visible_tiles()
+	for unit in units:
+		if unit.side != Side.ENEMY or not unit.is_alive():
+			continue
+		if visible.has(unit.grid_position):
+			_last_known_enemy_positions[unit] = unit.grid_position
+			continue
+		var remembered = _last_known_enemy_positions.get(unit, null)
+		if remembered != null and visible.has(remembered):
+			_last_known_enemy_positions.erase(unit)
+	for remembered_unit in _last_known_enemy_positions.keys():
+		if not units.has(remembered_unit):
+			_last_known_enemy_positions.erase(remembered_unit)
+
+
+## Every currently-stale enemy (alive, remembered, but not in the player's
+## current sight) paired with the last-known position rendering should draw
+## it at instead of its real (unknown-to-the-player) current tile.
+func get_stale_enemy_markers() -> Array[Dictionary]:
+	var visible := get_player_visible_tiles()
+	var markers: Array[Dictionary] = []
+	for unit in _last_known_enemy_positions:
+		if not units.has(unit) or visible.has(unit.grid_position):
+			continue
+		markers.append({"unit": unit, "position": _last_known_enemy_positions[unit]})
+	return markers
+
+
+## Cover's missile-only Guard bonus (Stage 5 D2's Approved values table) for
+## whichever tile `tile` is. Callers gate this to a missile attack landing on
+## the defender's front arc themselves (see try_attack_selected_unit()) --
+## flanking bypasses Cover's Guard bonus entirely per the decision ledger's
+## own Counterplay note.
+func _cover_missile_guard_bonus(tile: Vector2i) -> int:
+	match grid.get_cover(tile):
+		GridScript.COVER_LOW:
+			return GameConfig.get_int("combat", "cover_low_missile_guard_bonus", 25)
+		GridScript.COVER_HIGH:
+			return GameConfig.get_int("combat", "cover_high_missile_guard_bonus", 50)
+		_:
+			return 0
+
+
 ## Classifies an attack's angle against the defender's own facing --
 ## "front"/"side"/"rear" -- per the design doc's 3x3 directional diagrams (see
 ## docs/plans/2026-08-18-critical-hits-and-flanking/
@@ -704,6 +857,83 @@ func _classify_move_and_attack_failure(attacker, target) -> String:
 	return "out_of_range"
 
 
+## --- Shared attack resolution core (Stage 5 D2) ------------------------------
+
+## Shared hit -> Dodge -> Parry -> critical -> damage roll sequence for both
+## an ordinary attack (try_attack_selected_unit()) and a free Attack of
+## Opportunity (_resolve_opportunity_attack()) -- the only two ways a unit
+## ever damages another in this file. Both callers compute their own
+## effective_hit_chance (flank/off-balance/counter-bonus/Cover/opportunity-
+## penalty already folded in, per each caller's own rules) and
+## effective_crit_chance, and pass whether this specific attack is melee
+## (Dodge is eligible for any attack type per the decision ledger's Approved
+## values table; Parry only for melee). Owning only the roll sequence and its
+## Bless/critical damage math here means the two callers can never diverge on
+## either. crit_roll/damage_roll stay never-consumed on a miss, a dodge, or a
+## parry, extending this file's existing "no roll on a miss" contract.
+func _resolve_attack_core(attacker, defender, effective_hit_chance: float, effective_crit_chance: float, is_melee: bool) -> Dictionary:
+	var hit: bool = hit_roll.call() < effective_hit_chance
+	var dodged := false
+	var parried := false
+	if hit:
+		var dodge_chance: float = GameConfig.get_float("combat", "dodge_chance", 0.10)
+		if dodge_roll.call() < dodge_chance:
+			dodged = true
+		elif is_melee:
+			var parry_chance: float = GameConfig.get_float("combat", "parry_chance", 0.10)
+			if parry_roll.call() < parry_chance:
+				parried = true
+		if dodged or parried:
+			hit = false
+
+	var damage := 0
+	var is_critical := false
+	if hit:
+		is_critical = crit_roll.call() < effective_crit_chance
+		var raw_damage: int = damage_roll.call(attacker.damage_min, attacker.damage_max) + attacker.raw_damage_bonus + attacker.might
+		var effective_resistance: int = defender.resistance
+		if is_critical:
+			var critical_damage_multiplier: float = GameConfig.get_float("combat", "critical_damage_multiplier", 1.5)
+			raw_damage = int(round(raw_damage * critical_damage_multiplier))
+			var critical_resistance_reduction: int = GameConfig.get_int("combat", "critical_resistance_reduction", 20)
+			effective_resistance = maxi(0, defender.resistance - critical_resistance_reduction)
+		damage = int(maxi(1, round(raw_damage * (1.0 - effective_resistance / 100.0))))
+		if has_status(attacker, BLESSED_STATUS_ID):
+			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
+		defender.take_damage(damage)
+
+	return {"hit": hit, "critical": is_critical, "damage": damage, "dodged": dodged, "parried": parried}
+
+
+## Bookkeeping a successful Dodge or Parry sets up (Stage 5 D2's Counterplay
+## note): the attacker becomes off-balance for the whole of their own next
+## turn either way; a Parry additionally grants the defender a melee
+## counter-bonus against that SAME attacker on the defender's own next turn.
+## Both are *_pending fields -- see Unit.gd's own doc comment and end_turn()'s
+## _advance_reaction_timers(), which is what actually activates and later
+## expires them at the documented time.
+func _apply_evasion_reactions(attacker, defender, dodged: bool, parried: bool) -> void:
+	if not dodged and not parried:
+		return
+	attacker.off_balance_pending = true
+	if parried:
+		defender.counter_bonus_pending_against = attacker
+
+
+## Deterministic outcome label for logs/UI (Stage 5 D2 task 5's accessibility
+## requirement: outcomes must be distinguishable by text/icon, not colour
+## alone). Mutually exclusive: "critical"/"hit" on a landed blow, "dodged"/
+## "parried" on an evaded one, "blocked" for an ordinary Guard-driven miss.
+func _outcome_for(core: Dictionary) -> String:
+	if core.hit:
+		return "critical" if core.critical else "hit"
+	if core.dodged:
+		return "dodged"
+	if core.parried:
+		return "parried"
+	return "blocked"
+
+
 ## Route (not just destination legality) comes from grid.get_shortest_path():
 ## its inclusive start-to-target path both proves the destination reachable
 ## within the unit's remaining AP and supplies the route's final edge, which
@@ -725,11 +955,13 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 	if path.size() < 2:
 		return false
 
-	selected_unit.grid_position = target
-	selected_unit.action_points_remaining -= (path.size() - 1) * MOVE_ACTION_POINT_COST
-	selected_unit.set_facing(path[-1] - path[-2])
+	last_reaction_results = []
+	var mover = selected_unit
+	_apply_move_along_path(mover, path)
+	mover.set_facing(path[-1] - path[-2])
 	last_attack_result = {}
 	last_targeting_failure = {}
+	_refresh_battlefield_memory()
 	return true
 
 
@@ -765,10 +997,27 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 			return false
 
 	last_targeting_failure = {}
+	last_reaction_results = []
 	if move_tile != null:
-		var distances := _move_distances(selected_unit)
-		selected_unit.grid_position = move_tile
-		selected_unit.action_points_remaining -= int(distances[move_tile]) * MOVE_ACTION_POINT_COST
+		var move_range: int = selected_unit.action_points_remaining / MOVE_ACTION_POINT_COST
+		var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+		var path: Array[Vector2i] = grid.get_shortest_path(selected_unit.grid_position, move_tile, move_range, is_blocked)
+		if not path.is_empty():
+			_apply_move_along_path(selected_unit, path)
+		# A departure Attack of Opportunity can defeat the mover before it
+		# ever reaches melee range of its own intended target -- the move
+		# itself still completed (path/AP already applied above), but a dead
+		# unit cannot go on to attack. Recorded as its own outcome rather
+		# than silently returning false, since the move DID succeed.
+		if not selected_unit.is_alive():
+			last_attack_result = {
+				"type": "attack", "attacker": selected_unit, "defender": target,
+				"hit": false, "damage": 0, "critical": false, "defeated": false,
+				"dodged": false, "parried": false, "cover_tile": "", "cover_applied": false,
+				"outcome": "aborted_by_reaction", "is_reaction": false,
+			}
+			_refresh_battlefield_memory()
+			return true
 
 	# The attacker turns to face the defender from its (possibly just-moved-to)
 	# position, whether the strike lands or not -- see Unit.set_facing()'s
@@ -793,7 +1042,24 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		guard_penalty = GameConfig.get_int("combat", "rear_flank_guard_penalty", 50)
 		crit_bonus = GameConfig.get_float("combat", "rear_flank_crit_bonus", 0.50)
 
-	var effective_defense: int = maxi(0, target.defense - guard_penalty)
+	# Cover (Stage 5 D2's Approved values table): a missile-only Guard bonus
+	# for the defender's tile, applied only against a front-facing attack --
+	# flanking (side/rear) bypasses it entirely per the decision ledger's own
+	# Counterplay note, so it is never added alongside a flank guard_penalty.
+	var is_melee_attack: bool = selected_unit.attack_max_range == 1
+	var cover_tile: String = grid.get_cover(target.grid_position)
+	var cover_applied: bool = not is_melee_attack and flank_type == "front" and cover_tile != GridScript.COVER_NONE
+	var cover_bonus: int = _cover_missile_guard_bonus(target.grid_position) if cover_applied else 0
+	# Off-balance (Stage 5 D2): a defender who whiffed against a Dodge/Parry
+	# on their own last attack loses Guard for the whole of their current
+	# marked turn -- see Unit.gd's own doc comment and end_turn()'s
+	# _advance_reaction_timers(), which is the sole place off_balance_active
+	# is ever set or cleared.
+	var off_balance_penalty: int = (
+		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if target.off_balance_active else 0
+	)
+
+	var effective_defense: int = maxi(0, target.defense - guard_penalty - off_balance_penalty + cover_bonus)
 	var effective_hit_chance: float = clampf(
 		selected_unit.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
@@ -805,33 +1071,25 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		effective_hit_chance = clampf(
 			effective_hit_chance + BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 		)
+	# Parry's counter-bonus (Stage 5 D2): +10% melee to-hit for the attacker
+	# ONLY against the same defender who parried them last time, only during
+	# the attacker's own marked turn -- see Unit.gd's counter_bonus_active_
+	# against doc comment.
+	if selected_unit.counter_bonus_active_against == target:
+		effective_hit_chance = clampf(
+			effective_hit_chance + GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10),
+			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
 	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
 	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
 
-	var hit: bool = hit_roll.call() < effective_hit_chance
-	var damage: int = 0
-	# Critical hits only exist on a landed hit -- crit_roll is never consumed
-	# on a miss, keeping the roll sequence identical to hit_roll/damage_roll's
-	# own "no call on a miss" contract (see the Config & Defaults / Critical
-	# Hit Roll Determinism sections of docs/plans/2026-08-18-critical-hits-
-	# and-flanking/02-critical-hit-mechanics.md).
-	var is_critical := false
+	var core := _resolve_attack_core(selected_unit, target, effective_hit_chance, effective_crit_chance, is_melee_attack)
+	_apply_evasion_reactions(selected_unit, target, core.dodged, core.parried)
+	var hit: bool = core.hit
+	var is_critical: bool = core.critical
+	var damage: int = core.damage
+
 	if hit:
-		is_critical = crit_roll.call() < effective_crit_chance
-		var raw_damage: int = damage_roll.call(selected_unit.damage_min, selected_unit.damage_max) + selected_unit.raw_damage_bonus + selected_unit.might
-		var effective_resistance: int = target.resistance
-		if is_critical:
-			var critical_damage_multiplier: float = GameConfig.get_float("combat", "critical_damage_multiplier", 1.5)
-			raw_damage = int(round(raw_damage * critical_damage_multiplier))
-			var critical_resistance_reduction: int = GameConfig.get_int("combat", "critical_resistance_reduction", 20)
-			effective_resistance = maxi(0, target.resistance - critical_resistance_reduction)
-		damage = int(maxi(1, round(raw_damage * (1.0 - effective_resistance / 100.0))))
-		# Bless: +10% to the already-resolved final post-resistance damage
-		# (composed after crit's own raw-damage/resistance adjustments above,
-		# not folded into raw_damage before resistance is applied).
-		if has_status(selected_unit, BLESSED_STATUS_ID):
-			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
-		target.take_damage(damage)
 		if is_critical:
 			_spawn_combat_text(
 				_floating_text_anchor(target), tr("battle.floating.critical") % damage, FloatingTextScript.TYPE_CRITICAL
@@ -840,6 +1098,10 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 			_spawn_combat_text(
 				_floating_text_anchor(target), tr("battle.floating.damage") % damage, FloatingTextScript.TYPE_DAMAGE
 			)
+	elif core.dodged:
+		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.dodge"), FloatingTextScript.TYPE_DODGE)
+	elif core.parried:
+		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.parry"), FloatingTextScript.TYPE_PARRY)
 	else:
 		_spawn_combat_text(_floating_text_anchor(target), tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
 	var defeated: bool = hit and not target.is_alive()
@@ -868,13 +1130,154 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		"effective_defense": effective_defense,
 		"effective_hit_chance": effective_hit_chance,
 		"effective_crit_chance": effective_crit_chance,
+		"dodged": core.dodged,
+		"parried": core.parried,
+		"cover_tile": cover_tile,
+		"cover_applied": cover_applied,
+		"outcome": _outcome_for(core),
+		"is_reaction": false,
 	}
 	if hit:
-		_dispatch_completed_hit(selected_unit, target)
+		if _dispatch_completed_hit(selected_unit, target):
+			last_attack_result["thorn_triggered"] = true
 		completed_hit.emit(last_attack_result)
 	if defeated and target.side == Side.ENEMY:
 		enemy_defeated.emit(target)
+	_refresh_battlefield_memory()
 	return true
+
+
+## --- Attacks of Opportunity (Stage 5 D2) -------------------------------------
+
+## Executes a computed multi-tile route: resolves any Attack-of-Opportunity
+## departures along the way (see _trigger_opportunity_attacks_along_path()),
+## then moves the unit to the route's final tile and spends its AP. The move
+## always completes at its full intended destination and cost, whether or
+## not any triggered reaction lands (the approved design's own "the move
+## completes regardless of whether the attack hits") -- even when the mover
+## is defeated mid-route, since a dead unit's position/AP no longer matter to
+## anything that reads them afterward (see try_attack_selected_unit()'s own
+## is_alive() guard right after its move-and-attack branch calls this).
+func _apply_move_along_path(unit, path: Array[Vector2i]) -> void:
+	_trigger_opportunity_attacks_along_path(unit, path)
+	unit.grid_position = path[-1]
+	unit.action_points_remaining -= (path.size() - 1) * MOVE_ACTION_POINT_COST
+
+
+## Attacks of Opportunity (Stage 5 D2's "Opportunity-attack trigger scope"
+## row, decision-ledger.md's Approved values table): for every step of `path`
+## where `unit` departs a living enemy's melee-attack adjacency
+## (Grid.is_attack_adjacent(), the same 8-directional adjacency ordinary
+## melee attacks use) without still being adjacent on the very next tile,
+## that enemy gets exactly one free melee attack against `unit` for this
+## whole move action -- however many times `unit` departs/re-enters that
+## SAME enemy's adjacency within this one path, `already_reacted` below
+## ensures only the first departure fires. Only a melee-capable unit
+## (attack_max_range == 1) can make an opportunity attack: the design doc's
+## "-10% melee hit penalty" wording assumes the reactor's own melee stat,
+## which a ranged unit has no occasion to use this way. Populates
+## last_reaction_results (cleared by every caller before it calls this) so
+## Battlefield can log every reaction from one move action, and stops
+## issuing further reactions the moment `unit` is defeated, since a dead
+## unit cannot keep moving through anyone's threatened tiles.
+func _trigger_opportunity_attacks_along_path(unit, path: Array[Vector2i]) -> void:
+	if path.size() < 2:
+		return
+	var already_reacted: Array = []
+	for step_index in path.size() - 1:
+		var from_tile: Vector2i = path[step_index]
+		var to_tile: Vector2i = path[step_index + 1]
+		for reactor in units:
+			if reactor.side == unit.side or not reactor.is_alive():
+				continue
+			if reactor.attack_max_range != 1 or already_reacted.has(reactor):
+				continue
+			if not grid.is_attack_adjacent(reactor.grid_position, from_tile):
+				continue
+			if grid.is_attack_adjacent(reactor.grid_position, to_tile):
+				continue
+			already_reacted.append(reactor)
+			last_reaction_results.append(_resolve_opportunity_attack(reactor, unit))
+			if not unit.is_alive():
+				return
+
+
+## Free melee attack an adjacent enemy gets when `mover` departs its
+## adjacency mid-move (see _trigger_opportunity_attacks_along_path()). Costs
+## `reactor` no AP and never touches selected_unit/active_side, and uses the
+## exact same _resolve_attack_core() roll sequence every other attack in this
+## file uses, so a reaction can never diverge from ordinary combat math
+## beyond its own documented -10% melee penalty (no flanking bonus -- the
+## design doc's Attacks-of-Opportunity section names only the flat penalty).
+func _resolve_opportunity_attack(reactor, mover) -> Dictionary:
+	var off_balance_penalty: int = (
+		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if mover.off_balance_active else 0
+	)
+	var effective_defense: int = maxi(0, mover.defense - off_balance_penalty)
+	var opportunity_penalty: float = GameConfig.get_float("combat", "opportunity_attack_melee_hit_penalty", 0.10)
+	var effective_hit_chance: float = clampf(
+		reactor.hit_chance - effective_defense / 100.0 - opportunity_penalty, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+	)
+	if reactor.counter_bonus_active_against == mover:
+		effective_hit_chance = clampf(
+			effective_hit_chance + GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10),
+			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
+	var effective_crit_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
+
+	var core := _resolve_attack_core(reactor, mover, effective_hit_chance, effective_crit_chance, true)
+	_apply_evasion_reactions(reactor, mover, core.dodged, core.parried)
+
+	var defeated: bool = core.hit and not mover.is_alive()
+	if defeated:
+		AudioManager.play_sfx("sfx_unit_death")
+		units.erase(mover)
+		if mover.side == Side.PLAYER and mover.adventurer_id != "":
+			defeated_player_health_by_id[mover.adventurer_id] = mover.health
+
+	var result := {
+		"type": "reaction",
+		"reactor": reactor,
+		"mover": mover,
+		"hit": core.hit,
+		"damage": core.damage,
+		"critical": core.critical,
+		"defeated": defeated,
+		"dodged": core.dodged,
+		"parried": core.parried,
+		"effective_defense": effective_defense,
+		"effective_hit_chance": effective_hit_chance,
+		"effective_crit_chance": effective_crit_chance,
+		"is_reaction": true,
+		"outcome": _outcome_for(core),
+	}
+	if core.hit:
+		if _dispatch_completed_hit(reactor, mover):
+			result["thorn_triggered"] = true
+		completed_hit.emit(result)
+	if defeated and mover.side == Side.ENEMY:
+		enemy_defeated.emit(mover)
+	_spawn_reaction_combat_text(mover, result)
+	return result
+
+
+## Presentation feedback for one reaction, mirroring try_attack_selected_
+## unit()'s own hit/critical/dodge/parry/miss floating-text branch so a
+## reaction reads with the same distinct text/icon per outcome (Stage 4's
+## "never colour-only" accessibility carryover) rather than a bespoke look.
+func _spawn_reaction_combat_text(mover, result: Dictionary) -> void:
+	var anchor := _floating_text_anchor(mover)
+	if result.hit:
+		if result.critical:
+			_spawn_combat_text(anchor, tr("battle.floating.critical") % result.damage, FloatingTextScript.TYPE_CRITICAL)
+		else:
+			_spawn_combat_text(anchor, tr("battle.floating.damage") % result.damage, FloatingTextScript.TYPE_DAMAGE)
+	elif result.dodged:
+		_spawn_combat_text(anchor, tr("battle.floating.dodge"), FloatingTextScript.TYPE_DODGE)
+	elif result.parried:
+		_spawn_combat_text(anchor, tr("battle.floating.parry"), FloatingTextScript.TYPE_PARRY)
+	else:
+		_spawn_combat_text(anchor, tr("battle.floating.miss"), FloatingTextScript.TYPE_MISS)
 
 
 ## Tactical Retreat (docs/plans/2026-08-18-core-loop-and-engagement/
@@ -1112,10 +1515,11 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 	if selected_unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return false
 	selected_unit.set_facing(direction)
-	selected_unit.grid_position = target
-	selected_unit.action_points_remaining -= MOVE_ACTION_POINT_COST
+	last_reaction_results = []
+	_apply_move_along_path(selected_unit, [selected_unit.grid_position, target])
 	last_attack_result = {}
 	last_targeting_failure = {}
+	_refresh_battlefield_memory()
 	return true
 
 
@@ -1162,9 +1566,32 @@ func end_turn() -> void:
 	for unit in units:
 		if unit.side == active_side:
 			unit.action_points_remaining = unit.max_action_points
+			_advance_reaction_timers(unit)
 	# A new round starts once control returns to the player; open it with the
 	# first party member already selected rather than forcing a manual pick.
 	_select_unit(_first_living_player_unit() if active_side == Side.PLAYER else null)
+
+
+## Off-balance/counter-bonus timing (Stage 5 D2's "off-balance/counter
+## bonuses expire at the documented time" requirement): called once per unit
+## exactly when their OWN side's turn starts. A *_pending flag set during the
+## unit's previous turn (from whiffing against a Dodge/Parry, or from a
+## successful Parry -- see _apply_evasion_reactions()) is promoted to
+## *_active here, giving it effect for the ENTIRETY of this turn; an
+## already-*_active flag (active during the unit's last turn) expires here
+## instead. This gives exactly one full "their next turn" window per
+## trigger, never longer and never starting early.
+func _advance_reaction_timers(unit) -> void:
+	if unit.off_balance_active:
+		unit.off_balance_active = false
+	elif unit.off_balance_pending:
+		unit.off_balance_active = true
+		unit.off_balance_pending = false
+	if unit.counter_bonus_active_against != null:
+		unit.counter_bonus_active_against = null
+	elif unit.counter_bonus_pending_against != null:
+		unit.counter_bonus_active_against = unit.counter_bonus_pending_against
+		unit.counter_bonus_pending_against = null
 
 
 func _first_living_player_unit():
@@ -1221,12 +1648,21 @@ func _take_enemy_unit_actions(unit) -> Array:
 		if get_legal_attack_targets(unit).has(target):
 			if try_attack_selected_unit(target.grid_position):
 				steps.append(last_attack_result)
+				steps.append_array(last_reaction_results)
 				continue
 			break
 		var destination := _best_enemy_move(unit, target)
 		var from: Vector2i = unit.grid_position
 		if destination != from and try_move_selected_unit(destination):
 			steps.append({"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination})
+			steps.append_array(last_reaction_results)
+			# An Attack of Opportunity triggered by this very move can defeat
+			# `unit` before it ever gets another action -- stop here rather
+			# than letting the loop drive a dead unit's phantom next move (see
+			# _resolve_opportunity_attack()'s own doc comment on this file's
+			# is_alive() action guards).
+			if not unit.is_alive():
+				break
 			continue
 		break
 	return steps
@@ -1276,13 +1712,18 @@ func _clear_expired_statuses() -> void:
 		unit.statuses.erase(PARALYZED_STATUS_ID)
 
 
-func _dispatch_completed_hit(attacker, defender) -> void:
+## Returns true iff the Thorn rune actually triggered (and paralyzed
+## `attacker`) so each caller can record "thorn_triggered" on its OWN result
+## dict -- this function used to write directly into the module-level
+## last_attack_result, which would have silently corrupted a reaction's
+## separate result dict (see _resolve_opportunity_attack()) had it kept doing
+## that, since a reaction never touches last_attack_result at all.
+func _dispatch_completed_hit(attacker, defender) -> bool:
 	if defender.rune_id != THORN_RUNE_ID or has_status(attacker, PARALYZED_STATUS_ID):
-		return
+		return false
 	if rune_trigger_roll.call() >= THORN_TRIGGER_CHANCE:
-		return
-	if apply_status(attacker, PARALYZED_STATUS_ID):
-		last_attack_result["thorn_triggered"] = true
+		return false
+	return apply_status(attacker, PARALYZED_STATUS_ID)
 
 
 func _nearest_living_unit(from_pos: Vector2i, side: int):
@@ -1462,6 +1903,44 @@ func _draw_tiles() -> void:
 			tile.position = Vector2(x, y) * TILE_SIZE
 			tile_container.add_child(tile)
 
+	_draw_cover_markers()
+
+
+## Cover terrain (Stage 5 D2): hand-authored per encounter (see grid.gd's
+## cover_tiles doc comment) and static for the whole battle, so this draws
+## once alongside the ground tiles rather than being rebuilt every
+## _update_highlights() call. A separate sibling container from tile_container
+## (Terrain, not Tiles) so tile_container stays a pure ground-tile Sprite2D
+## collection for anything that scans it (see test_battle_sprite_rendering.gd).
+## A small badge in the tile's corner, distinct text per tier ("L"/"H") on
+## top of a distinct color -- never colour-only (Stage 4's accessibility
+## carryover) -- rather than a bespoke sprite this project has no art asset
+## for yet.
+func _draw_cover_markers() -> void:
+	for child in terrain_container.get_children():
+		child.queue_free()
+	for tile in grid.cover_tiles:
+		var tier: String = grid.get_cover(tile)
+		if tier == GridScript.COVER_NONE:
+			continue
+		var badge := ColorRect.new()
+		badge.name = "CoverMarker"
+		var badge_size := Vector2(TILE_SIZE * 0.3, TILE_SIZE * 0.3)
+		badge.size = badge_size
+		badge.position = Vector2(tile) * TILE_SIZE + Vector2(TILE_SIZE * 0.05, TILE_SIZE * 0.05)
+		badge.color = COVER_HIGH_MARKER_COLOR if tier == GridScript.COVER_HIGH else COVER_LOW_MARKER_COLOR
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		terrain_container.add_child(badge)
+		var label := Label.new()
+		label.text = "H" if tier == GridScript.COVER_HIGH else "L"
+		label.position = badge.position
+		label.size = badge_size
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.add_theme_font_size_override("font_size", 14)
+		terrain_container.add_child(label)
+
 
 func _draw_units() -> void:
 	# Mirrors _update_highlights()'s guard below: unit tests build a bare
@@ -1482,9 +1961,21 @@ func _draw_units() -> void:
 	# the unordered *set* of sprites/indicators (matched back to a unit by
 	# grid position), never on child index, so reordering the draw list here
 	# is safe.
+	# Battlefield visibility (Stage 5 D2): a stale enemy (see
+	# get_stale_enemy_markers(), the single authoritative query -- this loop
+	# never maintains an independent copy of that rule) is never drawn at its
+	# real, unknown-to-the-player current tile; _draw_stale_enemy_marker()
+	# below draws it at its last-known position instead.
+	var stale_markers: Array[Dictionary] = get_stale_enemy_markers()
+	var stale_units: Array = []
+	for marker in stale_markers:
+		stale_units.append(marker.unit)
+
 	var sorted_units: Array = units.duplicate()
 	sorted_units.sort_custom(func(a, b): return a.grid_position.y < b.grid_position.y)
 	for unit in sorted_units:
+		if stale_units.has(unit):
+			continue
 		var tile_origin: Vector2 = Vector2(unit.grid_position) * TILE_SIZE
 		var shadow_size := Vector2(TILE_SIZE * 0.6, TILE_SIZE * 0.22)
 		var shadow := ColorRect.new()
@@ -1527,6 +2018,37 @@ func _draw_units() -> void:
 		)
 		unit_container.add_child(sprite, true)
 		_add_facing_indicator(tile_origin, unit)
+
+	for marker in stale_markers:
+		_draw_stale_enemy_marker(marker.position, marker.unit)
+
+
+## Last-known-position ghost (Stage 5 D2): the same catalog sprite as a real
+## unit but dimmed (STALE_UNIT_MODULATE) and paired with a "?" text badge --
+## never colour-only -- so it reads as "an enemy was last seen here, this may
+## be outdated" rather than as a fresh, trustworthy sighting. No shadow/
+## facing indicator: those are current-state cues this marker deliberately
+## does not claim to have.
+func _draw_stale_enemy_marker(tile_pos: Vector2i, unit) -> void:
+	var tile_origin: Vector2 = Vector2(tile_pos) * TILE_SIZE
+	var sprite := Sprite2D.new()
+	sprite.name = "StaleMarker"
+	sprite.texture = SpriteCatalog.get_unit_texture(unit.visual_key)
+	sprite.scale = Vector2(4, 4)
+	sprite.modulate = STALE_UNIT_MODULATE
+	sprite.position = Vector2(
+		tile_origin.x + TILE_SIZE / 2.0, tile_origin.y + TILE_SIZE - (sprite.texture.get_height() * sprite.scale.y) / 2.0
+	)
+	unit_container.add_child(sprite, true)
+
+	var badge := Label.new()
+	badge.name = "StaleMarkerBadge"
+	badge.text = "?"
+	badge.add_theme_color_override("font_color", STALE_MARKER_BADGE_COLOR)
+	badge.add_theme_font_size_override("font_size", 20)
+	badge.position = tile_origin + Vector2(TILE_SIZE * 0.7, TILE_SIZE * 0.02)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit_container.add_child(badge, true)
 
 
 ## A small high-contrast square offset from the unit's own tile center toward
@@ -1635,12 +2157,30 @@ func _add_highlight(tile: Vector2i, color: Color) -> void:
 	highlight_container.add_child(highlight)
 
 
+## Battlefield visibility (Stage 5 D2): a translucent dark tint over every
+## tile outside get_player_visible_tiles() -- the single authoritative
+## visibility query (see its own doc comment); this function never maintains
+## an independent fog rule. Drawn first among highlight_container's children
+## (see _update_highlights()) so selection/movement/attack highlights still
+## render clearly on top of it.
+func _draw_stale_tile_overlay() -> void:
+	var visible_tiles := get_player_visible_tiles()
+	for y in grid.height:
+		for x in grid.width:
+			var tile := Vector2i(x, y)
+			if visible_tiles.has(tile):
+				continue
+			_add_highlight(tile, STALE_TILE_OVERLAY_COLOR)
+
+
 func _update_highlights() -> void:
 	if not is_inside_tree():
 		return
 
 	for child in highlight_container.get_children():
 		child.queue_free()
+
+	_draw_stale_tile_overlay()
 
 	if selected_unit != null:
 		var ring_margin := TILE_SIZE * 0.05

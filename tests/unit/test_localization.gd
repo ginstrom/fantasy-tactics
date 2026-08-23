@@ -58,6 +58,8 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle.status.hit") % ["Warrior", 2], "Warrior hits for 2 damage.")
 	assert_eq(tr("battle.status.critical_hit") % ["Warrior", 6], "Critical Hit! Warrior hits for 6 damage.")
 	assert_eq(tr("battle.status.miss") % "Goblin", "Goblin misses.")
+	assert_eq(tr("battle.status.dodged") % "Goblin", "Goblin dodges the blow!")
+	assert_eq(tr("battle.status.parried") % "Goblin", "Goblin parries the blow!")
 	assert_eq(tr("battle.status.enemy_move") % "Goblin", "Goblin moves closer.")
 	assert_eq(tr("battle.status.enemy_turn"), "Enemy turn.")
 	assert_eq(
@@ -89,6 +91,41 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		tr("battle.log.flank.rear_crit") % ["Warrior", "Kobold 1", 6],
 		"Warrior attacks Kobold 1 from behind — Critical Hit! Hits for 6 damage!"
 	)
+	assert_eq(
+		tr("battle.log.dodged") % ["Warrior", "Kobold 1", "Kobold 1"],
+		"Warrior attacks Kobold 1 — Kobold 1 dodges the blow!"
+	)
+	assert_eq(
+		tr("battle.log.parried") % ["Warrior", "Kobold 1", "Kobold 1"],
+		"Warrior attacks Kobold 1 — Kobold 1 parries the blow!"
+	)
+	assert_eq(
+		tr("battle.log.reaction.hit") % ["Kobold 1", "Warrior", 3],
+		"Kobold 1 strikes Warrior as they withdraw — hits for 3 damage!"
+	)
+	assert_eq(
+		tr("battle.log.reaction.critical_hit") % ["Kobold 1", "Warrior", 6],
+		"Kobold 1 strikes Warrior as they withdraw — Critical Hit! Hits for 6 damage!"
+	)
+	assert_eq(
+		tr("battle.log.reaction.miss") % ["Kobold 1", "Warrior"],
+		"Kobold 1 strikes at Warrior as they withdraw — misses."
+	)
+	assert_eq(
+		tr("battle.log.reaction.dodged") % ["Kobold 1", "Warrior", "Warrior"],
+		"Kobold 1 strikes at Warrior as they withdraw — Warrior dodges the blow!"
+	)
+	assert_eq(
+		tr("battle.log.reaction.parried") % ["Kobold 1", "Warrior", "Warrior"],
+		"Kobold 1 strikes at Warrior as they withdraw — Warrior parries the blow!"
+	)
+	assert_eq(tr("battle.floating.dodge"), "DODGED!")
+	assert_eq(tr("battle.floating.parry"), "PARRIED!")
+	assert_eq(tr("battle.unit_info.cover") % "Low", "Cover: Low")
+	assert_eq(tr("battle.cover.low"), "Low")
+	assert_eq(tr("battle.cover.high"), "High")
+	assert_eq(tr("battle.unit_info.off_balance") % 10, "Off-Balance (-10% Guard)")
+	assert_eq(tr("battle.unit_info.countering") % ["Kobold 1", 10], "Countering Kobold 1 (+10% melee)")
 	assert_eq(tr("battle.unit_info.empty"), "Hover or click a unit to see its details.")
 	assert_eq(tr("battle.unit_info.hp") % [3, 8], "HP: 3/8")
 	assert_eq(tr("battle.unit_info.ap") % [3, 9], "AP: 3/9")

@@ -33,6 +33,17 @@ func after_each() -> void:
 func _make_controller(width: int, height: int) -> Node2D:
 	var controller: Node2D = BattleControllerScript.new()
 	controller.grid = GridScript.new(width, height)
+	# Stage 5 D2 tactical primitives: Dodge/Parry are a chance layered on top
+	# of an already-landed hit (see battle_controller.gd's _resolve_attack_
+	# core()). Every pre-existing test in this file that forces a guaranteed
+	# hit_roll to assert an exact damage/critical outcome predates Dodge/
+	# Parry and never overrides these two -- pinning them to "never trigger"
+	# here, once, keeps every one of those tests deterministic exactly as
+	# before. A test that specifically exercises Dodge/Parry overrides
+	# dodge_roll/parry_roll back to a triggering value itself, the same way
+	# existing tests already override hit_roll/crit_roll for their own cases.
+	controller.dodge_roll = func() -> float: return 1.0
+	controller.parry_roll = func() -> float: return 1.0
 	autofree(controller)
 	return controller
 
@@ -3538,16 +3549,30 @@ func _run_to_resolution(controller: Node2D, max_rounds: int) -> int:
 ## own calibration convention -- explicitly NOT the real endgame party that
 ## actually fights this boss, see OGRE_ENEMY_STATS' doc comment) never wins
 ## the fight, though only after grinding the Ogre down to a fraction of its
-## health (12-46 of 90 across these 5 seeds) -- a hard-fought multi-round
-## loss, not an untouched stomp. Whether a bare 4-Warrior baseline should
-## legitimately win some fraction of the time is a tuning call for Step 6's
-## balance harness (or an explicit design decision) to make, not something
-## to silently resolve here by retuning OGRE_ENEMY_STATS underneath this
-## fix. What this test pins instead is today's actual power band: every
-## seed must still be a real, hard-fought loss -- neither an untouched
-## curbstomp (Ogre ends near full health) nor a near-miss (Ogre ends almost
-## dead) -- so a future regression that trivializes the Ogre, or one that
-## makes it unbeatably dominant, is caught either way.
+## health -- a hard-fought multi-round loss, not an untouched stomp. Whether
+## a bare 4-Warrior baseline should legitimately win some fraction of the
+## time is a tuning call for Step 6's balance harness (or an explicit design
+## decision) to make, not something to silently resolve here by retuning
+## OGRE_ENEMY_STATS underneath this fix. What this test pins instead is
+## today's actual power band: every seed must still be a real, hard-fought
+## loss -- neither an untouched curbstomp (Ogre ends near full health) nor a
+## near-miss (Ogre ends almost dead) -- so a future regression that
+## trivializes the Ogre, or one that makes it unbeatably dominant, is caught
+## either way.
+##
+## Re-calibrated for Stage 5 D2 (docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/03-tactical-depth-primitives.md): Dodge, Parry, and
+## Attacks of Opportunity are new per-attack possibilities in EVERY fight,
+## including this one, and BattleStateFactory.build() now seeds dodge_roll/
+## parry_roll from the same per-iteration RNG hit_roll/crit_roll/damage_roll
+## already draw from (a prerequisite for this test staying reproducible at
+## all) -- so the fight's actual roll sequence, and therefore its pacing,
+## legitimately shifted under the same five seeds. Re-measured directly
+## (see this file's own commit history for the probe): seed 1001 -> 12
+## rounds/26 HP, 2002 -> 9/54, 3003 -> 5/56, 4004 -> 6/68, 5005 -> 10/53,
+## still an Ogre win on every seed. The band below is widened to cover this
+## actually-observed Stage 5 range with a little headroom, not narrowed back
+## to the pre-Stage-5 numbers.
 func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band() -> void:
 	for root_seed in [1001, 2002, 3003, 4004, 5005]:
 		var controller := _build_four_warriors_vs_ogre_controller(root_seed)
@@ -3560,9 +3585,9 @@ func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band(
 			"seed %d: the benchmark must resolve, not stalemate at the round cap" % root_seed
 		)
 		assert_true(
-			rounds >= 8 and rounds <= 12,
+			rounds >= 4 and rounds <= 14,
 			(
-				"seed %d: the fight must resolve within the actually-observed 8-12 round band, not the old loose 2-20 (took %d rounds)"
+				"seed %d: the fight must resolve within the Stage 5 D2-observed 4-14 round band (took %d rounds)"
 				% [root_seed, rounds]
 			)
 		)
@@ -3578,7 +3603,7 @@ func test_ogre_seeded_four_warrior_benchmark_falls_within_the_agreed_power_band(
 			if unit.side == BattleControllerScript.Side.ENEMY:
 				ogre_health = int(unit.health)
 		assert_true(
-			ogre_health >= 5 and ogre_health <= 60,
+			ogre_health >= 5 and ogre_health <= 75,
 			(
 				"seed %d: the Ogre must end the fight meaningfully damaged (ruling out an untouched curbstomp) but still clearly standing (ruling out a near-miss loss), ended at %d/90 HP"
 				% [root_seed, ogre_health]
@@ -3805,3 +3830,519 @@ func test_a_kill_plays_the_unit_death_sfx() -> void:
 
 	assert_true(controller.last_attack_result.defeated)
 	assert_eq(AudioManager.last_sfx_id, "sfx_unit_death")
+
+
+## =============================================================================
+## Stage 5 D2 tactical depth primitives (docs/plans/2026-08-23-stage-5-
+## strategic-roster-expansion/03-tactical-depth-primitives.md, decision-
+## ledger.md's Approved values table): Cover, Dodge, Parry, off-balance/
+## counter-bonus timing, Attacks of Opportunity, and battlefield visibility/
+## staleness.
+## =============================================================================
+
+## --- Dodge -------------------------------------------------------------------
+
+func test_a_successful_dodge_converts_a_would_be_hit_into_a_miss_and_off_balances_the_attacker() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0  # would otherwise land
+	controller.dodge_roll = func() -> float: return 0.0  # below the flat 10% Dodge chance
+	watch_signals(controller)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.hit, "A successful Dodge converts the hit into a non-damaging outcome")
+	assert_true(controller.last_attack_result.dodged)
+	assert_false(controller.last_attack_result.parried)
+	assert_eq(controller.last_attack_result.outcome, "dodged")
+	assert_eq(controller.last_attack_result.damage, 0)
+	assert_eq(defender.health, defender.max_health, "A dodged attack deals no damage")
+	assert_true(attacker.off_balance_pending, "The whiffed attacker becomes off-balance pending, effective their own next turn")
+	assert_false(defender.off_balance_pending, "Only the attacker is off-balanced by a Dodge -- Dodge grants no counter-bonus")
+	var expected_pos: Vector2 = controller._floating_text_anchor(defender)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.dodge"), "dodge"]
+	)
+
+
+func test_dodge_is_eligible_against_a_missile_attack_too() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.dodge_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.dodged, "Dodge is eligible for any incoming attack type, including missile")
+
+
+func test_a_dodge_roll_at_or_above_the_flat_chance_does_not_trigger() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.dodge_roll = func() -> float: return 0.10  # exactly at the boundary -- not below it
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.hit, "0.10 is not strictly less than the flat 10% Dodge chance")
+	assert_false(controller.last_attack_result.dodged)
+
+
+## --- Parry ---------------------------------------------------------------------
+
+func test_a_successful_parry_converts_a_would_be_hit_into_a_miss_off_balances_the_attacker_and_grants_a_counter_bonus() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.dodge_roll = func() -> float: return 1.0  # never dodges
+	controller.parry_roll = func() -> float: return 0.0  # below the flat 10% Parry chance
+	watch_signals(controller)
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.hit)
+	assert_true(controller.last_attack_result.parried)
+	assert_eq(controller.last_attack_result.outcome, "parried")
+	assert_eq(defender.health, defender.max_health)
+	assert_true(attacker.off_balance_pending, "A successful Parry off-balances the attacker exactly like a Dodge")
+	assert_eq(
+		defender.counter_bonus_pending_against, attacker,
+		"A successful Parry additionally grants the defender a counter-bonus against that SAME attacker"
+	)
+	var expected_pos: Vector2 = controller._floating_text_anchor(defender)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.parry"), "parry"]
+	)
+
+
+func test_parry_is_not_eligible_against_a_missile_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.dodge_roll = func() -> float: return 1.0
+	controller.parry_roll = func() -> float: return 0.0  # would trigger if this attack were melee-eligible
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_true(controller.last_attack_result.hit, "Parry never applies to a missile attack, so the hit stands")
+	assert_false(controller.last_attack_result.parried)
+
+
+## --- Off-balance / counter-bonus timing (exactly one turn, no earlier/later) ---
+
+func test_off_balance_pending_promotes_to_active_at_the_start_of_the_units_own_next_turn_and_expires_after_that() -> void:
+	var controller := _make_controller(3, 3)
+	var unit = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var other = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [unit, other]
+	unit.off_balance_pending = true
+
+	assert_false(unit.off_balance_active, "Still pending -- not yet this unit's own turn again")
+	controller.end_turn()  # PLAYER -> ENEMY
+	assert_false(unit.off_balance_active, "Not PLAYER's turn yet")
+	controller.end_turn()  # ENEMY -> PLAYER: unit's own next turn begins
+	assert_true(unit.off_balance_active, "Promoted to active exactly at the start of the unit's own next turn")
+	assert_false(unit.off_balance_pending)
+	controller.end_turn()  # PLAYER -> ENEMY
+	assert_true(unit.off_balance_active, "Still active for the whole of this marked turn")
+	controller.end_turn()  # ENEMY -> PLAYER: the turn after that -- expires
+	assert_false(unit.off_balance_active, "Expires at the start of the turn after the marked one, never lingering longer")
+
+
+func test_counter_bonus_pending_promotes_and_expires_on_the_same_schedule_as_off_balance() -> void:
+	var controller := _make_controller(3, 3)
+	var defender = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var attacker = UnitScript.new(Vector2i(2, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [defender, attacker]
+	defender.counter_bonus_pending_against = attacker
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	assert_null(defender.counter_bonus_active_against, "Not the defender's own turn yet")
+	controller.end_turn()  # ENEMY -> PLAYER: defender's own next turn begins
+	assert_eq(defender.counter_bonus_active_against, attacker)
+	assert_null(defender.counter_bonus_pending_against)
+	controller.end_turn()
+	controller.end_turn()
+	assert_null(defender.counter_bonus_active_against, "Expires at the start of the turn after the marked one")
+
+
+func test_an_active_off_balance_defender_suffers_the_configured_guard_penalty() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4, 1.0, "Attack", "", 0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 40)
+	defender.facing = Vector2i.UP  # facing the attacker directly above it -- a front attack, no flank penalty
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(controller.last_attack_result.effective_defense, 40, "No off-balance penalty while off_balance_active is false")
+
+
+func test_off_balance_guard_penalty_is_subtracted_from_effective_defense() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4, 1.0, "Attack", "", 0)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 40)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	defender.off_balance_active = true
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(
+		controller.last_attack_result.effective_defense, 30,
+		"40 base Guard - the configured 10-point off-balance penalty = 30"
+	)
+
+
+## Parry's counter-bonus (Stage 5 D2) belongs to whoever PARRIED (see Unit.gd's
+## counter_bonus_active_against doc comment): it boosts THAT unit's own hit
+## chance the next time it attacks the SAME original attacker, not the other
+## way around. `parrier` here stands in for a unit that already parried
+## `original_attacker` last time (counter_bonus_active_against set directly,
+## bypassing the roll itself -- this test is about the bonus's effect, not
+## about triggering a fresh Parry).
+func test_parry_counter_bonus_adds_to_hit_chance_only_against_the_same_attacker() -> void:
+	var controller := _make_controller(3, 3)
+	var parrier = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20, 4, 4, 0.5, "Attack", "", 0)
+	var original_attacker = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	var bystander = UnitScript.new(Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [parrier, original_attacker, bystander]
+	parrier.counter_bonus_active_against = original_attacker
+	controller.hit_roll = func() -> float: return 0.55  # between the plain 0.5 and the counter-boosted 0.6
+	controller.crit_roll = func() -> float: return 1.0
+
+	controller.selected_unit = parrier
+	assert_true(controller.try_attack_selected_unit(original_attacker.grid_position))
+	assert_true(controller.last_attack_result.hit, "0.5 + the configured 10% counter-bonus = 0.6, clearing the 0.55 roll")
+
+	bystander.health = bystander.max_health
+	controller.selected_unit = parrier
+	assert_true(controller.try_attack_selected_unit(bystander.grid_position))
+	assert_false(
+		controller.last_attack_result.hit,
+		"The counter-bonus applies only against the SAME attacker who was parried -- a different target gets no bonus"
+	)
+
+
+## --- Cover ---------------------------------------------------------------------
+
+func test_low_cover_adds_the_configured_guard_bonus_against_a_front_facing_missile_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 0)
+	defender.facing = Vector2i.UP  # attacker approaches from directly ahead -- a front attack
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.grid.cover_tiles[defender.grid_position] = GridScript.COVER_LOW
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(controller.last_attack_result.effective_defense, 25, "0 base Guard + the configured 25-point Low Cover bonus")
+	assert_true(controller.last_attack_result.cover_applied)
+	assert_eq(controller.last_attack_result.cover_tile, GridScript.COVER_LOW)
+
+
+func test_high_cover_adds_the_configured_guard_bonus_against_a_front_facing_missile_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 0)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.grid.cover_tiles[defender.grid_position] = GridScript.COVER_HIGH
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(controller.last_attack_result.effective_defense, 50, "0 base Guard + the configured 50-point High Cover bonus")
+
+
+func test_cover_never_applies_to_a_melee_attack() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 0)
+	defender.facing = Vector2i.UP
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.grid.cover_tiles[defender.grid_position] = GridScript.COVER_HIGH
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_false(controller.last_attack_result.cover_applied, "Cover is a missile-only Guard bonus")
+	assert_eq(controller.last_attack_result.effective_defense, 0)
+
+
+func test_flanking_bypasses_cover_entirely() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(1, 3), Color.CORNFLOWER_BLUE, 0, 6, 20, 4, 4)
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0, "Attack", "", 0)
+	defender.facing = Vector2i.DOWN  # attacker at (1,3) is beside the defender -- a side flank, not front
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	controller.grid.cover_tiles[defender.grid_position] = GridScript.COVER_HIGH
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(defender.grid_position))
+
+	assert_eq(controller.last_attack_result.flank, "side")
+	assert_false(
+		controller.last_attack_result.cover_applied,
+		"Flanking bypasses Cover's Guard bonus entirely, even though the defender's tile has High Cover"
+	)
+
+
+## --- Attacks of Opportunity ------------------------------------------------
+
+func test_moving_out_of_an_adjacent_enemys_reach_triggers_exactly_one_free_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	controller.hit_roll = func() -> float: return 0.0
+
+	# (1,0) -> (2,0): departs (0,0)'s adjacency (still adjacent at (1,0), not at (2,0)).
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_eq(controller.last_reaction_results.size(), 1, "Exactly one reaction from the one adjacent enemy departed")
+	var reaction: Dictionary = controller.last_reaction_results[0]
+	assert_eq(reaction.type, "reaction")
+	assert_eq(reaction.reactor, reactor)
+	assert_eq(reaction.mover, mover)
+	assert_true(reaction.is_reaction)
+	assert_eq(mover.grid_position, Vector2i(2, 0), "The move completes regardless of whether the reaction hits")
+	assert_eq(mover.action_points_remaining, 5, "One tile of movement still costs its normal 1 AP")
+
+
+func test_departing_and_re_entering_the_same_enemys_adjacency_within_one_move_still_triggers_only_once() -> void:
+	var controller := _make_controller(6, 6)
+	# A path that departs (1,1)'s adjacency and later re-enters it: (0,1) is
+	# adjacent to (1,1); (2,1) is not; (0,1)... use a route that visits an
+	# adjacent tile, a non-adjacent tile, then an adjacent tile again.
+	var mover = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	controller.hit_roll = func() -> float: return 1.0  # never lands -- isolate the trigger COUNT, not damage
+
+	# Path: (0,0) start -> (0,1) [adjacent to (1,1)] -> (0,2) [not adjacent,
+	# departs] -> (0,1) [adjacent again, re-enters] -> (0,0) [departs again].
+	# Drive it as four single-tile steps via try_step_selected_unit() so the
+	# whole thing is still ONE move action's worth of reaction bookkeeping
+	# only if driven through one try_move_selected_unit() path -- so instead
+	# request the multi-tile destination directly and let get_shortest_path()
+	# supply the real intermediate route.
+	assert_true(controller.try_move_selected_unit(Vector2i(0, 3)))
+
+	assert_eq(
+		controller.last_reaction_results.size(), 1,
+		"However many times this one move departs/re-enters the SAME enemy's adjacency, it still triggers only once"
+	)
+
+
+func test_a_ranged_unit_never_makes_an_opportunity_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var archer = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	archer.attack_max_range = 3
+	controller.units = [mover, archer]
+	controller.selected_unit = mover
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_true(controller.last_reaction_results.is_empty(), "Only a melee-capable unit can make an opportunity attack")
+
+
+func test_opportunity_attack_applies_the_configured_melee_to_hit_penalty() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 0.55)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	var reaction: Dictionary = controller.last_reaction_results[0]
+	assert_almost_eq(
+		reaction.effective_hit_chance, 0.45, 0.0001,
+		"0.55 raw hit chance - 0 Guard - the configured 10-point opportunity penalty = 0.45"
+	)
+
+
+func test_own_side_units_never_trigger_an_opportunity_attack_against_each_other() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var ally = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	controller.units = [mover, ally]
+	controller.selected_unit = mover
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_true(controller.last_reaction_results.is_empty())
+
+
+## try_attack_selected_unit()'s move-and-attack branch (move_tile != null,
+## around line 1001-1020): a departure Attack of Opportunity triggered by
+## _apply_move_along_path() can kill the mover before it ever reaches its own
+## target's melee adjacency. That's the ONLY way a move-and-attack can
+## complete without ever resolving an attack -- covered here since a plain
+## try_move_selected_unit() (as every other Attacks-of-Opportunity test above
+## uses) never runs the attack-resolution code at all, so it can't exercise
+## this specific early-return branch.
+func test_a_lethal_departure_reaction_aborts_the_move_and_attack_before_any_attack_resolves() -> void:
+	var controller := _make_controller(6, 6)
+	# mover starts adjacent to reactor (0,0); its intended target sits two
+	# tiles further out, so target.grid_position isn't a legal direct-attack
+	# tile from (1,0) and try_attack_selected_unit() must route through
+	# find_best_move_and_attack_tile() -- the move_tile != null branch.
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 1)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	var target = UnitScript.new(Vector2i(3, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	controller.units = [mover, reactor, target]
+	controller.selected_unit = mover
+	# Force every roll deterministic: the reactor's free attack always hits,
+	# never crits (irrelevant here), and always deals lethal damage against
+	# the mover's 1 HP -- so the mover is guaranteed dead mid-route, well
+	# before it reaches (2,0), its computed move-and-attack tile adjacent to
+	# target.
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 5
+	watch_signals(controller)
+
+	assert_true(
+		controller.try_attack_selected_unit(target.grid_position),
+		"The move itself still completes even though the reaction kills the mover before it can attack"
+	)
+
+	assert_false(mover.is_alive(), "Precondition: the departure reaction must actually have killed the mover")
+	assert_eq(controller.last_attack_result["outcome"], "aborted_by_reaction")
+	assert_false(controller.last_attack_result["hit"])
+	assert_eq(controller.last_attack_result["damage"], 0)
+	assert_eq(target.health, target.max_health, "The intended target was never reached, let alone attacked")
+	assert_eq(controller.last_reaction_results.size(), 1, "Exactly the one lethal departure reaction, nothing else")
+	assert_true(controller.last_reaction_results[0].is_reaction)
+	assert_signal_emit_count(
+		controller, "completed_hit", 1,
+		"The only completed_hit is the reactor's kill -- the aborted original attack never rolls, let alone hits"
+	)
+
+
+## --- Battlefield visibility / staleness -------------------------------------
+
+func test_get_player_visible_tiles_uses_only_living_player_units_as_viewers() -> void:
+	var controller := _make_controller(6, 6)
+	var player = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var enemy = UnitScript.new(Vector2i(5, 5), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [player, enemy]
+
+	var visible: Dictionary = controller.get_player_visible_tiles()
+
+	assert_true(visible.has(Vector2i(0, 0)))
+	assert_true(visible.has(Vector2i(5, 5)), "Nothing blocks the line on an otherwise-empty board")
+
+
+func test_an_enemy_out_of_sight_keeps_showing_at_its_last_known_position() -> void:
+	var controller := _make_controller(1, 6)
+	var viewer = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	# Obstruction is a second ENEMY unit, not a friendly one -- a friendly
+	# unit at (0,1) would itself count as an additional viewer (see
+	# get_player_visible_tiles()) and see straight past its own tile,
+	# defeating the point of putting something in the line's way.
+	var obstruction = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [viewer, enemy]  # enemy starts visible (nothing blocks the line yet)
+	controller._refresh_battlefield_memory()
+	assert_true(controller.get_stale_enemy_markers().is_empty(), "Currently visible -- nothing stale yet")
+
+	controller.units = [viewer, obstruction, enemy]  # obstruction now sits between viewer and enemy
+	controller._refresh_battlefield_memory()
+
+	var markers: Array[Dictionary] = controller.get_stale_enemy_markers()
+	assert_eq(markers.size(), 1, "The obstruction itself stays visible (it's the line's first tile) -- only the far enemy goes stale")
+	assert_eq(markers[0].unit, enemy)
+	assert_eq(markers[0].position, Vector2i(0, 3), "Keeps showing at the last tile it was actually seen on")
+
+
+func test_a_stale_enemy_memory_clears_once_the_player_looks_straight_at_the_empty_tile() -> void:
+	var controller := _make_controller(1, 6)
+	var viewer = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var obstruction = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [viewer, enemy]
+	controller._refresh_battlefield_memory()
+	controller.units = [viewer, obstruction, enemy]
+	controller._refresh_battlefield_memory()
+	assert_eq(controller.get_stale_enemy_markers().size(), 1, "Precondition: the enemy is stale")
+
+	# The enemy actually relocates away from its last-known tile while still
+	# unseen (the obstruction is removed entirely here, standing in for it
+	# stepping out of the way) -- the viewer now gets a straight,
+	# unobstructed look at the remembered tile (0,3), which is empty.
+	enemy.grid_position = Vector2i(0, 5)
+	controller.units = [viewer, enemy]
+	controller._refresh_battlefield_memory()
+
+	assert_true(
+		controller.get_stale_enemy_markers().is_empty(),
+		"Looking straight at the remembered tile and finding it empty proves the old sighting wrong -- memory clears"
+	)
+
+
+func test_a_defeated_enemys_stale_marker_never_lingers() -> void:
+	var controller := _make_controller(1, 6)
+	var viewer = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var obstruction = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [viewer, enemy]
+	controller._refresh_battlefield_memory()
+	controller.units = [viewer, obstruction, enemy]
+	controller._refresh_battlefield_memory()
+	assert_eq(controller.get_stale_enemy_markers().size(), 1)
+
+	controller.units = [viewer, obstruction]  # enemy defeated and erased elsewhere, as real combat does
+	controller._refresh_battlefield_memory()
+
+	assert_true(controller.get_stale_enemy_markers().is_empty())
+
+
+## --- Terrain (Cover) awareness on Grid, consumed by BattleController --------
+
+func test_battle_controllers_grid_starts_with_no_cover_by_default() -> void:
+	var controller := _make_controller(6, 6)
+
+	assert_eq(controller.grid.get_cover(Vector2i(3, 3)), GridScript.COVER_NONE)

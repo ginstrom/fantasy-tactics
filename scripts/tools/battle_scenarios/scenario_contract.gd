@@ -71,6 +71,12 @@ const KNOWN_ENEMY_TEMPLATES: Array[String] = [
 # hydrate the real Unit.facing Vector2i).
 const KNOWN_FACINGS: Array[String] = ["right", "left", "up", "down"]
 
+## Cover terrain (Stage 5 D2, decision-ledger.md's "Terrain representation/
+## distribution" row): hand-authored per encounter, exactly like `blocked`
+## above -- see grid.gd's own cover_tiles doc comment for why no procedural
+## distribution exists anywhere in this pipeline.
+const KNOWN_COVER_TIERS: Array[String] = ["low", "high"]
+
 # Every modifier key BattleStateFactory._build_player_unit()/_build_enemy_
 # unit() actually reads (docs/plans/2026-08-21-stage-2-party-readiness/
 # 05-shared-tactical-profile-migration.md), covering both the shared
@@ -106,10 +112,22 @@ static func normalize(raw: Dictionary) -> Dictionary:
 
 	var board: Dictionary = raw.get("board", {})
 	var blocked: Array = board.get("blocked", [])
+	var cover: Array = board.get("cover", [])
+	var normalized_cover: Array = []
+	for raw_cover_entry in cover:
+		var cover_entry: Dictionary = raw_cover_entry if raw_cover_entry is Dictionary else {}
+		normalized_cover.append({
+			"position": (
+				cover_entry.position.duplicate(true) if cover_entry.get("position", {}) is Dictionary
+				else position_to_dict(position_from_dict(cover_entry.get("position", {})))
+			),
+			"tier": String(cover_entry.get("tier", "")),
+		})
 	scenario["board"] = {
 		"width": int(board.get("width", DEFAULT_BOARD_WIDTH)),
 		"height": int(board.get("height", DEFAULT_BOARD_HEIGHT)),
 		"blocked": blocked.duplicate(true),
+		"cover": normalized_cover,
 	}
 
 	scenario["player"] = _normalize_side(raw.get("player", {}), "player")
@@ -293,6 +311,13 @@ static func _validate_board(board: Dictionary) -> Array[String]:
 		var pos := position_from_dict(raw_blocked)
 		if not _in_bounds(pos, width, height):
 			errors.append("out_of_bounds: blocked tile %s is outside the %dx%d board" % [pos, width, height])
+	for cover_entry in board.get("cover", []):
+		var cover_pos := position_from_dict(cover_entry.get("position", {}))
+		if not _in_bounds(cover_pos, width, height):
+			errors.append("out_of_bounds: cover tile %s is outside the %dx%d board" % [cover_pos, width, height])
+		var tier: String = String(cover_entry.get("tier", ""))
+		if not tier in KNOWN_COVER_TIERS:
+			errors.append("invalid_cover_tier: cover tile %s has unknown tier \"%s\"" % [cover_pos, tier])
 	return errors
 
 

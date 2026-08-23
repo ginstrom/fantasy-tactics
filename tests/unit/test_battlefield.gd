@@ -29,8 +29,28 @@ func after_each() -> void:
 		DirAccess.remove_absolute(TEST_AUDIO_SETTINGS_PATH)
 
 
-func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+## Stage 5 D2 tactical primitives (docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/03-tactical-depth-primitives.md): every pre-existing test
+## in this file that forces battlefield.grid.hit_roll to assert a
+## deterministic hit/miss/damage outcome predates Dodge/Parry and never
+## overrides those two rolls -- pinning them to "never trigger" here, once,
+## right after instantiate() (before add_child_autofree() runs Battlefield's
+## own _ready(), which is what first reads battlefield.grid) keeps every one
+## of those tests deterministic exactly as before. A test that specifically
+## exercises Dodge/Parry overrides dodge_roll/parry_roll back to a triggering
+## value itself, the same way existing tests already override hit_roll/
+## crit_roll for their own cases. Mirrors test_battle_controller.gd's own
+## _make_controller() fix for the identical issue.
+func _make_battlefield() -> Node2D:
 	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var grid_controller: Node2D = battlefield.get_node("Grid")
+	grid_controller.dodge_roll = func() -> float: return 1.0
+	grid_controller.parry_roll = func() -> float: return 1.0
+	return battlefield
+
+
+func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var escape_event := InputEventAction.new()
 	escape_event.action = "ui_cancel"
@@ -47,14 +67,14 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 
 
 func test_battlefield_starts_at_round_one() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.round_number, 1)
 
 
 func test_round_increments_only_after_the_enemy_turn_returns_control_to_the_player() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 
@@ -67,7 +87,7 @@ func test_round_increments_only_after_the_enemy_turn_returns_control_to_the_play
 
 
 func test_set_enemy_turn_in_progress_locks_and_unlocks_input() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._set_enemy_turn_in_progress(true)
@@ -82,7 +102,7 @@ func test_set_enemy_turn_in_progress_locks_and_unlocks_input() -> void:
 
 
 func test_locked_input_ignores_board_clicks() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var selection_before_lock = battlefield.grid.selected_unit
 	battlefield._set_enemy_turn_in_progress(true)
@@ -95,7 +115,7 @@ func test_locked_input_ignores_board_clicks() -> void:
 
 
 func test_describe_step_reports_a_hit_with_damage() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {"type": "attack", "attacker": attacker, "hit": true, "damage": 1}
@@ -108,7 +128,7 @@ func test_describe_step_reports_a_hit_with_damage() -> void:
 ## step's result dictionary (see battle_controller.gd) -- a critical hit gets
 ## its own status line rather than the plain hit line.
 func test_describe_step_reports_a_critical_hit_with_amplified_damage() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {"type": "attack", "attacker": attacker, "hit": true, "damage": 6, "critical": true}
@@ -120,7 +140,7 @@ func test_describe_step_reports_a_critical_hit_with_amplified_damage() -> void:
 
 
 func test_describe_step_reports_a_miss() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {"type": "attack", "attacker": attacker, "hit": false, "damage": 0}
@@ -129,7 +149,7 @@ func test_describe_step_reports_a_miss() -> void:
 
 
 func test_describe_step_reports_an_enemy_move() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var mover = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var step := {
@@ -145,7 +165,7 @@ func test_describe_step_reports_an_enemy_move() -> void:
 func test_battlefield_exposes_the_selected_units_potion_as_a_separate_two_ap_action() -> void:
 	GameSession.banked_gear = {"healing_potion": 1}
 	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.selected_unit
 	warrior.health = 4
@@ -175,7 +195,7 @@ func _setup_cleric_party() -> String:
 
 func test_action_bar_shows_heal_and_bless_and_mp_for_a_selected_cleric() -> void:
 	var cleric_id := _setup_cleric_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.grid.select_unit_by_adventurer_id(cleric_id)
@@ -191,7 +211,7 @@ func test_action_bar_hides_spell_buttons_when_a_warrior_is_selected() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._update_action_bar()
@@ -207,7 +227,7 @@ func test_action_bar_hides_spell_buttons_when_a_scout_is_selected() -> void:
 	var scout := GameSession.get_default_scout("scout_test", "Test Scout")
 	GameSession.adventurers.append(scout)
 	GameSession.assign_adventurer_to_selected_party("scout_test")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.grid.select_unit_by_adventurer_id("scout_test")
@@ -238,7 +258,7 @@ func _setup_two_member_party() -> String:
 
 func test_portrait_panel_shows_one_row_per_fielded_party_member() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.portrait_panel.rows.get_child_count(), 2)
@@ -249,7 +269,7 @@ func test_portrait_panel_shows_one_row_per_fielded_party_member() -> void:
 
 func test_portrait_panel_shows_the_selection_ring_on_the_selected_member() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
@@ -264,7 +284,7 @@ func test_portrait_panel_dims_a_defeated_member() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	warrior.take_damage(warrior.max_health)
@@ -286,7 +306,7 @@ func test_portrait_panel_dims_a_defeated_member() -> void:
 ## since it bypasses hit-testing entirely.
 func test_portrait_row_click_target_spans_its_visible_content() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -305,7 +325,7 @@ func test_portrait_row_click_target_spans_its_visible_content() -> void:
 ## never let the Button register it as a press.
 func test_portrait_row_decorative_children_do_not_intercept_clicks() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
@@ -319,7 +339,7 @@ func test_portrait_row_decorative_children_do_not_intercept_clicks() -> void:
 
 func test_portrait_health_label_overlays_the_swatch_instead_of_sitting_beside_it() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var row: Control = battlefield.portrait_panel.get_node("Rows/Portrait0")
 	var swatch: Control = row.find_child("Swatch", true, false)
@@ -338,7 +358,7 @@ func test_portrait_health_label_overlays_the_swatch_instead_of_sitting_beside_it
 
 func test_clicking_a_portrait_selects_that_party_member() -> void:
 	var second_member_id: String = _setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.portrait_panel.get_node("Rows/Portrait1").emit_signal("pressed")
@@ -356,14 +376,14 @@ func test_clicking_a_portrait_selects_that_party_member() -> void:
 ## (see test_combat_log_spans_the_full_width_of_its_row below); Hint and
 ## Status remain here.
 func test_hud_hint_and_status_share_the_bottom_panel_stack() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.hint.get_parent(), battlefield.status.get_parent())
 
 
 func test_thorn_trigger_describes_the_visible_paralyzed_state() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = UnitScript.new(Vector2i.ZERO, Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
 	attacker.display_name = "Goblin 1"
@@ -376,7 +396,7 @@ func test_thorn_trigger_describes_the_visible_paralyzed_state() -> void:
 ## message panel -- freeing BottomPanel's height budget for the full-width
 ## combat log (see test_combat_log_spans_the_full_width_of_its_row below).
 func test_enemy_health_list_lives_in_the_body_row_not_the_bottom_panel() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.enemy_health.get_parent().get_parent(), battlefield.portrait_panel.get_parent())
@@ -389,7 +409,7 @@ func test_enemy_health_list_lives_in_the_body_row_not_the_bottom_panel() -> void
 ## total height can never grow past that budget no matter how many enemies
 ## are fielded -- extra entries scroll instead of pushing the panel taller.
 func test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var scroll_container: Control = battlefield.enemy_health.get_parent()
@@ -404,7 +424,7 @@ func test_enemy_health_list_is_wrapped_in_a_height_capped_scroll_container() -> 
 
 
 func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	# Hint/Status/EnemyHealth stack inside one VBoxContainer (BottomContent),
@@ -415,7 +435,7 @@ func test_hud_bottom_panel_is_a_panel_container_not_a_manually_offset_panel() ->
 
 
 func test_bottom_panel_does_not_share_a_parent_with_the_portrait_panel() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_ne(
@@ -426,7 +446,7 @@ func test_bottom_panel_does_not_share_a_parent_with_the_portrait_panel() -> void
 
 
 func test_combat_log_shares_the_bottom_panel_stack_and_starts_empty() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(
@@ -437,7 +457,7 @@ func test_combat_log_shares_the_bottom_panel_stack_and_starts_empty() -> void:
 
 
 func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var scroll_container: Control = battlefield.log_list.get_parent()
@@ -452,7 +472,7 @@ func test_combat_log_is_wrapped_in_a_height_capped_scroll_container() -> void:
 ## bottom_panel above), which keeps this panel's height budget in check even
 ## with LogScroll spanning the full row width alone.
 func test_bottom_panel_clears_the_battle_grids_bottom_edge() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -483,7 +503,7 @@ func test_a_hit_appends_a_detailed_line_naming_both_units_and_the_damage() -> vo
 	# -- otherwise the second party member would already occupy the tile
 	# _stage_an_adjacent_pair() moves the goblin onto.
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
@@ -502,7 +522,7 @@ func test_a_hit_appends_a_detailed_line_naming_both_units_and_the_damage() -> vo
 
 func test_a_critical_hit_appends_a_critical_log_line_with_amplified_damage() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
@@ -534,7 +554,7 @@ func test_a_critical_hit_appends_a_critical_log_line_with_amplified_damage() -> 
 func test_combat_log_and_floating_text_still_fire_when_the_master_bus_is_muted() -> void:
 	GameSession.reset()
 	AudioManager.set_bus_mute("Master", true)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
@@ -563,7 +583,7 @@ func test_combat_log_and_floating_text_still_fire_when_every_bus_is_muted() -> v
 	AudioManager.set_bus_mute("Master", true)
 	AudioManager.set_bus_mute("Music", true)
 	AudioManager.set_bus_mute("SFX", true)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.99  # force a miss
@@ -591,7 +611,7 @@ func test_combat_log_and_floating_text_still_fire_when_every_bus_is_muted() -> v
 
 func test_a_side_flank_hit_appends_the_side_flank_log_line() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.UP
@@ -611,7 +631,7 @@ func test_a_side_flank_hit_appends_the_side_flank_log_line() -> void:
 
 func test_a_side_flank_critical_hit_appends_the_side_flank_critical_log_line() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.UP
@@ -633,7 +653,7 @@ func test_a_side_flank_critical_hit_appends_the_side_flank_critical_log_line() -
 
 func test_a_rear_flank_hit_appends_the_rear_flank_log_line() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.RIGHT
@@ -653,7 +673,7 @@ func test_a_rear_flank_hit_appends_the_rear_flank_log_line() -> void:
 
 func test_a_rear_flank_critical_hit_appends_the_rear_flank_critical_log_line() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.RIGHT
@@ -677,7 +697,7 @@ func test_a_rear_flank_critical_hit_appends_the_rear_flank_critical_log_line() -
 ## key, so this guards that ordering.
 func test_a_rear_flank_killing_blow_still_appends_the_defeated_suffix() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.RIGHT
@@ -703,7 +723,7 @@ func test_a_rear_flank_killing_blow_still_appends_the_defeated_suffix() -> void:
 ## + the configured 0.50 rear bonus) as the case's real assertion.
 func test_last_attack_result_records_the_resolved_flank_and_effective_values() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.facing = Vector2i.RIGHT
@@ -721,7 +741,7 @@ func test_last_attack_result_records_the_resolved_flank_and_effective_values() -
 
 func test_a_miss_appends_a_miss_line_naming_both_units() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.99
@@ -736,9 +756,79 @@ func test_a_miss_appends_a_miss_line_naming_both_units() -> void:
 	)
 
 
+## --- Stage 5 D2: Dodge/Parry/reaction log feedback --------------------------
+
+func test_a_dodged_attack_appends_a_dodge_log_line_distinct_from_a_plain_miss() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.dodge_roll = func() -> float: return 0.0
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.dodged") % [units.warrior.display_name, units.goblin.display_name, units.goblin.display_name]
+	)
+
+
+func test_a_parried_attack_appends_a_parry_log_line_distinct_from_a_plain_miss() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var units := _stage_an_adjacent_pair(battlefield)
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.parry_roll = func() -> float: return 0.0
+
+	battlefield.grid.try_attack_selected_unit(units.goblin.grid_position)
+	battlefield._on_board_changed()
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	assert_eq(
+		battlefield.log_list.get_child(0).text,
+		tr("battle.log.parried") % [units.warrior.display_name, units.goblin.display_name, units.goblin.display_name]
+	)
+
+
+## An Attack of Opportunity is a side effect of a move, not the move's own
+## primary result -- it must still reach the persistent combat log (see
+## Battlefield._log_reactions()), independent of the move's own transient
+## status line.
+func test_an_opportunity_attack_triggered_by_a_move_appends_its_own_reaction_log_line() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	goblin.grid_position = warrior.grid_position + Vector2i(1, 0)
+	battlefield.grid.selected_unit = warrior
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 2
+
+	# Two tiles straight down: the first step (0,0)->(0,1) stays within the
+	# goblin's eight-directional adjacency (still diagonally adjacent), the
+	# second (0,1)->(0,2) departs it -- proving the whole route is walked,
+	# not just its final destination.
+	assert_true(battlefield.grid.try_move_selected_unit(warrior.grid_position + Vector2i(0, 2)))
+	battlefield._on_board_changed()
+
+	var lines: Array = []
+	for child in battlefield.log_list.get_children():
+		lines.append(child.text)
+	assert_true(
+		lines.has(tr("battle.log.reaction.hit") % [goblin.display_name, warrior.display_name, 2]),
+		"Expected a reaction log line among: %s" % [lines]
+	)
+
+
 func test_a_killing_blow_appends_a_defeated_suffix() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	units.goblin.health = 1
@@ -755,7 +845,7 @@ func test_a_killing_blow_appends_a_defeated_suffix() -> void:
 
 func test_a_repeated_board_changed_event_does_not_duplicate_the_log_line() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_an_adjacent_pair(battlefield)
 	battlefield.grid.hit_roll = func() -> float: return 0.0
@@ -772,7 +862,7 @@ func test_a_repeated_board_changed_event_does_not_duplicate_the_log_line() -> vo
 
 func test_enemy_turn_attacks_are_appended_to_the_log() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
@@ -796,7 +886,7 @@ func test_enemy_turn_attacks_are_appended_to_the_log() -> void:
 
 func test_enemy_turn_moves_are_not_logged() -> void:
 	GameSession.reset()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	# The default fallback fielding (no party assigned) puts the Warrior at
@@ -813,7 +903,7 @@ func test_enemy_turn_moves_are_not_logged() -> void:
 
 
 func test_hud_round_label_and_action_points_label_share_the_top_right_stack() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.round_label.get_parent(), battlefield.action_points_label.get_parent())
@@ -823,7 +913,7 @@ func test_hud_round_label_and_action_points_label_share_the_top_right_stack() ->
 ## and the item actions (per the Baldur's Gate inspired layout's bottom
 ## action row), not in the top header stack next to Round/AP.
 func test_end_turn_button_shares_the_bottom_action_bar_row_with_move_and_attack() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.end_turn_button.get_parent(), battlefield.move_button.get_parent().get_parent())
@@ -840,7 +930,7 @@ func test_end_turn_button_shares_the_bottom_action_bar_row_with_move_and_attack(
 ## panel's SelectedSection must reflect that same opening selection instead
 ## of showing its empty prompt despite a unit already being visibly selected.
 func test_unit_info_panel_shows_the_auto_selected_unit_at_battle_start() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
@@ -853,7 +943,7 @@ func test_unit_info_panel_shows_the_auto_selected_unit_at_battle_start() -> void
 func test_unit_info_panel_selected_section_shows_exact_hp_ap_name_class_level_and_weapon_for_a_player_unit() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 
@@ -880,7 +970,7 @@ func test_unit_info_panel_selected_section_shows_exact_hp_ap_name_class_level_an
 ## never side-conditional, since Steps 2/3 of this plan (critical hits,
 ## flanking) make an enemy's facing just as tactically relevant as an ally's.
 func test_unit_info_panel_selected_section_shows_the_selected_units_facing() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	warrior.facing = Vector2i.DOWN
@@ -894,7 +984,7 @@ func test_unit_info_panel_selected_section_shows_the_selected_units_facing() -> 
 
 
 func test_unit_info_panel_hovered_section_shows_the_hovered_units_facing() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	goblin.facing = Vector2i.UP
@@ -913,7 +1003,7 @@ func test_unit_info_panel_hovered_section_shows_the_hovered_units_facing() -> vo
 func test_unit_info_panel_shows_hovered_enemy_and_selected_player_simultaneously() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -940,7 +1030,7 @@ func test_unit_info_panel_shows_hovered_enemy_and_selected_player_simultaneously
 
 
 func test_unit_info_panel_hovered_section_shows_only_a_wound_tier_for_an_enemy_never_exact_hp() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 
@@ -960,7 +1050,7 @@ func test_unit_info_panel_hovered_section_shows_only_a_wound_tier_for_an_enemy_n
 ## unlike a hovered enemy which only ever shows a wound tier.
 func test_unit_info_panel_hovered_section_shows_class_for_a_hovered_ally() -> void:
 	_setup_two_member_party()
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var first_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var second_member = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[1])
@@ -982,7 +1072,7 @@ func test_unit_info_panel_hovered_section_shows_class_for_a_hovered_ally() -> vo
 
 
 func test_unit_info_panel_hovered_wound_tiers_match_the_health_percentage_thresholds() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	var panel: Control = battlefield.unit_info_panel
@@ -1006,7 +1096,7 @@ func test_unit_info_panel_hovered_wound_tiers_match_the_health_percentage_thresh
 ## keeps showing the actually-selected unit (grid.selected_unit) regardless
 ## of hover state; only the HoveredSection reacts to losing hover.
 func test_unit_info_panel_hides_hovered_section_when_hover_ends_but_keeps_selected_section_pinned() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -1032,7 +1122,7 @@ func test_unit_info_panel_selected_section_ap_updates_immediately_after_a_move()
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var starting_ap: int = warrior.action_points_remaining
@@ -1052,7 +1142,7 @@ func test_unit_info_panel_selected_section_ap_updates_immediately_after_a_move()
 ## through battlefield._on_board_changed(), which every damage/heal path in
 ## this game already routes through (see e.g. _on_use_potion_pressed()).
 func test_unit_info_panel_hp_and_wound_tier_update_immediately_on_damage() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -1071,7 +1161,7 @@ func test_unit_info_panel_hp_and_wound_tier_update_immediately_on_damage() -> vo
 
 
 func test_unit_info_panel_shows_empty_hint_when_nothing_selected_or_hovered() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.grid._select_unit(null)
@@ -1083,7 +1173,7 @@ func test_unit_info_panel_shows_empty_hint_when_nothing_selected_or_hovered() ->
 
 
 func test_unit_info_panel_lives_to_the_right_of_the_portrait_panel() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.unit_info_panel.get_parent(), battlefield.portrait_panel.get_parent())
@@ -1095,7 +1185,7 @@ func test_unit_info_panel_lives_to_the_right_of_the_portrait_panel() -> void:
 
 
 func test_portrait_panel_is_container_driven_not_offset_positioned() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_true(battlefield.portrait_panel.get_parent() is Container)
@@ -1105,7 +1195,7 @@ func test_ready_lists_each_living_enemys_health() -> void:
 	GameSession.reset()
 	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.enemy_health.get_child_count(), 2)
@@ -1117,7 +1207,7 @@ func test_enemy_health_list_drops_a_defeated_enemy() -> void:
 	GameSession.reset()
 	GameSession.enemy_composition_roll = func(_option_count: int) -> int: return 0
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
 	goblin.take_damage(goblin.max_health)
@@ -1129,7 +1219,7 @@ func test_enemy_health_list_drops_a_defeated_enemy() -> void:
 
 
 func test_player_health_label_no_longer_exists() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_false(battlefield.has_node("HUD/PlayerHealth"))
@@ -1138,7 +1228,7 @@ func test_player_health_label_no_longer_exists() -> void:
 func test_show_battle_result_names_the_won_goblin_camp_in_the_victory_message() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(true)
@@ -1151,10 +1241,45 @@ func test_show_battle_result_names_the_won_goblin_camp_in_the_victory_message() 
 	assert_true(battlefield.grid.input_locked)
 
 
+## --- Stage 5 D2: the Goblin Camp demonstration encounter's authored Cover --
+
+func test_the_goblin_camp_battle_hydrates_its_authored_cover_tiles() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.grid.grid.get_cover(Vector2i(3, 2)), "low")
+	assert_eq(battlefield.grid.grid.get_cover(Vector2i(4, 3)), "high")
+
+
+func test_an_encounter_with_no_authored_cover_fields_none() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	assert_eq(battlefield.grid.grid.cover_tiles, {})
+
+
+func test_cover_markers_render_a_text_badge_distinct_from_colour_alone() -> void:
+	GameSession.reset()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	var labels: Array = []
+	for child in battlefield.grid.terrain_container.get_children():
+		if child is Label:
+			labels.append(child.text)
+	labels.sort()
+	assert_eq(labels, ["H", "L"], "Cover markers must carry a text badge, not rely on colour alone")
+
+
 func test_show_battle_result_names_the_won_orc_outpost_in_the_victory_message() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(true)
@@ -1168,7 +1293,7 @@ func test_show_battle_result_names_the_won_orc_outpost_in_the_victory_message() 
 
 
 func test_show_battle_result_shows_the_defeat_message_and_locks_input() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(false)
@@ -1187,7 +1312,7 @@ func test_show_battle_result_shows_the_defeat_message_and_locks_input() -> void:
 func test_entering_a_battle_requests_the_tactical_combat_music() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 
 	add_child_autofree(battlefield)
 
@@ -1197,7 +1322,7 @@ func test_entering_a_battle_requests_the_tactical_combat_music() -> void:
 func test_entering_the_ogre_boss_battle_requests_the_boss_music() -> void:
 	GameSession.reset()
 	GameSession.selected_encounter = "obj_boss_borderlands_ogre"
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 
 	add_child_autofree(battlefield)
 
@@ -1205,7 +1330,7 @@ func test_entering_the_ogre_boss_battle_requests_the_boss_music() -> void:
 
 
 func test_a_won_battle_requests_the_victory_music() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(true)
@@ -1214,7 +1339,7 @@ func test_a_won_battle_requests_the_victory_music() -> void:
 
 
 func test_a_lost_battle_requests_the_defeat_music() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._show_battle_result(false)
@@ -1230,7 +1355,7 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 1.0
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(true)
@@ -1247,7 +1372,7 @@ func test_apply_battle_outcome_false_returns_the_party_home_without_completing()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(false)
@@ -1263,7 +1388,7 @@ func test_battle_start_reads_stored_adventurer_health() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.set_adventurer_health("warrior_001", 4)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var unit = battlefield.grid.units[0]
 
@@ -1277,7 +1402,7 @@ func test_victory_aftermath_persists_surviving_player_unit_health() -> void:
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	battlefield.grid.units[0].health = 6
 
@@ -1300,7 +1425,7 @@ func test_victory_aftermath_persists_a_surviving_clerics_remaining_mp() -> void:
 	GameSession.assign_adventurer_to_selected_party("cleric_test")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
 	cleric_unit.mp_remaining = 1
@@ -1326,7 +1451,7 @@ func test_a_dead_clerics_mp_does_not_survive_permadeath() -> void:
 	GameSession.assign_adventurer_to_selected_party("cleric_test")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var cleric_unit = battlefield.grid._get_unit_by_adventurer_id("cleric_test")
 	cleric_unit.mp_remaining = 1
@@ -1350,7 +1475,7 @@ func test_defeat_aftermath_permanently_removes_a_unit_that_reached_zero_health()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	battlefield.grid.units[0].health = 0
 
@@ -1375,7 +1500,7 @@ func test_a_player_unit_killed_in_real_combat_is_permanently_removed_after_the_b
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -1404,7 +1529,7 @@ func _setup_goblin_camp_battle() -> Node2D:
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	return battlefield
 
@@ -1417,7 +1542,7 @@ func _setup_orc_outpost_battle(roll_override: Callable = Callable()) -> Node2D:
 	if roll_override.is_valid():
 		GameSession.enemy_composition_roll = roll_override
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	return battlefield
 
@@ -1561,7 +1686,7 @@ func test_a_level_up_from_kill_xp_raises_the_active_units_max_and_current_health
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_a_killing_blow(battlefield)
 
@@ -1586,7 +1711,7 @@ func test_a_level_up_from_kill_xp_shows_the_modal_and_locks_board_and_end_turn_i
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_a_killing_blow(battlefield)
 
@@ -1605,7 +1730,7 @@ func test_resolving_the_only_queued_level_up_unlocks_board_and_end_turn_input() 
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var units := _stage_a_killing_blow(battlefield)
 	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
@@ -1636,7 +1761,7 @@ func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party
 	# recruited id is read back rather than assumed.
 	var second_member_id: String = GameSession.adventurers[-1].id
 	GameSession.assign_adventurer_to_selected_party(second_member_id)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._award_party_xp(42.0)
@@ -1679,7 +1804,7 @@ func test_a_level_up_from_clear_xp_must_resolve_before_the_battle_completes() ->
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(true)
@@ -1715,7 +1840,7 @@ func test_a_clear_xp_level_up_that_requires_a_perk_choice_still_gates_completion
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 49.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(true)
@@ -1831,7 +1956,7 @@ func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summa
 	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(true)
@@ -1881,7 +2006,7 @@ func test_multiple_kills_in_one_battle_are_tallied_by_type_not_overwritten() -> 
 
 
 func test_targeting_failure_updates_status_message() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -1905,7 +2030,7 @@ func test_targeting_failure_updates_status_message() -> void:
 
 
 func test_action_bar_contains_move_and_attack_buttons() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_true(battlefield.has_node("HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"))
@@ -1926,7 +2051,7 @@ func test_action_bar_contains_move_and_attack_buttons() -> void:
 ## the real .tscn signal wiring (not a direct method call), invokes
 ## BattleController.try_retreat().
 func test_action_bar_contains_a_retreat_button_left_of_move_and_attack() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.retreat_button.text, "battle.action.retreat")
@@ -1947,7 +2072,7 @@ func test_action_bar_contains_a_retreat_button_left_of_move_and_attack() -> void
 
 
 func test_clicking_retreat_button_invokes_try_retreat_through_the_real_signal_wiring() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var retreated: Array = []
 	battlefield.grid.retreat_resolved.connect(func(results: Array) -> void: retreated.append(results))
@@ -1958,7 +2083,7 @@ func test_clicking_retreat_button_invokes_try_retreat_through_the_real_signal_wi
 
 
 func test_clicking_move_button_activates_move_mode_and_highlights_it() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.move_button.emit_signal("pressed")
@@ -1969,7 +2094,7 @@ func test_clicking_move_button_activates_move_mode_and_highlights_it() -> void:
 
 
 func test_clicking_attack_button_activates_attack_mode_and_highlights_it() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield.attack_button.emit_signal("pressed")
@@ -1994,7 +2119,7 @@ func _native_toggle_click(button: Button) -> void:
 
 
 func test_repeat_clicking_the_active_move_button_stays_highlighted() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	_native_toggle_click(battlefield.move_button)
@@ -2017,7 +2142,7 @@ func test_repeat_clicking_the_active_move_button_stays_highlighted() -> void:
 
 
 func test_repeat_clicking_the_active_attack_button_stays_highlighted() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	_native_toggle_click(battlefield.attack_button)
@@ -2037,7 +2162,7 @@ func test_repeat_clicking_the_active_attack_button_stays_highlighted() -> void:
 
 
 func test_selecting_a_unit_resets_the_action_bar_to_contextual() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	battlefield.attack_button.emit_signal("pressed")
 	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
@@ -2050,7 +2175,7 @@ func test_selecting_a_unit_resets_the_action_bar_to_contextual() -> void:
 
 
 func test_starting_a_new_turn_resets_the_action_bar_to_contextual() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	battlefield.grid.set_action_mode(BattleControllerScript.ActionMode.MOVE)
@@ -2064,7 +2189,7 @@ func test_starting_a_new_turn_resets_the_action_bar_to_contextual() -> void:
 
 
 func test_move_and_attack_buttons_are_disabled_when_input_is_locked() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	battlefield._set_enemy_turn_in_progress(true)
@@ -2079,7 +2204,7 @@ func test_move_and_attack_buttons_are_disabled_when_input_is_locked() -> void:
 
 
 func test_attack_button_is_disabled_when_the_selected_unit_lacks_enough_ap() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.selected_unit
 	warrior.action_points_remaining = 2
@@ -2090,7 +2215,7 @@ func test_attack_button_is_disabled_when_the_selected_unit_lacks_enough_ap() -> 
 
 
 func test_move_button_is_disabled_when_the_selected_unit_has_no_action_points_left() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var warrior = battlefield.grid.selected_unit
 	warrior.action_points_remaining = 0
@@ -2101,7 +2226,7 @@ func test_move_button_is_disabled_when_the_selected_unit_has_no_action_points_le
 
 
 func test_move_mode_and_attack_mode_clicks_update_the_status_message() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
 	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
@@ -2131,7 +2256,7 @@ func test_move_mode_and_attack_mode_clicks_update_the_status_message() -> void:
 func test_battle_title_shows_the_goblin_camp_encounter_name() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.get_node("%BattleTitleLabel").text, "Goblin Camp Battle")
@@ -2140,14 +2265,14 @@ func test_battle_title_shows_the_goblin_camp_encounter_name() -> void:
 func test_battle_title_shows_the_orc_outpost_encounter_name() -> void:
 	GameSession.reset()
 	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.get_node("%BattleTitleLabel").text, "Orc Outpost Battle")
 
 
 func test_battle_title_label_lives_in_the_top_row() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var title_label: Label = battlefield.get_node("%BattleTitleLabel")
@@ -2160,7 +2285,7 @@ func test_battle_title_label_lives_in_the_top_row() -> void:
 ## row with a sibling (see test_enemy_health_list_lives_in_the_body_row_not_
 ## the_bottom_panel above for where that sibling went).
 func test_combat_log_spans_the_full_width_of_its_row() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var log_row: Node = battlefield.log_scroll.get_parent()
@@ -2171,7 +2296,7 @@ func test_combat_log_spans_the_full_width_of_its_row() -> void:
 
 
 func test_appending_a_log_line_scrolls_the_log_to_the_bottom() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	for i in range(20):
 		battlefield._append_log_line("Log line %d" % i)
@@ -2197,7 +2322,7 @@ func test_appending_a_log_line_scrolls_the_log_to_the_bottom() -> void:
 ## full-width log) must both stay clear of the 6x6 battle grid after at
 ## least one layout frame, at the project's supported viewport size.
 func test_header_and_bottom_panel_never_overlap_the_battle_grid() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -2226,7 +2351,7 @@ func test_header_and_bottom_panel_never_overlap_the_battle_grid() -> void:
 ## acceptance criterion, plus this step's own plan) requires the log row
 ## above the action bar row, not below it.
 func test_combat_log_row_sits_above_the_action_bar_row() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	var log_row: Node = battlefield.log_scroll.get_parent()
@@ -2260,7 +2385,7 @@ func test_combat_log_row_sits_above_the_action_bar_row() -> void:
 ## far past any realistic in-game value, so the assertion exercises the
 ## column's actual configured ceiling rather than just today's real content.
 func test_enemy_health_column_never_overlaps_the_battle_grid_even_with_wide_content() -> void:
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 	for unit in battlefield.grid.units:
 		if unit.side == BattleControllerScript.Side.ENEMY:
@@ -2306,7 +2431,7 @@ func test_a_survived_retreat_persists_hp_loss_discards_loot_and_stays_on_the_enc
 	var encounter_position: Vector2i = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position
 	GameSession.set_deployed_party_position(encounter_position)
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	# Fresh battle start positions put the lone warrior and the goblin at
@@ -2333,7 +2458,7 @@ func test_a_full_wipe_from_retreats_own_risk_roll_routes_home_and_forfeits_gold_
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
-	var battlefield: Node2D = BattlefieldScene.instantiate()
+	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
 	GameSession.gold = 40

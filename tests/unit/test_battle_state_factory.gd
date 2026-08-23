@@ -46,6 +46,32 @@ func test_build_creates_a_grid_sized_to_the_scenarios_board() -> void:
 	assert_eq(controller.grid.height, 8)
 
 
+## Cover terrain (Stage 5 D2, decision-ledger.md's "Terrain representation/
+## distribution" row): hand-authored per encounter, hydrated onto the built
+## Grid's own cover_tiles exactly as declared -- see grid.gd's own doc
+## comment on why no procedural distribution exists anywhere in this
+## pipeline.
+func test_build_hydrates_authored_cover_tiles_onto_the_grid() -> void:
+	var scenario := _normalized({
+		"scenario_id": "covered_board",
+		"board": {
+			"cover": [
+				{"position": {"x": 2, "y": 2}, "tier": "low"},
+				{"position": {"x": 4, "y": 4}, "tier": "high"},
+			],
+		},
+		"player": {"template_id": "warrior", "count": 1},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	assert_eq(controller.grid.get_cover(Vector2i(2, 2)), "low")
+	assert_eq(controller.grid.get_cover(Vector2i(4, 4)), "high")
+	assert_eq(controller.grid.get_cover(Vector2i(0, 0)), "")
+
+
 func test_build_fields_one_unit_per_declared_side_unit_at_its_declared_position() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)
@@ -642,6 +668,26 @@ func test_build_seeds_crit_roll_deterministically_from_the_iteration_seed() -> v
 
 	for _i in 5:
 		assert_eq(controller_a.crit_roll.call(), controller_b.crit_roll.call())
+
+
+## Stage 5 D2 tactical primitives (docs/plans/2026-08-23-stage-5-strategic-
+## roster-expansion/03-tactical-depth-primitives.md): Dodge/Parry are new
+## stochastic checks that must be seeded from the same per-iteration
+## RandomNumberGenerator as hit_roll/crit_roll/damage_roll -- never falling
+## back to Godot's global, unseeded randf() -- or a deterministic scenario
+## fielding either mechanic would stop reproducing byte-identically.
+func test_build_seeds_dodge_roll_and_parry_roll_deterministically_from_the_iteration_seed() -> void:
+	var scenario := _one_v_one_scenario()
+
+	var controller_a: Node2D = BattleStateFactory.build(scenario, 12345)
+	var controller_b: Node2D = BattleStateFactory.build(scenario, 12345)
+	autofree(controller_a)
+	autofree(controller_b)
+
+	for _i in 5:
+		assert_eq(controller_a.dodge_roll.call(), controller_b.dodge_roll.call())
+	for _i in 5:
+		assert_eq(controller_a.parry_roll.call(), controller_b.parry_roll.call())
 
 
 ## Heal (see battle_controller.gd's try_cast_spell()) rolls its healing
