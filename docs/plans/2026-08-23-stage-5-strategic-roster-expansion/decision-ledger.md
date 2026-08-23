@@ -172,21 +172,49 @@ than re-deciding it.
 
 ### D2 — Tactical depth: terrain representation/distribution and reaction ordering
 
-**Status: Blocked** — required before `feat/stage-5-tactical-depth` (Step 3) starts.
+**Status: Approved 2026-08-23 (user).**
 
-- **Player decision:** TBD at Step 3 kickoff — how terrain/cover choice
-  and avoidance/reaction (e.g. opportunity-attack) resolution order affect
-  play.
-- **Counterplay:** TBD.
-- **Encounter use:** TBD — must name at least one authored or repeatable
-  encounter that demonstrates it.
-- **Durable-state/snapshot change:** TBD — grid/terrain data does not exist
-  yet (`battle_state_factory.gd:35` confirms tile-occupancy-only today).
-- **Deterministic scenario assertion:** TBD.
-- **Manual acceptance check:** TBD.
+- **Player decision:** Whether to fight from Cover, whether to flank a
+  Cover/Parry-capable defender instead of attacking head-on, whether to
+  press a melee attack against a unit that might Dodge/Parry, and whether
+  to reposition near an enemy and accept the opportunity-attack risk versus
+  retreating safely.
+- **Counterplay:** Already fully specified in `docs/designs/combat-system.md`
+  and not re-decided here: flanking (Side/Rear) reduces defender Guard
+  20%/50% and raises crit chance, which bypasses Cover's Guard bonus; a
+  successful Dodge/Parry off-balances the attacker (-10% Guard on their next
+  round) and a successful Parry also grants the defender a +10% melee
+  counter-bonus against that attacker; an opportunity attack only lands at
+  -10% melee to-hit, so it punishes but doesn't guarantee-stop repositioning.
+- **Encounter use:** Step 3 adds one authored/repeatable encounter/terrain
+  layout demonstrating each of Cover, Dodge, Parry, and Opportunity Attack
+  (task 6 of the step file), now unblocked because each primitive's
+  counterplay is already approved above rather than needing individual
+  per-primitive sign-off.
+- **Durable-state/snapshot change:** New per-tile Cover data on the battle
+  grid (authored per encounter, not persisted to `CampaignSnapshot` — battle
+  state is not currently save/loadable mid-fight, consistent with existing
+  architecture); `Unit` gains Dodge/Parry/off-balance/counter-bonus/stale-LOS
+  state, scoped to `BattleController`/`Unit`, not `GameSession`.
+- **Deterministic scenario assertion:** `ScenarioContract`/`BattleStateFactory`
+  fixtures proving Cover/Dodge/Parry/Opportunity-Attack outcomes replay
+  byte-identically for a fixed seed, and that an unrelated seed run
+  before/after doesn't change the outcome (no hidden global RNG coupling).
+- **Manual acceptance check:** In `make play`, identify visible vs. stale
+  space, Cover, the valid reaction trigger, and the resulting log/feedback
+  without consulting test data; confirm Move/Attack stay button-only,
+  right-click facing costs no AP, and a reaction neither duplicates nor
+  bypasses normal battle aftermath.
 
-No balance value (terrain distribution weights, reaction ordering rule) is
-invented here; Step 3 cannot start until this row is filled in and approved.
+**Approved values:**
+
+| Parameter | Value | Basis |
+|---|---|---|
+| Terrain representation/distribution | Cover tiles are hand-authored per encounter (same pattern as `EXPEDITIONS`' existing hand-placed positions/compositions) — no procedural distribution algorithm | Avoids inventing distribution weights; only the demonstration encounter(s) this step adds need Cover tiles placed |
+| Battlefield visibility ("stale" areas) | Last-known-position memory: tiles outside current LOS render dimmed; an enemy last seen in a now-stale tile keeps showing at its last-known position (visually marked as possibly outdated) until re-observed | Matches the design doc's literal "grows stale" wording with a readable player signal, rather than simple hide/reveal |
+| Dodge chance | Flat 10% for all units | Matches the design doc's "small chance" wording without inventing a new per-unit stat; consistent order of magnitude with the existing 5% crit chance and -10% off-balance/opportunity penalties already in the design |
+| Parry chance | Flat 10% for all units (melee-eligible attacks only) | Same basis as Dodge |
+| Opportunity-attack trigger scope | One opportunity attack per adjacent enemy per move action, however many times the mover departs/re-enters that enemy's adjacency within one move; the move completes regardless of whether the attack hits | Matches the design doc's per-departure wording read at the move-action grain, avoids stacking multiple free attacks from a single repositioning decision |
 
 ### D3 — Mage: first spell/counter encounter
 
@@ -239,3 +267,9 @@ slice is optional intelligence/quests (Step 2); D2-D5 stay `Blocked` and no
 later step may start until its own row is filled in and approved by the
 user; D1's quest duration/reward-basis/posting-cadence and the Watchtower
 balance table are approved as recorded above.
+
+Step 2 merged 2026-08-23 after manual `make play` signoff (commit `7a9ae58`).
+
+D2 (tactical depth: terrain source, visibility staleness, Dodge/Parry
+chance, opportunity-attack trigger scope) approved with the user 2026-08-23
+ahead of Step 3 — recorded above.
