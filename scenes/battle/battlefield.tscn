@@ -151,6 +151,11 @@ visible = false
 layout_mode = 2
 visible = false
 
+[node name="StatusLabel" type="Label" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content/HoveredSection"]
+layout_mode = 2
+autowrap_mode = 3
+visible = false
+
 [node name="Separator" type="HSeparator" parent="HUD/Margin/VBox/BodyRow/UnitInfoPanel/Content"]
 layout_mode = 2
 
@@ -301,6 +306,13 @@ visible = false
 toggle_mode = true
 text = "battle.action.bless"
 
+[node name="SleepButton" type="Button" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+toggle_mode = true
+text = "battle.action.sleep"
+
 [node name="MPLabel" type="Label" parent="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -351,6 +363,7 @@ layout_mode = 1
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/MoveButton" to="." method="_on_move_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/HealButton" to="." method="_on_heal_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/BlessButton" to="." method="_on_bless_button_pressed"]
+[connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/SleepButton" to="." method="_on_sleep_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/AttackButton" to="." method="_on_attack_button_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/UsePotionButton" to="." method="_on_use_potion_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ItemActions/TransferButton" to="." method="_on_transfer_button_pressed"]

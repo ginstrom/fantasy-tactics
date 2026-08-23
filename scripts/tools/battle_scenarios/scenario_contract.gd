@@ -55,7 +55,7 @@ const DEFAULT_ENEMY_POLICY := "current_enemy_policy"
 # CLASS_DEFINITIONS -- warrior, scout, cleric). Enemy templates mirror
 # GameSession's named *_ENEMY_STATS consts (see battle_state_factory.gd's
 # read-only helpers, which resolve these same names to live stat data).
-const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout", "cleric"]
+const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout", "cleric", "mage"]
 # The four original species plus the authored-ladder additions (see
 # GameSession's *_ENEMY_STATS consts and docs/plans/2026-08-18-core-loop-
 # and-engagement/05-authored-encounters-and-final-boss.md) -- every name here

@@ -5809,6 +5809,7 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"DETAILS_HEAL_MIN": true,
 		"DETAILS_HEAL_MAX": true,
 		"CLERIC_MP_MAX": true,
+		"MAGE_MP_MAX": true,
 		"PERK_TREE_SIZE": true,
 		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
 		"WARRIOR_BULWARK_GUARD": true,
@@ -6800,4 +6801,183 @@ func test_importing_a_pre_stage_5_snapshot_backfills_missing_intel_records_for_l
 		bool(session.encounter_intel["obj_tier1_1_goblin_outpost"].discovered),
 		"A backfilled authored node is still guaranteed discovered"
 	)
+
+
+## --- Mage class, durable MP, and recruitment (Stage 5 Step 4, decision-
+## ledger.md's D3) ---
+## Intelligence 6-8, Strength 1-3, class_multiplier 0.5, spells == ["sleep"],
+## skills-by-class table's mage row read literally: might/melee/guard n/a
+## (never grow), missile low (1-2/level), spellcasting med (3-4/level). Its
+## own mage.mp_max GameConfig key/MAGE_MP_MAX var -- never sharing Cleric's
+## CLERIC_MP_MAX -- is what proves the two spellcasting classes' resource
+## pools are actually independent, not just coincidentally the same number.
+
+func test_mage_class_definition_has_the_approved_spellcasting_schema() -> void:
+	var mage: Dictionary = GameSession.CLASS_DEFINITIONS.mage
+
+	assert_eq(mage.primary_attribute_ranges.strength, Vector2i(1, 3))
+	assert_eq(mage.primary_attribute_ranges.intelligence, Vector2i(6, 8))
+	assert_eq(mage.class_multiplier, 0.5)
+	assert_eq(mage.spells, ["sleep"])
+	assert_eq(mage.mp_max, 3)
+	assert_true(mage.base_stats.has("spellcasting"))
+	assert_true(mage.skills.has("missile"))
+	assert_true(mage.skills.has("spellcasting"))
+	assert_false(mage.skills.has("melee"), "class-system.md's mage row: melee n/a -- must never grow")
+	assert_false(mage.skills.has("guard"), "class-system.md's mage row: guard n/a -- must never grow")
+	assert_false(mage.skills.has("might"), "class-system.md's mage row: might n/a -- must never grow")
+	assert_eq(mage.skills.missile, {"tier": "low", "min_gain": 1, "max_gain": 2})
+	assert_eq(mage.skills.spellcasting, {"tier": "med", "min_gain": 3, "max_gain": 4})
+
+
+func test_get_default_mage_returns_a_seeded_mage_record() -> void:
+	var mage := GameSession.get_default_mage("mage_test", "Test Mage")
+
+	assert_eq(mage.class, "mage")
+	assert_eq(mage.stats, GameSession.CLASS_DEFINITIONS.mage.base_stats)
+	assert_eq(mage.health, GameSession.CLASS_DEFINITIONS.mage.base_stats.max_health)
+	assert_true(GameSession.CLASS_DEFINITIONS.mage.allowed_weapon_categories.has(
+		GameSession.WEAPONS[mage.equipment.weapon].category
+	), "the Mage's default weapon must be one its own class can equip")
+
+
+func test_get_default_mage_starts_at_full_current_and_max_mp() -> void:
+	var mage := GameSession.get_default_mage("mage_test", "Test Mage")
+
+	assert_eq(mage.mp_current, 3)
+	assert_eq(GameSession.CLASS_DEFINITIONS.mage.mp_max, 3)
+
+
+## The load-bearing proof that Mage's mp_max is its OWN config-driven value,
+## not a second read of CLERIC_MP_MAX that happens to agree today (see
+## GameSession.MAGE_MP_MAX/get_effective_max_mp()'s own doc comment on why a
+## shared var would be wrong even though both currently default to 3).
+func test_mage_and_cleric_mp_max_are_independent_config_driven_values() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+
+	session.MAGE_MP_MAX = 7
+	session.CLERIC_MP_MAX = 3
+
+	assert_eq(session.get_effective_max_mp("mage_test"), 7)
+	assert_eq(session.get_effective_max_mp("cleric_test"), 3, "Raising Mage's mp_max must never move Cleric's")
+
+
+## Prove a non-Mage cannot obtain a Mage action (Sleep) merely by carrying
+## MP-shaped data: a Warrior record hand-given an mp_current field still
+## reports 0 max/current MP, since GameSession.CLASS_DEFINITIONS.warrior
+## carries no "mp_max" key at all -- get_effective_max_mp()/get_current_mp()
+## key off the class definition, never off which fields a record happens to
+## carry.
+func test_a_warrior_cannot_obtain_mp_merely_by_carrying_mp_shaped_data() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var warrior_index: int = session._get_adventurer_index(GameSessionScript.WARRIOR_ID)
+	session.adventurers[warrior_index]["mp_current"] = 3
+
+	assert_eq(session.get_effective_max_mp(GameSessionScript.WARRIOR_ID), 0)
+	assert_eq(session.get_current_mp(GameSessionScript.WARRIOR_ID), 0)
+
+
+## The reverse leak this step must also close: a Mage now carries the same
+## MP-shaped resource Cleric's Details-view "Heal party member" action reads
+## (get_effective_max_mp() > 0), but Mage's own CLASS_DEFINITIONS entry names
+## no "heal" spell -- heal_party_member()/get_legal_heal_targets() must key
+## off which spells the caster's class actually knows, not merely off
+## carrying MP, or a Mage would get Cleric's action for free.
+func test_a_mage_cannot_use_the_cleric_details_view_heal_action() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	session.assign_adventurer_to_selected_party("mage_test")
+	session.depart_selected_party()
+	session.set_adventurer_health("warrior_001", 2)
+
+	assert_eq(session.get_legal_heal_targets("mage_test"), [] as Array[String])
+	assert_false(session.heal_party_member("mage_test", "warrior_001"))
+	assert_eq(session.get_current_health("warrior_001"), 2)
+	assert_eq(session.get_current_mp("mage_test"), 3, "A rejected heal attempt must never spend the Mage's MP")
+
+
+func test_leveling_up_a_mage_grows_only_missile_and_spellcasting() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.skill_gain_roll = func(_min_val: int, max_val: int) -> int: return max_val
+	session.create_party()
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	session.assign_adventurer_to_selected_party("mage_test")
+	var base_melee: int = int(GameSession.CLASS_DEFINITIONS.mage.base_stats.get("melee", 0))
+	var base_guard: int = int(GameSession.CLASS_DEFINITIONS.mage.base_stats.get("guard", 0))
+	var base_might: int = int(GameSession.CLASS_DEFINITIONS.mage.base_stats.get("might", 0))
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	var leveled: Dictionary = session.get_adventurer("mage_test")
+	assert_eq(leveled.level, 2)
+	assert_eq(leveled.stats.missile, GameSession.CLASS_DEFINITIONS.mage.base_stats.missile + 2, "missile tier low max gain (+2)")
+	assert_eq(leveled.stats.spellcasting, GameSession.CLASS_DEFINITIONS.mage.base_stats.spellcasting + 4, "spellcasting tier med max gain (+4)")
+	assert_eq(leveled.stats.melee, base_melee, "melee is n/a for Mage -- must never grow")
+	assert_eq(leveled.stats.guard, base_guard, "guard is n/a for Mage -- must never grow")
+	assert_eq(leveled.stats.might, base_might, "might is n/a for Mage -- must never grow")
+
+
+## A class with fewer than PERK_TREE_SIZE defined perks (Mage has zero today
+## -- Stage 2's locked perk set only covers Warrior/Scout/Cleric) must never
+## report a pending perk choice with nothing to choose from -- that would
+## soft-lock the Level Up screen (level_up.gd disables Continue while a
+## choice is pending, and only renders buttons for get_available_perks()'s
+## entries).
+func test_a_mage_reaching_a_perk_level_never_reports_a_pending_choice_with_nothing_to_choose() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.skill_gain_roll = func(_min_val: int, max_val: int) -> int: return max_val
+	session.create_party()
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	session.assign_adventurer_to_selected_party("mage_test")
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)
+
+	assert_eq(session.get_adventurer("mage_test").level, 2)
+	assert_eq(session.get_available_perks("mage_test"), [] as Array[String])
+	assert_false(session.is_perk_choice_pending("mage_test"))
+
+
+## The Sleep counter enemy (D3): only orc_outpost's Orc carries a nonzero
+## magic_resistance -- immutable per-encounter factory data, mirroring Step
+## 3's Cover-tiles-on-goblin_camp precedent exactly. No other expedition's
+## enemy block is touched (spot-checked against goblin_camp/ruined_fortress,
+## which must stay at the universal default of no "magic_resistance" key at
+## all, exactly as before this step).
+func test_only_the_orc_outpost_encounter_carries_a_magic_resistant_enemy() -> void:
+	assert_eq(int(GameSession.EXPEDITIONS.orc_outpost.enemy.get("magic_resistance", 0)), 50)
+	assert_false(GameSession.EXPEDITIONS.goblin_camp.enemy.has("magic_resistance"))
+	assert_false(GameSession.EXPEDITIONS.ruined_fortress.enemy.has("magic_resistance"))
+
+
+func test_purchasing_a_mage_offer_lands_a_mage_on_the_roster() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	var offer: Dictionary = session._make_overflow_recruitment_offer("mage")
+	offer["cost"] = 10
+	session.recruitment_candidates.append(offer)
+	session.gold = 1000
+
+	assert_true(session.purchase_recruit(offer.id))
+
+	var roster_mage: Dictionary = session.get_adventurer(offer.id)
+	assert_eq(roster_mage.class, "mage")
+	assert_eq(roster_mage.stats, GameSession.CLASS_DEFINITIONS.mage.base_stats)
+	assert_eq(session.get_current_mp(offer.id), 3)
 

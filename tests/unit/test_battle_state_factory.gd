@@ -356,6 +356,168 @@ func test_build_hydrates_a_clerics_mp_from_an_explicit_scenario_value() -> void:
 	assert_eq(healer.mp_remaining, 1, "An explicit scenario mp_current must hydrate the built unit, not the class's full mp_max")
 
 
+## --- Mage spells/MP hydration (Stage 5 D3) --------------------------------
+## Mirrors the Cleric coverage immediately above -- KNOWN_PLAYER_TEMPLATES
+## now includes "mage" (see scenario_contract.gd), and CLASS_DEFINITIONS.mage
+## is read through the exact same generic hydration path, no Mage-specific
+## code needed in battle_state_factory.gd's _build_player_unit() itself.
+
+func test_build_hydrates_mage_spells_and_mp_from_the_class_definition() -> void:
+	var scenario := _normalized({
+		"scenario_id": "mage_hydration",
+		"player": {"units": [{"id": "spellcaster", "template_id": "mage", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var mage_def: Dictionary = GameSession.CLASS_DEFINITIONS.mage
+
+	assert_eq(mage.spells, mage_def.spells)
+	assert_eq(mage.mp_max, int(mage_def.mp_max))
+	assert_eq(mage.mp_max, 3)
+	assert_eq(mage.mp_remaining, mage.mp_max)
+	assert_eq(mage.max_health, mage_def.base_stats.max_health)
+	assert_eq(mage.spellcasting, mage_def.base_stats.spellcasting)
+
+
+func test_build_hydrates_a_mages_mp_from_an_explicit_scenario_value() -> void:
+	var scenario := _normalized({
+		"scenario_id": "mage_explicit_mp",
+		"player": {"units": [{"id": "spellcaster", "template_id": "mage", "position": {"x": 0, "y": 0}, "mp_current": 1}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var controller: Node2D = BattleStateFactory.build(scenario, 1)
+	autofree(controller)
+
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	assert_eq(mage.mp_max, 3)
+	assert_eq(mage.mp_remaining, 1, "An explicit scenario mp_current must hydrate the built unit, not the class's full mp_max")
+
+
+## Correctness fix this step made: a class whose skills_def omits a skill
+## entirely (Mage has no "melee"/"guard"/"might" entry -- class-system.md's
+## mage row reads them as n/a) must never grow that stat per level -- a
+## level-2+ scenario Mage's melee/guard/might must equal the flat base_stats
+## value, not base + a stray +1/level from a fallback default. Missile and
+## Spellcasting (Mage's two real skills) DO grow, at their own tiers'
+## min_gain, exactly like Cleric's growable skills already do.
+func test_build_grows_only_a_level_2_mages_missile_and_spellcasting_never_melee_guard_or_might() -> void:
+	var level_1_scenario := _normalized({
+		"scenario_id": "mage_level_1",
+		"player": {"units": [{"id": "spellcaster", "template_id": "mage", "position": {"x": 0, "y": 0}, "level": 1}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+	var level_2_scenario := _normalized({
+		"scenario_id": "mage_level_2",
+		"player": {"units": [{"id": "spellcaster", "template_id": "mage", "position": {"x": 0, "y": 0}, "level": 2}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	})
+
+	var level_1_controller: Node2D = BattleStateFactory.build(level_1_scenario, 1)
+	var level_2_controller: Node2D = BattleStateFactory.build(level_2_scenario, 1)
+	autofree(level_1_controller)
+	autofree(level_2_controller)
+
+	var level_1_mage = level_1_controller.get_unit_at(Vector2i(0, 0))
+	var level_2_mage = level_2_controller.get_unit_at(Vector2i(0, 0))
+	var mage_def: Dictionary = GameSession.CLASS_DEFINITIONS.mage
+
+	assert_eq(
+		level_2_mage.missile, level_1_mage.missile + int(mage_def.skills.missile.min_gain),
+		"missile is Mage's own low-tier skill -- must grow by min_gain per level"
+	)
+	assert_eq(
+		level_2_mage.spellcasting, level_1_mage.spellcasting + int(mage_def.skills.spellcasting.min_gain),
+		"spellcasting is Mage's own med-tier skill -- must grow by min_gain per level"
+	)
+	assert_eq(level_2_mage.melee, level_1_mage.melee, "melee is n/a for Mage -- must never grow")
+	assert_eq(level_2_mage.guard, level_1_mage.guard, "guard is n/a for Mage -- must never grow")
+	assert_eq(level_2_mage.might, level_1_mage.might, "might is n/a for Mage -- must never grow")
+
+
+## --- Deterministic Mage Sleep scenario (Stage 5 D3 task 6) -----------------
+## Proves the Mage's intended success case AND the counter (resisted) case
+## both replay byte-identically for a fixed seed, built entirely through the
+## production ScenarioContract/BattleStateFactory path (never a simulator-
+## only parallel model) -- mirrors the real orc_outpost encounter's own
+## Mage spellcasting (20)/Orc magic_resistance (50) values, giving the
+## documented 30% resist chance (see EXPEDITIONS.orc_outpost's own doc
+## comment). Seeds 1 and 13 were selected by probing sleep_resist_roll's
+## first draw (a fresh controller's very first randf() call, since nothing
+## else consumes the shared rng before a test's own try_cast_spell() call)
+## against that exact 30% threshold, not cherry-picked from a live run --
+## seed 1 draws ~0.33 (>= 30% -- succeeds), seed 13 draws ~0.06 (< 30% --
+## resisted).
+func _mage_vs_resistant_orc_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "mage_sleep_vs_resistant_orc",
+		"player": {"units": [{"id": "spellcaster", "template_id": "mage", "position": {"x": 0, "y": 0}}]},
+		"enemy": {"units": [
+			{"id": "resistant_orc", "template_id": "orc", "position": {"x": 1, "y": 0}, "modifiers": {"magic_resistance": 50}},
+		]},
+	})
+
+
+func test_seeded_sleep_scenario_succeeds_against_the_counter_enemy_on_seed_1() -> void:
+	var controller: Node2D = BattleStateFactory.build(_mage_vs_resistant_orc_scenario(), 1)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var orc = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+	assert_eq(orc.magic_resistance, 50, "Precondition: the scenario's counter enemy carries the documented magic_resistance")
+	assert_eq(mage.spellcasting, 20, "Precondition: the scenario's Mage carries the documented base spellcasting")
+
+	assert_true(controller.try_cast_spell("sleep", orc.grid_position))
+
+	assert_false(
+		controller.last_attack_result.resisted,
+		"Seed 1's first sleep_resist_roll draw (~0.33) sits above the 30% resist chance"
+	)
+	assert_true(controller.has_status(orc, "sleeping"))
+	assert_eq(mage.mp_remaining, 2)
+
+
+func test_seeded_sleep_scenario_is_resisted_by_the_counter_enemy_on_seed_13() -> void:
+	var controller: Node2D = BattleStateFactory.build(_mage_vs_resistant_orc_scenario(), 13)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var orc = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+
+	assert_true(controller.try_cast_spell("sleep", orc.grid_position))
+
+	assert_true(
+		controller.last_attack_result.resisted,
+		"Seed 13's first sleep_resist_roll draw (~0.06) sits below the 30% resist chance"
+	)
+	assert_false(controller.has_status(orc, "sleeping"))
+	assert_eq(mage.mp_remaining, 2, "A resisted cast still spends its MP")
+
+
+## Regression: a same-seed factory build must reproduce identical spell/
+## resource outcomes -- CampaignSim's own "100% reproducible from sim_seed
+## alone" contract, extended to Sleep's own new stochastic check.
+func test_same_seed_sleep_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_mage_vs_resistant_orc_scenario(), 13)
+	var controller_b: Node2D = BattleStateFactory.build(_mage_vs_resistant_orc_scenario(), 13)
+	autofree(controller_a)
+	autofree(controller_b)
+	controller_a.selected_unit = controller_a.get_unit_at(Vector2i(0, 0))
+	controller_b.selected_unit = controller_b.get_unit_at(Vector2i(0, 0))
+
+	controller_a.try_cast_spell("sleep", Vector2i(1, 0))
+	controller_b.try_cast_spell("sleep", Vector2i(1, 0))
+
+	assert_eq(controller_a.last_attack_result.resisted, controller_b.last_attack_result.resisted)
+	assert_eq(
+		controller_a.get_unit_at(Vector2i(0, 0)).mp_remaining, controller_b.get_unit_at(Vector2i(0, 0)).mp_remaining
+	)
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)
@@ -688,6 +850,23 @@ func test_build_seeds_dodge_roll_and_parry_roll_deterministically_from_the_itera
 		assert_eq(controller_a.dodge_roll.call(), controller_b.dodge_roll.call())
 	for _i in 5:
 		assert_eq(controller_a.parry_roll.call(), controller_b.parry_roll.call())
+
+
+## Sleep's magic-resistance roll (Stage 5 D3) is a new stochastic check --
+## the same requirement as Dodge/Parry above: it must be seeded from the same
+## per-iteration RandomNumberGenerator, never Godot's global unseeded randf(),
+## or a deterministic scenario fielding a Mage's Sleep would stop reproducing
+## byte-identically.
+func test_build_seeds_sleep_resist_roll_deterministically_from_the_iteration_seed() -> void:
+	var scenario := _one_v_one_scenario()
+
+	var controller_a: Node2D = BattleStateFactory.build(scenario, 12345)
+	var controller_b: Node2D = BattleStateFactory.build(scenario, 12345)
+	autofree(controller_a)
+	autofree(controller_b)
+
+	for _i in 5:
+		assert_eq(controller_a.sleep_resist_roll.call(), controller_b.sleep_resist_roll.call())
 
 
 ## Heal (see battle_controller.gd's try_cast_spell()) rolls its healing

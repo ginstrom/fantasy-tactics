@@ -159,6 +159,12 @@ func test_loads_stage_2_cleric_config_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_int("cleric", "details_heal_max", -1), 8)
 
 
+## Stage 5 D3: Mage's own mp_max lives under its own "mage" section, config-
+## driven exactly like Cleric's -- never sharing cleric.mp_max/CLERIC_MP_MAX.
+func test_loads_stage_5_mage_config_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("mage", "mp_max", -1), 3)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

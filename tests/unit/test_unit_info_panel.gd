@@ -360,3 +360,35 @@ func test_selected_section_shows_the_counter_bonus_status_naming_its_target() ->
 	var status_label: Label = panel.get_node("Content/SelectedSection/StatusLabel")
 	assert_true(status_label.visible)
 	assert_string_contains(status_label.text, "Countering " + goblin.display_name + " (+10% melee)")
+
+
+## Stage 5 D3: Sleep applies to an ENEMY, which is only ever inspectable via
+## hover -- the selected unit is always the player's own (see this file's
+## SelectedSection tests above) -- so the hovered section is the only place
+## a Sleeping status becomes visible at all. Generic (mirrors _populate_
+## selected()'s own unit.statuses loop), so this also covers a hovered
+## ally's Blessed status the same way, not just Sleeping specifically.
+func test_hovered_section_shows_a_sleeping_enemys_status_as_readable_text() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	battlefield.grid.apply_status(goblin, "sleeping")
+
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel := _panel(battlefield)
+	var status_label: Label = panel.get_node("Content/HoveredSection/StatusLabel")
+	assert_true(status_label.visible)
+	assert_string_contains(status_label.text, "Sleeping")
+
+
+func test_hovered_section_hides_the_status_label_for_an_unaffected_unit() -> void:
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+
+	battlefield.grid._set_hovered_unit(goblin)
+
+	var panel := _panel(battlefield)
+	var status_label: Label = panel.get_node("Content/HoveredSection/StatusLabel")
+	assert_false(status_label.visible)

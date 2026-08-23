@@ -83,6 +83,12 @@ const DEFAULTS: Dictionary = {
 		"details_heal_min": 2,
 		"details_heal_max": 8,
 	},
+	# Mage's own mp_max (Stage 5 D3): a second, independent config-driven
+	# spellcasting resource pool, same magnitude as Cleric's but never sharing
+	# CLERIC_MP_MAX's var -- see GameSession.MAGE_MP_MAX/get_effective_max_mp().
+	"mage": {
+		"mp_max": 3,
+	},
 	"intelligence": {
 		"watchtower_tier_1_cost": 50,
 		"watchtower_tier_2_cost": 100,

@@ -536,6 +536,30 @@ func test_thorn_rune_leaves_the_attacker_unaffected_when_the_trigger_roll_fails(
 	assert_false(controller.last_attack_result.get("thorn_triggered", false))
 
 
+## _dispatch_completed_hit()'s own Thorn guard checked has_status(attacker,
+## PARALYZED_STATUS_ID) directly instead of is_incapacitated(attacker) --
+## the file's single source of truth for "cannot act" elsewhere. An already
+## Sleeping attacker must not ALSO be Thorn-paralyzed on top of that (two
+## incapacitating statuses stacked from one hit), even though Sleeping is a
+## different status id than Paralyzed. Calls _dispatch_completed_hit()
+## directly since an actually-sleeping unit could never drive a real attack
+## through try_attack_selected_unit() itself -- is_incapacitated() would
+## block it at the acting-unit gate first.
+func test_dispatch_completed_hit_does_not_thorn_paralyze_an_already_sleeping_attacker() -> void:
+	var controller := _make_controller(3, 3)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	var defender = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	defender.rune_id = "thorn"
+	controller.units = [attacker, defender]
+	controller.rune_trigger_roll = func() -> float: return 0.0
+	assert_true(controller.apply_status(attacker, "sleeping"))
+
+	var thorn_triggered: bool = controller._dispatch_completed_hit(attacker, defender)
+
+	assert_false(thorn_triggered, "An already-incapacitated attacker must not be Thorn-paralyzed on top of it")
+	assert_false(controller.has_status(attacker, "paralyzed"), "Sleeping and Paralyzed must not stack from one hit")
+
+
 func test_paralyze_blocks_actions_without_spending_action_points_and_expires_at_the_round_boundary() -> void:
 	var controller := _make_controller(4, 4)
 	var player = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
@@ -764,6 +788,201 @@ func test_bless_cannot_be_reapplied_to_an_already_blessed_ally() -> void:
 
 	assert_false(controller.try_cast_spell("bless", ally.grid_position))
 	assert_eq(healer.mp_remaining, 2, "A rejected re-bless must not spend a second MP")
+
+
+## --- Mage Sleep (Stage 5 D3) ------------------------------------------------
+
+func test_sleep_applies_the_sleeping_status_to_an_enemy_and_spends_ap_and_mp() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["sleep"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.magic_resistance = 0
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.sleep_resist_roll = func() -> float: return 0.99  # never below any real resist chance
+
+	assert_true(controller.try_cast_spell("sleep", enemy.grid_position))
+
+	assert_eq(caster.action_points_remaining, 3)
+	assert_eq(caster.mp_remaining, 2)
+	assert_true(controller.has_status(enemy, "sleeping"))
+	assert_eq(controller.last_attack_result.type, "spell")
+	assert_eq(controller.last_attack_result.spell_id, "sleep")
+	assert_false(controller.last_attack_result.resisted)
+	assert_eq(controller.last_attack_result.outcome, "applied")
+
+
+## Resistance formula (D3): (magic_resistance - spellcasting) / 100. 50 - 20
+## = 30% resist chance -- a roll strictly below 0.30 must resist; AP/MP are
+## still spent (the cast happens, only the effect is negated).
+func test_sleep_can_be_resisted_by_a_magic_resistant_target_but_still_spends_ap_and_mp() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["sleep"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.magic_resistance = 50
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.sleep_resist_roll = func() -> float: return 0.10  # strictly below the 30% resist chance
+
+	assert_true(controller.try_cast_spell("sleep", enemy.grid_position))
+
+	assert_eq(caster.action_points_remaining, 3, "A resisted cast still costs its AP")
+	assert_eq(caster.mp_remaining, 2, "A resisted cast still costs its MP")
+	assert_false(controller.has_status(enemy, "sleeping"), "A successful resist roll fully negates the effect")
+	assert_true(controller.last_attack_result.resisted)
+	assert_eq(controller.last_attack_result.outcome, "resisted")
+
+
+func test_sleep_roll_exactly_at_the_resist_chance_boundary_still_succeeds() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["sleep"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.magic_resistance = 50
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.sleep_resist_roll = func() -> float: return 0.30  # exactly at the boundary -- not below it
+
+	assert_true(controller.try_cast_spell("sleep", enemy.grid_position))
+
+	assert_true(controller.has_status(enemy, "sleeping"))
+	assert_false(controller.last_attack_result.resisted)
+
+
+func test_sleep_cannot_target_an_ally() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["sleep"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("sleep", ally.grid_position))
+	assert_eq(caster.mp_remaining, 3)
+	assert_false(controller.has_status(ally, "sleeping"))
+
+
+func test_heal_and_bless_still_cannot_target_an_enemy_after_sleeps_own_targeting_branch() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.health = 4
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", enemy.grid_position))
+	assert_false(controller.try_cast_spell("bless", enemy.grid_position))
+	assert_eq(caster.mp_remaining, 3)
+
+
+func test_sleep_cannot_be_reapplied_to_an_already_sleeping_enemy() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["sleep"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	assert_true(controller.apply_status(enemy, "sleeping"))
+
+	assert_false(controller.try_cast_spell("sleep", enemy.grid_position))
+	assert_eq(caster.mp_remaining, 3, "A rejected re-sleep must not spend a second MP")
+
+
+func test_sleeping_unit_cannot_move_attack_or_cast() -> void:
+	var controller := _make_controller(6, 6)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	mage.spells = ["sleep"]
+	mage.mp_max = 3
+	mage.mp_remaining = 3
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [mage, enemy]
+	controller.selected_unit = mage
+	assert_true(controller.apply_status(mage, "sleeping"))
+
+	assert_false(controller.try_move_selected_unit(Vector2i(1, 2)))
+	assert_false(controller.try_attack_selected_unit(enemy.grid_position))
+	assert_false(controller.try_cast_spell("sleep", enemy.grid_position))
+	assert_eq(mage.action_points_remaining, 6)
+
+
+func test_sleeping_enemy_turn_ends_without_moving_or_attacking() -> void:
+	var controller := _make_controller(4, 4)
+	var player = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	var enemy = UnitScript.new(Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [player, enemy]
+	assert_true(controller.apply_status(enemy, "sleeping"))
+	controller.end_turn()
+
+	assert_eq(controller.run_enemy_turn(), [])
+	assert_eq(enemy.grid_position, Vector2i(3, 1))
+	assert_eq(player.health, 10)
+
+
+## D3's own explicit requirement: any landed attack against a sleeping unit,
+## from any source, wakes it immediately -- before its natural round-boundary
+## expiry.
+func test_a_landed_attack_on_a_sleeping_unit_wakes_it_immediately() -> void:
+	var controller := _make_controller(4, 4)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	var sleeper = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, sleeper]
+	controller.selected_unit = attacker
+	assert_true(controller.apply_status(sleeper, "sleeping"))
+	controller.hit_roll = func() -> float: return 0.0
+
+	assert_true(controller.try_attack_selected_unit(sleeper.grid_position))
+
+	assert_true(controller.last_attack_result.hit)
+	assert_false(controller.has_status(sleeper, "sleeping"), "A landed hit must wake a sleeping unit immediately")
+
+
+## A missed attack (or a Dodge/Parry) never wakes a sleeping unit -- only a
+## LANDED hit does, per D3's own "any landed attack" wording.
+func test_a_missed_attack_on_a_sleeping_unit_does_not_wake_it() -> void:
+	var controller := _make_controller(4, 4)
+	var attacker = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	var sleeper = UnitScript.new(Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [attacker, sleeper]
+	controller.selected_unit = attacker
+	assert_true(controller.apply_status(sleeper, "sleeping"))
+	controller.hit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(sleeper.grid_position))
+
+	assert_false(controller.last_attack_result.hit)
+	assert_true(controller.has_status(sleeper, "sleeping"), "A miss must never wake a sleeping unit")
+
+
+func test_sleep_expires_at_the_round_boundary_like_paralyze() -> void:
+	var controller := _make_controller(4, 4)
+	var player = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	controller.units = [player, enemy]
+	assert_true(controller.apply_status(enemy, "sleeping"))
+
+	controller.end_turn()  # -> ENEMY (no clear -- only clears entering PLAYER)
+	assert_true(controller.has_status(enemy, "sleeping"))
+	controller.end_turn()  # -> PLAYER
+
+	assert_false(controller.has_status(enemy, "sleeping"))
 
 
 func test_spell_is_rejected_beyond_its_range() -> void:
@@ -4213,6 +4432,47 @@ func test_own_side_units_never_trigger_an_opportunity_attack_against_each_other(
 	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
 
 	assert_true(controller.last_reaction_results.is_empty())
+
+
+## is_incapacitated() (Stage 5 D3) is supposed to be the single source of
+## truth for "this unit cannot act" everywhere in this file -- including a
+## reactor's own free Attack of Opportunity, which is still a unit acting on
+## its own initiative even though it costs no AP and happens outside its
+## turn. A sleeping enemy that lands its own opportunity attack would
+## directly contradict Sleep's whole point.
+func test_a_sleeping_reactor_never_makes_an_opportunity_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	assert_true(controller.apply_status(reactor, "sleeping"))
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_true(
+		controller.last_reaction_results.is_empty(),
+		"A sleeping reactor is incapacitated and must not get a free opportunity attack"
+	)
+
+
+## Same as the sleeping case above but for Paralyzed -- the gap already
+## existed for Paralyzed before Sleep was added; this locks in the fix for
+## both incapacitating statuses via the same is_incapacitated() check.
+func test_a_paralyzed_reactor_never_makes_an_opportunity_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	assert_true(controller.apply_status(reactor, "paralyzed"))
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_true(
+		controller.last_reaction_results.is_empty(),
+		"A paralyzed reactor is incapacitated and must not get a free opportunity attack"
+	)
 
 
 ## try_attack_selected_unit()'s move-and-attack branch (move_tile != null,

@@ -29,6 +29,12 @@ const TYPE_BLOCKED := "blocked"
 ## try_attack_selected_unit()/_resolve_opportunity_attack().
 const TYPE_DODGE := "dodge"
 const TYPE_PARRY := "parry"
+## Sleep (Stage 5 D3): a successful cast ("ASLEEP!") vs. a resisted one
+## ("RESISTED!") are always distinct text, never colour-only feedback (Stage
+## 4's accessibility carryover) -- see battle_controller.gd's try_cast_spell()
+## "sleep" match arm, the only spawn site for either type.
+const TYPE_SLEEP := "sleep"
+const TYPE_RESISTED := "resisted"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -38,6 +44,8 @@ const COLORS := {
 	TYPE_BLOCKED: Color(0.35, 0.6, 0.95),
 	TYPE_DODGE: Color(0.4, 0.85, 0.9),
 	TYPE_PARRY: Color(0.95, 0.75, 0.35),
+	TYPE_SLEEP: Color(0.6, 0.4, 0.95),
+	TYPE_RESISTED: Color(0.7, 0.7, 0.7),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6

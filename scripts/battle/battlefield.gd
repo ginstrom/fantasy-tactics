@@ -24,6 +24,7 @@ const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 @onready var attack_button: Button = %AttackButton
 @onready var heal_button: Button = %HealButton
 @onready var bless_button: Button = %BlessButton
+@onready var sleep_button: Button = %SleepButton
 @onready var mp_label: Label = %MPLabel
 @onready var potion_option: OptionButton = %PotionOption
 @onready var use_potion_button: Button = %UsePotionButton
@@ -155,8 +156,8 @@ func _on_attack_button_pressed() -> void:
 	_on_action_mode_changed(grid.action_mode)
 
 
-## Heal/Bless share the same begin_spell_targeting() entry point (see
-## BattleController's own doc comment) -- only pending_spell_id differs.
+## Heal/Bless/Sleep all share the same begin_spell_targeting() entry point
+## (see BattleController's own doc comment) -- only pending_spell_id differs.
 func _on_heal_button_pressed() -> void:
 	grid.begin_spell_targeting("heal")
 	_on_action_mode_changed(grid.action_mode)
@@ -164,6 +165,14 @@ func _on_heal_button_pressed() -> void:
 
 func _on_bless_button_pressed() -> void:
 	grid.begin_spell_targeting("bless")
+	_on_action_mode_changed(grid.action_mode)
+
+
+## Stage 5 D3: Sleep's own action-bar entry point, identical shape to Heal/
+## Bless above -- try_cast_spell()'s own "sleep" targeting branch is what
+## actually restricts the next click to an enemy tile, not this handler.
+func _on_sleep_button_pressed() -> void:
+	grid.begin_spell_targeting("sleep")
 	_on_action_mode_changed(grid.action_mode)
 
 
@@ -177,15 +186,21 @@ func _on_action_mode_changed(mode: int) -> void:
 	var spell_mode: bool = mode == BattleControllerScript.ActionMode.SPELL
 	heal_button.button_pressed = spell_mode and grid.pending_spell_id == "heal"
 	bless_button.button_pressed = spell_mode and grid.pending_spell_id == "bless"
+	sleep_button.button_pressed = spell_mode and grid.pending_spell_id == "sleep"
 
 
 ## Move requires at least one AP (its own cost); Attack requires enough AP
 ## for a basic attack -- so on low AP, Move can stay enabled while Attack
 ## disables first (Attack's cost is strictly higher). Both disable while
 ## input is locked (enemy turn / a queued level-up), matching End Turn.
-## Heal/Bless (plus the MP readout) show only for a unit that actually knows
-## spells (Cleric today, see unit.gd's spells field) -- every other class
-## keeps its default empty spells array, so this stays hidden for them.
+## Heal/Bless/Sleep (plus the MP readout) show only for a unit that actually
+## knows spells at all (Cleric/Mage today, see unit.gd's spells field) --
+## every other class keeps its default empty spells array, so this stays
+## hidden for them. Stage 5 D3 fix: each button additionally checks its OWN
+## spell id is in that unit's spells list -- previously every caster-class
+## button showed for ANY caster (a Mage, whose spells == ["sleep"], would
+## have shown Cleric's Heal/Bless too), which would have let a Mage cast a
+## spell it doesn't know the instant this button existed.
 func _update_action_bar() -> void:
 	var selected_unit = grid.selected_unit
 	var can_act: bool = (
@@ -198,8 +213,12 @@ func _update_action_bar() -> void:
 	attack_button.disabled = not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
 
 	var is_caster: bool = selected_unit != null and not selected_unit.spells.is_empty()
-	heal_button.visible = is_caster
-	bless_button.visible = is_caster
+	var knows_heal: bool = is_caster and selected_unit.spells.has("heal")
+	var knows_bless: bool = is_caster and selected_unit.spells.has("bless")
+	var knows_sleep: bool = is_caster and selected_unit.spells.has("sleep")
+	heal_button.visible = knows_heal
+	bless_button.visible = knows_bless
+	sleep_button.visible = knows_sleep
 	mp_label.visible = is_caster
 	if is_caster:
 		mp_label.text = tr("battle.mp") % [selected_unit.mp_remaining, selected_unit.mp_max]
@@ -210,6 +229,7 @@ func _update_action_bar() -> void:
 		)
 		heal_button.disabled = not can_cast
 		bless_button.disabled = not can_cast
+		sleep_button.disabled = not can_cast
 
 
 func _play_enemy_turn() -> void:
@@ -631,6 +651,8 @@ func _describe_step(step: Dictionary) -> String:
 	if step.type == "item_transfer":
 		return tr("battle.status.item_transfer") % [step.from.display_name, tr(GameSession.get_item_definition(step.item_id).name_key), step.to.display_name]
 	if step.type == "spell":
+		if step.spell_id == "sleep":
+			return _describe_sleep_entry(step, "battle.status.spell_sleep_applied", "battle.status.spell_sleep_resisted")
 		return _describe_spell_entry(step, "battle.status.spell_heal", "battle.status.spell_bless")
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
@@ -645,6 +667,20 @@ func _describe_spell_entry(step: Dictionary, heal_key: String, bless_key: String
 	if step.spell_id == "heal":
 		return tr(heal_key) % [caster_name, target_name, step.healing]
 	return tr(bless_key) % [caster_name, target_name]
+
+
+## Sleep's own log/status line (Stage 5 D3): distinct from _describe_spell_
+## entry() above -- Sleep targets an enemy, not an ally, and has no
+## "healing" field, and must distinguish an applied cast from a resisted one
+## (readable text, never colour-only feedback, per Stage 4's accessibility
+## carryover) -- see try_cast_spell()'s "sleep" match arm, which is the only
+## place that ever sets step.resisted.
+func _describe_sleep_entry(step: Dictionary, applied_key: String, resisted_key: String) -> String:
+	var caster_name: String = step.caster.display_name
+	var target_name: String = step.target.display_name
+	if step.get("resisted", false):
+		return tr(resisted_key) % [caster_name, target_name]
+	return tr(applied_key) % [caster_name, target_name]
 
 
 func _describe_targeting_failure(failure: Dictionary) -> String:
@@ -724,6 +760,9 @@ func _log_spell(step: Dictionary) -> void:
 	if is_same(_last_logged_attack_result, step):
 		return
 	_last_logged_attack_result = step
+	if step.spell_id == "sleep":
+		_append_log_line(_describe_sleep_entry(step, "battle.log.spell.sleep_applied", "battle.log.spell.sleep_resisted"))
+		return
 	_append_log_line(_describe_spell_entry(step, "battle.log.spell.heal", "battle.log.spell.bless"))
 
 

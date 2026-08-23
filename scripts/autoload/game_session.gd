@@ -202,6 +202,17 @@ const EXPEDITIONS: Dictionary = {
 		# GOBLIN_ENEMY_STATS/ORC_ENEMY_STATS depending on which composition
 		# resolves.
 		"clear_xp": 20,
+		# Stage 5 D3's counter enemy: this one Orc carries a nonzero
+		# magic_resistance as immutable per-encounter factory data -- NOT a
+		# new monster family, exactly analogous to Step 3's Cover tiles on
+		# `goblin_camp` above (_cover_tiles_for_encounter() in
+		# battle_controller.gd) -- only THIS encounter's Orc carries the
+		# override; every other Orc (including obj_tier2_*'s ORC_BRUISER_
+		# ENEMY_STATS) is unaffected. 50, paired with Mage's own base
+		# spellcasting (20, see CLASS_DEFINITIONS.mage's own doc comment),
+		# yields a 30% Sleep-resist chance -- both a successful and a
+		# resisted cast are reachable across a handful of casts, per D3's
+		# "demonstrate both outcomes" requirement.
 		"enemy": {
 			"name_key": "battle.enemy.orc",
 			"attack_name_key": "battle.enemy.orc.attack",
@@ -209,6 +220,7 @@ const EXPEDITIONS: Dictionary = {
 			"attack_damage": 3,
 			"hit_chance": 0.5,
 			"count": 1,
+			"magic_resistance": 50,
 		},
 	},
 	"ruined_fortress": {
@@ -751,6 +763,48 @@ const CLASS_DEFINITIONS: Dictionary = {
 		"mp_max": 3,
 		"spells": ["heal", "bless"],
 	},
+	# Mage (Stage 5 D3, docs/plans/2026-08-23-stage-5-strategic-roster-
+	# expansion/decision-ledger.md): control/offense role, the weakest melee
+	# stats and durability in the game, real spellcasting. Reuses Cleric's
+	# already-declared "staff" weapon category (see WEAPONS.mace_iron's own
+	# doc comment: mace/hammer/staff were pre-declared as distinct categories
+	# with no distinct damage tier of their own yet) rather than inventing a
+	# new weapon -- a fresh Mage equips the same mace_iron item Cleric does,
+	# just eligible additionally through "staff". primary_attribute_ranges/
+	# class_multiplier/spells are exactly D3's approved values; skills is the
+	# class-system.md "skills-by-class table" mage row read literally --
+	# might/melee/guard are n/a (omitted entirely, never grow -- see
+	# battle_state_factory.gd's _build_player_unit(), which now defaults an
+	# absent skill's per-level gain to 0, not 1) while missile (low) and
+	# spellcasting (med) are the only two that do. base_stats.spellcasting
+	# (20) and the counter Orc's magic_resistance (see EXPEDITIONS.orc_
+	# outpost) are a paired judgment call absent from D3's own table: chosen
+	# together so `(magic_resistance - spellcasting) / 100` lands at a
+	# demonstrable, non-extreme resist chance (30%) rather than either
+	# extreme -- see this step's own report for the reasoning. mp_max (this
+	# class's only spellcasting resource) is hydrated onto the battle-local
+	# Unit by BattleController/BattleStateFactory exactly like Cleric's, and
+	# is a persistent adventurer stat via "mp_current" (see get_default_
+	# mage()/get_current_mp()/set_adventurer_mp()). The flat mp_max value here
+	# is config-driven (GameConfig's mage.mp_max, see MAGE_MP_MAX and get_
+	# effective_max_mp()) -- its own var, never CLERIC_MP_MAX -- but this
+	# compile-time 3 stays the default baseline other call sites
+	# (BattleController._ready(), battle_state_factory.gd) read directly.
+	"mage": {
+		"allowed_weapon_categories": ["mace", "staff"],
+		"base_stats": {
+			"max_health": 8, "vitality": 8, "melee": 15, "missile": 25, "guard": 0, "might": 0,
+			"spellcasting": 20, "move_range": 3,
+		},
+		"primary_attribute_ranges": {"strength": Vector2i(1, 3), "agility": Vector2i(3, 5), "vitality": Vector2i(3, 5), "intelligence": Vector2i(6, 8), "piety": Vector2i(1, 4), "luck": Vector2i(1, 10)},
+		"class_multiplier": 0.5,
+		"skills": {
+			"missile": {"tier": "low", "min_gain": 1, "max_gain": 2},
+			"spellcasting": {"tier": "med", "min_gain": 3, "max_gain": 4},
+		},
+		"mp_max": 3,
+		"spells": ["sleep"],
+	},
 }
 const BLACKSMITH_BUILD_COST := 50
 const BLACKSMITH_UPGRADE_COSTS := {2: 50, 3: 100}
@@ -1007,6 +1061,13 @@ var DETAILS_HEAL_MAX: int = 8
 ## read directly for battle-local Unit.mp_max hydration -- out of scope for
 ## this fix, see the fix wave's own report.
 var CLERIC_MP_MAX: int = 3
+## Mage's own max MP (Stage 5 D3): a second, independent config-driven
+## spellcasting resource pool -- see get_effective_max_mp(), which branches on
+## the adventurer's own class to read this var (never CLERIC_MP_MAX) for a
+## Mage. Kept as its own var, not a shared constant with Cleric's, exactly
+## per D3's "same default magnitude as Cleric's, via its own mage.mp_max
+## GameConfig key" approved value.
+var MAGE_MP_MAX: int = 3
 
 # Vacancy-timed population (see docs/plans/2026-08-06-campaign-progression-and-population).
 # A campaign starts sparse (two active encounters, one active recruitment
@@ -1111,6 +1172,34 @@ func get_default_cleric(adventurer_id: String, adventurer_name: String) -> Dicti
 	}
 
 
+## Mage factory (Stage 5 D3): mirrors get_default_cleric() exactly, down to
+## the shared mace_iron starting weapon (see CLASS_DEFINITIONS.mage's own
+## doc comment) -- only the class id, base stats, and MAGE_MP_MAX differ.
+func get_default_mage(adventurer_id: String, adventurer_name: String) -> Dictionary:
+	return {
+		"id": adventurer_id,
+		"name": adventurer_name,
+		"class": "mage",
+		"equipment": {
+			"weapon": "mace_iron", "weapon_inventory": ["mace_iron"],
+			"armor": DEFAULT_ARMOR_ID, "armor_inventory": [DEFAULT_ARMOR_ID],
+		},
+		"level": 1,
+		"availability_status": "available",
+		"stats": CLASS_DEFINITIONS.mage.base_stats.duplicate(true),
+		"health": CLASS_DEFINITIONS.mage.base_stats.max_health,
+		# Durable MP (mirrors get_default_cleric()'s own identical field):
+		# reads the config-driven MAGE_MP_MAX var, not the CLASS_DEFINITIONS.
+		# mage.mp_max compile-time default, so a fresh Mage's starting MP
+		# always agrees with get_effective_max_mp()'s own config-driven value.
+		"mp_current": MAGE_MP_MAX,
+		"progression": {
+			"xp": 0.0,
+			"perks": [],
+		},
+	}
+
+
 const FIRST_PARTY_ID := "party_001"
 const DEFAULT_PLAYER_NAME := "Player"
 # The pool of recruitment templates a fresh campaign seeds as live offers
@@ -1208,10 +1297,20 @@ var enemy_count_roll: Callable = func(min_value: int, max_value: int) -> int: re
 ## [minimum, maximum] jitter range and expected to return a value in that
 ## range once per newly opened vacancy.
 var vacancy_delay_roll: Callable = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
-## Injectable class policy for recruitment refills. Production picks Warrior
-## or Scout with equal probability; tests may force either outcome without
-## waiting through unrelated offers.
-var recruitment_class_roll: Callable = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+## Injectable class policy for recruitment refills. Production picks Warrior,
+## Scout, or Mage with equal probability (Mage needs no Temple-style building
+## gate the way Cleric does -- no design doc names one, so it stays available
+## the same ungated way Warrior/Scout always have been); tests may force any
+## outcome without waiting through unrelated offers. Cleric is deliberately
+## NOT part of this roll -- see cleric_offer_roll below, its own separate,
+## Temple-gated policy.
+var recruitment_class_roll: Callable = func() -> String:
+	var roll := randi() % 3
+	if roll == 0:
+		return "warrior"
+	if roll == 1:
+		return "scout"
+	return "mage"
 ## Injectable so tests can force whether a recruitment refill becomes a
 ## Cleric offer instead of the warrior/scout pool (see recruitment_class_
 ## roll above for the same pattern). Only ever consulted from
@@ -1249,7 +1348,13 @@ func reset_injectable_rolls() -> void:
 	enemy_count_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	star_weight_roll = func(total_weight: int) -> int: return randi() % total_weight
 	vacancy_delay_roll = func(minimum: int, maximum: int) -> int: return randi_range(minimum, maximum)
-	recruitment_class_roll = func() -> String: return "scout" if randi() % 2 == 0 else "warrior"
+	recruitment_class_roll = func() -> String:
+		var roll := randi() % 3
+		if roll == 0:
+			return "warrior"
+		if roll == 1:
+			return "scout"
+		return "mage"
 	cleric_offer_roll = func() -> bool: return randf() < 0.25
 	skill_gain_roll = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
 	instance_id_roll = func() -> String:
@@ -1464,6 +1569,7 @@ func _load_balance_config() -> void:
 	DETAILS_HEAL_MIN = GameConfig.get_int("cleric", "details_heal_min", DETAILS_HEAL_MIN)
 	DETAILS_HEAL_MAX = GameConfig.get_int("cleric", "details_heal_max", DETAILS_HEAL_MAX)
 	CLERIC_MP_MAX = GameConfig.get_int("cleric", "mp_max", CLERIC_MP_MAX)
+	MAGE_MP_MAX = GameConfig.get_int("mage", "mp_max", MAGE_MP_MAX)
 	WATCHTOWER_TIER_1_COST = GameConfig.get_int("intelligence", "watchtower_tier_1_cost", WATCHTOWER_TIER_1_COST)
 	WATCHTOWER_TIER_2_COST = GameConfig.get_int("intelligence", "watchtower_tier_2_cost", WATCHTOWER_TIER_2_COST)
 	WATCHTOWER_TIER_3_COST = GameConfig.get_int("intelligence", "watchtower_tier_3_cost", WATCHTOWER_TIER_3_COST)
@@ -1707,6 +1813,8 @@ func _seed_adventurer_baseline_stats(record: Dictionary) -> Dictionary:
 		baseline = get_default_scout(str(record.id), str(record.name))
 	elif class_id == "cleric":
 		baseline = get_default_cleric(str(record.id), str(record.name))
+	elif class_id == "mage":
+		baseline = get_default_mage(str(record.id), str(record.name))
 	else:
 		baseline = get_default_warrior()
 	record["stats"] = baseline.stats.duplicate(true)
@@ -1747,6 +1855,8 @@ func _next_cosmetic_adventurer_name(class_id: String) -> String:
 		display_class = "Scout"
 	elif class_id == "cleric":
 		display_class = "Cleric"
+	elif class_id == "mage":
+		display_class = "Mage"
 	var count := 0
 	for adventurer in adventurers:
 		if adventurer.get("class", "") == class_id:
@@ -3855,12 +3965,15 @@ func _spawn_next_recruitment_offer() -> Dictionary:
 	return offer
 
 
-## The RECRUITMENT_CANDIDATE_TEMPLATES pool has no Cleric entries (it is the
-## decided 3-warrior + 1-scout starting composition -- see that const's own
-## doc comment), so a Cleric refill always mints an overflow candidate here.
+## The RECRUITMENT_CANDIDATE_TEMPLATES pool has no Cleric or Mage entries (it
+## is the decided 3-warrior + 1-scout starting composition -- see that const's
+## own doc comment), so a Cleric or Mage refill always mints an overflow
+## candidate here.
 func _make_overflow_recruitment_offer(class_id: String) -> Dictionary:
 	if class_id == "cleric":
 		return get_default_cleric(_new_instance_id(), _next_cosmetic_adventurer_name("cleric"))
+	if class_id == "mage":
+		return get_default_mage(_new_instance_id(), _next_cosmetic_adventurer_name("mage"))
 	if class_id == "scout":
 		return get_default_scout(_new_instance_id(), _next_cosmetic_adventurer_name("scout"))
 	return get_default_warrior(_new_instance_id(), _next_cosmetic_adventurer_name("warrior"))
@@ -3952,13 +4065,23 @@ func is_perk_choice_pending(adventurer_id: String) -> bool:
 	return _pending_perk_slot_count(adventurers[adventurer_index]) > 0
 
 
-## earned_slots is level-derived, capped at PERK_TREE_SIZE. Slots already
-## spent count only class-owned perks (CLASS_PERKS' own ids) -- a legacy
-## BONUS_MOVE_PERK_ID entry (retired from new choices, never migrated away;
-## see choose_perk()'s doc comment) never consumes a class-owned slot, so an
-## old save holding it still earns both of its class's real perks.
+## earned_slots is level-derived, capped at PERK_TREE_SIZE -- and also at the
+## adventurer's own class's actual perk count (CLASS_PERKS.get(class_id, [])
+## .size()), so a class with fewer than PERK_TREE_SIZE defined perks (Mage
+## has zero today -- Stage 2's locked perk set only covers Warrior/Scout/
+## Cleric, see class-system.md's "Class perk inventory (Future unless its
+## primitive is shipped)") never reports a slot pending with nothing to
+## choose from. Every existing class already defines exactly PERK_TREE_SIZE
+## perks, so this second cap is a no-op for them (min(2, 2) == 2) -- it only
+## ever binds for a class with fewer. Slots already spent count only class-
+## owned perks (CLASS_PERKS' own ids) -- a legacy BONUS_MOVE_PERK_ID entry
+## (retired from new choices, never migrated away; see choose_perk()'s doc
+## comment) never consumes a class-owned slot, so an old save holding it
+## still earns both of its class's real perks.
 func _pending_perk_slot_count(adventurer: Dictionary) -> int:
-	var earned_slots: int = mini(adventurer.level / PERK_LEVEL_INTERVAL, PERK_TREE_SIZE)
+	var class_id: String = str(adventurer.get("class", ""))
+	var perk_cap: int = mini(PERK_TREE_SIZE, (CLASS_PERKS.get(class_id, []) as Array).size())
+	var earned_slots: int = mini(adventurer.level / PERK_LEVEL_INTERVAL, perk_cap)
 	var spent_slots := 0
 	for perk_id in adventurer.progression.perks:
 		if perk_id != BONUS_MOVE_PERK_ID:
@@ -4241,22 +4364,26 @@ func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
 
 ## Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is durable
 ## adventurer state" paragraph): a class's mp_max is a config-driven balance
-## value (CLERIC_MP_MAX, loaded from config/game_config.json's cleric.mp_max
-## -- see _load_balance_config()), not a perk-derived effective stat -- no
-## Step 1 perk grants a bonus to it, unlike get_effective_max_health()'s
-## Juggernaut/Devout percent bonus. Returns 0 for an unknown adventurer or a
-## class with no "mp_max" entry at all (Warrior/Scout), so a caller never
-## needs its own class check first. Only Cleric carries an "mp_max" key in
-## CLASS_DEFINITIONS today, so CLERIC_MP_MAX is the only config-driven value
-## needed here; a future second spellcasting class would need its own var
-## the same way, not a shared one.
+## value (CLERIC_MP_MAX/MAGE_MP_MAX, loaded from config/game_config.json's
+## cleric.mp_max/mage.mp_max -- see _load_balance_config()), not a perk-
+## derived effective stat -- no Step 1 perk grants a bonus to it, unlike
+## get_effective_max_health()'s Juggernaut/Devout percent bonus. Returns 0
+## for an unknown adventurer or a class with no "mp_max" entry at all
+## (Warrior/Scout), so a caller never needs its own class check first. Stage
+## 5 D3 added Mage as a second spellcasting class -- this branches on the
+## adventurer's own class id to pick the matching config-driven var, exactly
+## as this function's own doc comment always said a second spellcasting
+## class would need (never a value shared with Cleric's).
 func get_effective_max_mp(adventurer_id: String) -> int:
 	var adventurer := get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return 0
-	var class_def: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
+	var class_id: String = str(adventurer.get("class", ""))
+	var class_def: Dictionary = CLASS_DEFINITIONS.get(class_id, {})
 	if not class_def.has("mp_max"):
 		return 0
+	if class_id == "mage":
+		return MAGE_MP_MAX
 	return CLERIC_MP_MAX
 
 
@@ -4420,16 +4547,38 @@ func _apply_natural_recovery() -> void:
 				adventurers[_get_adventurer_index(adv_id)]["mp_current"] = mini(current_mp + mp_rate, max_mp)
 
 
+## Stage 5 D3 fix: Mage now carries the same MP-shaped resource the Details-
+## view Heal action reads (get_effective_max_mp() > 0), but Mage's
+## CLASS_DEFINITIONS entry names no "heal" spell -- gating on MP alone would
+## let a Mage use Cleric's Details-view heal for free. Keys off whether
+## adventurer_id's own class actually lists spell_id among CLASS_
+## DEFINITIONS[class].spells, the same data BattleController._ready()/
+## BattleStateFactory already hydrate a battle-local Unit's `spells` array
+## from, so this can never disagree with which spells a class' battle-local
+## Unit actually carries. Public (not a private "_"-prefixed helper) since
+## unit_details.gd's own _refresh_heal_section() reads it too, to decide
+## whether to show the Heal row at all rather than a permanently-disabled one.
+func adventurer_knows_spell(adventurer_id: String, spell_id: String) -> bool:
+	var adventurer := get_adventurer(adventurer_id)
+	if adventurer.is_empty():
+		return false
+	var class_def: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
+	return (class_def.get("spells", []) as Array).has(spell_id)
+
+
 ## Details-view "Heal party member" transaction (docs/designs/campaign-
 ## loop.md's Healer paragraph): caster_id spends DETAILS_HEAL_MP_COST MP to
 ## restore a random DETAILS_HEAL_MIN-DETAILS_HEAL_MAX HP (matching the
 ## existing battle-local Heal spell exactly -- see BattleController.
 ## SPELL_MP_COST/SPELL_HEAL_MIN/SPELL_HEAL_MAX) to target_id, capped at the
-## target's own effective max HP. Every precondition -- caster has enough MP,
-## target is a legal heal target (see _is_legal_heal_target()), target is not
+## target's own effective max HP. Every precondition -- caster's class knows
+## "heal" (see adventurer_knows_spell()), caster has enough MP, target
+## is a legal heal target (see _is_legal_heal_target()), target is not
 ## already at full HP -- is checked before any mutation, so a rejected call
 ## never spends MP or changes HP. Returns whether the heal actually happened.
 func heal_party_member(caster_id: String, target_id: String) -> bool:
+	if not adventurer_knows_spell(caster_id, "heal"):
+		return false
 	if get_current_mp(caster_id) < DETAILS_HEAL_MP_COST:
 		return false
 	if not _is_legal_heal_target(caster_id, target_id):
@@ -4468,9 +4617,12 @@ func _is_legal_heal_target(caster_id: String, target_id: String) -> bool:
 ## those here, rather than merely letting the transaction no-op on one, is
 ## what lets the UI disable the whole action and explain why instead of
 ## offering a target guaranteed to do nothing. Returns [] for an unknown
-## caster or a class with no MP resource at all.
+## caster, a class with no MP resource at all, or (Stage 5 D3) a class whose
+## spells don't include "heal" (Mage) -- see adventurer_knows_spell().
 func get_legal_heal_targets(caster_id: String) -> Array[String]:
 	var targets: Array[String] = []
+	if not adventurer_knows_spell(caster_id, "heal"):
+		return targets
 	if get_effective_max_mp(caster_id) <= 0:
 		return targets
 	for adventurer in adventurers:
