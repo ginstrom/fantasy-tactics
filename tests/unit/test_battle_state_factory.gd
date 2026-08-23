@@ -639,6 +639,237 @@ func test_seeded_chain_blow_finds_no_second_target_against_a_solitary_kobold_on_
 	)
 
 
+## --- Deterministic Archer scenarios (Stage 5 D4 task 5) --------------------
+## Proves Called Shot's Guard-bypass and Lock On's same-target/last-round
+## to-hit bonus both replay byte-identically for a fixed seed, and that each
+## specifically flips a stubbed outcome (miss <-> hit), built entirely
+## through the production ScenarioContract/BattleStateFactory path -- mirrors
+## the Knight section above's "favorable / countered" pairing exactly, one
+## pair per shipped ability. All four fixtures reuse the Warrior/Archer's own
+## level-6 melee (75% hit_chance, unchanged from Knight's own fixtures) and
+## Kobold's 0 base Guard/25 melee, adding only a "guard" modifier where a
+## fixture specifically needs a defended target -- no new stats invented.
+
+func _archer_vs_guarded_kobold_scenario(defender_guard: int) -> Dictionary:
+	return _normalized({
+		"scenario_id": "archer_called_shot_guard_probe",
+		"player": {
+			"units": [
+				{
+					"id": "archer", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 6,
+					"specialization": "archer",
+					"perks": [
+						GameSession.WARRIOR_JUGGERNAUT_PERK_ID, GameSession.WARRIOR_BULWARK_PERK_ID,
+						GameSession.ARCHER_LOCK_ON_PERK_ID, GameSession.ARCHER_CALLED_SHOT_PERK_ID,
+					],
+				},
+			],
+		},
+		"enemy": {"units": [
+			{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}, "modifiers": {"guard": defender_guard}},
+		]},
+	})
+
+
+func _archer_vs_one_kobold_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "archer_lock_on_favorable",
+		"player": {
+			"units": [
+				{
+					"id": "archer", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 6,
+					"specialization": "archer",
+					"perks": [
+						GameSession.WARRIOR_JUGGERNAUT_PERK_ID, GameSession.WARRIOR_BULWARK_PERK_ID,
+						GameSession.ARCHER_LOCK_ON_PERK_ID, GameSession.ARCHER_CALLED_SHOT_PERK_ID,
+					],
+				},
+			],
+		},
+		"enemy": {"units": [{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}}]},
+	})
+
+
+func _archer_vs_two_kobolds_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "archer_lock_on_countered_by_switching_targets",
+		"player": {
+			"units": [
+				{
+					"id": "archer", "template_id": "warrior", "position": {"x": 0, "y": 0}, "level": 6,
+					"specialization": "archer",
+					"perks": [
+						GameSession.WARRIOR_JUGGERNAUT_PERK_ID, GameSession.WARRIOR_BULWARK_PERK_ID,
+						GameSession.ARCHER_LOCK_ON_PERK_ID, GameSession.ARCHER_CALLED_SHOT_PERK_ID,
+					],
+				},
+			],
+		},
+		"enemy": {"units": [
+			{"id": "kobold_a", "template_id": "kobold", "position": {"x": 1, "y": 0}},
+			{"id": "kobold_b", "template_id": "kobold", "position": {"x": 0, "y": 1}},
+		]},
+	})
+
+
+## Favorable: a 40-Guard Kobold (a "modifiers" override, not a new monster --
+## mirrors D3's own "hand-authored per encounter" precedent for a one-off
+## stat variant) reduces a plain attack to a 35% effective hit chance (75%
+## melee - 40 Guard); Called Shot ignores that Guard entirely and nets 75% -
+## the flat 10% penalty = 65% instead. Seed 3's roll lands specifically
+## inside that [35%, 65%) band -- a plain attack misses, Called Shot hits the
+## exact same roll.
+func test_seeded_called_shot_ignores_guard_and_flips_a_miss_to_a_hit_on_seed_3() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(40), 3)
+	autofree(plain_controller)
+	var plain_archer = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_archer
+	assert_true(plain_controller.try_attack_selected_unit(plain_kobold.grid_position))
+	assert_false(plain_controller.last_attack_result.hit, "Seed 3's roll misses a plain attack against 40 Guard (35% effective hit chance)")
+
+	var controller: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(40), 3)
+	autofree(controller)
+	var archer = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = archer
+
+	assert_true(controller.try_called_shot_selected_unit(kobold.grid_position))
+
+	assert_eq(controller.last_attack_result.effective_defense, 0, "Called Shot ignores the defender's 40 Guard entirely")
+	assert_true(controller.last_attack_result.called_shot)
+	assert_true(controller.last_attack_result.hit, "Seed 3's exact same roll now hits once Guard is bypassed (65% effective hit chance)")
+
+
+## Regression: a same-seed factory build must reproduce identical Called Shot
+## outcomes -- CampaignSim's own "100% reproducible from sim_seed alone"
+## contract, extended to Stage 5 D4's Archer branch.
+func test_same_seed_called_shot_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(40), 3)
+	var controller_b: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(40), 3)
+	autofree(controller_a)
+	autofree(controller_b)
+	controller_a.selected_unit = controller_a.get_unit_at(Vector2i(0, 0))
+	controller_b.selected_unit = controller_b.get_unit_at(Vector2i(0, 0))
+
+	controller_a.try_called_shot_selected_unit(Vector2i(1, 0))
+	controller_b.try_called_shot_selected_unit(Vector2i(1, 0))
+
+	assert_eq(controller_a.last_attack_result.hit, controller_b.last_attack_result.hit)
+	assert_eq(controller_a.last_attack_result.damage, controller_b.last_attack_result.damage)
+
+
+## The countered case: against a defenseless (0 Guard) Kobold, Called Shot's
+## flat -10% penalty has nothing to offset -- a plain attack (75% effective
+## hit chance) is strictly better than Called Shot (65%, since there is no
+## Guard left to ignore). Seed 2's roll lands specifically inside that
+## [65%, 75%) band -- a plain attack lands, Called Shot (the same roll)
+## misses, demonstrating why Called Shot is a situational choice, not a
+## strictly-dominant one.
+func test_seeded_called_shot_is_worse_than_a_plain_attack_against_an_undefended_kobold_on_seed_2() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(0), 2)
+	autofree(plain_controller)
+	var plain_archer = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_archer
+	assert_true(plain_controller.try_attack_selected_unit(plain_kobold.grid_position))
+	assert_true(plain_controller.last_attack_result.hit, "Seed 2's roll lands a plain attack against an undefended Kobold (75% effective hit chance)")
+
+	var controller: Node2D = BattleStateFactory.build(_archer_vs_guarded_kobold_scenario(0), 2)
+	autofree(controller)
+	var archer = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = archer
+
+	assert_true(controller.try_called_shot_selected_unit(kobold.grid_position))
+
+	assert_true(controller.last_attack_result.called_shot)
+	assert_false(
+		controller.last_attack_result.hit,
+		"Seed 2's exact same roll misses once Called Shot's flat 10% penalty applies with no Guard to offset it"
+	)
+
+
+## Favorable: the Archer attacks the same solitary Kobold on Round 1 and
+## Round 2. Round 1 (seed 43's roll, deliberately a miss -- only the tracking
+## matters here) stamps Unit.last_attacked_target/last_attacked_round; Round
+## 2 reads that state, sees the same target on the immediately preceding
+## Round, and applies Lock On's +10% -- flipping seed 43's Round-2 roll from
+## a miss (75% base) to a hit (85% with the bonus).
+func test_seeded_lock_on_applies_against_the_same_target_and_flips_a_miss_to_a_hit_on_seed_43() -> void:
+	var controller: Node2D = BattleStateFactory.build(_archer_vs_one_kobold_scenario(), 43)
+	autofree(controller)
+	var archer = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = archer
+
+	assert_true(controller.try_attack_selected_unit(kobold.grid_position))
+	assert_eq(controller.current_round, 1)
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	controller.end_turn()  # ENEMY -> PLAYER: Round 2 begins
+	controller.selected_unit = archer
+	archer.action_points_remaining = archer.max_action_points
+
+	assert_true(controller.try_attack_selected_unit(kobold.grid_position))
+
+	assert_true(controller.last_attack_result.lock_on_applied)
+	assert_true(controller.last_attack_result.hit, "Seed 43's Round-2 roll hits once Lock On's +10% applies (85% effective hit chance)")
+
+
+## Regression: a same-seed factory build must reproduce identical Lock On
+## outcomes across both attacks -- same "100% reproducible from sim_seed
+## alone" contract as the Called Shot regression test above.
+func test_same_seed_lock_on_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_archer_vs_one_kobold_scenario(), 43)
+	var controller_b: Node2D = BattleStateFactory.build(_archer_vs_one_kobold_scenario(), 43)
+	autofree(controller_a)
+	autofree(controller_b)
+	for controller in [controller_a, controller_b]:
+		controller.selected_unit = controller.get_unit_at(Vector2i(0, 0))
+		controller.try_attack_selected_unit(Vector2i(1, 0))
+		controller.end_turn()
+		controller.end_turn()
+		controller.selected_unit = controller.get_unit_at(Vector2i(0, 0))
+		controller.get_unit_at(Vector2i(0, 0)).action_points_remaining = controller.get_unit_at(Vector2i(0, 0)).max_action_points
+		controller.try_attack_selected_unit(Vector2i(1, 0))
+
+	assert_eq(controller_a.last_attack_result.hit, controller_b.last_attack_result.hit)
+	assert_eq(controller_a.last_attack_result.lock_on_applied, controller_b.last_attack_result.lock_on_applied)
+	assert_eq(controller_a.last_attack_result.damage, controller_b.last_attack_result.damage)
+
+
+## The countered case: two Kobolds are fielded instead of one -- the Archer
+## attacks kobold_a on Round 1 and kobold_b (a DIFFERENT target) on Round 2.
+## Lock On is present on the Archer either way (same perk list as the
+## favorable fixture above), but the same seed 43 Round-2 roll that hits once
+## Lock On applies (the favorable fixture) misses here, since kobold_b was
+## never attacked on the immediately preceding Round -- demonstrating why
+## switching targets forfeits Lock On's bonus.
+func test_seeded_lock_on_grants_no_bonus_when_round_2_targets_a_different_kobold_on_seed_43() -> void:
+	var controller: Node2D = BattleStateFactory.build(_archer_vs_two_kobolds_scenario(), 43)
+	autofree(controller)
+	var archer = controller.get_unit_at(Vector2i(0, 0))
+	var kobold_a = controller.get_unit_at(Vector2i(1, 0))
+	var kobold_b = controller.get_unit_at(Vector2i(0, 1))
+	controller.selected_unit = archer
+
+	assert_true(controller.try_attack_selected_unit(kobold_a.grid_position))
+
+	controller.end_turn()
+	controller.end_turn()
+	controller.selected_unit = archer
+	archer.action_points_remaining = archer.max_action_points
+
+	assert_true(controller.try_attack_selected_unit(kobold_b.grid_position))
+
+	assert_false(
+		controller.last_attack_result.lock_on_applied,
+		"kobold_b was never attacked on the immediately preceding Round -- a solitary-target composition denies Lock On the same way a solitary enemy denies Chain Blow"
+	)
+	assert_false(controller.last_attack_result.hit, "The same seed 43 roll that hits WITH Lock On's bonus (the favorable fixture) misses here without it")
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)

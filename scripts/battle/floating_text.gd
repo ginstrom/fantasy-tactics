@@ -43,6 +43,13 @@ const TYPE_RESISTED := "resisted"
 ## attack()/_resolve_chain_blow_strike().
 const TYPE_OFF_BALANCE := "off_balance"
 const TYPE_CHAIN_BLOW := "chain_blow"
+## Archer specialization (Stage 5 D4): Called Shot's Guard-bypass ("CALLED
+## SHOT!") and Lock On's to-hit bonus applying ("LOCKED ON!") are each their
+## own distinct text, same "never colour-only feedback" rule as Knight's two
+## types immediately above -- see battle_controller.gd's _execute_direct_
+## attack(), the sole spawn site for either type.
+const TYPE_CALLED_SHOT := "called_shot"
+const TYPE_LOCKED_ON := "locked_on"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -56,6 +63,8 @@ const COLORS := {
 	TYPE_RESISTED: Color(0.7, 0.7, 0.7),
 	TYPE_OFF_BALANCE: Color(0.95, 0.6, 0.2),
 	TYPE_CHAIN_BLOW: Color(0.85, 0.3, 0.9),
+	TYPE_CALLED_SHOT: Color(0.9, 0.5, 0.15),
+	TYPE_LOCKED_ON: Color(0.3, 0.75, 0.95),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6

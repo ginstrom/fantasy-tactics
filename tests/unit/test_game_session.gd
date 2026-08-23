@@ -2645,10 +2645,11 @@ func test_get_available_specializations_is_empty_until_both_warrior_perks_are_ch
 
 	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
 	assert_eq(
-		session.get_available_specializations("warrior_001"), ["knight"] as Array[String],
-		"Both root perks are now chosen -- Knight becomes available"
+		session.get_available_specializations("warrior_001"), ["knight", "archer"] as Array[String],
+		"Both root perks are now chosen -- Knight AND Archer (Stage 5 D4's second Warrior specialization) become available"
 	)
 	assert_true(session.is_promotion_eligible("warrior_001", "knight"))
+	assert_true(session.is_promotion_eligible("warrior_001", "archer"))
 	assert_false(session.is_promotion_eligible("warrior_001", "no_such_specialization"))
 
 
@@ -2698,6 +2699,60 @@ func test_promote_adventurer_unlocks_knight_perks_on_the_existing_perk_tree_mech
 	assert_false(session.promote_adventurer("warrior_001", "knight"), "Cannot promote a second time")
 
 
+## Archer specialization (Stage 5 D4): mirrors test_promote_adventurer_
+## unlocks_knight_perks_on_the_existing_perk_tree_mechanism()'s own shape --
+## Lock On/Called Shot are unavailable before promotion, available after a
+## legal promotion, and promotion itself is rejected when ineligible. Also
+## proves the two Warrior specializations are mutually exclusive: promoting
+## into Archer forecloses Knight (and vice versa is covered by the Knight
+## test above), since promotion is a one-time adventurer.specialization
+## write (see promote_adventurer()'s own doc comment).
+func test_promote_adventurer_unlocks_archer_perks_on_the_existing_perk_tree_mechanism() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)  # level 6
+
+	assert_false(
+		session.promote_adventurer("warrior_001", "archer"), "Not eligible: neither root perk chosen yet"
+	)
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "")
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.ARCHER_LOCK_ON_PERK_ID),
+		"Lock On is unavailable before promotion"
+	)
+
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	assert_true(session.promote_adventurer("warrior_001", "archer"))
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "archer")
+
+	# Same level-6/perk-cap math as Knight's own test: 3 of 4 total slots
+	# already earned, both root perks already spent, so exactly one Archer
+	# perk slot is pending immediately on promotion.
+	assert_true(session.is_perk_choice_pending("warrior_001"))
+	assert_eq(
+		session.get_available_perks("warrior_001"),
+		[GameSessionScript.ARCHER_LOCK_ON_PERK_ID, GameSessionScript.ARCHER_CALLED_SHOT_PERK_ID]
+	)
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.ARCHER_LOCK_ON_PERK_ID))
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.ARCHER_CALLED_SHOT_PERK_ID),
+		"Only one Archer slot is pending at level 6 -- the second needs another level-interval"
+	)
+
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 250.0)  # level 9: all 4 slots earned
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.ARCHER_CALLED_SHOT_PERK_ID))
+	assert_false(session.is_perk_choice_pending("warrior_001"), "All 4 slots (2 root + 2 Archer) are now spent")
+	assert_eq(session.get_available_specializations("warrior_001"), [] as Array[String], "Already promoted")
+	assert_false(session.promote_adventurer("warrior_001", "archer"), "Cannot promote a second time")
+	assert_false(
+		session.promote_adventurer("warrior_001", "knight"),
+		"A Warrior already promoted to Archer can never also become a Knight"
+	)
+
+
 func test_promote_adventurer_rejects_a_specialization_foreign_to_the_adventurers_class() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2745,6 +2800,32 @@ func test_specialization_and_knight_perks_persist_through_a_snapshot_round_trip(
 	)
 
 
+## Archer's own snapshot round trip (Stage 5 D4): mirrors the Knight test
+## immediately above exactly -- proves this is the same general mechanism,
+## not Knight-specific persistence code.
+func test_specialization_and_archer_perks_persist_through_a_snapshot_round_trip() -> void:
+	GameSession.adventurers[0].level = 6
+	GameSession.adventurers[0].progression.perks = [
+		GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
+	]
+	assert_true(GameSession.promote_adventurer(GameSessionScript.WARRIOR_ID, "archer"))
+	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.ARCHER_LOCK_ON_PERK_ID))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_adventurer_specialization(GameSessionScript.WARRIOR_ID), "archer")
+	assert_eq(
+		GameSession.get_adventurer(GameSessionScript.WARRIOR_ID).progression.perks,
+		[
+			GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
+			GameSessionScript.ARCHER_LOCK_ON_PERK_ID,
+		]
+	)
+
+
 func test_importing_a_save_with_no_specialization_field_normalizes_as_not_promoted() -> void:
 	GameSession.adventurers[0].level = 6
 	var snapshot := GameSession.export_campaign_snapshot()
@@ -2757,7 +2838,7 @@ func test_importing_a_save_with_no_specialization_field_normalizes_as_not_promot
 
 	assert_true(result.ok, result.error)
 	assert_eq(GameSession.get_adventurer_specialization(GameSessionScript.WARRIOR_ID), "")
-	assert_eq(session_available_specializations_after_root_perks(), ["knight"] as Array[String])
+	assert_eq(session_available_specializations_after_root_perks(), ["knight", "archer"] as Array[String])
 
 
 ## Small helper for the test immediately above: proves an imported, not-yet-
@@ -6010,6 +6091,14 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		# reasoning as every other GameConfig-cached var already excluded
 		# above (WARRIOR_BULWARK_GUARD etc.).
 		"OFF_BALANCE_GUARD_PENALTY": true,
+		# Stage 5 D4 (Archer specialization): same non-durable-config-value
+		# reasoning as OFF_BALANCE_GUARD_PENALTY immediately above -- cached
+		# copies of GameConfig's combat.lock_on_hit_chance_bonus/called_shot_
+		# to_hit_penalty keys, used only to format Lock On/Called Shot's own
+		# perk effect text; BattleController reads the same two keys directly,
+		# uncached.
+		"ARCHER_LOCK_ON_HIT_CHANCE_BONUS": true,
+		"ARCHER_CALLED_SHOT_TO_HIT_PENALTY": true,
 		"SCOUT_QUICKDRAW_ACTION_POINTS": true,
 		"SCOUT_KEEN_EYES_INTEL_RANGE_BONUS": true,
 		"CLERIC_MEDITATION_SPELL_RANGE_BONUS": true,

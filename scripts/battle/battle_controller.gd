@@ -120,8 +120,10 @@ enum Side { PLAYER, ENEMY }
 ## SHIELD_BASH is Stage 5 D4's addition (Knight specialization): behaves
 ## exactly like ATTACK mode (enemy click only, no free move on an empty
 ## tile -- see _handle_tile_click()) except it dispatches to try_shield_
-## bash_selected_unit() instead of try_attack_selected_unit().
-enum ActionMode { CONTEXTUAL, MOVE, ATTACK, SPELL, SHIELD_BASH }
+## bash_selected_unit() instead of try_attack_selected_unit(). CALLED_SHOT is
+## Stage 5 D4's Archer addition: the same attack-only shape again, dispatching
+## to try_called_shot_selected_unit() instead.
+enum ActionMode { CONTEXTUAL, MOVE, ATTACK, SPELL, SHIELD_BASH, CALLED_SHOT }
 
 const GROUP := "battle_controller"
 
@@ -234,6 +236,22 @@ var sleep_resist_roll: Callable = func() -> float: return randf()
 ## once per living player unit in try_retreat(), in the same stable unit
 ## order every other per-unit sweep in this file uses.
 var retreat_roll: Callable = func() -> float: return randf()
+## Archer's Lock On perk (Stage 5 D4): the current Round number, starting at
+## 1 (mirrors Battlefield's own presentation-layer round_number, which is NOT
+## read here -- see this var's own doc comment on why the controller needed
+## its own copy). Incremented exactly once per Round, in end_turn(), at the
+## SAME PLAYER-side boundary _clear_expired_statuses() already fires at
+## (never on the PLAYER -> ENEMY half of a Round). Unit.last_attacked_round
+## is stamped from this value every time a unit attacks (see
+## _execute_direct_attack()) and compared against it in _compute_effective_
+## attack_chances() to grant Lock On's +10% only for a target attacked on
+## the IMMEDIATELY PRECEDING Round (current_round - 1) -- a round counter,
+## not the pending/active flag pattern off_balance/counter_bonus use,
+## because Lock On's target can change (or repeat) every single Round this
+## unit acts, not just on a sporadic Dodge/Parry event; a plain "was it my
+## last turn" comparison has no promotion-collision edge case a counter
+## doesn't already handle for free.
+var current_round: int = 1
 var last_attack_result: Dictionary = {}
 var last_targeting_failure: Dictionary = {}
 ## Chain Blow's bonus second strike result (Stage 5 D4), populated only when
@@ -964,18 +982,21 @@ func _apply_evasion_reactions(attacker, defender, dodged: bool, parried: bool) -
 
 
 ## Shared per-defender modifier computation for a direct melee/ranged attack
-## (flank, Cover, off-balance, Bless, Parry's counter-bonus, and the
-## resulting effective_defense/effective_hit_chance/effective_crit_chance) --
-## factored out of try_attack_selected_unit()'s original inline body so
-## Chain Blow's second strike (Stage 5 D4, _resolve_chain_blow_strike()) can
-## compute the exact same formula fresh against a DIFFERENT defender, rather
-## than reusing the primary target's own numeric chances (each defender's
-## own Guard/flank/off-balance status must apply to it, not to whichever
-## defender happened to be attacked first). `attacker`'s facing/position are
-## read as they stand at call time -- callers that also move/reposition the
-## attacker must do so before calling this, same as the original inline code
-## required.
-func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool) -> Dictionary:
+## (flank, Cover, off-balance, Bless, Parry's counter-bonus, Lock On, Called
+## Shot, and the resulting effective_defense/effective_hit_chance/effective_
+## crit_chance) -- factored out of try_attack_selected_unit()'s original
+## inline body so Chain Blow's second strike (Stage 5 D4, _resolve_chain_
+## blow_strike()) can compute the exact same formula fresh against a
+## DIFFERENT defender, rather than reusing the primary target's own numeric
+## chances (each defender's own Guard/flank/off-balance status must apply to
+## it, not to whichever defender happened to be attacked first). `attacker`'s
+## facing/position are read as they stand at call time -- callers that also
+## move/reposition the attacker must do so before calling this, same as the
+## original inline code required. is_called_shot (Stage 5 D4, Archer's
+## Called Shot perk) defaults false for every existing caller (Chain Blow
+## never called-shots) -- see _execute_direct_attack()'s own doc comment for
+## what setting it true changes.
+func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool, is_called_shot: bool = false) -> Dictionary:
 	# Flanking geometry (docs/plans/2026-08-18-critical-hits-and-flanking/
 	# 03-flanking-tactics-and-combat-resolution.md): a side or rear flank
 	# reduces the defender's effective Guard (raising hit chance) and adds to
@@ -1007,9 +1028,22 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if defender.off_balance_active else 0
 	)
 
-	var effective_defense: int = maxi(0, defender.defense - guard_penalty - off_balance_penalty + cover_bonus)
+	# Called Shot (Stage 5 D4, Archer specialization): "ignores the defender's
+	# Guard entirely for that one attack" (decision-ledger.md's exact wording)
+	# -- effective_defense drops to 0 outright rather than subtracting flank/
+	# cover/off-balance's individual pieces, since all of them are themselves
+	# just modifiers to the SAME Guard number this bypasses. Mirrors the
+	# existing opportunity-attack accuracy/power trade-off exactly: a flat
+	# to-hit penalty (below) is the only cost, applied on top of the
+	# attacker's raw hit_chance with no Guard subtraction at all.
+	var effective_defense: int = (
+		0 if is_called_shot else maxi(0, defender.defense - guard_penalty - off_balance_penalty + cover_bonus)
+	)
+	var called_shot_penalty: float = (
+		GameConfig.get_float("combat", "called_shot_to_hit_penalty", 0.10) if is_called_shot else 0.0
+	)
 	var effective_hit_chance: float = clampf(
-		attacker.hit_chance - effective_defense / 100.0, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		attacker.hit_chance - effective_defense / 100.0 - called_shot_penalty, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
 	# Bless (see try_cast_spell()): +10 percentage points to the attacker's
 	# already-computed final hit chance, composed on top of every other
@@ -1028,6 +1062,24 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 			effective_hit_chance + GameConfig.get_float("combat", "parry_counter_melee_hit_bonus", 0.10),
 			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 		)
+	# Lock On (Stage 5 D4, Archer specialization): +10% to-hit against the
+	# SAME defender this attacker also attacked on the IMMEDIATELY PRECEDING
+	# Round (current_round - 1 -- see current_round's own doc comment on why
+	# a round-number comparison, not the off-balance-style pending/active
+	# flag pair, is what this needs). Gated on the perk so an un-promoted
+	# Warrior (or a Knight) never benefits from the tracking every attacker
+	# already carries (Unit.last_attacked_target/last_attacked_round are
+	# populated unconditionally -- see _execute_direct_attack()).
+	var lock_on_applied: bool = (
+		_unit_has_perk(attacker, GameSession.ARCHER_LOCK_ON_PERK_ID)
+		and attacker.last_attacked_target == defender
+		and attacker.last_attacked_round == current_round - 1
+	)
+	if lock_on_applied:
+		effective_hit_chance = clampf(
+			effective_hit_chance + GameConfig.get_float("combat", "lock_on_hit_chance_bonus", 0.10),
+			MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
 	var base_critical_chance: float = GameConfig.get_float("combat", "base_critical_chance", 0.05)
 	var effective_crit_chance: float = clampf(base_critical_chance + crit_bonus, 0.0, 0.95)
 
@@ -1038,6 +1090,8 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 		"effective_defense": effective_defense,
 		"effective_hit_chance": effective_hit_chance,
 		"effective_crit_chance": effective_crit_chance,
+		"called_shot": is_called_shot,
+		"lock_on_applied": lock_on_applied,
 	}
 
 
@@ -1110,17 +1164,35 @@ func try_shield_bash_selected_unit(target_pos: Vector2i) -> bool:
 	return _execute_direct_attack(target_pos, true)
 
 
-## Shared body for try_attack_selected_unit()/try_shield_bash_selected_unit()
-## (Stage 5 D4): only is_shield_bash differs between the two callers, gating
-## (a) whether a landed hit also off-balances the defender and (b) nothing
-## else -- AP cost, targeting, move-and-attack fallback, and the to-hit/
-## damage formula are identical on purpose (Shield Bash is a normal melee
-## attack with a bonus effect on hit, not a separate action economy). Chain
-## Blow (also Stage 5 D4) is independent of is_shield_bash: it triggers off
-## ANY landed melee attack from either entry point, at most once per Round
-## per attacker (see Unit.chain_blow_used_this_round, cleared in
-## _clear_expired_statuses()).
-func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool) -> bool:
+## Stage 5 D4's Called Shot perk (Archer specialization): identical action to
+## a plain attack (same AP cost, same targeting/move-and-attack fallback --
+## reuses _execute_direct_attack() with is_called_shot=true) except the
+## to-hit formula ignores the defender's Guard entirely and applies a flat
+## -10% to-hit penalty instead (see _compute_effective_attack_chances()'s own
+## doc comment). Rejects outright (no AP spent, no state touched) for a unit
+## that does not own the archer_called_shot perk -- mirrors try_shield_bash_
+## selected_unit()'s identical gate.
+func try_called_shot_selected_unit(target_pos: Vector2i) -> bool:
+	if selected_unit == null or not _unit_has_perk(selected_unit, GameSession.ARCHER_CALLED_SHOT_PERK_ID):
+		return false
+	return _execute_direct_attack(target_pos, false, true)
+
+
+## Shared body for try_attack_selected_unit()/try_shield_bash_selected_unit()/
+## try_called_shot_selected_unit() (Stage 5 D4): is_shield_bash gates whether
+## a landed hit also off-balances the defender; is_called_shot gates the
+## Guard-bypass/flat-penalty to-hit formula (see _compute_effective_attack_
+## chances()). Neither flag changes AP cost, targeting, or the move-and-
+## attack fallback -- both Shield Bash and Called Shot are normal attacks
+## with a bonus rule, not a separate action economy. Chain Blow (also Stage
+## 5 D4) is independent of both flags: it triggers off ANY landed melee
+## attack from any entry point, at most once per Round per attacker (see
+## Unit.chain_blow_used_this_round, cleared in _clear_expired_statuses()).
+## Lock On's own tracking (Unit.last_attacked_target/last_attacked_round) is
+## likewise stamped unconditionally near the end of this function for every
+## attacker, regardless of is_shield_bash/is_called_shot or which perks the
+## attacker owns -- see current_round's own doc comment.
+func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool, is_called_shot: bool = false) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
 		return false
 	var target = get_unit_at(target_pos)
@@ -1178,13 +1250,26 @@ func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool) -> bool:
 	selected_unit.action_points_remaining -= BASIC_ATTACK_ACTION_POINT_COST
 
 	var is_melee_attack: bool = selected_unit.attack_max_range == 1
-	var chances := _compute_effective_attack_chances(selected_unit, target, is_melee_attack)
+	var chances := _compute_effective_attack_chances(selected_unit, target, is_melee_attack, is_called_shot)
 	var flank_type: String = chances.flank_type
 	var cover_tile: String = chances.cover_tile
 	var cover_applied: bool = chances.cover_applied
 	var effective_defense: int = chances.effective_defense
 	var effective_hit_chance: float = chances.effective_hit_chance
 	var effective_crit_chance: float = chances.effective_crit_chance
+	var lock_on_applied: bool = chances.lock_on_applied
+
+	# Lock On tracking (Stage 5 D4): stamped for EVERY attacker unconditionally
+	# (any direct attack, hit or miss -- see Unit.last_attacked_target's own
+	# doc comment), using the chances dict's own already-read PRE-attack state
+	# above -- so this attack's own chance computation reads last round's
+	# target, never this same attack's target. Must run after _compute_
+	# effective_attack_chances() (which is the sole reader of the OLD value)
+	# and before any early return past this point, so every completed attack
+	# -- including one from a unit with no Lock On perk at all -- keeps this
+	# state current for whichever unit next queries it.
+	selected_unit.last_attacked_target = target
+	selected_unit.last_attacked_round = current_round
 
 	var core := _resolve_attack_core(selected_unit, target, effective_hit_chance, effective_crit_chance, is_melee_attack)
 	_apply_evasion_reactions(selected_unit, target, core.dodged, core.parried)
@@ -1222,6 +1307,23 @@ func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool) -> bool:
 		_spawn_combat_text(
 			_floating_text_anchor(target), tr("battle.floating.off_balance"), FloatingTextScript.TYPE_OFF_BALANCE
 		)
+	# Called Shot (Stage 5 D4): shown regardless of hit/miss -- unlike off-
+	# balance (a landed-hit EFFECT), the Guard-bypass/flat-penalty already
+	# happened inside this attack's own chance computation the instant Called
+	# Shot was chosen, so it is a fact about the ATTEMPT, not about whether it
+	# succeeded (see _compute_effective_attack_chances()'s own doc comment).
+	if is_called_shot:
+		_spawn_combat_text(
+			_floating_text_anchor(target), tr("battle.floating.called_shot"), FloatingTextScript.TYPE_CALLED_SHOT
+		)
+	# Lock On (Stage 5 D4): same "fact about the attempt, not the outcome"
+	# reasoning as Called Shot immediately above -- the +10% bonus already
+	# factored into effective_hit_chance regardless of whether this roll
+	# lands.
+	if lock_on_applied:
+		_spawn_combat_text(
+			_floating_text_anchor(target), tr("battle.floating.locked_on"), FloatingTextScript.TYPE_LOCKED_ON
+		)
 	var defeated: bool = hit and not target.is_alive()
 	if defeated:
 		AudioManager.play_sfx("sfx_unit_death")
@@ -1256,6 +1358,8 @@ func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool) -> bool:
 		"is_reaction": false,
 		"shield_bash": is_shield_bash,
 		"off_balance_applied": off_balance_applied,
+		"called_shot": is_called_shot,
+		"lock_on_applied": lock_on_applied,
 	}
 	if hit:
 		if _dispatch_completed_hit(selected_unit, target):
@@ -1844,6 +1948,7 @@ func end_turn() -> void:
 	active_side = Side.ENEMY if active_side == Side.PLAYER else Side.PLAYER
 	if active_side == Side.PLAYER:
 		_clear_expired_statuses()
+		current_round += 1
 	for unit in units:
 		if unit.side == active_side:
 			unit.action_points_remaining = unit.max_action_points
@@ -2158,6 +2263,18 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			board_changed.emit()
 			return
 
+		# Stage 5 D4: CALLED_SHOT mode is the same attack-only shape again
+		# (Archer's Called Shot perk), dispatching to try_called_shot_selected_
+		# unit() instead.
+		if action_mode == ActionMode.CALLED_SHOT:
+			if selected_unit != null and try_called_shot_selected_unit(tile_pos):
+				_draw_units()
+				_select_unit_after_action()
+				return
+			_set_inspected_unit(clicked_unit)
+			board_changed.emit()
+			return
+
 		# CONTEXTUAL and ATTACK modes both attempt direct/auto move-and-attack
 		# on an enemy click.
 		if selected_unit != null and try_attack_selected_unit(tile_pos):
@@ -2171,10 +2288,10 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		board_changed.emit()
 		return
 
-	if action_mode == ActionMode.ATTACK or action_mode == ActionMode.SHIELD_BASH:
-		# ATTACK/SHIELD_BASH mode never moves -- an empty-tile click is a
-		# no-op that reports attack-mode feedback (Action Mode State Machine,
-		# index.md), same reason as ATTACK's own case above.
+	if action_mode == ActionMode.ATTACK or action_mode == ActionMode.SHIELD_BASH or action_mode == ActionMode.CALLED_SHOT:
+		# ATTACK/SHIELD_BASH/CALLED_SHOT mode never moves -- an empty-tile
+		# click is a no-op that reports attack-mode feedback (Action Mode
+		# State Machine, index.md), same reason as ATTACK's own case above.
 		last_targeting_failure = {"reason": "attack_mode_no_target"}
 		board_changed.emit()
 		return

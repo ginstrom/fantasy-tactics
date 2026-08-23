@@ -23,6 +23,7 @@ const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 @onready var move_button: Button = %MoveButton
 @onready var attack_button: Button = %AttackButton
 @onready var shield_bash_button: Button = %ShieldBashButton
+@onready var called_shot_button: Button = %CalledShotButton
 @onready var heal_button: Button = %HealButton
 @onready var bless_button: Button = %BlessButton
 @onready var sleep_button: Button = %SleepButton
@@ -172,6 +173,14 @@ func _on_shield_bash_button_pressed() -> void:
 	_on_action_mode_changed(grid.action_mode)
 
 
+## Stage 5 D4 (Archer specialization): identical shape to _on_shield_bash_
+## button_pressed() above, just its own ActionMode -- try_called_shot_
+## selected_unit() (not this handler) is what actually rejects a non-Archer.
+func _on_called_shot_button_pressed() -> void:
+	grid.set_action_mode(BattleControllerScript.ActionMode.CALLED_SHOT)
+	_on_action_mode_changed(grid.action_mode)
+
+
 ## Heal/Bless/Sleep all share the same begin_spell_targeting() entry point
 ## (see BattleController's own doc comment) -- only pending_spell_id differs.
 func _on_heal_button_pressed() -> void:
@@ -200,6 +209,7 @@ func _on_action_mode_changed(mode: int) -> void:
 	move_button.button_pressed = mode == BattleControllerScript.ActionMode.MOVE
 	attack_button.button_pressed = mode == BattleControllerScript.ActionMode.ATTACK
 	shield_bash_button.button_pressed = mode == BattleControllerScript.ActionMode.SHIELD_BASH
+	called_shot_button.button_pressed = mode == BattleControllerScript.ActionMode.CALLED_SHOT
 	var spell_mode: bool = mode == BattleControllerScript.ActionMode.SPELL
 	heal_button.button_pressed = spell_mode and grid.pending_spell_id == "heal"
 	bless_button.button_pressed = spell_mode and grid.pending_spell_id == "bless"
@@ -238,6 +248,16 @@ func _update_action_bar() -> void:
 	shield_bash_button.visible = has_shield_bash
 	if has_shield_bash:
 		shield_bash_button.disabled = (
+			not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
+		)
+
+	# Called Shot (Stage 5 D4): shown only for a unit that actually owns the
+	# archer_called_shot perk -- mirrors Shield Bash's identical "don't offer
+	# an action this unit doesn't own" rule immediately above.
+	var has_called_shot: bool = selected_unit != null and selected_unit.perks.has(GameSession.ARCHER_CALLED_SHOT_PERK_ID)
+	called_shot_button.visible = has_called_shot
+	if has_called_shot:
+		called_shot_button.disabled = (
 			not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
 		)
 
@@ -663,8 +683,9 @@ func _describe_step(step: Dictionary) -> String:
 		return tr("battle.status.thorn_trigger") % step.attacker.display_name
 	if step.type == "attack":
 		var attacker_name: String = tr(SIDE_NAME_KEYS[step.attacker.side])
+		var line: String
 		if step.hit:
-			var line: String = (
+			line = (
 				tr("battle.status.critical_hit") % [attacker_name, step.damage] if step.get("critical", false)
 				else tr("battle.status.hit") % [attacker_name, step.damage]
 			)
@@ -674,15 +695,25 @@ func _describe_step(step: Dictionary) -> String:
 			# _execute_direct_attack()'s "off_balance_applied" field.
 			if step.get("off_balance_applied", false):
 				line += " " + tr("battle.status.off_balance_applied") % tr(SIDE_NAME_KEYS[step.defender.side])
-			return line
 		# Dodge/Parry (Stage 5 D2) are a distinct outcome from a plain
 		# Guard-driven miss -- distinct text, never colour-only feedback
 		# (Stage 4's accessibility carryover).
-		if step.get("dodged", false):
-			return tr("battle.status.dodged") % tr(SIDE_NAME_KEYS[step.defender.side])
-		if step.get("parried", false):
-			return tr("battle.status.parried") % tr(SIDE_NAME_KEYS[step.defender.side])
-		return tr("battle.status.miss") % attacker_name
+		elif step.get("dodged", false):
+			line = tr("battle.status.dodged") % tr(SIDE_NAME_KEYS[step.defender.side])
+		elif step.get("parried", false):
+			line = tr("battle.status.parried") % tr(SIDE_NAME_KEYS[step.defender.side])
+		else:
+			line = tr("battle.status.miss") % attacker_name
+		# Called Shot/Lock On (Stage 5 D4, Archer specialization): appended
+		# regardless of the roll's own outcome (hit, miss, dodge, or parry) --
+		# see BattleController._execute_direct_attack()'s own doc comment on
+		# why these are attempt-level facts (the bonus/penalty already factors
+		# into the roll above), not hit-only effects like off-balance above.
+		if step.get("called_shot", false):
+			line += " " + tr("battle.status.called_shot_applied")
+		if step.get("lock_on_applied", false):
+			line += " " + tr("battle.status.lock_on_applied")
+		return line
 
 	if step.type == "potion":
 		return tr("battle.status.potion") % [step.unit.display_name, tr(GameSession.get_item_definition(step.potion_id).name_key), step.healing]
@@ -846,24 +877,34 @@ func _log_spell(step: Dictionary) -> void:
 func _describe_log_entry(step: Dictionary) -> String:
 	var attacker_name: String = step.attacker.display_name
 	var defender_name: String = step.defender.display_name
+	var line: String
 	if not step.hit:
 		# Dodge/Parry (Stage 5 D2) get their own log line, distinct from a
 		# plain Guard-driven miss -- see last_attack_result's "outcome" field
 		# (battle_controller.gd's _outcome_for()), which already distinguishes
 		# "blocked"/"dodged"/"parried" the same way this log line does.
 		if step.get("dodged", false):
-			return tr("battle.log.dodged") % [attacker_name, defender_name, defender_name]
-		if step.get("parried", false):
-			return tr("battle.log.parried") % [attacker_name, defender_name, defender_name]
-		return tr("battle.log.miss") % [attacker_name, defender_name]
-	var critical: bool = step.get("critical", false)
-	var line_key: String = _log_key_for_flank(String(step.get("flank", "front")), critical)
-	var line: String = tr(line_key) % [attacker_name, defender_name, step.damage]
-	if step.defeated:
-		line += " " + tr("battle.log.defeated") % defender_name
-	# Shield Bash (Stage 5 D4): see _describe_step()'s identical clause.
-	if step.get("off_balance_applied", false):
-		line += " " + tr("battle.log.off_balance_applied") % defender_name
+			line = tr("battle.log.dodged") % [attacker_name, defender_name, defender_name]
+		elif step.get("parried", false):
+			line = tr("battle.log.parried") % [attacker_name, defender_name, defender_name]
+		else:
+			line = tr("battle.log.miss") % [attacker_name, defender_name]
+	else:
+		var critical: bool = step.get("critical", false)
+		var line_key: String = _log_key_for_flank(String(step.get("flank", "front")), critical)
+		line = tr(line_key) % [attacker_name, defender_name, step.damage]
+		if step.defeated:
+			line += " " + tr("battle.log.defeated") % defender_name
+		# Shield Bash (Stage 5 D4): see _describe_step()'s identical clause.
+		if step.get("off_balance_applied", false):
+			line += " " + tr("battle.log.off_balance_applied") % defender_name
+	# Called Shot/Lock On (Stage 5 D4, Archer specialization): appended
+	# regardless of the roll's own outcome -- see _describe_step()'s identical
+	# clause and BattleController._execute_direct_attack()'s own doc comment.
+	if step.get("called_shot", false):
+		line += " " + tr("battle.log.called_shot_applied")
+	if step.get("lock_on_applied", false):
+		line += " " + tr("battle.log.lock_on_applied")
 	return line
 
 

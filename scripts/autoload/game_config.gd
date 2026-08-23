@@ -26,6 +26,8 @@ const DEFAULTS: Dictionary = {
 		"off_balance_guard_penalty": 10,
 		"parry_counter_melee_hit_bonus": 0.10,
 		"opportunity_attack_melee_hit_penalty": 0.10,
+		"lock_on_hit_chance_bonus": 0.10,
+		"called_shot_to_hit_penalty": 0.10,
 	},
 	"progression": {
 		"perk_level_interval": 2,
