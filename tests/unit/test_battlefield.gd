@@ -238,6 +238,61 @@ func test_action_bar_hides_spell_buttons_when_a_scout_is_selected() -> void:
 	assert_false(battlefield.mp_label.visible)
 
 
+## --- Mage Sleep ActionBar (Stage 5 D3) --------------------------------------
+
+func _setup_mage_party() -> String:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var mage := GameSession.get_default_mage("mage_test", "Test Mage")
+	GameSession.adventurers.append(mage)
+	GameSession.assign_adventurer_to_selected_party("mage_test")
+	return "mage_test"
+
+
+func test_action_bar_shows_sleep_and_mp_but_not_heal_or_bless_for_a_selected_mage() -> void:
+	var mage_id := _setup_mage_party()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id(mage_id)
+	battlefield._update_action_bar()
+
+	assert_true(battlefield.sleep_button.visible)
+	assert_true(battlefield.mp_label.visible)
+	assert_eq(battlefield.mp_label.text, tr("battle.mp") % [3, 3])
+	# The load-bearing fix this step made: Heal/Bless previously showed for
+	# ANY caster (a class with a non-empty `spells` array), not just a class
+	# that actually knows "heal"/"bless" -- a Mage (spells == ["sleep"])
+	# would otherwise have exposed Cleric's own action-bar buttons.
+	assert_false(battlefield.heal_button.visible, "A Mage must never see Cleric's Heal button")
+	assert_false(battlefield.bless_button.visible, "A Mage must never see Cleric's Bless button")
+
+
+func test_action_bar_hides_sleep_button_for_a_selected_cleric() -> void:
+	var cleric_id := _setup_cleric_party()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	battlefield.grid.select_unit_by_adventurer_id(cleric_id)
+	battlefield._update_action_bar()
+
+	assert_false(battlefield.sleep_button.visible, "A Cleric must never see the Mage's Sleep button")
+
+
+func test_sleep_button_pressed_enters_spell_targeting_mode() -> void:
+	var mage_id := _setup_mage_party()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	battlefield.grid.select_unit_by_adventurer_id(mage_id)
+
+	battlefield._on_sleep_button_pressed()
+
+	assert_eq(battlefield.grid.action_mode, BattleControllerScript.ActionMode.SPELL)
+	assert_eq(battlefield.grid.pending_spell_id, "sleep")
+	assert_true(battlefield.sleep_button.button_pressed)
+
+
 ## Task 6: the left-side portrait panel (one row per fielded party member)
 ## and the per-living-enemy HUD list that replaces the old aggregate
 ## PlayerHealth/EnemyHealth labels.

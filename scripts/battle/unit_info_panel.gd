@@ -47,6 +47,7 @@ const FACING_KEYS := {
 @onready var hovered_health_fill: ColorRect = $Content/HoveredSection/HealthBar/Fill
 @onready var hovered_wound_badge: Label = $Content/HoveredSection/WoundBadge
 @onready var hovered_wound_label: Label = $Content/HoveredSection/WoundLabel
+@onready var hovered_status_label: Label = $Content/HoveredSection/StatusLabel
 @onready var selected_section: VBoxContainer = $Content/SelectedSection
 @onready var selected_name_label: Label = $Content/SelectedSection/NameLabel
 @onready var selected_facing_label: Label = $Content/SelectedSection/FacingLabel
@@ -140,6 +141,21 @@ func _populate_hovered(unit) -> void:
 	# an enemy's bar only ever fills to its coarse tier width (is_player
 	# gates exact vs. discretized fraction; see ENEMY_BAR_DISPLAY_FRACTIONS).
 	_hovered_pulse_tween = _update_health_visual(hovered_health_fill, hovered_wound_badge, unit, is_player, _hovered_pulse_tween)
+
+	# Generic status display (Stage 5 D3): mirrors _populate_selected()'s own
+	# unit.statuses loop below -- Sleep applies to an ENEMY, which is only
+	# ever inspectable via hover (the selected unit is always the player's
+	# own, see _populate_selected()'s doc comment), so this is the only
+	# place a hovered unit's status (Sleeping, or a hovered ally's Blessed)
+	# becomes visible at all. Deliberately does not surface off_balance_
+	# active/counter_bonus_active_against here -- those are player-only
+	# reaction mechanics with no enemy-facing counterpart today.
+	var hovered_status_names: Array[String] = []
+	for status_id in unit.statuses:
+		hovered_status_names.append(String(status_id).capitalize())
+	hovered_status_label.visible = not hovered_status_names.is_empty()
+	if not hovered_status_names.is_empty():
+		hovered_status_label.text = ", ".join(hovered_status_names)
 
 
 func _populate_selected(unit) -> void:

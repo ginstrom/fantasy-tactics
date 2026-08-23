@@ -77,6 +77,10 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	# Godot's global, unseeded randf() for a new stochastic check either.
 	controller.dodge_roll = func() -> float: return rng.randf()
 	controller.parry_roll = func() -> float: return rng.randf()
+	# Sleep's magic-resistance roll (Stage 5 D3): the same requirement as
+	# every roll above -- a deterministic scenario must never fall back to
+	# Godot's global, unseeded randf() for a new stochastic check either.
+	controller.sleep_resist_roll = func() -> float: return rng.randf()
 
 	var units: Array = []
 	var player_adventurer_ids: Array[String] = []
@@ -177,16 +181,24 @@ static func _build_player_unit(spec: Dictionary, index: int):
 		max_health, perks, GameSession.WARRIOR_JUGGERNAUT_HP_PERCENT, GameSession.CLERIC_DEVOUT_HP_PERCENT
 	)
 
-	var melee_min_gain: int = int(skills_def.get("melee", {}).get("min_gain", 1))
+	# Every gain below defaults to 0, not 1, when the class's own skills_def
+	# omits that skill entirely (Stage 5 D3: Mage's skills dict deliberately
+	# has no "melee"/"guard"/"might" entries -- class-system.md's mage row
+	# reads might/melee/guard as n/a, meaning "never grows," not "grows at
+	# the same rate as every other class"). Every class before Mage (Warrior/
+	# Scout/Cleric) already defines all four skills explicitly, so this
+	# default was previously never exercised -- this is a correctness fix,
+	# not a behavior change, for them.
+	var melee_min_gain: int = int(skills_def.get("melee", {}).get("min_gain", 0))
 	var melee: int = int(base.get("melee", 60)) + (level - 1) * melee_min_gain + int(modifiers.get("melee", modifiers.get("attack", 0)))
 
-	var missile_min_gain: int = int(skills_def.get("missile", {}).get("min_gain", 1))
+	var missile_min_gain: int = int(skills_def.get("missile", {}).get("min_gain", 0))
 	var missile: int = int(base.get("missile", 60)) + (level - 1) * missile_min_gain + int(modifiers.get("missile", modifiers.get("attack", 0)))
 
-	var guard_min_gain: int = int(skills_def.get("guard", {}).get("min_gain", 1))
+	var guard_min_gain: int = int(skills_def.get("guard", {}).get("min_gain", 0))
 	var guard: int = int(base.get("guard", 0)) + (level - 1) * guard_min_gain + int(modifiers.get("guard", 0))
 
-	var might_min_gain: int = int(skills_def.get("might", {}).get("min_gain", 1))
+	var might_min_gain: int = int(skills_def.get("might", {}).get("min_gain", 0))
 	var might: int = int(base.get("might", 0)) + (level - 1) * might_min_gain + int(modifiers.get("might", 0))
 
 	var category := str(weapon.get("category", ""))

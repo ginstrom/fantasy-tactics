@@ -276,6 +276,20 @@ func test_skills_label_appends_spellcasting_for_a_cleric() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, expected_skills)
 
 
+## Stage 5 D3: this whole row is already fully generic (adventurer.stats.
+## has("spellcasting")), so Mage's own base_stats.spellcasting (20) shows
+## with zero code change -- this test locks that in. Melee/Guard/Might show
+## as their base values (n/a for Mage means never GROWS, not that the row
+## disappears -- unlike Spellcasting, which is conditional on the class
+## carrying the key at all).
+func test_skills_label_shows_missile_and_spellcasting_for_a_mage() -> void:
+	GameSession.adventurers.append(GameSession.get_default_mage("mage_test", "Test Mage"))
+	var screen := _open_unit_details("mage_test")
+
+	var expected_skills := "Skills:\n   Melee: 15%\n   Missile: 25%\n   Guard: 0%\n   Might: 0%\n   Spellcasting: 20%"
+	assert_eq(screen.get_node("Body/Center/VBox/SkillsLabel").text, expected_skills)
+
+
 func test_perks_label_shows_none_before_any_perk_is_chosen() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
@@ -330,6 +344,35 @@ func test_mp_row_is_hidden_for_a_non_caster() -> void:
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
 	assert_false(screen.get_node("Body/Center/VBox/MpLabel").visible)
+
+
+func test_mp_row_shows_current_and_max_mp_for_a_mage() -> void:
+	GameSession.adventurers.append(GameSession.get_default_mage("mage_test", "Test Mage"))
+	GameSession.set_adventurer_mp("mage_test", 2)
+	var screen := _open_unit_details("mage_test")
+
+	var mp_label: Label = screen.get_node("Body/Center/VBox/MpLabel")
+	assert_true(mp_label.visible)
+	assert_eq(mp_label.text, tr("unit_details.mp") % [2, 3])
+
+
+## Stage 5 D3 fix: a Mage now carries the same MP-shaped resource this Heal
+## section keys off (effective_max_mp > 0), but Mage's class knows no "heal"
+## spell -- the section must stay hidden, not offer a Heal action a Mage
+## doesn't have (see GameSession.get_legal_heal_targets()'s own class-spell
+## gate, which this screen's _refresh_heal_section() reads through).
+func test_heal_section_stays_hidden_for_a_mage_despite_carrying_mp() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	var mage: Dictionary = GameSession.get_default_mage("mage_test", "Test Mage")
+	GameSession.adventurers.append(mage)
+	GameSession.assign_adventurer_to_selected_party("mage_test")
+	GameSession.depart_selected_party()
+	GameSession.set_adventurer_health("warrior_001", 2)
+	var screen := _open_unit_details("mage_test")
+
+	assert_false(screen.get_node("Body/Center/VBox/HealButton").visible)
+	assert_false(screen.get_node("Body/Center/VBox/HealTargetPicker").visible)
 
 
 func test_mp_row_shows_current_and_max_mp_for_a_cleric() -> void:

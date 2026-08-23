@@ -74,6 +74,9 @@
 		"details_heal_min": 2,
 		"details_heal_max": 8
 	},
+	"mage": {
+		"mp_max": 3
+	},
 	"intelligence": {
 		"watchtower_tier_1_cost": 50,
 		"watchtower_tier_2_cost": 100,

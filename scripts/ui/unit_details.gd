@@ -248,7 +248,14 @@ func _on_unequip_pressed(slot: String, item_id: String) -> void:
 ## re-reads state via refresh() afterward; it never assigns health or MP
 ## itself.
 func _refresh_heal_section(adventurer_id: String, effective_max_mp: int) -> void:
-	if effective_max_mp <= 0:
+	# Stage 5 D3 fix: Mage now carries the same MP-shaped resource this row
+	# used to key off alone (effective_max_mp > 0), but Mage's class knows
+	# no "heal" spell -- without this second check, a Mage would see a
+	# permanently-disabled Heal button ("no legal target") rather than no
+	# Heal row at all, since target_ids below would always resolve empty
+	# for a class that doesn't own "heal" (see GameSession.get_legal_heal_
+	# targets()'s own class-spell gate) without ever explaining why.
+	if effective_max_mp <= 0 or not GameSession.adventurer_knows_spell(adventurer_id, "heal"):
 		_hide_heal_section()
 		return
 

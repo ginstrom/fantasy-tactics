@@ -186,6 +186,34 @@ func test_pressing_recruit_purchases_the_selected_candidate_and_routes_to_roster
 	assert_eq(GameSession.adventurers[4].id, first_candidate.id)
 
 
+## Stage 5 D3: the recruitment screen (this file's whole subject) is already
+## fully class-agnostic -- it never special-cased Cleric, and needs no
+## special case for Mage either. A Mage offer (RECRUITMENT_CANDIDATE_
+## TEMPLATES has no Mage entries, exactly like Cleric -- see GameSession.
+## _make_overflow_recruitment_offer()) flows through the exact same select-
+## then-Recruit path as any Warrior/Scout row and lands on the roster.
+func test_pressing_recruit_purchases_a_mage_offer_and_routes_to_roster() -> void:
+	var offer: Dictionary = GameSession._make_overflow_recruitment_offer("mage")
+	offer["cost"] = 10
+	GameSession.recruitment_candidates.append(offer)
+	GameSession.gold = 10
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var panel: Control = screen.get_node("%InformationPanel")
+	var tree: Tree = screen.get_node("Body/Center/VBox/RecruitmentTable/Tree")
+	# The Mage offer is the fifth (last) row: 4 starting templates (3
+	# Warriors, 1 Scout) plus this test's own appended candidate.
+	tree.get_root().get_child(4).select(0)
+	tree.emit_signal("item_selected")
+
+	panel.get_node("Content/RecruitButton").emit_signal("pressed")
+
+	assert_eq(GameSession.gold, 0)
+	var roster_mage: Dictionary = GameSession.get_adventurer(offer.id)
+	assert_eq(roster_mage.class, "mage")
+	assert_eq(GameSession.get_current_mp(offer.id), 3)
+
+
 func test_double_clicking_candidate_row_purchases_candidate_and_routes_to_roster() -> void:
 	GameSession.gold = 10
 	var first_candidate := GameSession.get_recruitment_candidates()[0]

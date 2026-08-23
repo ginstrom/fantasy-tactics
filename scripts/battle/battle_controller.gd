@@ -162,6 +162,13 @@ const MIN_HIT_CHANCE := 0.05
 const THORN_RUNE_ID := "thorn"
 const PARALYZED_STATUS_ID := "paralyzed"
 const THORN_TRIGGER_CHANCE := 0.25
+## Sleep (Stage 5 D3, docs/plans/2026-08-23-stage-5-strategic-roster-
+## expansion/decision-ledger.md): a distinct status id from PARALYZED_
+## STATUS_ID -- Thorn's existing behavior must not change, and Sleep is its
+## own source, not a repurposing of Paralyzed -- but both block a unit's
+## move/attack/cast identically (see is_incapacitated()), so both are erased
+## at the same round-boundary in _clear_expired_statuses().
+const SLEEPING_STATUS_ID := "sleeping"
 
 ## Retreat outcome ids (see try_retreat()).
 const RETREAT_OUTCOME_NO_LOSS := "no_loss"
@@ -212,6 +219,12 @@ var rune_trigger_roll: Callable = func() -> float: return randf()
 ## scenario. See _resolve_attack_core().
 var dodge_roll: Callable = func() -> float: return randf()
 var parry_roll: Callable = func() -> float: return randf()
+## Sleep's magic-resistance roll (Stage 5 D3): same injectable pattern as
+## dodge_roll/parry_roll immediately above, seeded from BattleStateFactory's
+## same per-iteration RNG (see that file's build()) so a deterministic
+## scenario never falls back to global randf() for this new stochastic
+## check either.
+var sleep_resist_roll: Callable = func() -> float: return randf()
 ## Injectable so tests can seed an exact Retreat outcome per unit instead of
 ## depending on real randomness (see hit_roll for the same pattern). Called
 ## once per living player unit in try_retreat(), in the same stable unit
@@ -597,7 +610,7 @@ func _move_distances(unit) -> Dictionary:
 
 
 func get_legal_moves(unit) -> Array[Vector2i]:
-	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+	if is_incapacitated(unit) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return []
 	var moves: Array[Vector2i] = []
 	moves.assign(_move_distances(unit).keys())
@@ -610,7 +623,7 @@ func get_legal_moves(unit) -> Array[Vector2i]:
 ## represented by the selection ring, not a movement fill (see
 ## _move_distances(), which erases the start tile).
 func get_move_and_attack_tiles(unit) -> Array[Vector2i]:
-	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+	if is_incapacitated(unit) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return []
 	var tiles: Array[Vector2i] = []
 	var distances := _move_distances(unit)
@@ -626,7 +639,7 @@ func get_move_and_attack_tiles(unit) -> Array[Vector2i]:
 ## get_move_and_attack_tiles() -- together they exactly partition
 ## get_legal_moves()'s reachable set, and neither includes the origin.
 func get_dash_tiles(unit) -> Array[Vector2i]:
-	if has_status(unit, PARALYZED_STATUS_ID) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
+	if is_incapacitated(unit) or unit.action_points_remaining < MOVE_ACTION_POINT_COST:
 		return []
 	var tiles: Array[Vector2i] = []
 	var distances := _move_distances(unit)
@@ -901,6 +914,15 @@ func _resolve_attack_core(attacker, defender, effective_hit_chance: float, effec
 		if has_status(attacker, BLESSED_STATUS_ID):
 			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
 		defender.take_damage(damage)
+		# Sleep's own interruption rule (Stage 5 D3, explicit user
+		# requirement): any LANDED attack against a sleeping unit, from
+		# either side, wakes it immediately -- before its natural round-
+		# boundary expiry. A dodge/parry (hit == false, handled above this
+		# block) or a plain miss never wakes it; only a hit that actually
+		# reaches here does. Shared by both callers of this function
+		# (try_attack_selected_unit()/_resolve_opportunity_attack()), so
+		# neither path can forget to wake a sleeping defender.
+		defender.statuses.erase(SLEEPING_STATUS_ID)
 
 	return {"hit": hit, "critical": is_critical, "damage": damage, "dodged": dodged, "parried": parried}
 
@@ -944,7 +966,7 @@ func _outcome_for(core: Dictionary) -> String:
 func try_move_selected_unit(target: Vector2i) -> bool:
 	if input_locked or selected_unit == null:
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -978,7 +1000,7 @@ func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 		return false
 	if selected_unit.side != active_side:
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit, "target": target}
 		return false
 	if selected_unit.action_points_remaining < BASIC_ATTACK_ACTION_POINT_COST:
@@ -1175,7 +1197,10 @@ func _apply_move_along_path(unit, path: Array[Vector2i]) -> void:
 ## ensures only the first departure fires. Only a melee-capable unit
 ## (attack_max_range == 1) can make an opportunity attack: the design doc's
 ## "-10% melee hit penalty" wording assumes the reactor's own melee stat,
-## which a ranged unit has no occasion to use this way. Populates
+## which a ranged unit has no occasion to use this way. An is_incapacitated()
+## reactor (Paralyzed or Sleeping) also can't react -- an incapacitated unit
+## cannot act on its own turn, and a free attack is still the reactor acting
+## on its own initiative. Populates
 ## last_reaction_results (cleared by every caller before it calls this) so
 ## Battlefield can log every reaction from one move action, and stops
 ## issuing further reactions the moment `unit` is defeated, since a dead
@@ -1191,6 +1216,8 @@ func _trigger_opportunity_attacks_along_path(unit, path: Array[Vector2i]) -> voi
 			if reactor.side == unit.side or not reactor.is_alive():
 				continue
 			if reactor.attack_max_range != 1 or already_reacted.has(reactor):
+				continue
+			if is_incapacitated(reactor):
 				continue
 			if not grid.is_attack_adjacent(reactor.grid_position, from_tile):
 				continue
@@ -1379,7 +1406,7 @@ func _resolve_retreat_outcome(distance: int, roll: float) -> String:
 func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		return false
 	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
 		return false
@@ -1398,7 +1425,7 @@ func try_transfer_selected_item(item_id: String, recipient_adventurer_id: String
 func try_use_selected_potion(potion_id: String) -> bool:
 	if input_locked or selected_unit == null or not selected_unit.is_alive():
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		return false
 	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
 		return false
@@ -1420,17 +1447,22 @@ func try_use_selected_potion(potion_id: String) -> bool:
 
 
 ## Tactical spells (docs/plans/2026-08-18-core-loop-and-engagement/
-## 04-cleric-class-and-scout-reconnaissance.md): the only two spells today are
-## "heal" (restore an injectable 2-8 HP, capped at max, on a living ally
-## that isn't already at full health) and "bless" (apply the battle-local
-## BLESSED_STATUS_ID status -- see try_attack_selected_unit() -- to a living
-## ally not already blessed). Both share the same 3 AP / 1 MP cost and the
-## same occupied-endpoint line-of-sight range (see grid.has_line_of_sight()/
-## get_manhattan_distance(), the same primitives ranged attacks already use
-## via get_legal_attack_targets()) -- 0-3 tiles by default, 0-4 once the
-## caster has chosen the Meditation perk (see GameSession.get_effective_
-## spell_range(), consulted per-caster below rather than a flat constant, per
-## docs/plans/2026-08-21-stage-2-party-readiness/
+## 04-cleric-class-and-scout-reconnaissance.md): "heal" (restore an
+## injectable 2-8 HP, capped at max, on a living ally that isn't already at
+## full health) and "bless" (apply the battle-local BLESSED_STATUS_ID status
+## -- see try_attack_selected_unit() -- to a living ally not already
+## blessed) both target an ALLY. Stage 5 D3 adds "sleep" (apply the battle-
+## local SLEEPING_STATUS_ID status -- see is_incapacitated() -- to a living
+## ENEMY, gated by a magic-resistance roll that can fully negate the effect
+## without refunding the cast; see the "sleep" match arm below) -- the one
+## spell here with its own, ENEMY-only targeting branch rather than sharing
+## Heal/Bless's ally-only one. All three share the same 3 AP / 1 MP cost and
+## the same occupied-endpoint line-of-sight range (see grid.has_line_of_
+## sight()/get_manhattan_distance(), the same primitives ranged attacks
+## already use via get_legal_attack_targets()) -- 0-3 tiles by default, 0-4
+## once the caster has chosen the Meditation perk (see GameSession.get_
+## effective_spell_range(), consulted per-caster below rather than a flat
+## constant, per docs/plans/2026-08-21-stage-2-party-readiness/
 ## 02-class-progression-and-perks.md's "effects belong in explicit
 ## GameSession.get_effective_* readers" rule). Every validation runs before
 ## any mutation, matching every other try_* action in this file, so a
@@ -1440,7 +1472,7 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 		return false
 	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit}
 		return false
 	if not selected_unit.spells.has(spell_id):
@@ -1450,7 +1482,16 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 		return false
 
 	var target = get_unit_at(target_pos)
-	if target == null or target.side != selected_unit.side or not target.is_alive():
+	if target == null or not target.is_alive():
+		return false
+	# Sleep targets a living ENEMY; Heal/Bless target a living ALLY -- see
+	# this function's own doc comment above. Deliberately its own branch,
+	# not a shared ally-only gate, so a future enemy-targeted spell has an
+	# obvious place to join without touching Heal/Bless's existing rule.
+	if spell_id == "sleep":
+		if target.side == selected_unit.side:
+			return false
+	elif target.side != selected_unit.side:
 		return false
 
 	var distance: int = grid.get_manhattan_distance(selected_unit.grid_position, target_pos)
@@ -1491,6 +1532,38 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 			last_attack_result = {"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target}
 			AudioManager.play_sfx("sfx_spell_bless")
 			return true
+		"sleep":
+			if has_status(target, SLEEPING_STATUS_ID):
+				return false
+			selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
+			selected_unit.mp_remaining -= SPELL_MP_COST
+			# Magic-resistance roll (Stage 5 D3's approved formula): a roll
+			# below (magic_resistance - spellcasting) / 100 fully negates the
+			# cast -- binary, no partial effect -- but the AP/MP cost above is
+			# already spent either way, matching combat-system.md's "negates
+			# ... the effect" wording (the cast still happens; only the
+			# effect doesn't land). Clamped to [0, 1] defensively: a caster
+			# whose spellcasting exceeds the target's magic_resistance
+			# already naturally never resists (a negative chance), and this
+			# keeps a pathological over-100 magic_resistance from ever
+			# exceeding a real probability.
+			var resist_chance: float = clampf(
+				(float(target.magic_resistance) - float(selected_unit.spellcasting)) / 100.0, 0.0, 1.0
+			)
+			var resisted: bool = sleep_resist_roll.call() < resist_chance
+			if not resisted:
+				apply_status(target, SLEEPING_STATUS_ID)
+			last_targeting_failure = {}
+			last_attack_result = {
+				"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target,
+				"resisted": resisted, "outcome": "resisted" if resisted else "applied",
+			}
+			_spawn_combat_text(
+				_floating_text_anchor(target),
+				tr("battle.floating.sleep_resisted") if resisted else tr("battle.floating.sleep"),
+				FloatingTextScript.TYPE_RESISTED if resisted else FloatingTextScript.TYPE_SLEEP
+			)
+			return true
 		_:
 			return false
 
@@ -1500,7 +1573,7 @@ func try_step_selected_unit(direction: Vector2i) -> bool:
 		return false
 	if selected_unit == null or not selected_unit.is_alive():
 		return false
-	if has_status(selected_unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(selected_unit):
 		return false
 	if selected_unit.side != active_side:
 		return false
@@ -1636,7 +1709,7 @@ func run_enemy_turn() -> Array:
 func _take_enemy_unit_actions(unit) -> Array:
 	var steps: Array = []
 	selected_unit = unit
-	if has_status(unit, PARALYZED_STATUS_ID):
+	if is_incapacitated(unit):
 		unit.action_points_remaining = 0
 		return steps
 	var guard: int = int(unit.max_action_points) + 1
@@ -1707,9 +1780,24 @@ func has_status(unit, status_id: String) -> bool:
 	return unit != null and bool(unit.statuses.get(status_id, false))
 
 
+## Single source of truth for "this unit cannot act" (Stage 5 D3): true while
+## `unit` carries PARALYZED_STATUS_ID (Thorn rune) or SLEEPING_STATUS_ID
+## (Sleep spell) -- every move/attack/cast/item action gate in this file
+## (try_move_selected_unit, try_step_selected_unit, try_attack_selected_unit,
+## try_cast_spell, try_use_selected_potion, try_transfer_selected_item, the
+## read-only move/attack-tile highlight helpers, the enemy AI action-taking
+## path, and the attack-range highlight affordance) calls this instead of
+## checking either status id directly, so a future third incapacitating
+## status only ever needs to change this one place -- never a second,
+## possibly-diverging copy of "cannot act."
+func is_incapacitated(unit) -> bool:
+	return has_status(unit, PARALYZED_STATUS_ID) or has_status(unit, SLEEPING_STATUS_ID)
+
+
 func _clear_expired_statuses() -> void:
 	for unit in units:
 		unit.statuses.erase(PARALYZED_STATUS_ID)
+		unit.statuses.erase(SLEEPING_STATUS_ID)
 
 
 ## Returns true iff the Thorn rune actually triggered (and paralyzed
@@ -1717,9 +1805,13 @@ func _clear_expired_statuses() -> void:
 ## dict -- this function used to write directly into the module-level
 ## last_attack_result, which would have silently corrupted a reaction's
 ## separate result dict (see _resolve_opportunity_attack()) had it kept doing
-## that, since a reaction never touches last_attack_result at all.
+## that, since a reaction never touches last_attack_result at all. Guards on
+## is_incapacitated(attacker), not a raw PARALYZED_STATUS_ID check, so an
+## already-Sleeping attacker can't also be Thorn-paralyzed on top of it --
+## the same "one source of truth for cannot-act" rule is_incapacitated()
+## exists to enforce everywhere else in this file.
 func _dispatch_completed_hit(attacker, defender) -> bool:
-	if defender.rune_id != THORN_RUNE_ID or has_status(attacker, PARALYZED_STATUS_ID):
+	if defender.rune_id != THORN_RUNE_ID or is_incapacitated(attacker):
 		return false
 	if rune_trigger_roll.call() >= THORN_TRIGGER_CHANCE:
 		return false
@@ -1803,9 +1895,12 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 	if action_mode == ActionMode.SPELL:
 		# SPELL mode intercepts every click, including one on an ally tile
-		# (which every other mode treats as a reselect) -- a spell always
-		# targets an ally, so try_cast_spell() itself decides legality; this
-		# mode never falls through to the move/attack dispatch below.
+		# (which every other mode treats as a reselect) or an enemy tile
+		# (which every other mode treats as an attack) -- try_cast_spell()
+		# itself decides legality per spell_id (Heal/Bless want an ally,
+		# Sleep wants an enemy -- see its own doc comment), so this mode
+		# never falls through to the move/attack dispatch below regardless
+		# of which side was clicked.
 		if selected_unit != null and try_cast_spell(pending_spell_id, tile_pos):
 			_draw_units()
 			_select_unit_after_action()
@@ -2204,7 +2299,7 @@ func _update_highlights() -> void:
 
 		var legal_moves := get_legal_moves(selected_unit)
 
-		if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not has_status(selected_unit, PARALYZED_STATUS_ID):
+		if selected_unit.action_points_remaining >= BASIC_ATTACK_ACTION_POINT_COST and not is_incapacitated(selected_unit):
 			var attackable_tiles := get_attackable_tiles_for_unit(selected_unit)
 			var legal_targets := get_legal_attack_targets(selected_unit)
 			var target_positions: Array[Vector2i] = []
