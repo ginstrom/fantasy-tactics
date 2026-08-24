@@ -1553,6 +1553,42 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 
+## Stage 5 D5 (decision-ledger.md) regression: the real victory path never
+## calls GameManager.complete_battle() (see _finish_victory()'s own doc
+## comment) -- it routes straight to battle_result.gd/victory_screen.gd, both
+## of which call GameManager.go_to_world_map()/go_to_encampment() directly.
+## Before this fix, only complete_battle()/fail_battle()/retreat_from_battle()
+## released GameSession.active_battle_party_id, so a party that actually won
+## through Battlefield (this scene, driven the same way _apply_battle_
+## outcome()'s other tests already drive it) left the claim permanently held,
+## locking a second fielded party out of ever entering battle again.
+func test_a_real_victory_through_battlefield_releases_the_battle_claim_for_a_second_party() -> void:
+	GameSession.reset()
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	# Alpha's Enter claimed the battle -- see GameManager.enter_battle().
+	GameSession.claim_battle_for_party(alpha_id)
+	GameSession.create_party("Bravo")
+	var bravo_id: String = GameSession.selected_party_id
+	GameSession.adventurers.append(GameSession.get_default_warrior("warrior_bravo", "Bravo Warrior"))
+	GameSession.assign_adventurer_to_party(bravo_id, "warrior_bravo")
+	GameSession.deploy_party(bravo_id)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	battlefield._apply_battle_outcome(true)
+
+	assert_eq(GameSession.active_battle_party_id, "", "Victory must release the battle claim")
+	assert_true(
+		GameSession.can_party_enter_battle(bravo_id),
+		"A second fielded party must be able to enter battle after the first party's real victory"
+	)
+
+
 func test_apply_battle_outcome_false_returns_the_party_home_without_completing() -> void:
 	GameSession.reset()
 	GameSession.create_party()

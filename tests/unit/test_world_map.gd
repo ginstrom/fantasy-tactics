@@ -1662,6 +1662,12 @@ func test_activating_the_tier1_1_marker_selects_it_as_the_current_encounter() ->
 	var world_map := _make_world_map()
 	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
 	world_map.party_position = tier1_1.position
+	# GameManager.enter_battle()'s own position guard checks GameSession's
+	# tracked party position, not this bare instance's local party_position
+	# (never synced here since _ready() never runs without add_child) -- keep
+	# both in agreement so this test still proves the World Map's routing
+	# reaches the real battle-entry point, not the position guard itself.
+	GameSession.set_deployed_party_position(tier1_1.position)
 
 	world_map.try_activate_current_tile()
 	GameManager.enter_battle("obj_tier1_1_goblin_outpost")
@@ -2044,4 +2050,394 @@ func test_end_turn_is_re_enabled_after_cancelling_the_arrival_panel() -> void:
 	assert_false(
 		end_turn_button.disabled,
 		"Cancel must re-enable End Turn just like Withdraw does"
+	)
+
+
+## --- Step 6: multi-party strategy (decision-ledger.md's D5) -----------------
+
+
+## Deploys a second party at a distinct position from the first (see
+## before_each()'s own _deploy_warrior_party(), party_001). Requires Guild
+## Hall level 3 (get_max_party_count() == 2) -- mirrors game_session.gd's own
+## multi-party test setup pattern.
+func _deploy_second_party_at(position: Vector2i) -> String:
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party("Bravo")
+	var bravo_id: String = GameSession.selected_party_id
+	GameSession.adventurers.append({
+		"id": "warrior_bravo", "name": "Bravo Warrior", "class": "warrior",
+		"level": 1, "availability_status": "available",
+		"stats": GameSession.get_default_warrior().stats.duplicate(true),
+		"health": GameSession.get_default_warrior().health,
+		"progression": {"xp": 0.0, "perks": []},
+		"equipment": GameSession.get_default_warrior().equipment.duplicate(true),
+	})
+	GameSession.assign_adventurer_to_party(bravo_id, "warrior_bravo")
+	GameSession.deploy_party(bravo_id)
+	GameSession.set_deployed_party_position(position, bravo_id)
+	# Reselect the first party (Alpha) so it stays "the" World Map party --
+	# _deploy_second_party_at() itself must not change which party a caller
+	# was already focused on.
+	GameSession.select_party(GameSessionScript.FIRST_PARTY_ID)
+	return bravo_id
+
+
+func test_world_map_renders_a_marker_for_every_deployed_party_not_only_the_selected_one() -> void:
+	_deploy_second_party_at(Vector2i(0, 0))
+	var world_map: Node2D = WorldMapScene.instantiate()
+
+	add_child_autofree(world_map)
+
+	var party_sprites := 0
+	for child in world_map.marker_container.get_children():
+		if child is Sprite2D and child.texture == SpriteCatalog.get_unit_texture("world_party"):
+			party_sprites += 1
+	assert_eq(party_sprites, 2, "Both the selected and the other deployed party must render their own marker")
+
+
+func test_clicking_a_different_deployed_partys_tile_switches_the_selected_party_without_moving_it() -> void:
+	var bravo_id := _deploy_second_party_at(Vector2i(0, 0))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	assert_eq(GameSession.selected_party_id, GameSessionScript.FIRST_PARTY_ID, "Setup: Alpha starts selected")
+
+	world_map._handle_tile_click(Vector2i(0, 0))
+
+	assert_eq(GameSession.selected_party_id, bravo_id, "Clicking Bravo's tile must select Bravo")
+	assert_eq(world_map.party_position, Vector2i(0, 0))
+	assert_eq(GameSession.get_deployed_party_position(bravo_id), Vector2i(0, 0), "Selecting must never move the party")
+	assert_eq(
+		GameSession.get_deployed_party_position(GameSessionScript.FIRST_PARTY_ID),
+		WorldMapScript.SETTLEMENT_POSITION,
+		"Alpha's own position must be untouched by switching selection to Bravo"
+	)
+
+
+## Battle-party tie-break (D5's approved value): the other party's Enter must
+## stay visible but disabled while a different party already owns the active
+## battle.
+func test_arrival_panel_enter_is_disabled_when_another_party_already_owns_the_active_battle() -> void:
+	GameSession.claim_battle_for_party("some_other_party_already_fighting")
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+
+	var enter_button: Button = world_map.get_node("%EnterButton")
+	assert_true(world_map.get_node("%ArrivalPanel").visible)
+	assert_true(enter_button.visible, "Enter must stay visible, only disabled")
+	assert_true(enter_button.disabled, "A party may not claim a battle another party already owns")
+
+
+func test_arrival_panel_enter_stays_enabled_when_no_other_party_owns_the_active_battle() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+
+	world_map._handle_tile_click(world_map.party_position)
+	world_map._handle_tile_click(world_map.party_position)
+
+	assert_false(world_map.get_node("%EnterButton").disabled)
+
+
+## --- Send Party modal (docs/designs/world-map-and-encounters.md's "Future
+## multi-party model") ---
+
+
+func test_send_party_requested_opens_a_modal_listing_every_deployed_party() -> void:
+	var bravo_id := _deploy_second_party_at(Vector2i(1, 1))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var modal: Control = world_map.get_node("%SendPartyModal")
+	assert_false(modal.visible, "Setup: the modal starts hidden")
+
+	world_map._on_information_panel_send_party_requested(GameSessionScript.GOBLIN_CAMP_ID)
+
+	assert_true(modal.visible)
+	var list: Control = world_map.get_node("%SendPartyList")
+	assert_eq(list.get_child_count(), 2, "Both deployed parties must be listed")
+	var row_names: Array = []
+	for row in list.get_children():
+		row_names.append(row.name)
+	assert_true(row_names.has("SendPartyRow_%s" % GameSessionScript.FIRST_PARTY_ID))
+	assert_true(row_names.has("SendPartyRow_%s" % bravo_id))
+
+
+func test_selecting_a_party_in_the_send_party_modal_sets_only_that_partys_route_and_closes_the_modal() -> void:
+	var bravo_id := _deploy_second_party_at(Vector2i(1, 1))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_information_panel_send_party_requested(GameSessionScript.GOBLIN_CAMP_ID)
+	var list: Control = world_map.get_node("%SendPartyList")
+	var bravo_row: Control = list.get_node("SendPartyRow_%s" % bravo_id)
+	var bravo_send_button: Button = bravo_row.get_node("SendButton")
+
+	bravo_send_button.pressed.emit()
+
+	assert_false(world_map.get_node("%SendPartyModal").visible, "Sending must close the modal")
+	assert_false(
+		GameSession.get_deployed_party_route(bravo_id).is_empty(),
+		"Bravo must receive a route to the requested encounter"
+	)
+	assert_true(
+		GameSession.get_deployed_party_route(GameSessionScript.FIRST_PARTY_ID).is_empty(),
+		"Selecting Bravo's row must never touch Alpha's own route"
+	)
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSessionScript.GOBLIN_CAMP_ID)
+	var bravo_route: Array = GameSession.get_deployed_party_route(bravo_id)
+	assert_eq(bravo_route[bravo_route.size() - 1], goblin_camp.position)
+
+
+func test_send_party_cancel_closes_the_modal_without_changing_any_route() -> void:
+	_deploy_second_party_at(Vector2i(1, 1))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_information_panel_send_party_requested(GameSessionScript.GOBLIN_CAMP_ID)
+
+	world_map.get_node("%SendPartyCancelButton").pressed.emit()
+
+	assert_false(world_map.get_node("%SendPartyModal").visible)
+	assert_true(GameSession.get_deployed_party_route(GameSessionScript.FIRST_PARTY_ID).is_empty())
+
+
+## Task 6: "one arriving/withdrawing/battling while another continues" -- a
+## single End Turn press must open the arrival panel for whichever party (if
+## any) just landed on a live encounter, while a second, independently
+## routed deployed party's own travel simply continues in the background,
+## completely unaffected by the first party's arrival.
+func test_one_partys_arrival_via_end_turn_does_not_disturb_a_second_partys_ongoing_travel() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var alpha_id := GameSessionScript.FIRST_PARTY_ID
+	GameSession.set_deployed_party_position(encounter_position + Vector2i(1, 0), alpha_id)
+	GameSession.set_deployed_party_route([encounter_position] as Array[Vector2i], alpha_id)
+	var bravo_id := _deploy_second_party_at(Vector2i(0, 0))
+	GameSession.set_deployed_party_route([Vector2i(0, 1), Vector2i(0, 2)] as Array[Vector2i], bravo_id)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	assert_false(panel.visible, "Setup: the panel starts hidden")
+
+	world_map._on_end_turn_pressed()
+
+	assert_true(panel.visible, "Alpha's arrival at a live encounter must still open the panel automatically")
+	assert_eq(GameSession.get_deployed_party_position(alpha_id), encounter_position)
+	assert_eq(
+		GameSession.get_deployed_party_position(bravo_id), Vector2i(0, 1),
+		"Bravo must take its own route step in the very same End Turn press"
+	)
+	assert_eq(GameSession.get_deployed_party_route(bravo_id), [Vector2i(0, 2)] as Array[Vector2i])
+	assert_eq(GameSession.selected_encounter, "", "Opening the panel must not itself enter battle")
+
+	# Withdrawing Alpha must not touch Bravo's own state at all.
+	world_map.get_node("%WithdrawButton").pressed.emit()
+
+	assert_false(panel.visible)
+	assert_eq(
+		GameSession.get_deployed_party_position(bravo_id), Vector2i(0, 1),
+		"Resolving Alpha's arrival must never move or otherwise disturb Bravo"
+	)
+	assert_eq(GameSession.get_deployed_party_route(bravo_id), [Vector2i(0, 2)] as Array[Vector2i])
+
+
+## Arrival-visibility clarification (decision-ledger.md's "Arrival-visibility
+## clarification, approved 2026-08-24" paragraph): _check_for_arrival() used
+## to check only the currently-selected party's own tracked position, so a
+## non-selected party that arrived at a live encounter via the very same End
+## Turn's own auto route step never opened its arrival panel at all -- the
+## player would have to notice and click that party's marker to find out.
+func test_a_non_selected_partys_arrival_via_end_turn_switches_selection_and_opens_its_own_panel() -> void:
+	var encounter_id := "obj_tier1_1_goblin_outpost"
+	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
+	var alpha_id := GameSessionScript.FIRST_PARTY_ID
+	var alpha_start_position := GameSession.get_deployed_party_position(alpha_id)
+	var bravo_id := _deploy_second_party_at(encounter_position + Vector2i(1, 0))
+	GameSession.set_deployed_party_route([encounter_position] as Array[Vector2i], bravo_id)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	assert_false(panel.visible, "Setup: the panel starts hidden")
+	assert_eq(GameSession.selected_party_id, alpha_id, "Setup: Alpha starts selected")
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(
+		GameSession.get_deployed_party_position(alpha_id), alpha_start_position,
+		"Setup: Alpha itself must not have arrived anywhere this turn"
+	)
+	assert_eq(
+		GameSession.get_deployed_party_position(bravo_id), encounter_position,
+		"Setup: Bravo's own auto route step must land exactly on the encounter"
+	)
+	assert_eq(
+		GameSession.selected_party_id, bravo_id,
+		"A non-selected party's own arrival must auto-switch selection to it"
+	)
+	assert_eq(
+		world_map.party_position, encounter_position,
+		"The World Map's own tracked position must follow the selection switch"
+	)
+	assert_true(panel.visible, "The newly-selected party's arrival panel must open immediately")
+	assert_eq(world_map.pending_arrival_encounter_id, encounter_id)
+	assert_eq(GameSession.selected_encounter, "", "Opening the panel must not itself enter battle")
+
+
+## Tie-break (D5's approved value, unchanged by the clarification above): when
+## the already-selected party AND a different deployed party both arrive at
+## their own live encounters in the very same End Turn, the selected party's
+## own arrival panel still wins -- the other party's arrival is picked up on
+## the player's next click, same as today for any change made to a
+## non-selected party.
+func test_both_parties_arriving_simultaneously_still_opens_only_the_selected_partys_panel() -> void:
+	var alpha_id := GameSessionScript.FIRST_PARTY_ID
+	var alpha_encounter_id := GameSessionScript.GOBLIN_CAMP_ID
+	var alpha_encounter_position: Vector2i = GameSession.get_expedition(alpha_encounter_id).position
+	var bravo_encounter_id := GameSessionScript.ORC_OUTPOST_ID
+	var bravo_encounter_position: Vector2i = GameSession.get_expedition(bravo_encounter_id).position
+	GameSession.set_deployed_party_position(alpha_encounter_position + Vector2i(1, 0), alpha_id)
+	GameSession.set_deployed_party_route([alpha_encounter_position] as Array[Vector2i], alpha_id)
+	var bravo_id := _deploy_second_party_at(bravo_encounter_position + Vector2i(1, 0))
+	GameSession.set_deployed_party_route([bravo_encounter_position] as Array[Vector2i], bravo_id)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+	assert_false(panel.visible, "Setup: the panel starts hidden")
+
+	world_map._on_end_turn_pressed()
+
+	assert_eq(
+		GameSession.get_deployed_party_position(alpha_id), alpha_encounter_position,
+		"Setup: Alpha's own auto route step must land exactly on its encounter"
+	)
+	assert_eq(
+		GameSession.get_deployed_party_position(bravo_id), bravo_encounter_position,
+		"Setup: Bravo's own auto route step must land exactly on its encounter, simultaneously with Alpha's"
+	)
+	assert_eq(
+		GameSession.selected_party_id, alpha_id,
+		"The already-selected party's own arrival must take priority when both arrive simultaneously"
+	)
+	assert_true(panel.visible)
+	assert_eq(
+		world_map.pending_arrival_encounter_id, alpha_encounter_id,
+		"The opened panel must be the already-selected party's own encounter, not the other party's"
+	)
+
+
+## Combined regression (independent review finding against Stage 5 D5's own
+## "Arrival-visibility clarification", decision-ledger.md): continues the
+## exact simultaneous-arrival scenario above -- Alpha's panel wins the tie
+## and opens first -- then proves the reachable next step (clicking Bravo's
+## own marker tile while Alpha's panel is STILL open, since nothing on the
+## World Map screen blocks tile clicks while ArrivalPanel is visible -- it is
+## a small centered PanelContainer, not a full-screen blocker) no longer
+## leaves a stale panel naming Alpha's encounter while GameSession.
+## selected_party_id has already moved to Bravo. Before the fix,
+## _check_for_arrival() no-op'd here (its own arrival_panel.visible guard saw
+## Alpha's still-open panel), so pending_arrival_encounter_id stayed Alpha's
+## and a later Enter press would have entered Alpha's battle for Bravo.
+func test_clicking_the_other_partys_tile_while_its_arrival_panel_is_open_refreshes_the_panel_to_its_own_encounter() -> void:
+	var alpha_id := GameSessionScript.FIRST_PARTY_ID
+	var alpha_encounter_id := GameSessionScript.GOBLIN_CAMP_ID
+	var alpha_encounter_position: Vector2i = GameSession.get_expedition(alpha_encounter_id).position
+	var bravo_encounter_id := GameSessionScript.ORC_OUTPOST_ID
+	var bravo_encounter_position: Vector2i = GameSession.get_expedition(bravo_encounter_id).position
+	GameSession.set_deployed_party_position(alpha_encounter_position + Vector2i(1, 0), alpha_id)
+	GameSession.set_deployed_party_route([alpha_encounter_position] as Array[Vector2i], alpha_id)
+	var bravo_id := _deploy_second_party_at(bravo_encounter_position + Vector2i(1, 0))
+	GameSession.set_deployed_party_route([bravo_encounter_position] as Array[Vector2i], bravo_id)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+
+	world_map._on_end_turn_pressed()
+
+	# Setup: matches test_both_parties_arriving_simultaneously_still_opens_
+	# only_the_selected_partys_panel() above -- Alpha's own arrival wins the
+	# tie and its panel is open, stale relative to Bravo.
+	assert_eq(GameSession.selected_party_id, alpha_id, "Setup: Alpha wins the simultaneous-arrival tie-break")
+	assert_true(panel.visible, "Setup: Alpha's own arrival panel is open")
+	assert_eq(world_map.pending_arrival_encounter_id, alpha_encounter_id, "Setup: the open panel names Alpha's encounter")
+
+	world_map._handle_tile_click(bravo_encounter_position)
+
+	assert_eq(
+		GameSession.selected_party_id, bravo_id,
+		"Clicking Bravo's tile must switch selection to Bravo, same as the single-party switch-selection flow"
+	)
+	assert_true(panel.visible, "Bravo's own arrival must reopen the panel immediately, not leave it stuck closed")
+	assert_eq(
+		world_map.pending_arrival_encounter_id, bravo_encounter_id,
+		"The panel must refresh to Bravo's own encounter, not stay stuck on Alpha's stale one"
+	)
+	assert_eq(GameSession.selected_encounter, "", "Refreshing the panel must not itself enter battle")
+
+	# The combined scenario's actual payoff: pressing Enter now must resolve
+	# Bravo's own encounter, never Alpha's stale one -- whether that's because
+	# the panel itself is now correct (Part B) or because GameManager.
+	# enter_battle()'s own position guard would reject a mismatch outright
+	# even if it weren't (Part A, the second line of defense) -- see that
+	# function's own doc comment.
+	var enter_button: Button = world_map.get_node("%EnterButton")
+	enter_button.pressed.emit()
+
+	assert_eq(
+		GameSession.selected_encounter, bravo_encounter_id,
+		"Enter must resolve Bravo's own encounter, never Alpha's stale one"
+	)
+	assert_eq(
+		GameSession.active_battle_party_id, bravo_id,
+		"The battle claim must belong to Bravo, who actually entered"
+	)
+	assert_false(panel.visible, "Entering battle must close the arrival panel")
+
+
+## Regression (independent review, third pass): the switch-selection block's
+## own _check_for_arrival() call must never re-select a DIFFERENT party than
+## the one the player just explicitly clicked. Before this fix, switching
+## selection to Bravo while Alpha's arrival panel was still open (Part B,
+## above) called the FULL _check_for_arrival() -- including its "other party"
+## loop meant for GameSession.end_world_turn(), which found Alpha still
+## parked on its own live, unresolved encounter and immediately re-selected
+## Alpha, silently undoing the player's click. This scenario differs from the
+## one above only in that Bravo itself is NOT standing on any live encounter
+## -- so the "own position" check inside _check_for_arrival()/its replacement
+## here finds nothing for Bravo, which is exactly the branch that used to
+## fall through into the other-party loop and bounce back to Alpha.
+func test_clicking_a_party_with_no_arrival_of_its_own_does_not_bounce_selection_back() -> void:
+	var alpha_id := GameSessionScript.FIRST_PARTY_ID
+	var alpha_encounter_id := GameSessionScript.GOBLIN_CAMP_ID
+	var alpha_encounter_position: Vector2i = GameSession.get_expedition(alpha_encounter_id).position
+	GameSession.set_deployed_party_position(alpha_encounter_position + Vector2i(1, 0), alpha_id)
+	GameSession.set_deployed_party_route([alpha_encounter_position] as Array[Vector2i], alpha_id)
+	var bravo_position := Vector2i(0, 0)
+	var bravo_id := _deploy_second_party_at(bravo_position)
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var panel: Control = world_map.get_node("%ArrivalPanel")
+
+	world_map._on_end_turn_pressed()
+
+	# Setup: only Alpha arrives (Bravo never had a route, so it never moved
+	# and stands nowhere near a live encounter); Alpha's panel is open.
+	assert_eq(GameSession.selected_party_id, alpha_id, "Setup: Alpha arrived and its panel opened")
+	assert_true(panel.visible, "Setup: Alpha's own arrival panel is open")
+
+	world_map._handle_tile_click(bravo_position)
+
+	assert_eq(
+		GameSession.selected_party_id, bravo_id,
+		"Clicking Bravo's tile must select Bravo and keep it selected, even though Bravo has no arrival of its own"
+	)
+	assert_eq(
+		world_map.party_position, bravo_position,
+		"The World Map's own tracked position must follow Bravo, not silently snap back to Alpha's"
+	)
+	assert_false(
+		panel.visible,
+		"Bravo has no live arrival, so no panel should reopen for anyone -- Alpha's must stay closed, not reopen"
 	)

@@ -461,10 +461,10 @@ func test_threat_stars_rise_with_world_turns_and_clamp_at_five() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
-	session.world_turn = 1 + GameSessionScript.THREAT_TURN_INTERVAL
+	session.world_turn = 1 + session.THREAT_TURN_INTERVAL
 	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 2, "One interval elapsed adds exactly one star")
 
-	session.world_turn = 1 + GameSessionScript.THREAT_TURN_INTERVAL * 20
+	session.world_turn = 1 + session.THREAT_TURN_INTERVAL * 20
 	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 5, "Threat stars never exceed five")
 
 
@@ -6398,6 +6398,19 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"QUEST_TIER_CAP_LEVEL_3": true,
 		"QUEST_TIER_CAP_LEVEL_4": true,
 		"SCOUT_SCOUTING_SKILL": true,
+		# Stage 5 D5 (Step 6): same non-durable-config-value reasoning as
+		# every other GameConfig-cached var already excluded above -- now
+		# GameConfig-backed (world_map.threat_turn_interval) rather than a
+		# plain constant, but still balance data, not player state.
+		"THREAT_TURN_INTERVAL": true,
+		# Stage 5 D5 (Step 6): the in-session battle-party claim is
+		# deliberately NOT part of the snapshot -- see its own doc comment on
+		# game_session.gd. It can only ever be non-empty for the same window
+		# selected_encounter is non-empty, and a save is only possible while
+		# selected_encounter == "" (GameManager.can_save_current_campaign()),
+		# so it can never be non-empty at a point a save could actually
+		# happen.
+		"active_battle_party_id": true,
 	}
 
 
@@ -7546,3 +7559,382 @@ func test_purchasing_a_mage_offer_lands_a_mage_on_the_roster() -> void:
 	assert_eq(roster_mage.stats, GameSession.CLASS_DEFINITIONS.mage.base_stats)
 	assert_eq(session.get_current_mp(offer.id), 3)
 
+
+## --- Step 6: multi-party strategy (decision-ledger.md's D5) -----------------
+
+
+func test_get_deployed_parties_includes_every_deployed_party_and_excludes_encamped_ones() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.parties.append(_party("deployed_a", ["warrior_001"], GameSessionScript.STARTING_SETTLEMENT_ID, true))
+	session.parties.append(_party("encamped_b", [] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, false))
+	session.parties.append(_party("deployed_c", [] as Array[String], GameSessionScript.GOBLIN_CAMP_ID, true))
+
+	var deployed: Array[Dictionary] = session.get_deployed_parties()
+
+	var ids: Array = []
+	for party in deployed:
+		ids.append(party.id)
+	assert_eq(deployed.size(), 2)
+	assert_true(ids.has("deployed_a"))
+	assert_true(ids.has("deployed_c"))
+	assert_false(ids.has("encamped_b"))
+
+
+func test_get_max_party_count_stays_one_below_guild_hall_level_three_and_becomes_two_at_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.guild_hall_level = 1
+	assert_eq(session.get_max_party_count(), 1)
+	session.guild_hall_level = 2
+	assert_eq(session.get_max_party_count(), 1)
+	session.guild_hall_level = session.GUILD_HALL_MAX_LEVEL
+	assert_eq(session.get_max_party_count(), 2)
+
+
+func test_create_party_mints_a_second_unique_id_once_the_cap_allows_it() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = session.GUILD_HALL_MAX_LEVEL
+
+	assert_true(session.create_party("Alpha"))
+	var first_id: String = session.selected_party_id
+	assert_true(session.create_party("Bravo"))
+	var second_id: String = session.selected_party_id
+
+	assert_ne(first_id, second_id, "Each party must get its own unique id")
+	assert_eq(session.parties.size(), 2)
+	assert_false(session.create_party("Charlie"), "A third party must still be rejected below the cap")
+
+
+func test_select_party_switches_the_selected_id_between_two_existing_parties() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = session.GUILD_HALL_MAX_LEVEL
+	session.create_party("Alpha")
+	var alpha_id: String = session.selected_party_id
+	session.create_party("Bravo")
+	var bravo_id: String = session.selected_party_id
+
+	assert_eq(session.selected_party_id, bravo_id)
+	assert_true(session.select_party(alpha_id))
+	assert_eq(session.selected_party_id, alpha_id)
+	assert_false(session.select_party("no_such_party"), "An unknown party id must be rejected")
+	assert_eq(session.selected_party_id, alpha_id, "A rejected selection must not change the current one")
+
+
+## Two parties independently deployed must keep fully independent position/
+## route/movement state through the explicit party-id-aware APIs -- the
+## audited replacement for has_deployed_party()/get_deployed_party_position()/
+## etc.'s old single-selected-party-only behavior (see the step's own task 2
+## ledger below this test file's Step 6 section, and game_session.gd's own
+## _resolve_party_id() doc comment).
+func test_two_deployed_parties_hold_fully_independent_position_and_route_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.guild_hall_level = session.GUILD_HALL_MAX_LEVEL
+	session.create_party("Alpha")
+	var alpha_id: String = session.selected_party_id
+	session.assign_adventurer_to_party(alpha_id, "warrior_001")
+	session.deploy_party(alpha_id)
+	session.create_party("Bravo")
+	var bravo_id: String = session.selected_party_id
+	session.adventurers.append(_adventurer("scout_bravo", "available"))
+	session.assign_adventurer_to_party(bravo_id, "scout_bravo")
+	session.deploy_party(bravo_id)
+
+	assert_true(session.has_deployed_party(alpha_id))
+	assert_true(session.has_deployed_party(bravo_id))
+
+	session.set_deployed_party_position(Vector2i(1, 1), alpha_id)
+	session.set_deployed_party_position(Vector2i(5, 5), bravo_id)
+	assert_eq(session.get_deployed_party_position(alpha_id), Vector2i(1, 1))
+	assert_eq(session.get_deployed_party_position(bravo_id), Vector2i(5, 5))
+
+	var alpha_route: Array[Vector2i] = [Vector2i(2, 1), Vector2i(3, 1)]
+	var bravo_route: Array[Vector2i] = [Vector2i(5, 4), Vector2i(5, 3)]
+	assert_true(session.set_deployed_party_route(alpha_route, alpha_id))
+	assert_true(session.set_deployed_party_route(bravo_route, bravo_id))
+	assert_eq(session.get_deployed_party_route(alpha_id), alpha_route)
+	assert_eq(session.get_deployed_party_route(bravo_id), bravo_route)
+
+	assert_true(session.take_next_route_step(alpha_id))
+	assert_eq(session.get_deployed_party_position(alpha_id), Vector2i(2, 1), "Only Alpha should have moved")
+	assert_eq(session.get_deployed_party_position(bravo_id), Vector2i(5, 5), "Bravo must be untouched by Alpha's step")
+	assert_eq(session.get_deployed_party_route(bravo_id), bravo_route)
+
+	session.clear_deployed_party_route(bravo_id)
+	assert_eq(session.get_deployed_party_route(bravo_id), [] as Array[Vector2i])
+	assert_eq(session.get_deployed_party_route(alpha_id), [Vector2i(3, 1)], "Clearing Bravo's route must not touch Alpha's")
+
+	assert_true(session.return_deployed_party_to_settlement(bravo_id))
+	assert_false(session.has_deployed_party(bravo_id))
+	assert_true(session.has_deployed_party(alpha_id), "Returning Bravo home must not affect Alpha")
+
+
+## No-arg calls must keep resolving against selected_party_id exactly as
+## before this step -- the explicit party_id parameter is purely additive, so
+## the original first campaign's single-party save/UI call sites (world_map.gd
+## etc.) keep working unchanged.
+func test_no_arg_travel_calls_still_resolve_against_the_selected_party() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.depart_selected_party()
+
+	assert_true(session.has_deployed_party())
+	session.set_deployed_party_position(Vector2i(2, 2))
+	assert_eq(session.get_deployed_party_position(), Vector2i(2, 2))
+	assert_eq(session.get_deployed_party_position(), session.get_deployed_party_position(session.selected_party_id))
+
+
+## end_world_turn() must auto-step EVERY deployed party's own unspent route,
+## not only the selected one -- otherwise a non-selected party would silently
+## stop travelling the instant a second party existed.
+func test_end_world_turn_auto_steps_every_deployed_partys_own_route_independently() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	session.guild_hall_level = session.GUILD_HALL_MAX_LEVEL
+	session.create_party("Alpha")
+	var alpha_id: String = session.selected_party_id
+	session.assign_adventurer_to_party(alpha_id, "warrior_001")
+	session.deploy_party(alpha_id)
+	session.create_party("Bravo")
+	var bravo_id: String = session.selected_party_id
+	session.adventurers.append(_adventurer("warrior_bravo", "available"))
+	session.assign_adventurer_to_party(bravo_id, "warrior_bravo")
+	session.deploy_party(bravo_id)
+	session.set_deployed_party_route([Vector2i(4, 3)] as Array[Vector2i], alpha_id)
+	session.set_deployed_party_route([Vector2i(2, 3)] as Array[Vector2i], bravo_id)
+
+	session.end_world_turn()
+
+	assert_eq(session.get_deployed_party_position(alpha_id), Vector2i(4, 3))
+	assert_eq(session.get_deployed_party_position(bravo_id), Vector2i(2, 3))
+	assert_false(session.get_party(alpha_id).movement_spent, "movement_spent resets for every deployed party, not only the selected one")
+	assert_false(session.get_party(bravo_id).movement_spent)
+
+
+## Battle-party tie-break (D5's approved value): whichever party's Enter is
+## claimed first owns the single active battle; a second party's claim
+## attempt is rejected until the first is released.
+func test_battle_claim_is_exclusive_to_one_party_until_released() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+
+	assert_true(session.can_party_enter_battle("party_a"))
+	assert_true(session.claim_battle_for_party("party_a"))
+	assert_true(session.can_party_enter_battle("party_a"), "The owning party may re-enter its own claimed battle")
+	assert_false(session.can_party_enter_battle("party_b"))
+	assert_false(session.claim_battle_for_party("party_b"))
+
+	session.release_battle_claim()
+
+	assert_true(session.can_party_enter_battle("party_b"))
+	assert_true(session.claim_battle_for_party("party_b"))
+
+
+func test_reset_clears_any_held_battle_claim() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+	session.claim_battle_for_party("party_a")
+
+	session.reset()
+
+	assert_true(session.can_party_enter_battle("party_a"))
+	assert_eq(session.active_battle_party_id, "")
+
+
+## Turns-until-next-threat-star UI counter (D5's approved time-escalation
+## value): mirrors get_threat_stars()'s own THREAT_TURN_INTERVAL math exactly.
+func test_turns_until_next_threat_star_counts_down_to_the_next_interval_boundary() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+
+	session.world_turn = 1
+	assert_eq(
+		session.get_turns_until_next_threat_star(GameSessionScript.GOBLIN_CAMP_ID),
+		session.THREAT_TURN_INTERVAL - 1,
+		"14 more turns remain before world_turn 15 adds the next star"
+	)
+
+	# world_turn == THREAT_TURN_INTERVAL is exactly the turn the star bump
+	# above already reflects (get_threat_stars()' own int(world_turn /
+	# THREAT_TURN_INTERVAL) division) -- the counter must already be counting
+	# down to the *next* bump (at 2 * THREAT_TURN_INTERVAL), not read as "0".
+	session.world_turn = session.THREAT_TURN_INTERVAL
+	assert_eq(session.get_turns_until_next_threat_star(GameSessionScript.GOBLIN_CAMP_ID), session.THREAT_TURN_INTERVAL)
+
+	session.world_turn = session.THREAT_TURN_INTERVAL + 1
+	assert_eq(session.get_turns_until_next_threat_star(GameSessionScript.GOBLIN_CAMP_ID), session.THREAT_TURN_INTERVAL - 1)
+
+
+## Once an encounter's threat stars are already clamped at 5, there is no
+## further escalation to count down to -- the counter must not claim a
+## next star is coming when get_threat_stars() can never rise again.
+func test_turns_until_next_threat_star_reports_no_further_escalation_once_capped_at_five() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.reset()
+
+	session.world_turn = 1 + session.THREAT_TURN_INTERVAL * 20
+	assert_eq(session.get_threat_stars(GameSessionScript.GOBLIN_CAMP_ID), 5)
+	assert_eq(session.get_turns_until_next_threat_star(GameSessionScript.GOBLIN_CAMP_ID), -1)
+
+
+## Task 1/2 (malformed/duplicate member imports must fail transactionally):
+## an adventurer id claimed by two different parties' member_ids at once is
+## structurally impossible to reach through normal play (assign_adventurer_
+## to_party()/_is_adventurer_assigned() already forbid it), but hand-edited
+## or corrupted save data could still encode it -- the whole import must be
+## rejected atomically, leaving a prepared session completely untouched,
+## exactly like every other malformed-field rejection in this file.
+func test_import_rejects_an_adventurer_shared_by_two_parties_without_mutating_live_state() -> void:
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_party(alpha_id, "warrior_001")
+	GameSession.gold = 42
+	var before := _capture_durable_fields()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	var second_party: Dictionary = snapshot.parties[0].duplicate(true)
+	second_party["id"] = "party_dupe"
+	second_party["name"] = "Dupe"
+	# "warrior_001" already belongs to Alpha above -- claiming it again here
+	# is the malformed cross-party duplicate this test exists to catch.
+	second_party["member_ids"] = ["warrior_001"]
+	snapshot.parties.append(second_party)
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_string_contains(result.error, "warrior_001")
+	assert_eq(_capture_durable_fields(), before)
+
+
+## Task 1 (malformed route imports must fail transactionally): a travel_route
+## step that is not adjacent to its predecessor (or to the party's own
+## world_position) is malformed positional data -- CampaignSnapshot's shape
+## checks alone (each step is a valid Vector2i) do not catch this, so a
+## corrupted or hand-edited multi-party save could otherwise silently teleport
+## a party. The whole import must be rejected atomically.
+func test_import_rejects_a_party_with_a_non_adjacent_route_step_without_mutating_live_state() -> void:
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_party(alpha_id, "warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.gold = 7
+	var before := _capture_durable_fields()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	var party_index := -1
+	for index in snapshot.parties.size():
+		if snapshot.parties[index].id == alpha_id:
+			party_index = index
+	assert_ne(party_index, -1)
+	# A route step ten tiles away from the settlement start is not reachable
+	# in one cardinal step -- malformed positional data.
+	snapshot.parties[party_index]["travel_route"] = [{"x": 30, "y": 30}]
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_eq(_capture_durable_fields(), before)
+
+
+
+## Task 6 (docs/plans/2026-08-23-stage-5-strategic-roster-expansion/
+## 06-multi-party-strategy.md): "save/load mid-route" for two independently
+## deployed, independently routed parties -- both parties' own position,
+## route, and movement_spent must round-trip through export/import exactly
+## as test_export_then_reset_then_import_restores_the_full_session() already
+## proves for the single-party case above, extended to prove neither party's
+## state leaks into or overwrites the other's.
+func test_export_then_import_restores_two_independently_routed_deployed_parties() -> void:
+	GameSession.reset()
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_party(alpha_id, "warrior_001")
+	GameSession.deploy_party(alpha_id)
+	GameSession.set_deployed_party_position(Vector2i(2, 2), alpha_id)
+	GameSession.set_deployed_party_route([Vector2i(2, 1)] as Array[Vector2i], alpha_id)
+	GameSession.create_party("Bravo")
+	var bravo_id: String = GameSession.selected_party_id
+	GameSession.adventurers.append(GameSession.get_default_warrior("warrior_bravo", "Bravo Warrior"))
+	GameSession.assign_adventurer_to_party(bravo_id, "warrior_bravo")
+	GameSession.deploy_party(bravo_id)
+	GameSession.set_deployed_party_position(Vector2i(5, 5), bravo_id)
+	GameSession.set_deployed_party_route([Vector2i(5, 4), Vector2i(5, 3)] as Array[Vector2i], bravo_id)
+	# select_party() switches which party the World Map treats as "the"
+	# party; the save/load contract must still restore BOTH parties' own
+	# state regardless of which one happens to be selected at export time.
+	GameSession.select_party(alpha_id)
+	var expected := _capture_durable_fields()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(_capture_durable_fields(), expected)
+	assert_eq(GameSession.get_deployed_party_position(alpha_id), Vector2i(2, 2))
+	assert_eq(GameSession.get_deployed_party_route(alpha_id), [Vector2i(2, 1)] as Array[Vector2i])
+	assert_eq(GameSession.get_deployed_party_position(bravo_id), Vector2i(5, 5))
+	assert_eq(
+		GameSession.get_deployed_party_route(bravo_id),
+		[Vector2i(5, 4), Vector2i(5, 3)] as Array[Vector2i]
+	)
+
+
+## Task 6: quest/reward progress must stay keyed to the encounter a party
+## actually cleared -- clearing one live encounter (goblin_camp) with an
+## accepted quest must not disturb a second, still-live encounter's own
+## independent intelligence/quest record, even though both are simultaneously
+## reachable by two different deployed parties.
+func test_completing_one_encounters_quest_does_not_disturb_a_second_live_encounters_intel_or_quest() -> void:
+	GameSession.quest_posting_roll = func() -> float: return 0.0
+	GameSession.reset()
+	var goblin_quest_id: String = String(GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID].quest_id)
+	assert_ne(goblin_quest_id, "")
+	# orc_outpost's own base difficulty (tier 2) exceeds the Guild Hall level
+	# 1 quest-tier cap, so reset() itself never posts it a quest -- raise the
+	# cap first, then re-register its intel/quest record (private methods are
+	# fair game per docs/dev/testing.md) so this test has two independent
+	# live quests to prove isolation between, mirroring how a real campaign
+	# would only post orc_outpost's quest once the Guild Hall was upgraded.
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession._register_encounter_intel_and_quest(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID))
+	var orc_quest_id: String = String(GameSession.encounter_intel[GameSession.ORC_OUTPOST_ID].quest_id)
+	assert_ne(orc_quest_id, "")
+	GameSession.accept_quest(goblin_quest_id)
+	GameSession.accept_quest(orc_quest_id)
+	var orc_intel_before: Dictionary = GameSession.get_encounter_intel(GameSession.ORC_OUTPOST_ID)
+	var orc_quest_before: Dictionary = GameSession.get_quest(orc_quest_id)
+
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_party(alpha_id, "warrior_001")
+	GameSession.deploy_party(alpha_id)
+	GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position, alpha_id)
+	GameSession.select_party(alpha_id)
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	GameSession.complete_current_encounter()
+
+	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
+	assert_false(GameSession.quests.has(goblin_quest_id), "The cleared encounter's own quest settles and is removed")
+	assert_eq(
+		GameSession.get_encounter_intel(GameSession.ORC_OUTPOST_ID), orc_intel_before,
+		"A second, still-live encounter's own intel record must be completely untouched"
+	)
+	assert_eq(
+		GameSession.get_quest(orc_quest_id), orc_quest_before,
+		"A second, still-live encounter's own quest must be completely untouched"
+	)

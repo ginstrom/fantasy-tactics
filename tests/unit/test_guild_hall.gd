@@ -40,6 +40,26 @@ func test_level_one_default_display_shows_the_level_party_size_and_caps() -> voi
 	assert_eq(screen.get_node("Body/Center/VBox/OfferCapLabel").text, tr("guild_hall.offer_cap") % 4)
 
 
+## Stage 5 D5 (decision-ledger.md): Guild Hall level 3 is what raises
+## GameSession.get_max_party_count() from 1 to 2 -- shown here alongside the
+## pre-existing per-party size/roster/offer caps so the player can see why
+## reaching level 3 matters for fielding a second party, not only through
+## Parties' own already-existing caps_label.
+func test_party_count_label_shows_one_below_level_three_and_two_at_it() -> void:
+	var screen: Control = GuildHallScene.instantiate()
+	add_child_autofree(screen)
+
+	assert_eq(screen.get_node("Body/Center/VBox/PartyCountLabel").text, tr("guild_hall.party_count") % 1)
+
+	GameSession.gold = GameSession.GUILD_HALL_UPGRADE_COST
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+	GameSession.gold = GameSession.GUILD_HALL_LEVEL_3_UPGRADE_COST
+	screen.get_node("Body/Center/VBox/UpgradeButton").emit_signal("pressed")
+
+	assert_eq(GameSession.guild_hall_level, 3)
+	assert_eq(screen.get_node("Body/Center/VBox/PartyCountLabel").text, tr("guild_hall.party_count") % 2)
+
+
 func test_upgrade_button_is_disabled_below_the_upgrade_cost_and_enabled_at_it() -> void:
 	var screen: Control = GuildHallScene.instantiate()
 	add_child_autofree(screen)

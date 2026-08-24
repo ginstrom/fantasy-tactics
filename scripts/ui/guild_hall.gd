@@ -20,6 +20,7 @@ extends Control
 
 @onready var level_label: Label = $Body/Center/VBox/LevelLabel
 @onready var party_size_label: Label = $Body/Center/VBox/PartySizeLabel
+@onready var party_count_label: Label = $Body/Center/VBox/PartyCountLabel
 @onready var roster_cap_label: Label = $Body/Center/VBox/RosterCapLabel
 @onready var offer_cap_label: Label = $Body/Center/VBox/OfferCapLabel
 @onready var upgrade_button: Button = $Body/Center/VBox/UpgradeButton
@@ -44,6 +45,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func refresh() -> void:
 	level_label.text = tr("guild_hall.level") % GameSession.guild_hall_level
 	party_size_label.text = tr("guild_hall.party_size") % GameSession.get_max_party_size()
+	# Stage 5 D5 (decision-ledger.md): level 3 is what raises the number of
+	# simultaneous parties (get_max_party_count()) from 1 to 2 -- surfaced
+	# here alongside the per-party size cap above so it is visible before the
+	# player ever opens Parties, whose own caps_label already renders the
+	# same figure once a second party could actually be created.
+	party_count_label.text = tr("guild_hall.party_count") % GameSession.get_max_party_count()
 	roster_cap_label.text = tr("guild_hall.roster_cap") % GameSession.get_roster_cap()
 	offer_cap_label.text = tr("guild_hall.offer_cap") % GameSession.get_recruitment_offer_cap()
 

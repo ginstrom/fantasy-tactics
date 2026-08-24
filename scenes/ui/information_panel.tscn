@@ -39,6 +39,10 @@ text = "information.members"
 layout_mode = 2
 visible = false
 
+[node name="PartyDestination" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
 [node name="PartyViewButton" type="Button" parent="Content"]
 layout_mode = 2
 visible = false
@@ -106,3 +110,12 @@ visible = false
 [node name="EncounterIntelQuest" type="Label" parent="Content"]
 layout_mode = 2
 visible = false
+
+[node name="EncounterEscalation" type="Label" parent="Content"]
+layout_mode = 2
+visible = false
+
+[node name="SendPartyButton" type="Button" parent="Content"]
+layout_mode = 2
+visible = false
+text = "information.send_party"

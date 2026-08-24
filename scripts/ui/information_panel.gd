@@ -12,11 +12,18 @@ signal adventurer_selected(adventurer_id: String)
 ## decides what happens next (see recruitment.gd).
 signal recruit_selected(candidate_id: String)
 
+## Raised when the Send Party button is pressed (Stage 5 D5, docs/designs/
+## world-map-and-encounters.md's "Future multi-party model"). Like every
+## other signal above, the panel never opens the Send Party modal itself --
+## world_map.gd owns that -- it only forwards which encounter was chosen.
+signal send_party_requested(encounter_id: String)
+
 @onready var player_name_label: Label = $Content/PlayerName
 @onready var gold_label: Label = $Content/Gold
 @onready var party_name_label: Label = $Content/PartyName
 @onready var party_members_label: Label = $Content/PartyMembers
 @onready var party_gold_label: Label = $Content/PartyGold
+@onready var party_destination_label: Label = $Content/PartyDestination
 @onready var party_view_button: Button = $Content/PartyViewButton
 @onready var adventurer_name_label: Label = $Content/AdventurerName
 @onready var adventurer_class_label: Label = $Content/AdventurerClass
@@ -44,6 +51,13 @@ signal recruit_selected(candidate_id: String)
 @onready var intel_tier_label: Label = $Content/EncounterIntelTier
 @onready var intel_enemies_label: Label = $Content/EncounterIntelEnemies
 @onready var intel_quest_label: Label = $Content/EncounterIntelQuest
+## Stage 5 D5 (Step 6): the "turns until next threat star" counter and the
+## Send Party button -- see refresh_encounter_intel()'s own doc comment for
+## the escalation counter, and refresh_encounter_send_party()'s for why Send
+## Party is a separate, additive call rather than folded into either
+## existing refresh_encounter()/refresh_encounter_intel() method.
+@onready var escalation_label: Label = $Content/EncounterEscalation
+@onready var send_party_button: Button = $Content/SendPartyButton
 
 var _selected_party_id: String = ""
 var _selected_adventurer_id: String = ""
@@ -55,6 +69,7 @@ func _ready() -> void:
 	party_view_button.pressed.connect(_on_party_view_button_pressed)
 	adventurer_view_button.pressed.connect(_on_adventurer_view_button_pressed)
 	recruit_button.pressed.connect(_on_recruit_button_pressed)
+	send_party_button.pressed.connect(_on_send_party_button_pressed)
 	refresh()
 
 
@@ -96,6 +111,18 @@ func refresh_party(party_id: String, pending_reward: int = 0) -> void:
 	party_gold_label.visible = pending_reward > 0
 	if pending_reward > 0:
 		party_gold_label.text = tr("information.party_gold") % pending_reward
+
+	# Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future
+	# multi-party model": "Selecting a party shows its destination and
+	# remaining travel time." Only meaningful for a deployed party with a
+	# committed route -- an encamped or route-less party shows nothing here.
+	var route: Array = party.get("travel_route", [])
+	party_destination_label.visible = bool(party.get("deployed", false)) and not route.is_empty()
+	if party_destination_label.visible:
+		var destination: Vector2i = route[route.size() - 1]
+		party_destination_label.text = tr("information.party_destination") % [
+			_destination_name_for_position(destination), route.size()
+		]
 
 
 ## Shows the permanent rows plus the named adventurer's name, class, level,
@@ -266,6 +293,17 @@ func refresh_encounter_intel(encounter_id: String) -> void:
 		var stars := "★".repeat(clampi(GameSession.get_threat_stars(encounter_id), 1, 5))
 		intel_tier_label.text = tr("information.encounter_danger") % stars
 
+	# Stage 5 D5 (decision-ledger.md): the bounded time-escalation counter,
+	# shown alongside the tier-stars row it explains -- only once the tier is
+	# actually known (matching intel_tier_label's own visibility threshold),
+	# and only while GameSession.get_turns_until_next_threat_star() reports
+	# further escalation is possible (its own -1 "already capped at five
+	# stars" sentinel hides this row rather than showing a misleading count).
+	var turns_until_next_star := GameSession.get_turns_until_next_threat_star(encounter_id)
+	escalation_label.visible = intel_tier_label.visible and turns_until_next_star >= 0
+	if escalation_label.visible:
+		escalation_label.text = tr("information.turns_until_next_threat_star") % turns_until_next_star
+
 	var intel_enemy_types: Array = intel.get("enemy_types", [])
 	var intel_enemy_counts: Array = intel.get("enemy_counts", [])
 	intel_enemies_label.visible = not intel_enemy_types.is_empty()
@@ -286,6 +324,45 @@ func refresh_encounter_intel(encounter_id: String) -> void:
 		intel_quest_label.text = tr("information.encounter_quest") % [
 			tr("guild_hall.quests.status.%s" % String(quest.status)), int(quest.reward_gold)
 		]
+
+
+## Send Party (Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future
+## multi-party model"): "If there are eligible parties, the right panel
+## offers Send Party." A strictly additive third call alongside refresh_
+## encounter()/refresh_encounter_intel() -- the same "own call, own doc
+## comment" pattern refresh_encounter_intel() already established relative to
+## refresh_encounter() -- because Send Party's own eligibility (any deployed
+## party exists at all) is independent of Scout intel: refresh_encounter()'s
+## own "no intel" branch clears the whole encounter section, which would
+## otherwise wrongly hide Send Party for an encounter outside every deployed
+## party's Scout range. Never opens the modal itself -- see send_party_
+## requested, forwarded to world_map.gd via _on_send_party_button_pressed().
+func refresh_encounter_send_party(encounter_id: String) -> void:
+	_selected_encounter_id = encounter_id
+	send_party_button.visible = not GameSession.get_deployed_parties().is_empty()
+
+
+## Resolves a World Map tile position to a display name for refresh_party()'s
+## destination row: the Encampment, a live sandbox encounter instance, or the
+## current authored campaign objective's own node -- the same three position
+## sources world_map.gd's own marker-drawing code already reads from
+## (GameSession.get_active_encounters()/get_current_campaign_objective()).
+## Falls back to a generic "unknown" label rather than crashing on a position
+## that matches none of them (should not happen in practice, since a route's
+## final tile is always one a player actually clicked to commit).
+func _destination_name_for_position(position: Vector2i) -> String:
+	if position == GameSession.STARTING_SETTLEMENT_WORLD_POSITION:
+		return tr("encampment.title")
+	for record in GameSession.get_active_encounters():
+		if record.position == position:
+			return tr(str(record.get("name_key", "")))
+	var objective := GameSession.get_current_campaign_objective()
+	var encounter_id: String = objective.get("encounter_id", "")
+	if encounter_id != "":
+		var expedition := GameSession.get_expedition(encounter_id)
+		if expedition.get("position") == position:
+			return tr(str(expedition.get("name_key", "")))
+	return tr("information.party_destination_unknown")
 
 
 ## Candidates are resolved fresh from GameSession.get_recruitment_candidates()
@@ -309,6 +386,7 @@ func _clear_party_section() -> void:
 	party_members_label.visible = false
 	party_view_button.visible = false
 	party_gold_label.visible = false
+	party_destination_label.visible = false
 
 
 func _clear_adventurer_section() -> void:
@@ -336,6 +414,7 @@ func _clear_encounter_section() -> void:
 	encounter_danger_label.visible = false
 	encounter_enemies_label.visible = false
 	_clear_encounter_intel_section()
+	_clear_send_party_section()
 
 
 ## Intelligence system rows (see intel_tier_label's own doc comment) --
@@ -345,6 +424,15 @@ func _clear_encounter_intel_section() -> void:
 	intel_tier_label.visible = false
 	intel_enemies_label.visible = false
 	intel_quest_label.visible = false
+	escalation_label.visible = false
+
+
+## Send Party's own row (see refresh_encounter_send_party()'s doc comment) --
+## factored out the same way _clear_encounter_intel_section() is, so a caller
+## that only wants to clear Send Party's affordance can do so without
+## touching the unrelated legacy/intel rows.
+func _clear_send_party_section() -> void:
+	send_party_button.visible = false
 
 
 func _on_party_view_button_pressed() -> void:
@@ -357,3 +445,7 @@ func _on_adventurer_view_button_pressed() -> void:
 
 func _on_recruit_button_pressed() -> void:
 	recruit_selected.emit(_selected_recruitment_candidate_id)
+
+
+func _on_send_party_button_pressed() -> void:
+	send_party_requested.emit(_selected_encounter_id)

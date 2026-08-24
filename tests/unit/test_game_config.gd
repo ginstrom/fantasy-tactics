@@ -165,6 +165,14 @@ func test_loads_stage_5_mage_config_from_the_real_config_file() -> void:
 	assert_eq(GameConfig.get_int("mage", "mp_max", -1), 3)
 
 
+## Stage 5 Step 6 (decision-ledger.md's D5): the pre-existing threat-star
+## escalation interval, moved from a plain GameSession constant into
+## GameConfig (see game_session.gd's THREAT_TURN_INTERVAL/get_threat_stars()).
+## The value itself is unchanged (15) -- only its home moves.
+func test_loads_world_map_config_from_the_real_config_file() -> void:
+	assert_eq(GameConfig.get_int("world_map", "threat_turn_interval", -1), 15)
+
+
 func test_missing_key_returns_the_provided_default() -> void:
 	assert_eq(GameConfig.get_int("guild_hall", "no_such_key", 999), 999)
 

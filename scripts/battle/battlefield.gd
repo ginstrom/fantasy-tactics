@@ -651,6 +651,13 @@ func _finish_victory() -> void:
 	_persist_battle_aftermath()
 	var was_campaign_completed := GameSession.is_campaign_completed
 	GameSession.complete_current_encounter()
+	# Stage 5 D5 (decision-ledger.md): the real victory path never routes
+	# through GameManager.complete_battle() (it goes straight to battle_
+	# result.gd/victory_screen.gd, which call go_to_world_map()/go_to_
+	# encampment() directly), so this is the one place that release has to
+	# happen for an actual player win -- covering both branches below it,
+	# ordinary victory and campaign victory alike.
+	GameSession.release_battle_claim()
 	var just_won_campaign: bool = GameSession.is_campaign_completed and not was_campaign_completed
 
 	var party := GameSession.get_party(GameSession.selected_party_id)
