@@ -456,3 +456,23 @@ simultaneously the already-selected party's own arrival panel takes priority
 (existing behavior unchanged); the other party's arrival is picked up on the
 player's next click, same as today for any change made to a non-selected
 party.
+
+Step 6 went through four independent review passes before merge, each of the
+first three finding a real bug introduced or missed by the previous fix:
+(1) a battle-claim leak on the real victory path in `battlefield.gd`'s
+`_finish_victory()`, which never released `active_battle_party_id`, fixed by
+calling `GameSession.release_battle_claim()` there; (2) the arrival-visibility
+gap recorded above; (3) a stale-arrival-panel bug where switching selection to
+a party with its own simultaneous arrival could leave `pending_arrival_
+encounter_id` pointed at the previous party's encounter, fixed with a
+position-match guard in `GameManager.enter_battle()` plus closing the panel
+before rechecking arrival in `world_map.gd`'s switch-selection block; (4) that
+panel-close fix itself unmasked `_check_for_arrival()`'s "other party" loop
+(meant only for the End Turn context) inside the switch-selection block,
+silently bouncing selection back to the previously-selected party when the
+newly-clicked party had no arrival of its own — fixed by scoping that block to
+the narrower `_arrivable_encounter_at()` check instead. The fourth review pass
+found no further issues, including on the previously-untested "both parties
+have simultaneous live arrivals" edge case, and confirmed test coverage
+complete. Merged 2026-08-24 after manual `make play` signoff (commit
+`0ae1f0d`, merge commit `aba8e49`). Step 6 is complete.
