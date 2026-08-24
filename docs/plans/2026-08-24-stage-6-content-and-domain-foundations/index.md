@@ -27,14 +27,16 @@
 
 Step 1 must copy the final disposition of every unresolved Stage 5 ledger row into this plan's decision record. In particular, do not begin the named implementation step until the user has approved:
 
-| Gate | Needed decision | Blocks |
-|---|---|---|
-| G1 | Whether Rogue is delivered now, and its player choice, counterplay, encounter use, persistence, deterministic proof, and manual check | Step 4, if Rogue is included |
-| G2 | The first authored-content schema's supported encounter hooks: objective unlocks, reward types, terrain, cover layout, and scripted event boundary | Step 3 |
-| G3 | The first branching perk tree's branch count, respec policy (default: none), and approved effect/action vocabulary | Step 4 |
-| G4 | Multi-party simultaneous arrival and encounter lock resolution rules after Stage 5 Step 7 | Step 2 |
+| Gate | Needed decision | Blocks | Disposition |
+|---|---|---|---|
+| G1 | Whether Rogue is delivered now, and its player choice, counterplay, encounter use, persistence, deterministic proof, and manual check | Step 4, if Rogue is included | **Approved 2026-08-24: deferred.** Rogue stays out of Stage 6 scope. See [decision-ledger.md](decision-ledger.md#g1--rogue-scope). |
+| G2 | The first authored-content schema's supported encounter hooks: objective unlocks, reward types, terrain, cover layout, and scripted event boundary | Step 3 | **Approved 2026-08-24: static-setup-only.** No scripted-event boundary in the first schema version. See [decision-ledger.md](decision-ledger.md#g2--first-authored-content-schemas-supported-encounter-hooks). |
+| G3 | The first branching perk tree's branch count, respec policy (default: none), and approved effect/action vocabulary | Step 4 | **Approved 2026-08-24: Knight's Shield Bash / Chain Blow**, 2 mutually-exclusive tier-2 branches behind a shared tier-1 root, no respec. See [decision-ledger.md](decision-ledger.md#g3--first-branching-perk-trees-branch-count-respec-policy-effectaction-vocabulary). |
+| G4 | Multi-party simultaneous arrival and encounter lock resolution rules after Stage 5 Step 7 | Step 2 | **Approved 2026-08-24: already closed** by Stage 5 Step 6's `active_battle_party_id`/arrival-auto-selection mechanism; carried forward unchanged into `BattleContext`. See [decision-ledger.md](decision-ledger.md#g4--multi-party-simultaneous-arrival-and-encounter-lock-resolution). |
 
 No gate authorizes invented balance values. Put tunable approved values in `GameConfig` plus `config/game_config.json`; authored identity/layout data belongs in the content catalog.
+
+All four gates are closed as of 2026-08-24; see [decision-ledger.md](decision-ledger.md) for full evidence, target contracts, and the playtest reset policy. Step 2 may begin.
 
 ## Sequence
 
