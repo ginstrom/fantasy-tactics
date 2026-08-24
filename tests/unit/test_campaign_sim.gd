@@ -8,6 +8,7 @@ extends GutTest
 const CampaignSimScript := preload("res://scripts/tools/campaign_sim.gd")
 const CampaignSimMetricsScript := preload("res://scripts/tools/campaign_sim_metrics.gd")
 const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 ## The representative seed set lives on CampaignSim itself now (CampaignSim.
 ## REPRESENTATIVE_VICTORY_SEEDS) -- see that constant's own doc comment for
@@ -326,7 +327,7 @@ class _FragileCasualtyCampaignSim extends CampaignSimScript:
 	var tank_id: String = ""
 	var fragile_id: String = ""
 
-	func _build_player_units() -> Array:
+	func _build_player_units(_catalog_definition: Dictionary = {}) -> Array:
 		return [
 			_unit_spec(tank_id, {}),
 			_unit_spec(fragile_id, {
@@ -356,7 +357,7 @@ class _FragileCasualtyCampaignSim extends CampaignSimScript:
 		spec.merge(extra)
 		return spec
 
-	func _build_enemy_units(_expedition: Dictionary) -> Array:
+	func _build_enemy_units(_expedition: Dictionary, _catalog_definition: Dictionary = {}) -> Array:
 		return [{"id": "enemy_0", "template_id": "orc_bruiser"}]
 
 
@@ -409,7 +410,7 @@ func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -
 class _SoloWipeCampaignSim extends CampaignSimScript:
 	var solo_id: String = ""
 
-	func _build_player_units() -> Array:
+	func _build_player_units(_catalog_definition: Dictionary = {}) -> Array:
 		var adventurer := GameSession.get_adventurer(solo_id)
 		return [{
 			"id": solo_id,
@@ -421,7 +422,7 @@ class _SoloWipeCampaignSim extends CampaignSimScript:
 			"position": {"x": 4, "y": 5},
 		}]
 
-	func _build_enemy_units(_expedition: Dictionary) -> Array:
+	func _build_enemy_units(_expedition: Dictionary, _catalog_definition: Dictionary = {}) -> Array:
 		return [{"id": "enemy_0", "template_id": "orc_bruiser"}]
 
 
@@ -924,3 +925,46 @@ func test_two_deployed_parties_carry_and_bank_loot_independently() -> void:
 
 	assert_true(GameSession.has_deployed_party(party_b_id), "Party B must remain deployed in the field, undisturbed by Party A's return")
 	assert_eq(GameSession.get_party_carry(party_b_id).gold, 0, "Party B's carry must remain independently empty after Party A's own carry is banked")
+
+
+## --- Stage 6 Step 3: CampaignSim parity against ContentCatalog ------------
+## (docs/plans/2026-08-24-stage-6-content-and-domain-foundations/
+## 03-authored-content-catalog.md, task 6). CampaignSim is a wholly separate
+## battle-construction path from BattleController._ready() -- see that
+## file's own sibling test in test_battle_controller.gd -- so a catalog
+## change reflected in one but not the other is exactly the drift class this
+## step's own task brief calls out by name (the same class of bug Step 2's
+## review found: a green suite that never actually exercised the second
+## caller). This proves _build_scenario() derives board/cover/spawn tiles
+## from the SAME catalog definition BattleController reads, not still from
+## ScenarioContract's generic DEFAULT_BOARD_WIDTH/HEIGHT/PLAYER_START_
+## POSITIONS/ENEMY_START_POSITIONS fallback.
+func test_campaign_sims_scenario_for_the_migrated_encounter_matches_its_catalog_definition_exactly() -> void:
+	var definition := ContentCatalogScript.get_encounter_definition("obj_tier1_1_goblin_outpost")
+	assert_false(definition.is_empty(), "Setup: obj_tier1_1_goblin_outpost must be a real catalog entry")
+
+	GameSession.create_party()
+	for adventurer in GameSession.adventurers.slice(0, 3):
+		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
+
+	var sim := CampaignSimScript.new()
+	var expedition := GameSession.get_expedition("obj_tier1_1_goblin_outpost")
+	var scenario: Dictionary = sim._build_scenario("obj_tier1_1_goblin_outpost", expedition)
+
+	assert_eq(scenario.board.width, definition.grid_size.width)
+	assert_eq(scenario.board.height, definition.grid_size.height)
+	var cover_by_position: Dictionary = {}
+	for cover_entry in (scenario.board.cover as Array):
+		cover_by_position[ScenarioContractScript.position_from_dict(cover_entry.position)] = cover_entry.tier
+	assert_eq(cover_by_position, definition.cover_tiles)
+
+	var player_positions: Array[Vector2i] = []
+	for unit_spec in (scenario.player.units as Array):
+		player_positions.append(ScenarioContractScript.position_from_dict(unit_spec.position))
+	assert_eq(player_positions, definition.player_spawns.slice(0, player_positions.size()))
+
+	var enemy_positions: Array[Vector2i] = []
+	for unit_spec in (scenario.enemy.units as Array):
+		enemy_positions.append(ScenarioContractScript.position_from_dict(unit_spec.position))
+	assert_eq(enemy_positions, definition.enemy_spawns.slice(0, enemy_positions.size()))
+	assert_eq(enemy_positions.size(), 3, "goblin x1 + kobold x2, per the catalog's own enemy_composition")

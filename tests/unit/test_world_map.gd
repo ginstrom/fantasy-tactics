@@ -4,6 +4,7 @@ const GridScript := preload("res://scripts/battle/grid.gd")
 const WorldMapScript := preload("res://scripts/world/world_map.gd")
 const WorldMapScene := preload("res://scenes/world/world_map.tscn")
 const GameSessionScript := preload("res://scripts/autoload/game_session.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 
 func before_each() -> void:
@@ -1684,6 +1685,22 @@ func test_the_tier1_1_marker_is_found_by_expedition_id_at() -> void:
 	var tier1_1: Dictionary = GameSession.get_expedition("obj_tier1_1_goblin_outpost")
 
 	assert_eq(world_map._expedition_id_at(tier1_1.position), "obj_tier1_1_goblin_outpost")
+
+
+## Stage 6 Step 3 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/03-authored-content-catalog.md): the marker's position must
+## be the migrated encounter's own ContentCatalog `world_position`
+## specifically -- not merely "whatever GameSession.get_expedition() happens
+## to return" (the assertion every other test above already makes), which
+## would stay green even if the overlay in GameSession.
+## _overlay_content_catalog_definition() silently stopped reading the
+## catalog at all and fell back to EXPEDITIONS' own literal (2, 2).
+func test_the_tier1_1_marker_sits_at_the_content_catalogs_own_world_position() -> void:
+	var world_map := _make_world_map()
+	var definition := ContentCatalogScript.get_encounter_definition("obj_tier1_1_goblin_outpost")
+
+	assert_eq(GameSession.get_expedition("obj_tier1_1_goblin_outpost").position, definition.world_position)
+	assert_eq(world_map._expedition_id_at(definition.world_position), "obj_tier1_1_goblin_outpost")
 
 
 ## Once Tier 1-1 is completed, the marker must move to the newly-unlocked

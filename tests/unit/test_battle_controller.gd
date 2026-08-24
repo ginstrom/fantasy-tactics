@@ -7,6 +7,7 @@ const BattlefieldScene := preload("res://scenes/battle/battlefield.tscn")
 const BattleStateFactory := preload("res://scripts/tools/battle_scenarios/battle_state_factory.gd")
 const ScenarioContract := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
 const BattleBot := preload("res://scripts/tools/battle_bot.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 ## Sentinel (an impossible hit-chance cap) rather than -1.0 alone would also
 ## work, but any negative value signals "no test currently owns a lowered
@@ -5609,5 +5610,71 @@ func test_casting_a_regular_bless_spawns_no_floating_text() -> void:
 	watch_signals(controller)
 
 	assert_true(controller.try_cast_spell("bless", ally.grid_position))
-
 	assert_signal_not_emitted(controller, "combat_text_spawned")
+
+
+## --- Stage 6 Step 3: real-battle parity against ContentCatalog ------------
+## (docs/plans/2026-08-24-stage-6-content-and-domain-foundations/
+## 03-authored-content-catalog.md, task 6's "deterministic scenario parity
+## test asserting that a battle constructed via ContentCatalog matches the
+## exact state of the previously hardcoded setup"). A green test suite alone
+## already proved BattleController compiles/runs against the catalog path --
+## this proves it is ACTUALLY reading the catalog's own real numbers (grid
+## size, spawns, cover), not silently still falling back to GRID_WIDTH/
+## GRID_HEIGHT/PLAYER_START_POSITIONS/ENEMY_START_POSITIONS/no-cover for this
+## id. See test_campaign_sim.gd's sibling test for the same proof against
+## CampaignSim's own independent battle-construction path.
+func test_a_real_battle_against_the_migrated_encounter_matches_its_catalog_definition_exactly() -> void:
+	var definition := ContentCatalogScript.get_encounter_definition("obj_tier1_1_goblin_outpost")
+	assert_false(definition.is_empty(), "Setup: obj_tier1_1_goblin_outpost must be a real catalog entry")
+
+	GameSession.create_party()
+	for adventurer in GameSession.adventurers.slice(0, 3):
+		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
+	GameSession.enter_encounter("obj_tier1_1_goblin_outpost")
+
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_eq(
+		Vector2i(controller.grid.width, controller.grid.height),
+		Vector2i(definition.grid_size.width, definition.grid_size.height)
+	)
+	assert_eq(controller.grid.cover_tiles, definition.cover_tiles)
+
+	var player_positions: Array[Vector2i] = []
+	var enemy_positions: Array[Vector2i] = []
+	for unit in controller.units:
+		if unit.side == BattleControllerScript.Side.PLAYER:
+			player_positions.append(unit.grid_position)
+		else:
+			enemy_positions.append(unit.grid_position)
+	assert_eq(player_positions, definition.player_spawns.slice(0, player_positions.size()))
+	assert_eq(enemy_positions, definition.enemy_spawns.slice(0, enemy_positions.size()))
+	assert_eq(enemy_positions.size(), 3, "goblin x1 + kobold x2, per the catalog's own enemy_composition")
+
+
+## goblin_camp is seeded into every fresh campaign from turn 1 (see
+## GameSession.reset()'s active_encounters seed) -- a real, always-present
+## early encounter, not a debug-only id. Migrating cover off it during Step 3
+## (onto obj_tier1_1_goblin_outpost instead) would have silently dropped its
+## only Cover tiles from live play; this catalog entry restores them via the
+## new system instead of leaving goblin_camp fielding no Cover at all.
+func test_goblin_camp_keeps_its_own_cover_tiles_through_the_content_catalog() -> void:
+	var definition := ContentCatalogScript.get_encounter_definition("goblin_camp")
+	assert_false(definition.is_empty(), "Setup: goblin_camp must be a real catalog entry")
+	assert_eq(
+		definition.cover_tiles, {Vector2i(3, 2): GridScript.COVER_LOW, Vector2i(4, 3): GridScript.COVER_HIGH},
+		"goblin_camp's cover must match its original hardcoded _cover_tiles_for_encounter() values"
+	)
+
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(String(GameSession.adventurers[0].id))
+	GameSession.enter_encounter("goblin_camp")
+
+	var battlefield: Node2D = BattlefieldScene.instantiate()
+	add_child_autofree(battlefield)
+	var controller: Node2D = battlefield.grid
+
+	assert_eq(controller.grid.cover_tiles, definition.cover_tiles, "A real battle against goblin_camp must field the catalog's own restored cover")

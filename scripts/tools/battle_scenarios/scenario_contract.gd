@@ -24,6 +24,7 @@ extends RefCounted
 ## this file's job -- see battle_state_factory.gd.
 
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 const CONTRACT_VERSION := 1
 
@@ -59,12 +60,14 @@ const KNOWN_PLAYER_TEMPLATES: Array[String] = ["warrior", "scout", "cleric", "ma
 # The four original species plus the authored-ladder additions (see
 # GameSession's *_ENEMY_STATS consts and docs/plans/2026-08-18-core-loop-
 # and-engagement/05-authored-encounters-and-final-boss.md) -- every name here
-# must resolve in BattleStateFactory._read_enemy_template_stats().
-const KNOWN_ENEMY_TEMPLATES: Array[String] = [
-	"goblin", "orc", "kobold", "hobgoblin",
-	"goblin_archer", "goblin_shaman", "kobold_slinger", "orc_bruiser",
-	"hobgoblin_elite", "hobgoblin_champion", "orc_warlord", "ogre",
-]
+# must resolve in BattleStateFactory._read_enemy_template_stats(). Sourced
+# directly from ContentCatalog.KNOWN_ENEMY_TEMPLATE_IDS (Stage 6 Step 3,
+# docs/plans/2026-08-24-stage-6-content-and-domain-foundations/
+# 03-authored-content-catalog.md's "validate enemy templates ... against
+# ContentCatalog" requirement) rather than a hand-kept duplicate list, so a
+# scenario-tooling template id and a catalog encounter's own
+# enemy_composition.template_id vocabulary can never silently drift apart.
+const KNOWN_ENEMY_TEMPLATES: Array[String] = ContentCatalogScript.KNOWN_ENEMY_TEMPLATE_IDS
 
 # JSON-safe facing values a unit record may declare (see _normalize_side()'s
 # per-side default and facing_from_string(), which BattleStateFactory uses to

@@ -41,6 +41,7 @@ extends GutTest
 const CampaignSimScript := preload("res://scripts/tools/campaign_sim.gd")
 const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
 const BattleStateFactoryScript := preload("res://scripts/tools/battle_scenarios/battle_state_factory.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 ## A representative victory seed (CampaignSim.REPRESENTATIVE_VICTORY_SEEDS) --
 ## reused here (as test_stage_3_campaign_assembly.gd also does) so the
@@ -387,29 +388,34 @@ func test_stage_5_slices_compose_across_one_real_campaign_journey() -> void:
 	assert_true(tactics_controller.last_attack_result.parried)
 	assert_eq(parry_defender.counter_bonus_pending_against, parry_attacker, "A successful Parry grants the defender a counter-bonus against that same attacker")
 
-	# Cover: placed on goblin_camp's own real, hand-authored Cover tile
-	# (battle_controller.gd's _cover_tiles_for_encounter()), not an invented
-	# position -- ties this demonstration to Step 3's real "encounter use."
+	# Cover: placed on obj_tier1_1_goblin_outpost's own real, hand-authored
+	# Cover tile (config/content/encounters/obj_tier1_1_goblin_outpost.json,
+	# read through ContentCatalog -- see content_catalog.gd and Stage 6 Step
+	# 3, docs/plans/2026-08-24-stage-6-content-and-domain-foundations/
+	# 03-authored-content-catalog.md), not an invented position -- ties this
+	# demonstration to Step 3's real "encounter use."
+	var real_tier1_1_cover: Dictionary = ContentCatalogScript.get_encounter_definition(
+		"obj_tier1_1_goblin_outpost"
+	).cover_tiles
+	assert_false(real_tier1_1_cover.is_empty(), "Setup: obj_tier1_1_goblin_outpost must carry real, hand-authored Cover tiles")
 	var cover_scenario := ScenarioContractScript.normalize({
 		"scenario_id": "stage5_exit_gate_cover",
-		"player": {"units": [{"id": "cover_attacker", "template_id": "scout", "weapon_id": "shortbow_iron", "armor_id": GameSession.DEFAULT_ARMOR_ID, "level": 1, "position": {"x": 4, "y": 0}}]},
-		"enemy": {"units": [{"id": "cover_defender", "template_id": "goblin", "position": {"x": 4, "y": 3}, "facing": "up", "modifiers": {"max_health": 500}}]},
+		"player": {"units": [{"id": "cover_attacker", "template_id": "scout", "weapon_id": "shortbow_iron", "armor_id": GameSession.DEFAULT_ARMOR_ID, "level": 1, "position": {"x": 3, "y": 0}}]},
+		"enemy": {"units": [{"id": "cover_defender", "template_id": "goblin", "position": {"x": 3, "y": 4}, "facing": "up", "modifiers": {"max_health": 500}}]},
 		"rules": {"round_limit": 1},
 	})
 	var cover_controller: Node2D = BattleStateFactoryScript.build(cover_scenario, 1)
 	autofree(cover_controller)
-	var real_goblin_camp_cover: Dictionary = cover_controller._cover_tiles_for_encounter(GameSession.GOBLIN_CAMP_ID)
-	assert_false(real_goblin_camp_cover.is_empty(), "Setup: goblin_camp must carry real, hand-authored Cover tiles")
-	for cover_pos in real_goblin_camp_cover:
-		cover_controller.grid.cover_tiles[cover_pos] = real_goblin_camp_cover[cover_pos]
-	var cover_attacker = cover_controller.get_unit_at(Vector2i(4, 0))
-	var cover_defender = cover_controller.get_unit_at(Vector2i(4, 3))
+	for cover_pos in real_tier1_1_cover:
+		cover_controller.grid.cover_tiles[cover_pos] = real_tier1_1_cover[cover_pos]
+	var cover_attacker = cover_controller.get_unit_at(Vector2i(3, 0))
+	var cover_defender = cover_controller.get_unit_at(Vector2i(3, 4))
 	cover_controller.selected_unit = cover_attacker
 	cover_controller.hit_roll = func() -> float: return 0.0
 	cover_controller.crit_roll = func() -> float: return 1.0
 	assert_true(cover_controller.try_attack_selected_unit(cover_defender.grid_position))
-	assert_true(cover_controller.last_attack_result.cover_applied, "A front-facing missile attack against goblin_camp's own real Cover tile must apply its Guard bonus")
-	assert_eq(cover_controller.last_attack_result.cover_tile, real_goblin_camp_cover[Vector2i(4, 3)])
+	assert_true(cover_controller.last_attack_result.cover_applied, "A front-facing missile attack against obj_tier1_1_goblin_outpost's own real Cover tile must apply its Guard bonus")
+	assert_eq(cover_controller.last_attack_result.cover_tile, real_tier1_1_cover[Vector2i(3, 4)])
 
 	# Opportunity Attack: departing an adjacent melee-capable enemy's reach
 	# triggers exactly one free reaction (D2).

@@ -46,6 +46,7 @@ const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
 const FloatingTextScript := preload("res://scripts/battle/floating_text.gd")
 const FloatingTextScene := preload("res://scenes/battle/floating_text.tscn")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 const GRID_WIDTH := 6
 const GRID_HEIGHT := 6
@@ -342,17 +343,28 @@ var _last_known_enemy_positions: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group(GROUP)
-	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
-	grid.cover_tiles = _cover_tiles_for_encounter(_current_encounter_id())
+	# Stage 6 Step 3 (docs/plans/2026-08-24-stage-6-content-and-domain-
+	# foundations/03-authored-content-catalog.md): when the current encounter
+	# id has a ContentCatalog definition, board dimensions, cover, and unit
+	# spawn tiles all come from it -- see _board_dimensions()/
+	# _player_spawn_positions()/_enemy_spawn_positions() below, which fall
+	# back to this file's own GRID_WIDTH/GRID_HEIGHT/PLAYER_START_POSITIONS/
+	# ENEMY_START_POSITIONS constants (and empty cover) for every encounter
+	# still outside the catalog, exactly as before this step existed.
+	var catalog_definition: Dictionary = ContentCatalogScript.get_encounter_definition(_current_encounter_id())
+	var board_size := _board_dimensions(catalog_definition)
+	grid = GridScript.new(board_size.x, board_size.y)
+	grid.cover_tiles = (catalog_definition.cover_tiles as Dictionary).duplicate() if not catalog_definition.is_empty() else {}
 	var expedition := _get_expedition_for_battle()
 	_player_adventurer_ids = _get_player_adventurer_ids()
 	units = []
-	for index in mini(_player_adventurer_ids.size(), PLAYER_START_POSITIONS.size()):
+	var player_spawn_positions := _player_spawn_positions(catalog_definition)
+	for index in mini(_player_adventurer_ids.size(), player_spawn_positions.size()):
 		var adventurer_id: String = _player_adventurer_ids[index]
 		var damage_range: Vector2i = GameSession.get_effective_weapon_damage_range(adventurer_id)
 		var attack_range: Vector2i = GameSession.get_effective_weapon_attack_range(adventurer_id)
 		var player_unit := UnitScript.new(
-			PLAYER_START_POSITIONS[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
+			player_spawn_positions[index], PLAYER_COLORS[index % PLAYER_COLORS.size()], Side.PLAYER,
 			GameSession.get_effective_action_points(adventurer_id),
 			GameSession.get_effective_max_health(adventurer_id),
 			damage_range.x,
@@ -432,7 +444,8 @@ func _ready() -> void:
 		units.append(player_unit)
 	var enemy_specs: Array[Dictionary] = _build_enemy_specs(expedition)
 	var enemy_type_counts: Dictionary = {}
-	for index in mini(enemy_specs.size(), ENEMY_START_POSITIONS.size()):
+	var enemy_spawn_positions := _enemy_spawn_positions(catalog_definition)
+	for index in mini(enemy_specs.size(), enemy_spawn_positions.size()):
 		var enemy_stats: Dictionary = enemy_specs[index]
 		# Enemy hit chance/Guard are normalized once through GameSession's
 		# shared adapter (see get_enemy_profile_hit_chance()/get_enemy_
@@ -444,7 +457,7 @@ func _ready() -> void:
 		var enemy_hit_chance: float = GameSession.get_enemy_profile_hit_chance(enemy_stats)
 		var enemy_guard: int = GameSession.get_enemy_profile_guard(enemy_stats)
 		var enemy_unit := UnitScript.new(
-			ENEMY_START_POSITIONS[index], ENEMY_COLOR, Side.ENEMY,
+			enemy_spawn_positions[index], ENEMY_COLOR, Side.ENEMY,
 			int(enemy_stats.get("action_points", BASE_ACTION_POINTS)),
 			enemy_stats.max_health, enemy_stats.get("damage_min", int(enemy_stats.get("attack_damage", 1))),
 			enemy_stats.get("damage_max", int(enemy_stats.get("attack_damage", 1))), enemy_hit_chance,
@@ -524,25 +537,34 @@ func _current_encounter_id() -> String:
 	return encounter_id
 
 
-## Cover terrain (Stage 5 D2, docs/plans/2026-08-23-stage-5-strategic-
-## roster-expansion/decision-ledger.md's "Terrain representation/
-## distribution" row): hand-authored per encounter, exactly like
-## PLAYER_START_POSITIONS/ENEMY_START_POSITIONS above -- never procedural.
-## Only the Goblin Camp -- this step's authored demonstration encounter --
-## carries an entry; every other encounter fields no Cover at all, exactly
-## as before this step existed. A Low Cover tile sits in the open ground a
-## player unit can reach before engaging; a High Cover tile sits one tile
-## further in, giving a missile-armed party member (a Scout) a real
-## positional choice on the approach to the Goblin's fixed (5,5) spawn.
-func _cover_tiles_for_encounter(encounter_id: String) -> Dictionary:
-	match encounter_id:
-		GameSession.GOBLIN_CAMP_ID:
-			return {
-				Vector2i(3, 2): GridScript.COVER_LOW,
-				Vector2i(4, 3): GridScript.COVER_HIGH,
-			}
-		_:
-			return {}
+## Board dimensions for this battle (Stage 6 Step 3, docs/plans/2026-08-24-
+## stage-6-content-and-domain-foundations/03-authored-content-catalog.md):
+## `catalog_definition`'s own grid_size when the current encounter has a
+## ContentCatalog entry, else this file's own GRID_WIDTH/GRID_HEIGHT
+## constants -- the same fallback every still-legacy (non-cataloged)
+## encounter always used before this step existed.
+func _board_dimensions(catalog_definition: Dictionary) -> Vector2i:
+	if catalog_definition.is_empty():
+		return Vector2i(GRID_WIDTH, GRID_HEIGHT)
+	var grid_size: Dictionary = catalog_definition.grid_size
+	return Vector2i(int(grid_size.get("width", GRID_WIDTH)), int(grid_size.get("height", GRID_HEIGHT)))
+
+
+## Player spawn tiles for this battle: `catalog_definition`'s own
+## player_spawns when present, else this file's own PLAYER_START_POSITIONS
+## constant -- see _board_dimensions()'s identical fallback rule.
+func _player_spawn_positions(catalog_definition: Dictionary) -> Array[Vector2i]:
+	if catalog_definition.is_empty() or (catalog_definition.player_spawns as Array).is_empty():
+		return PLAYER_START_POSITIONS
+	return catalog_definition.player_spawns
+
+
+## Enemy spawn tiles for this battle -- see _player_spawn_positions()'s
+## identical doc comment, mirrored for ENEMY_START_POSITIONS.
+func _enemy_spawn_positions(catalog_definition: Dictionary) -> Array[Vector2i]:
+	if catalog_definition.is_empty() or (catalog_definition.enemy_spawns as Array).is_empty():
+		return ENEMY_START_POSITIONS
+	return catalog_definition.enemy_spawns
 
 
 ## Flattens an expedition's enemy composition into one ordered stat block per

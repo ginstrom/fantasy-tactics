@@ -42,6 +42,7 @@ const BattleControllerScript := preload("res://scripts/battle/battle_controller.
 const GridScript := preload("res://scripts/battle/grid.gd")
 const UnitScript := preload("res://scripts/battle/unit.gd")
 const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 
 ## Constructs one battle's worth of state from `scenario` (a
@@ -127,37 +128,15 @@ static func _read_player_template_base_stats(template_id: String) -> Dictionary:
 ## (see scenario_contract.gd's KNOWN_ENEMY_TEMPLATES) -- the same data
 ## BattleController._get_enemy_stats() ultimately reads through
 ## GameSession.EXPEDITIONS/STAR_ENEMY_COMPOSITIONS, resolved here directly
-## by name instead of through GameSession.selected_encounter.
+## by name instead of through GameSession.selected_encounter. Delegates to
+## ContentCatalog.resolve_enemy_template() (Stage 6 Step 3, docs/plans/
+## 2026-08-24-stage-6-content-and-domain-foundations/03-authored-content-
+## catalog.md's "validate enemy templates ... against ContentCatalog"
+## requirement) rather than keeping its own duplicate match statement, so
+## this file's enemy-template resolution and a catalog encounter's own
+## enemy_composition.template_id validation can never silently diverge.
 static func _read_enemy_template_stats(template_id: String) -> Dictionary:
-	match template_id:
-		"goblin":
-			return GameSession.GOBLIN_ENEMY_STATS
-		"orc":
-			return GameSession.ORC_ENEMY_STATS
-		"kobold":
-			return GameSession.KOBOLD_ENEMY_STATS
-		"hobgoblin":
-			return GameSession.HOBGOBLIN_ENEMY_STATS
-		# Authored-ladder additions (see docs/plans/2026-08-18-core-loop-and-
-		# engagement/05-authored-encounters-and-final-boss.md).
-		"goblin_archer":
-			return GameSession.GOBLIN_ARCHER_ENEMY_STATS
-		"goblin_shaman":
-			return GameSession.GOBLIN_SHAMAN_ENEMY_STATS
-		"kobold_slinger":
-			return GameSession.KOBOLD_SLINGER_ENEMY_STATS
-		"orc_bruiser":
-			return GameSession.ORC_BRUISER_ENEMY_STATS
-		"hobgoblin_elite":
-			return GameSession.HOBGOBLIN_ELITE_ENEMY_STATS
-		"hobgoblin_champion":
-			return GameSession.HOBGOBLIN_CHAMPION_ENEMY_STATS
-		"orc_warlord":
-			return GameSession.ORC_WARLORD_ENEMY_STATS
-		"ogre":
-			return GameSession.OGRE_ENEMY_STATS
-		_:
-			return {}
+	return ContentCatalogScript.resolve_enemy_template(template_id)
 
 
 static func _build_player_unit(spec: Dictionary, index: int):

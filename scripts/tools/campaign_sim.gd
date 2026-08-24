@@ -39,6 +39,7 @@ const BattleStateFactoryScript := preload("res://scripts/tools/battle_scenarios/
 const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
 const BattleBotScript := preload("res://scripts/tools/battle_bot.gd")
 const BattleControllerScript := preload("res://scripts/battle/battle_controller.gd")
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 ## The three root classes the scene-free battle path can field (see this
 ## file's own header comment).
@@ -908,19 +909,46 @@ func _return_to_encampment(telemetry: Dictionary) -> void:
 ## hand-authors per node (see that file and test_battle_state_factory.gd),
 ## except the player side reflects the simulator's actual current roster
 ## (level, equipped gear) rather than a fixed fixture.
+## Stage 6 Step 3: when `encounter_id` has a ContentCatalog definition, the
+## simulated battle's board (dimensions + cover) and every unit's spawn tile
+## are derived from it -- the exact same source BattleController._ready()
+## now reads for a real production battle against this id (see that file's
+## _board_dimensions()/_player_spawn_positions()/_enemy_spawn_positions()) --
+## so a campaign_sim run and a real playthrough can never silently diverge
+## for a migrated encounter. Every other still-legacy encounter id (no
+## catalog file) omits "board" and per-unit "position" entirely, leaving
+## ScenarioContract.normalize()'s own defaults (DEFAULT_BOARD_WIDTH/HEIGHT,
+## BattleControllerScript.PLAYER_START_POSITIONS/ENEMY_START_POSITIONS) to
+## apply exactly as before this step existed -- the same fallback pair
+## BattleController._ready() itself falls back to for a non-cataloged id.
 func _build_scenario(encounter_id: String, expedition: Dictionary) -> Dictionary:
+	var catalog_definition: Dictionary = ContentCatalogScript.get_encounter_definition(encounter_id)
 	var raw := {
 		"scenario_id": "campaign_sim_%s" % encounter_id,
-		"player": {"units": _build_player_units()},
-		"enemy": {"units": _build_enemy_units(expedition)},
+		"player": {"units": _build_player_units(catalog_definition)},
+		"enemy": {"units": _build_enemy_units(expedition, catalog_definition)},
 		"rules": {"round_limit": MAX_BATTLE_ROUNDS},
 		"randomness": {"root_seed": sim_seed, "iterations": 1},
 	}
+	if not catalog_definition.is_empty():
+		var cover: Array = []
+		for cover_pos in (catalog_definition.cover_tiles as Dictionary):
+			cover.append({
+				"position": ScenarioContractScript.position_to_dict(cover_pos),
+				"tier": catalog_definition.cover_tiles[cover_pos],
+			})
+		raw["board"] = {
+			"width": catalog_definition.grid_size.width,
+			"height": catalog_definition.grid_size.height,
+			"cover": cover,
+		}
 	return ScenarioContractScript.normalize(raw)
 
 
-func _build_player_units() -> Array:
+func _build_player_units(catalog_definition: Dictionary = {}) -> Array:
+	var player_spawns: Array = catalog_definition.get("player_spawns", []) if not catalog_definition.is_empty() else []
 	var units: Array = []
+	var index := 0
 	for member_id in GameSession.get_selected_party().get("member_ids", []):
 		var adventurer := GameSession.get_adventurer(member_id)
 		if adventurer.is_empty() or not _is_fieldable(adventurer):
@@ -932,6 +960,9 @@ func _build_player_units() -> Array:
 			"armor_id": String(adventurer.equipment.get("armor", GameSession.DEFAULT_ARMOR_ID)),
 			"level": int(adventurer.get("level", 1)),
 		}
+		if index < player_spawns.size():
+			unit_spec["position"] = ScenarioContractScript.position_to_dict(player_spawns[index])
+		index += 1
 		# Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is
 		# durable adventurer state" paragraph): this simulator plays many
 		# battles back to back off the same live roster, so a Cleric's MP
@@ -976,7 +1007,8 @@ func _build_player_units() -> Array:
 	return units
 
 
-func _build_enemy_units(expedition: Dictionary) -> Array:
+func _build_enemy_units(expedition: Dictionary, catalog_definition: Dictionary = {}) -> Array:
+	var enemy_spawns: Array = catalog_definition.get("enemy_spawns", []) if not catalog_definition.is_empty() else []
 	var units: Array = []
 	var index := 0
 	if expedition.has("enemies"):
@@ -984,13 +1016,19 @@ func _build_enemy_units(expedition: Dictionary) -> Array:
 			var stats: Dictionary = group.get("enemy", {})
 			var template_id := _enemy_template_id(stats)
 			for _i in int(group.get("count", 1)):
-				units.append({"id": "enemy_%d" % index, "template_id": template_id})
+				var unit_spec := {"id": "enemy_%d" % index, "template_id": template_id}
+				if index < enemy_spawns.size():
+					unit_spec["position"] = ScenarioContractScript.position_to_dict(enemy_spawns[index])
+				units.append(unit_spec)
 				index += 1
 	else:
 		var stats: Dictionary = expedition.get("enemy", {})
 		var template_id := _enemy_template_id(stats)
 		for _i in int(stats.get("count", 1)):
-			units.append({"id": "enemy_%d" % index, "template_id": template_id})
+			var unit_spec := {"id": "enemy_%d" % index, "template_id": template_id}
+			if index < enemy_spawns.size():
+				unit_spec["position"] = ScenarioContractScript.position_to_dict(enemy_spawns[index])
+			units.append(unit_spec)
 			index += 1
 	return units
 

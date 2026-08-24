@@ -1428,16 +1428,18 @@ func test_show_battle_result_names_the_won_goblin_camp_in_the_victory_message() 
 	assert_true(battlefield.grid.input_locked)
 
 
-## --- Stage 5 D2: the Goblin Camp demonstration encounter's authored Cover --
+## --- Stage 5 D2 / Stage 6 Step 3: the migrated Tier 1-1 encounter's
+## authored Cover (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/03-authored-content-catalog.md) -----------------------------
 
-func test_the_goblin_camp_battle_hydrates_its_authored_cover_tiles() -> void:
+func test_the_tier1_1_battle_hydrates_its_authored_cover_tiles() -> void:
 	GameSession.reset()
-	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.enter_encounter("obj_tier1_1_goblin_outpost")
 	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 
 	assert_eq(battlefield.grid.grid.get_cover(Vector2i(3, 2)), "low")
-	assert_eq(battlefield.grid.grid.get_cover(Vector2i(4, 3)), "high")
+	assert_eq(battlefield.grid.grid.get_cover(Vector2i(3, 4)), "high")
 
 
 func test_an_encounter_with_no_authored_cover_fields_none() -> void:
@@ -1451,7 +1453,7 @@ func test_an_encounter_with_no_authored_cover_fields_none() -> void:
 
 func test_cover_markers_render_a_text_badge_distinct_from_colour_alone() -> void:
 	GameSession.reset()
-	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+	GameSession.enter_encounter("obj_tier1_1_goblin_outpost")
 	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
 

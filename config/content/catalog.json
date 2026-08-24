@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "encounters": [
+    "res://config/content/encounters/obj_tier1_1_goblin_outpost.json",
+    "res://config/content/encounters/goblin_camp.json"
+  ]
+}

@@ -1,5 +1,11 @@
 extends Node
 
+## Stage 6 Step 3 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/03-authored-content-catalog.md): the authored-content loader
+## get_expedition() overlays onto EXPEDITIONS for any encounter id that has
+## migrated into config/content/ -- see _overlay_content_catalog_definition().
+const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
+
 ## Emitted whenever campaign_objective_id, completed_objectives,
 ## unlocked_authored_encounters, is_campaign_completed, or
 ## is_free_play_active changes (see complete_campaign_objective() and
@@ -1674,7 +1680,22 @@ func _init() -> void:
 
 func _ready() -> void:
 	_load_balance_config()
+	_validate_content_catalog_at_startup()
 	reset()
+
+
+## Stage 6 Step 3's manual check requires a clear startup diagnostic (not a
+## crash, not silently broken battle state) when config/content/ carries an
+## invalid encounter -- ContentCatalog.load_catalog() never crashes on bad
+## content (see its own doc comment), so this just surfaces whatever
+## structured errors it already collected via push_error, exactly once at
+## boot. An invalid/missing catalog entry otherwise degrades gracefully:
+## get_expedition() simply keeps returning the untouched EXPEDITIONS entry
+## for that id (see _overlay_content_catalog_definition()'s early-return).
+func _validate_content_catalog_at_startup() -> void:
+	var catalog := ContentCatalogScript.load_catalog()
+	for error in (catalog.errors as Array):
+		push_error("ContentCatalog: %s" % error)
 
 
 func _load_balance_config() -> void:
@@ -3175,7 +3196,37 @@ func get_expedition(encounter_id: String) -> Dictionary:
 		return active_encounters[instance_index].duplicate(true)
 	if not EXPEDITIONS.has(encounter_id):
 		return {}
-	return EXPEDITIONS[encounter_id].duplicate(true)
+	return _overlay_content_catalog_definition(encounter_id, EXPEDITIONS[encounter_id].duplicate(true))
+
+
+## Overlays a ContentCatalog encounter definition's authored fields onto a
+## legacy EXPEDITIONS entry, for whichever encounter id has migrated into
+## config/content/ (Stage 6 Step 3). ContentCatalog now owns `position`
+## (from its own `world_position`), `clear_xp`, `difficulty` (from its own
+## `tier`), `name_key`, and `enemies` (rebuilt from its own
+## `enemy_composition`, in the exact `{"enemy": <*_ENEMY_STATS>, "count": n}`
+## group shape EXPEDITIONS' own "obj_*" entries already use -- see
+## _build_enemy_specs() in battle_controller.gd and _build_enemy_units() in
+## campaign_sim.gd, both of which keep working unchanged against this
+## overlay) -- so a hand-edited encounter JSON is reflected everywhere
+## get_expedition() is read from (World Map placement, threat stars,
+## scouting intel, reward XP) with no changes at any of those call sites.
+## Every other still-legacy EXPEDITIONS entry (no catalog file for its id)
+## is returned completely unchanged, exactly as before this step existed.
+func _overlay_content_catalog_definition(encounter_id: String, expedition: Dictionary) -> Dictionary:
+	var definition: Dictionary = ContentCatalogScript.get_encounter_definition(encounter_id)
+	if definition.is_empty():
+		return expedition
+	expedition["position"] = definition.world_position
+	expedition["clear_xp"] = definition.clear_xp
+	expedition["difficulty"] = definition.tier
+	expedition["name_key"] = definition.name_key
+	var enemies: Array = []
+	for group in (definition.enemy_composition as Array):
+		var stats: Dictionary = ContentCatalogScript.resolve_enemy_template(String(group.template_id))
+		enemies.append({"enemy": stats, "count": int(group.count)})
+	expedition["enemies"] = enemies
+	return expedition
 
 
 ## Every THREAT_TURN_INTERVAL world turns elapsed adds one star on top of an

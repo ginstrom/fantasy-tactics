@@ -306,11 +306,18 @@ func test_selected_section_hides_the_cover_label_on_an_uncovered_tile() -> void:
 	assert_false(panel.get_node("Content/SelectedSection/CoverLabel").visible)
 
 
+## Stage 6 Step 3 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/03-authored-content-catalog.md) migrated the authored Cover
+## demonstration off the Goblin Camp sandbox expedition (which now fields no
+## Cover at all) onto obj_tier1_1_goblin_outpost's own ContentCatalog
+## definition -- see content_catalog.gd and config/content/encounters/
+## obj_tier1_1_goblin_outpost.json.
 func test_selected_section_shows_the_cover_label_for_a_unit_standing_on_a_cover_tile() -> void:
+	GameSession.enter_encounter("obj_tier1_1_goblin_outpost")
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var warrior = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
-	warrior.grid_position = Vector2i(3, 2)  # the Goblin Camp's own authored Low Cover tile
+	var warrior = battlefield.grid.get_unit_at(Vector2i(0, 3))  # obj_tier1_1_goblin_outpost's first player_spawns entry
+	warrior.grid_position = Vector2i(3, 2)  # obj_tier1_1_goblin_outpost's own authored Low Cover tile
 	battlefield.grid._select_unit(warrior)
 
 	var panel := _panel(battlefield)
@@ -320,10 +327,11 @@ func test_selected_section_shows_the_cover_label_for_a_unit_standing_on_a_cover_
 
 
 func test_hovered_section_shows_the_cover_label_too_since_terrain_is_public_information() -> void:
+	GameSession.enter_encounter("obj_tier1_1_goblin_outpost")
 	var battlefield: Node2D = BattlefieldScene.instantiate()
 	add_child_autofree(battlefield)
-	var goblin = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
-	goblin.grid_position = Vector2i(4, 3)  # the Goblin Camp's own authored High Cover tile
+	var goblin = battlefield.grid.get_unit_at(Vector2i(6, 3))  # obj_tier1_1_goblin_outpost's first enemy_spawns entry
+	goblin.grid_position = Vector2i(3, 4)  # obj_tier1_1_goblin_outpost's own authored High Cover tile
 
 	battlefield.grid._set_hovered_unit(goblin)
 

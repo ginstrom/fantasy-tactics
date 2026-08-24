@@ -225,6 +225,15 @@ func _expedition_id_at(pos: Vector2i) -> String:
 ## is "" from that point on -- see GameSession.get_current_campaign_
 ## objective()), so no such marker renders once there is no current
 ## objective left to point at.
+##
+## Stage 6 Step 3 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/03-authored-content-catalog.md): for the encounter id
+## migrated into config/content/, GameSession.get_expedition()'s own
+## "position" field is no longer EXPEDITIONS' hardcoded literal -- it is
+## overlaid from that encounter's ContentCatalog definition (see
+## GameSession._overlay_content_catalog_definition()), so this function
+## keeps working unchanged while now placing that marker at the JSON's own
+## authored `world_position`.
 func _current_campaign_objective_marker() -> Dictionary:
 	var objective := GameSession.get_current_campaign_objective()
 	var encounter_id: String = objective.get("encounter_id", "")

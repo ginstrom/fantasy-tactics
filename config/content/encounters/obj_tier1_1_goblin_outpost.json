@@ -1,0 +1,21 @@
+{
+  "id": "obj_tier1_1_goblin_outpost",
+  "name_key": "expedition.obj_tier1_1_goblin_outpost.name",
+  "tier": 1,
+  "category": "authored_objective",
+  "world_position": { "x": 3, "y": 4 },
+  "grid_size": { "width": 7, "height": 7 },
+  "player_spawns": [{ "x": 0, "y": 3 }, { "x": 0, "y": 2 }, { "x": 0, "y": 4 }],
+  "enemy_spawns": [{ "x": 6, "y": 3 }, { "x": 6, "y": 2 }, { "x": 6, "y": 4 }],
+  "cover_tiles": [
+    { "x": 3, "y": 2, "tier": "low" },
+    { "x": 3, "y": 4, "tier": "high" }
+  ],
+  "enemy_composition": [
+    { "template_id": "goblin", "count": 1 },
+    { "template_id": "kobold", "count": 2 }
+  ],
+  "clear_xp": 15,
+  "reward_bonus_multiplier": 1,
+  "prerequisite_objective_id": ""
+}

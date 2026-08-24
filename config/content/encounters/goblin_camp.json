@@ -1,0 +1,20 @@
+{
+  "id": "goblin_camp",
+  "name_key": "expedition.goblin_camp.name",
+  "tier": 1,
+  "category": "sandbox_expedition",
+  "world_position": { "x": 4, "y": 4 },
+  "grid_size": { "width": 6, "height": 6 },
+  "player_spawns": [{ "x": 0, "y": 0 }, { "x": 1, "y": 0 }, { "x": 0, "y": 1 }, { "x": 1, "y": 1 }, { "x": 2, "y": 0 }],
+  "enemy_spawns": [{ "x": 5, "y": 5 }],
+  "cover_tiles": [
+    { "x": 3, "y": 2, "tier": "low" },
+    { "x": 4, "y": 3, "tier": "high" }
+  ],
+  "enemy_composition": [
+    { "template_id": "goblin", "count": 1 }
+  ],
+  "clear_xp": 10,
+  "reward_bonus_multiplier": 1,
+  "prerequisite_objective_id": ""
+}
