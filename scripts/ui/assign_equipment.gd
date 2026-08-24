@@ -8,9 +8,9 @@ extends Control
 ## Details' Equip, scoped to the current party — the victory summary has
 ## no Equip action at all, see battle_result.gd).
 ## Activating a row equips that adventurer immediately — via
-## GameSession.equip_item_from_party_store() when this screen is scoped to
+## GameSession.equip_item_from_party_carry() when this screen is scoped to
 ## a party (World Map Party Details' Equip, about a deployed party's own
-## not-yet-banked loot), or via GameSession.equip_item_from_bank() when
+## not-yet-banked carry), or via GameSession.equip_item_from_bank() when
 ## unscoped (Stores' Equip, always from the bank) — then returns to
 ## whichever screen sent us here
 ## (GameManager.assign_equipment_origin), mirroring add_member.gd's
@@ -82,7 +82,7 @@ func _scoped_adventurers() -> Array:
 
 func _on_row_activated(row_id: Variant) -> void:
 	var equipped: bool = (
-		GameSession.equip_item_from_party_store(str(row_id), item_id)
+		GameSession.equip_item_from_party_carry(GameManager.assign_equipment_party_id, str(row_id), item_id)
 		if GameManager.assign_equipment_party_id != ""
 		else GameSession.equip_item_from_bank(str(row_id), item_id)
 	)

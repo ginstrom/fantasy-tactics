@@ -457,19 +457,20 @@ func test_stage_5_slices_compose_across_one_real_campaign_journey() -> void:
 	# =========================================================================
 
 	assert_true(GameSession.can_party_enter_battle(party_a_id))
-	assert_true(GameSession.claim_battle_for_party(party_a_id))
+	assert_false(GameSession.create_battle_context(party_a_id, GameSession.GOBLIN_CAMP_ID).is_empty())
 	assert_false(GameSession.can_party_enter_battle(party_b_id), "A second party's Enter must be blocked while the first holds the claim")
-	assert_false(GameSession.claim_battle_for_party(party_b_id))
-	GameSession.release_battle_claim()
+	assert_true(GameSession.create_battle_context(party_b_id, GameSession.GOBLIN_CAMP_ID).is_empty())
+	GameSession.resolve_battle_retreat(GameSession.get_active_battle_context().battle_id)
 	assert_true(GameSession.can_party_enter_battle(party_b_id))
-	assert_true(GameSession.claim_battle_for_party(party_b_id))
-	GameSession.release_battle_claim()
+	assert_false(GameSession.create_battle_context(party_b_id, GameSession.GOBLIN_CAMP_ID).is_empty())
+	GameSession.resolve_battle_retreat(GameSession.get_active_battle_context().battle_id)
 
 	# =========================================================================
 	# PART 9 -- Complete goblin_camp's still-active quest for real, proving
 	# reward/objective ownership stays correct: the quest reward folds into
-	# Party A's own battle_reward, and Party B's own member is completely
-	# untouched by any of Party A's battles above.
+	# Party A's own carry via the active battle context's reward, and Party
+	# B's own member is completely untouched by any of Party A's battles
+	# above.
 	# =========================================================================
 
 	var scout_b_health_before := GameSession.get_current_health(SCOUT_B_ID)
@@ -578,7 +579,6 @@ func _capture_durable_state() -> Dictionary:
 		"selected_party_id": GameSession.selected_party_id,
 		"world_turn": GameSession.world_turn,
 		"gold": GameSession.gold,
-		"pending_reward": GameSession.pending_reward,
 		"guild_hall_level": GameSession.guild_hall_level,
 		"watchtower_level": GameSession.watchtower_level,
 		"encounter_intel": _encounter_intel_with_authored_backfill(),
@@ -623,7 +623,6 @@ func _assert_durable_state_matches(expected: Dictionary) -> void:
 	assert_eq(GameSession.selected_party_id, expected.selected_party_id, "selected_party_id")
 	assert_eq(GameSession.world_turn, expected.world_turn, "world_turn")
 	assert_eq(GameSession.gold, expected.gold, "gold")
-	assert_eq(GameSession.pending_reward, expected.pending_reward, "pending_reward")
 	assert_eq(GameSession.guild_hall_level, expected.guild_hall_level, "guild_hall_level")
 	assert_eq(GameSession.watchtower_level, expected.watchtower_level, "watchtower_level")
 	assert_eq(GameSession.encounter_intel, expected.encounter_intel, "encounter_intel")

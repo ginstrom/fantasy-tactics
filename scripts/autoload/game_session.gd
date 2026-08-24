@@ -1404,19 +1404,23 @@ var recruitment_vacancies: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
-## Battle-party tie-break (Stage 5 D5, decision-ledger.md): whichever party's
-## Enter GameManager.enter_battle() claims first owns the single active
-## battle (relying on the existing single-BattleController-instance
-## invariant -- no per-party lock/ownership field is added to the parties
-## array itself). "" means no battle is currently claimed. Deliberately NOT
-## part of CampaignSnapshot: a save is only ever possible while
-## selected_encounter == "" (see GameManager.can_save_current_campaign()),
-## and this is only ever non-empty for the same window selected_encounter is
-## non-empty (claimed in GameManager.enter_battle(), released in
-## complete_battle()/fail_battle()/retreat_from_battle()), so it can never be
-## non-empty at a point a save could actually happen. Never reset except by
-## reset() itself -- see release_battle_claim().
-var active_battle_party_id: String = ""
+## Battle-party tie-break (Stage 5 D5; Stage 6 Step 2, decision-ledger.md's
+## G4 disposition): whichever party's Enter GameManager.enter_battle() claims
+## first owns the single active battle (relying on the existing single-
+## BattleController-instance invariant -- no per-party lock/ownership field
+## is added to the parties array itself). The claim itself now lives on
+## _battle_context.owner_party_id (see create_battle_context()/
+## can_party_enter_battle()) rather than its own dedicated field -- an empty
+## _battle_context, or one whose status is no longer "active", means no
+## battle is currently claimed. Deliberately NOT part of CampaignSnapshot,
+## for the same reason the old active_battle_party_id field never was: a
+## save is only ever possible while selected_encounter == "" (see
+## GameManager.can_save_current_campaign()) and _battle_context.status ==
+## "active" only for the same window selected_encounter is non-empty or a
+## battle result/victory screen is still showing unsettled loot, so it can
+## never be "active" at a point a save could actually happen. Never reset
+## except by reset() itself.
+var _battle_context: Dictionary = {}
 # Injectable so tests can force a specific composition (see hit_roll on
 # BattleController for the same pattern) instead of depending on real
 # randomness. Never reset by reset() — every call site that needs a specific
@@ -1631,25 +1635,21 @@ var alchemy_workshop_level: int = 0
 var alchemy_craft_job: Dictionary = {}
 var runic_workshop_level: int = 0
 var runic_craft_job: Dictionary = {}
-## KNOWN LIMITATION (Stage 5 D5, decision-ledger.md, accepted by the user
-## 2026-08-24, not fixed in Step 6 -- see the Step 6 entry there for the
-## full writeup): pending_reward/pending_mana_crystals/pending_gear below
-## are single campaign-wide "loot in transit" buckets, not fields on each
-## entry in `parties`. Now that get_max_party_count() can return 2
-## (Step 6), two parties can each be independently travelling home with
-## their own unbanked battle reward at once, and this shared-bucket shape
-## pools them together instead of keeping them separate per party. A single
-## battle's own reward is never misattributed at the moment it's earned
-## (active_battle_party_id only ever lets one party hold the active battle
-## claim at a time), so this is a real but narrow gap: it only bites during
-## the post-battle travel-home window with two unbanked rewards in flight
-## together. The correct fix is to make these three fields attributes of
-## each party dictionary in `parties` (like member_ids/travel_route already
-## are) rather than campaign-wide globals; that touches every reader,
-## including party_details.gd, victory_screen.gd, battle_result.gd, and
-## campaign_sim.gd, which is why it was scoped out of Step 6 rather than
-## fixed inline.
-var pending_reward: int = 0
+## PartyCarry (Stage 6 Step 2, decision-ledger.md): resolves the Stage 5 D5
+## known limitation this comment used to describe -- pending_reward/
+## pending_mana_crystals/pending_gear/battle_reward/battle_mana_crystals/
+## battle_gear used to be single campaign-wide "loot in transit" buckets,
+## which pooled two simultaneously-deployed parties' unbanked rewards
+## together instead of keeping them independent. Each party's own carry now
+## lives on its own `parties` entry (see create_party()'s "carry" field,
+## get_party_carry()/deposit_party_carry()/forfeit_party_carry()); the
+## in-progress battle's own not-yet-attributed reward lives on
+## _battle_context.reward (see create_battle_context()/
+## get_active_battle_context()/resolve_battle_victory()) until it is
+## resolved into its owning party's own carry. `gold`/`mana_crystals`/
+## `banked_gear`/`owned_item_instances`/`banked_item_instance_ids` below
+## remain campaign-wide -- they are the shared Encampment bank every party
+## deposits into, not a per-party carry.
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
 # Permanent improvements materialize a normal stack entry into one of these
@@ -1657,11 +1657,6 @@ var banked_gear: Dictionary = {}
 # can retain its compact stack-based representation.
 var owned_item_instances: Dictionary = {}
 var banked_item_instance_ids: Array[String] = []
-var pending_mana_crystals: Dictionary = {}
-var pending_gear: Dictionary = {}
-var battle_reward: int = 0
-var battle_mana_crystals: Dictionary = {}
-var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
 var shop_level: int = 1
 var shop_gold: int = SHOP_LEVEL_ONE_GOLD_CAP
@@ -1775,7 +1770,7 @@ func reset() -> void:
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
-	active_battle_party_id = ""
+	_battle_context = {}
 	campaign_objective_id = "obj_tier1_1_goblin_outpost"
 	completed_objectives = []
 	unlocked_authored_encounters = ["obj_tier1_1_goblin_outpost"]
@@ -1811,16 +1806,10 @@ func reset() -> void:
 	alchemy_craft_job = {}
 	runic_workshop_level = 0
 	runic_craft_job = {}
-	pending_reward = 0
 	mana_crystals = {}
 	banked_gear = {}
 	owned_item_instances = {}
 	banked_item_instance_ids = []
-	pending_mana_crystals = {}
-	pending_gear = {}
-	battle_reward = 0
-	battle_mana_crystals = {}
-	battle_gear = {}
 	has_trading_post = true
 	shop_level = 1
 	shop_gold = SHOP_LEVEL_ONE_GOLD_CAP
@@ -1845,6 +1834,20 @@ func _new_party_id() -> String:
 	return "party_%03d" % (parties.size() + 1)
 
 
+## The canonical empty PartyCarry/BattleContext-reward shape (decision-ledger.md's
+## PartyCarry contract): a fresh party's own carry, a resolved battle context's
+## reward once it has been moved/discarded, and every intermediate reset in
+## between all share this exact shape, so it is minted from one place rather
+## than four separately-typed dictionary literals drifting apart over time.
+func _empty_carry() -> Dictionary:
+	return {
+		"gold": 0,
+		"gear": {} as Dictionary,
+		"mana_crystals": {} as Dictionary,
+		"item_instance_ids": [] as Array[String],
+	}
+
+
 func create_party(party_name: String = "Party 1") -> bool:
 	if parties.size() >= get_max_party_count():
 		return false
@@ -1863,6 +1866,14 @@ func create_party(party_name: String = "Party 1") -> bool:
 		"progression": {},
 		# TBD: free-form party metadata. Placeholder only.
 		"metadata": {},
+		# PartyCarry (Stage 6 Step 2, decision-ledger.md): everything this
+		# party has picked up in the field but not yet banked at the
+		# Encampment (see get_party_carry()/deposit_party_carry()/
+		# forfeit_party_carry()) -- replaces the old campaign-wide
+		# pending_reward/pending_mana_crystals/pending_gear globals, which
+		# pooled every deployed party's unbanked loot together instead of
+		# keeping each party's own carry independent.
+		"carry": _empty_carry(),
 	})
 	selected_party_id = party_id
 	return true
@@ -2382,34 +2393,51 @@ func can_enter_encounter(encounter_id: String) -> bool:
 
 
 ## True when party_id may enter/continue the single active battle: no battle
-## is currently claimed, or party_id itself already owns it (re-entering its
-## own claim is always legal, e.g. a debug re-launch mid-battle). False for
-## any other party while a different one holds the claim -- see
-## claim_battle_for_party()/release_battle_claim().
+## is currently claimed, the current battle context has already resolved
+## (status is no longer "active"), or party_id itself already owns the live
+## claim (re-entering its own claim is always legal, e.g. a debug re-launch
+## mid-battle). False for any other party while a different one holds an
+## active claim -- see create_battle_context()/get_active_battle_context().
 func can_party_enter_battle(party_id: String) -> bool:
-	return active_battle_party_id == "" or active_battle_party_id == party_id
+	var context := get_active_battle_context()
+	return context.is_empty() or context.status != "active" or context.owner_party_id == party_id
 
 
-## Claims the single active battle for party_id. Returns false (no state
-## change) if a different party already holds the claim -- GameManager.
-## enter_battle() must check this before ever changing scene to Battlefield,
-## and world_map.gd's arrival panel disables Enter accordingly (Stage 5 D5's
-## approved battle-party tie-break: "whichever party's Enter the player
-## clicks first claims the active battle; the other party's Enter stays
-## visible but disabled until that battle resolves").
-func claim_battle_for_party(party_id: String) -> bool:
+## Claims the single active battle for party_id and mints a fresh BattleContext
+## record (decision-ledger.md's PartyCarry/BattleContext target contract) --
+## the canonical claim/attribution record for the battle about to start,
+## replacing the old dedicated active_battle_party_id field. Returns an empty
+## Dictionary (no state change) if a different party already holds an active
+## claim -- GameManager.enter_battle() must check this before ever changing
+## scene to Battlefield, and world_map.gd's arrival panel disables Enter
+## accordingly (Stage 5 D5's approved battle-party tie-break: "whichever
+## party's Enter the player clicks first claims the active battle; the other
+## party's Enter stays visible but disabled until that battle resolves").
+## Otherwise returns a duplicate of the newly-created context. battle_id is
+## minted from the same entropy source encounter/recruitment instance ids
+## use (see _new_instance_id()) -- opaque and unique, never reused.
+func create_battle_context(party_id: String, encounter_id: String, seed: int = 0) -> Dictionary:
 	if not can_party_enter_battle(party_id):
-		return false
-	active_battle_party_id = party_id
-	return true
+		return {}
+	_battle_context = {
+		"battle_id": _new_instance_id(),
+		"owner_party_id": party_id,
+		"encounter_id": encounter_id,
+		"reward": _empty_carry(),
+		"status": "active",
+		"seed": seed,
+	}
+	return _battle_context.duplicate(true)
 
 
-## Releases the current battle claim, if any -- called from every path that
-## ends a battle (GameManager.complete_battle()/fail_battle()/
-## retreat_from_battle()), so the next Enter click (from either party) can
-## claim a fresh battle.
-func release_battle_claim() -> void:
-	active_battle_party_id = ""
+## The current battle's own context record -- whatever its status, not only
+## while a battle is still "active" (see can_party_enter_battle()/
+## resolve_battle_victory()/resolve_battle_retreat()/resolve_battle_defeat(),
+## which need to read the owning party back out of an already-resolved
+## context). Empty only when no battle has ever been created this session
+## (or since the last reset()).
+func get_active_battle_context() -> Dictionary:
+	return _battle_context.duplicate(true)
 
 
 func enter_encounter(encounter_id: String) -> void:
@@ -2440,6 +2468,7 @@ func enter_encounter(encounter_id: String) -> void:
 func complete_current_encounter() -> void:
 	if selected_encounter == "":
 		return
+	_ensure_active_battle_context()
 	var expedition := get_expedition(selected_encounter)
 	if not completed_encounters.has(selected_encounter):
 		completed_encounters.append(selected_encounter)
@@ -2453,7 +2482,7 @@ func complete_current_encounter() -> void:
 				_roll_and_queue_loot(enemy_with_count)
 		else:
 			_roll_and_queue_loot(expedition.get("enemy", {}))
-		battle_reward += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
+		_battle_context.reward.gold += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
 		_settle_encounter_intelligence(selected_encounter)
 		_clear_active_encounter(selected_encounter)
 		# An authored node's own encounter_id is exactly its CAMPAIGN_
@@ -2466,24 +2495,54 @@ func complete_current_encounter() -> void:
 	selected_encounter = ""
 
 
+## Guarantees _battle_context is a fresh, "active" record before
+## complete_current_encounter() rolls loot into it. GameManager.enter_battle()
+## always calls create_battle_context() explicitly (so the real UI flow's
+## battle-party tie-break gate runs first) -- but a great many lower-level
+## callers (tests, debug scenarios, CampaignSim) call enter_encounter()/
+## complete_current_encounter() directly without ever going through that
+## gate, exactly as they could call the pre-Stage-6 enter_encounter() without
+## ever touching claim_battle_for_party() either. Auto-vivifying here
+## preserves that same bypass instead of forcing every such caller to mint
+## its own context: a context left over from an already-resolved battle (or
+## none at all) is replaced with a fresh one owned by whichever party is
+## currently selected (possibly "" when no party exists yet, e.g. a bare
+## GameSession unit test) -- see create_battle_context(), which this
+## deliberately does not reuse, since that gate would otherwise reject
+## re-completing an encounter for the same still-"active" context.
+func _ensure_active_battle_context() -> void:
+	if _battle_context.get("status", "") == "active":
+		return
+	_battle_context = {
+		"battle_id": _new_instance_id(),
+		"owner_party_id": selected_party_id,
+		"encounter_id": selected_encounter,
+		"reward": _empty_carry(),
+		"status": "active",
+		"seed": 0,
+	}
+
 
 ## Rolls loot once per kill in the resolved enemy composition (a battle can
 # only complete once every fielded enemy is dead, so "once per kill" and
 # "kill_count times at completion" are equivalent). A loot_id with no
 # ENEMY_LOOT_TABLES row (should not happen for a real expedition's enemy)
-# queues nothing rather than erroring.
+# queues nothing rather than erroring. Accumulates into the active battle
+# context's own reward (see _ensure_active_battle_context()) rather than a
+# dedicated battle_reward/battle_gear/battle_mana_crystals global.
 func _roll_and_queue_loot(enemy: Dictionary) -> void:
 	var loot_id: String = enemy.get("loot_id", "")
 	if not ENEMY_LOOT_TABLES.has(loot_id):
 		return
 	var table: Dictionary = ENEMY_LOOT_TABLES[loot_id]
 	var kill_count: int = enemy.get("count", 1)
+	var reward: Dictionary = _battle_context.reward
 	for _kill in kill_count:
-		battle_reward += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
+		reward.gold += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
 		var crystal_tier: int = table.mana_crystal_tier
-		battle_mana_crystals[crystal_tier] = battle_mana_crystals.get(crystal_tier, 0) + 1
+		reward.mana_crystals[crystal_tier] = reward.mana_crystals.get(crystal_tier, 0) + 1
 		if loot_gear_roll.call() < GEAR_DROP_CHANCE:
-			battle_gear[table.gear_item_id] = battle_gear.get(table.gear_item_id, 0) + 1
+			reward.gear[table.gear_item_id] = reward.gear.get(table.gear_item_id, 0) + 1
 
 
 func abandon_current_encounter() -> void:
@@ -2615,99 +2674,136 @@ func get_campaign_victory_summary() -> Dictionary:
 
 
 ## Adds every count in source into dest in place -- both id/tier -> count
-## Dictionaries sharing the exact shape battle_gear/pending_gear/banked_gear
-## (and their mana-crystal counterparts) all use. The one function shared by
-## both loot-store merges: battle -> party (merge_battle_loot_into_party())
-## and party -> encampment (deposit_pending_reward()).
+## Dictionaries sharing the exact shape a PartyCarry/BattleContext-reward's
+## own "gear"/"mana_crystals" fields use. Shared by every carry-to-carry or
+## carry-to-bank merge in this file (resolve_battle_victory()/
+## deposit_party_carry()).
 func _merge_counts(source: Dictionary, dest: Dictionary) -> void:
 	for key in source:
 		dest[key] = dest.get(key, 0) + source[key]
 
 
-## Merges this battle's own loot store into the party's carried store. Called
-## once the player leaves the victory summary screen for the World Map (see
-## GameManager.go_to_world_map()) -- a no-op if the battle store is already
-## empty, e.g. when go_to_world_map() is reached from anywhere other than
-## straight out of a battle.
-func merge_battle_loot_into_party() -> void:
-	pending_reward += battle_reward
-	battle_reward = 0
-	_merge_counts(battle_gear, pending_gear)
-	_merge_counts(battle_mana_crystals, pending_mana_crystals)
-	battle_gear = {}
-	battle_mana_crystals = {}
+## party_id's own carry (decision-ledger.md's PartyCarry contract): everything
+## it has picked up in the field but not yet banked at the Encampment. An
+## unknown party_id returns an empty carry rather than erroring, matching
+## get_party()'s own "unknown id" convention.
+func get_party_carry(party_id: String) -> Dictionary:
+	var party := get_party(party_id)
+	if party.is_empty():
+		return _empty_carry()
+	return (party.get("carry", _empty_carry()) as Dictionary).duplicate(true)
 
 
-## Discards this battle's own not-yet-shared loot store outright, the other
-## way a battle can end besides merge_battle_loot_into_party() -- see
-## BattleController.try_retreat(), which calls this instead of ever letting
-## a Retreat's loot reach the party's own pending_* store.
-func discard_battle_loot() -> void:
-	battle_reward = 0
-	battle_mana_crystals = {}
-	battle_gear = {}
-
-
-## True whenever this battle's own loot store (battle_reward/battle_gear/
-## battle_mana_crystals) still holds anything merge_battle_loot_into_party()
-## has not yet folded into the party's carried store -- i.e. the window
-## between complete_current_encounter() clearing selected_encounter and the
-## player leaving the Battle Result screen for the World Map. See
-## GameManager.can_save_current_campaign(), which ANDs this in alongside the
-## "no active encounter" guard so a save can never freeze loot in this
-## transient, not-yet-settled bucket.
-func has_unsettled_battle_loot() -> bool:
-	return battle_reward != 0 or not battle_gear.is_empty() or not battle_mana_crystals.is_empty()
-
-
-## Merges the party's carried store into the Encampment's bank -- the other
-## half of the shared _merge_counts() pair (see merge_battle_loot_into_
-## party() for the battle -> party merge). pending_gear holds two different
-## kinds of key with the same id->count shape banked_gear/pending_gear
-## always used: an ordinary stackable item id (banked into banked_gear, same
-## as always) and -- since resolve_battle_deaths() -- a unique owned-item
-## instance id recovered from a slain adventurer's equipment (see that
-## function). An instance id must bank into banked_item_instance_ids
-## instead, preserving its one-of-a-kind modifier record rather than
-## folding it into a fungible count; _merge_counts() alone cannot tell the
-## two apart, so this walks pending_gear itself rather than reusing it.
-func deposit_pending_reward() -> int:
-	var deposited := pending_reward
-	gold += deposited
-	pending_reward = 0
-	for item_id in pending_gear:
-		var count: int = int(pending_gear[item_id])
-		if count <= 0:
-			continue
-		if owned_item_instances.has(item_id):
-			if not banked_item_instance_ids.has(item_id):
-				banked_item_instance_ids.append(item_id)
-		else:
+## Merges party_id's own carry into the Encampment's shared bank (gold,
+## banked_gear, mana_crystals, banked_item_instance_ids) and clears that
+## party's carry back to empty. A no-op (returns an empty carry, no state
+## change) for an unknown party_id. Returns a duplicate of the carry that was
+## just deposited, for callers that want to report what was banked.
+func deposit_party_carry(party_id: String) -> Dictionary:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return _empty_carry()
+	var carry: Dictionary = parties[party_index].get("carry", _empty_carry())
+	var deposited: Dictionary = carry.duplicate(true)
+	gold += int(carry.get("gold", 0))
+	for item_id in carry.get("gear", {}):
+		var count: int = int(carry.gear[item_id])
+		if count > 0:
 			banked_gear[item_id] = banked_gear.get(item_id, 0) + count
-	pending_gear = {}
-	_merge_counts(pending_mana_crystals, mana_crystals)
-	pending_mana_crystals = {}
+	for raw_instance_id in carry.get("item_instance_ids", []):
+		var instance_id := str(raw_instance_id)
+		if not banked_item_instance_ids.has(instance_id):
+			banked_item_instance_ids.append(instance_id)
+	_merge_counts(carry.get("mana_crystals", {}), mana_crystals)
+	parties[party_index]["carry"] = _empty_carry()
 	return deposited
 
 
-## Party-wipe forfeiture (docs/designs/campaign-loop.md's loss rule): every
-## pending pickup this run -- ordinary gear counts and any unique item
-## instances recovered from a fallen party member alike (see
-## resolve_battle_deaths()) -- plus this run's own unbanked reward and gold
-## already on hand are lost outright ("a wipe loses all gold and loot").
-## Preserved: completed campaign objectives, building levels, and anything
-## already banked before this run (banked_gear/mana_crystals/
-## banked_item_instance_ids are never touched here). A pending instance id's
-## owned_item_instances record is erased too -- it was never banked, so
-## nothing else still references it once this forfeits it.
-func resolve_party_wipe() -> void:
-	for item_id in pending_gear:
-		if owned_item_instances.has(item_id):
-			owned_item_instances.erase(item_id)
-	pending_reward = 0
-	pending_mana_crystals = {}
-	pending_gear = {}
-	gold = 0
+## Party-wipe forfeiture (docs/designs/campaign-loop.md's loss rule, narrowed
+## to per-party scope by Stage 6 Step 2's PartyCarry split): party_id's own
+## carry -- ordinary gear counts, mana crystals, unique item instances
+## recovered from a fallen party member (see transfer_dead_unit_gear_to_
+## party_carry()), and this run's own unbanked gold alike -- is lost
+## outright, without touching any other party's carry or anything already
+## banked at the Encampment (gold/banked_gear/mana_crystals/
+## banked_item_instance_ids, completed campaign objectives, and building
+## levels are all preserved). A forfeited item instance's own owned_item_
+## instances record is erased too -- it was never banked, so nothing else
+## still references it once this forfeits it. A no-op for an unknown
+## party_id.
+func forfeit_party_carry(party_id: String) -> void:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return
+	var carry: Dictionary = parties[party_index].get("carry", _empty_carry())
+	for raw_instance_id in carry.get("item_instance_ids", []):
+		owned_item_instances.erase(str(raw_instance_id))
+	parties[party_index]["carry"] = _empty_carry()
+
+
+## True whenever the current battle context's reward still holds anything
+## resolve_battle_victory()/resolve_battle_retreat()/resolve_battle_defeat()
+## has not yet resolved -- i.e. the window between complete_current_
+## encounter() clearing selected_encounter and the player leaving the Battle
+## Result screen for the World Map. See GameManager.can_save_current_
+## campaign(), which ANDs this in alongside the "no active encounter" guard
+## so a save can never freeze loot in this transient, not-yet-settled state.
+func has_unsettled_battle_loot() -> bool:
+	return _battle_context.get("status", "") == "active"
+
+
+## Moves the active battle context's own reward into its owning party's
+## carry (see resolve_battle_defeat()/resolve_battle_retreat() for the other
+## two ways a battle context resolves) and marks it "victory". Returns false
+## (no state change) unless battle_id names the current, still-"active"
+## battle context -- covering both an unknown/stale battle_id and the
+## harmless no-op GameManager.go_to_world_map() must stay when it is reached
+## from anywhere other than straight out of a battle.
+func resolve_battle_victory(battle_id: String) -> bool:
+	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
+		return false
+	var party_index := _get_party_index(_battle_context.owner_party_id)
+	if party_index != -1:
+		var carry: Dictionary = parties[party_index].carry
+		var reward: Dictionary = _battle_context.reward
+		carry.gold += int(reward.get("gold", 0))
+		_merge_counts(reward.get("gear", {}), carry.gear)
+		_merge_counts(reward.get("mana_crystals", {}), carry.mana_crystals)
+		for raw_instance_id in reward.get("item_instance_ids", []):
+			var instance_id := str(raw_instance_id)
+			if not carry.item_instance_ids.has(instance_id):
+				carry.item_instance_ids.append(instance_id)
+	_battle_context.status = "victory"
+	return true
+
+
+## Discards the active battle context's own not-yet-banked reward outright --
+## the Retreat outcome (docs/designs/campaign-loop.md: Battle Retreat
+## "discards all unbanked/pending rewards") -- and marks it "retreat". See
+## BattleController.try_retreat(), the only caller, which calls this instead
+## of ever letting a Retreat's loot reach the owning party's own carry.
+## Returns false (no state change) unless battle_id names the current,
+## still-"active" battle context.
+func resolve_battle_retreat(battle_id: String) -> bool:
+	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
+		return false
+	_battle_context.reward = _empty_carry()
+	_battle_context.status = "retreat"
+	return true
+
+
+## A full party wipe: discards the active battle context's own not-yet-banked
+## reward and forfeits the owning party's own already-carried loot alike
+## (see forfeit_party_carry()), then marks the context "defeat". Returns
+## false (no state change) unless battle_id names the current, still-"active"
+## battle context.
+func resolve_battle_defeat(battle_id: String) -> bool:
+	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
+		return false
+	forfeit_party_carry(_battle_context.owner_party_id)
+	_battle_context.reward = _empty_carry()
+	_battle_context.status = "defeat"
+	return true
 
 
 func get_max_party_size() -> int:
@@ -3476,20 +3572,23 @@ func _advance_quest_timers() -> void:
 ## "Clearing or removing an encounter removes its record"). Called from
 ## complete_current_encounter() before the instance itself is cleared. An
 ## "active" (accepted, unexpired) quest completes here: its reward_gold folds
-## into battle_reward alongside normal loot, so it flows through the exact
-## same battle_reward -> pending_reward (merge_battle_loot_into_party()) ->
-## gold (deposit_pending_reward()) pipeline every other reward already uses --
-## actual gold is only banked once the party reaches the Encampment, matching
-## "a quest completes only when its target clears AND the party returns to
-## the Encampment" without a parallel reward path. A "posted" (never
-## accepted) or "expired" quest is simply dropped: no reward.
+## into the active battle context's own reward alongside normal loot, so it
+## flows through the exact same battle-context -> party-carry
+## (resolve_battle_victory()) -> gold (deposit_party_carry()) pipeline every
+## other reward already uses -- actual gold is only banked once the party
+## reaches the Encampment, matching "a quest completes only when its target
+## clears AND the party returns to the Encampment" without a parallel reward
+## path. A "posted" (never accepted) or "expired" quest is simply dropped: no
+## reward. Only ever called from complete_current_encounter(), after
+## _ensure_active_battle_context() has already guaranteed an active context
+## exists.
 func _settle_encounter_intelligence(encounter_id: String) -> void:
 	if not encounter_intel.has(encounter_id):
 		return
 	var quest_id: String = str(encounter_intel[encounter_id].get("quest_id", ""))
 	if quest_id != "" and quests.has(quest_id):
 		if str(quests[quest_id].status) == QUEST_STATUS_ACTIVE:
-			battle_reward += int(quests[quest_id].reward_gold)
+			_battle_context.reward.gold += int(quests[quest_id].reward_gold)
 		quests.erase(quest_id)
 	encounter_intel.erase(encounter_id)
 
@@ -3698,9 +3797,9 @@ func get_item_sale_price(item_id: String) -> int:
 
 ## The shared loot-row shape (id/name/type/count/price) every loot-listing
 ## screen renders through LootTable — Stores (banked_gear/mana_crystals),
-## the victory summary (battle_gear/battle_mana_crystals), and the World
-## Map's Party Details screen (pending_gear/pending_mana_crystals), each
-## backed by a different pair of GameSession fields but sharing this exact
+## the victory summary (the active battle context's own reward), and the
+## World Map's Party Details screen (a party's own carry), each backed by a
+## different pair of gear/mana-crystal dictionaries but sharing this exact
 ## row shape and this exact pricing/naming logic.
 func build_loot_rows(gear_counts: Dictionary, mana_crystal_counts: Dictionary, item_instance_ids: Array = []) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
@@ -3805,15 +3904,21 @@ func buy_item(item_id: String) -> bool:
 
 ## Requires item_id to currently be in banked_gear. See _equip_item_from()
 ## for the shared add-and-activate logic -- this is identical to
-## equip_item_from_party_store() below except which pool it draws from.
+## equip_item_from_party_carry() below except which pool it draws from.
 func equip_item_from_bank(adventurer_id: String, item_id: String) -> bool:
 	if owned_item_instances.has(item_id):
-		return _equip_item_instance_from_bank(adventurer_id, item_id)
+		return _equip_item_instance_from(banked_item_instance_ids, adventurer_id, item_id)
 	return _equip_item_from(banked_gear, adventurer_id, item_id)
 
 
-func _equip_item_instance_from_bank(adventurer_id: String, instance_id: String) -> bool:
-	if not banked_item_instance_ids.has(instance_id):
+## Shared by equip_item_from_bank()/equip_item_from_party_carry(): makes
+## instance_id the active item for its slot, removing it from source_ids (a
+## unique-instance id Array of the exact shape banked_item_instance_ids and a
+## PartyCarry's own "item_instance_ids" both use) unless the unit already
+## carries it. Rejects (mutates nothing) for an id not currently in
+## source_ids, an unknown item id, or an unknown adventurer.
+func _equip_item_instance_from(source_ids: Array, adventurer_id: String, instance_id: String) -> bool:
+	if not source_ids.has(instance_id):
 		return false
 	var item := get_item_definition(instance_id)
 	var adventurer_index := _get_adventurer_index(adventurer_id)
@@ -3825,29 +3930,39 @@ func _equip_item_instance_from_bank(adventurer_id: String, instance_id: String) 
 	var inventory: Array = adventurers[adventurer_index].equipment["%s_inventory" % slot]
 	if inventory.has(instance_id):
 		return false
-	banked_item_instance_ids.erase(instance_id)
+	source_ids.erase(instance_id)
 	inventory.append(instance_id)
 	adventurers[adventurer_index].equipment[slot] = instance_id
 	return true
 
 
-## Requires item_id to currently be in the party's own store (pending_gear
-## -- everything the deployed party has picked up but not yet carried home
-## and banked). Used by the victory summary and World Map Party Details'
-## Equip actions, both scoped to the currently deployed party, as opposed
-## to Stores' Equip, which always draws from the (encamped) bank via
-## equip_item_from_bank() above.
-func equip_item_from_party_store(adventurer_id: String, item_id: String) -> bool:
-	return _equip_item_from(pending_gear, adventurer_id, item_id)
+## Requires item_id to currently be in party_id's own carry (see
+## get_party_carry()/deposit_party_carry()) -- everything that party has
+## picked up but not yet carried home and banked. Used by the victory
+## summary and World Map Party Details' Equip actions, both scoped to a
+## single party, as opposed to Stores' Equip, which always draws from the
+## (encamped) bank via equip_item_from_bank() above. Handles both a
+## fungible stackable item id (carry.gear) and a unique owned-item instance
+## id recovered from a slain party member (carry.item_instance_ids, see
+## transfer_dead_unit_gear_to_party_carry()) -- an unknown party_id fails
+## safely (mutates nothing) rather than erroring.
+func equip_item_from_party_carry(party_id: String, adventurer_id: String, item_id: String) -> bool:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return false
+	var carry: Dictionary = parties[party_index].carry
+	if owned_item_instances.has(item_id):
+		return _equip_item_instance_from(carry.item_instance_ids, adventurer_id, item_id)
+	return _equip_item_from(carry.gear, adventurer_id, item_id)
 
 
-## Shared by equip_item_from_bank()/equip_item_from_party_store(): makes
+## Shared by equip_item_from_bank()/equip_item_from_party_carry(): makes
 ## item_id the active item for its slot, taking one unit from source_gear
-## (a Dictionary of the exact same id -> count shape banked_gear and
-## pending_gear both use) unless the unit already carries item_id, in
-## which case source_gear is untouched and the already-carried copy is
-## just re-activated. Rejects (mutates nothing) for an item not currently
-## in source_gear, an unknown item id, or an unknown adventurer.
+## (a Dictionary of the exact same id -> count shape banked_gear and a
+## PartyCarry's own "gear" field both use) unless the unit already carries
+## item_id, in which case source_gear is untouched and the already-carried
+## copy is just re-activated. Rejects (mutates nothing) for an item not
+## currently in source_gear, an unknown item id, or an unknown adventurer.
 func _equip_item_from(source_gear: Dictionary, adventurer_id: String, item_id: String) -> bool:
 	if source_gear.get(item_id, 0) <= 0:
 		return false
@@ -4822,18 +4937,18 @@ func set_adventurer_mp(adventurer_id: String, amount: int) -> bool:
 ## every genuine kill in it rather than aborting the whole call. For each
 ## confirmed kill, in order: its full carried and equipped gear (ordinary
 ## stackable items and unique modified instances alike) moves atomically
-## into the party's own pending_gear store (see _transfer_dead_unit_gear_
-## to_pending()), its id is erased from every party's member_ids, and the
-## adventurer record itself is deleted from the roster -- so a dead id can
-## never remain in live session state afterward, and (docs/designs/campaign-
-## loop.md: "a dead adventurer owns no persisted MP record, the same as HP")
-## whatever "mp_current" the record carried is discarded along with it, no
-## separate MP-specific cleanup needed. A later successful retreat
-## or victory banks that gear through the existing settlement transition
-## (deposit_pending_reward()); a wipe forfeits it instead
-## (resolve_party_wipe()). owned_item_instances records are never deleted
-## here -- only resolve_party_wipe() ever discards a recovered instance
-## record, never a successful recovery. Returns the ids actually removed.
+## into its own party's carry (see transfer_dead_unit_gear_to_party_carry()),
+## its id is erased from every party's member_ids, and the adventurer record
+## itself is deleted from the roster -- so a dead id can never remain in live
+## session state afterward, and (docs/designs/campaign-loop.md: "a dead
+## adventurer owns no persisted MP record, the same as HP") whatever
+## "mp_current" the record carried is discarded along with it, no separate
+## MP-specific cleanup needed. A later successful retreat or victory banks
+## that gear through the existing settlement transition (deposit_party_
+## carry()); a wipe forfeits it instead (forfeit_party_carry()).
+## owned_item_instances records are never deleted here -- only forfeit_
+## party_carry() ever discards a recovered instance record, never a
+## successful recovery. Returns the ids actually removed.
 func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
 	var dead_ids: Array[String] = []
 	for id_key in health_by_id:
@@ -4842,7 +4957,7 @@ func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
 			dead_ids.append(adventurer_id)
 
 	for adventurer_id in dead_ids:
-		_transfer_dead_unit_gear_to_pending(adventurer_id)
+		transfer_dead_unit_gear_to_party_carry(_get_party_for_adventurer(adventurer_id).get("id", ""), adventurer_id)
 		for party_index in parties.size():
 			parties[party_index].member_ids.erase(adventurer_id)
 		adventurers.remove_at(_get_adventurer_index(adventurer_id))
@@ -4853,17 +4968,28 @@ func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
 ## Moves every item a slain adventurer carried -- weapons, armor, and
 ## potions, active or spare alike, since a unit's *_inventory array already
 ## lists everything it carries including its currently-active item -- into
-## the party's pending_gear store, one count per item id. Whether an id
-## later banks as a fungible count or a unique instance record is decided
-## once, at deposit_pending_reward() time (see its own doc comment), not
-## here.
-func _transfer_dead_unit_gear_to_pending(adventurer_id: String) -> void:
-	var adventurer := get_adventurer(adventurer_id)
+## party_id's own carry: an ordinary stackable item id into carry.gear (one
+## count per id) and a unique owned-item instance id into carry.
+## item_instance_ids instead, preserving its one-of-a-kind modifier record
+## rather than folding it into a fungible count. A no-op for an unknown
+## party_id (should not happen for a real in-battle death -- see
+## resolve_battle_deaths(), the only caller, which resolves party_id from
+## the dying adventurer's own membership before this erases it).
+func transfer_dead_unit_gear_to_party_carry(party_id: String, unit_id: String) -> void:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1:
+		return
+	var adventurer := get_adventurer(unit_id)
 	var equipment: Dictionary = adventurer.get("equipment", {})
+	var carry: Dictionary = parties[party_index].carry
 	for slot in ["weapon", "armor", "potion"]:
 		for item_id in equipment.get("%s_inventory" % slot, []):
 			var id := str(item_id)
-			pending_gear[id] = pending_gear.get(id, 0) + 1
+			if owned_item_instances.has(id):
+				if not carry.item_instance_ids.has(id):
+					carry.item_instance_ids.append(id)
+			else:
+				carry.gear[id] = carry.gear.get(id, 0) + 1
 
 
 ## Batch write-back used by the battlefield after victory or defeat.
@@ -5195,8 +5321,12 @@ func get_effective_resistance(adventurer_id: String) -> int:
 
 ## Exports every durable field this session owns as a versioned, deep-copy-
 ## safe, JSON-safe Dictionary (see CampaignSnapshot). No disk I/O and no
-## reward-banking side effects -- battle_reward/pending_reward are carried
-## across exactly as they stand, never merged or deposited.
+## reward-banking side effects -- each party's own "carry" (part of its
+## `parties` entry) is carried across exactly as it stands, never deposited.
+## The in-progress battle context (_battle_context) is deliberately NOT
+## exported, for the same reason active_battle_party_id never was (see that
+## field's own former doc comment): a save is only ever possible while no
+## battle is unsettled.
 func export_campaign_snapshot() -> Dictionary:
 	var snapshot := CampaignSnapshot.new()
 	snapshot.adventurers = adventurers.duplicate(true)
@@ -5230,16 +5360,10 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.alchemy_craft_job = alchemy_craft_job.duplicate(true)
 	snapshot.runic_workshop_level = runic_workshop_level
 	snapshot.runic_craft_job = runic_craft_job.duplicate(true)
-	snapshot.pending_reward = pending_reward
 	snapshot.mana_crystals = mana_crystals.duplicate(true)
 	snapshot.banked_gear = banked_gear.duplicate(true)
 	snapshot.owned_item_instances = owned_item_instances.duplicate(true)
 	snapshot.banked_item_instance_ids = banked_item_instance_ids.duplicate()
-	snapshot.pending_mana_crystals = pending_mana_crystals.duplicate(true)
-	snapshot.pending_gear = pending_gear.duplicate(true)
-	snapshot.battle_reward = battle_reward
-	snapshot.battle_mana_crystals = battle_mana_crystals.duplicate(true)
-	snapshot.battle_gear = battle_gear.duplicate(true)
 	snapshot.has_trading_post = has_trading_post
 	snapshot.shop_level = shop_level
 	snapshot.shop_gold = shop_gold
@@ -5253,9 +5377,9 @@ func export_campaign_snapshot() -> Dictionary:
 ## session's own fields once that normalization reports "ok": true, so a
 ## rejected import never partially lands. Returns the same
 ## { "ok", "snapshot", "error" } result CampaignSnapshot.from_dictionary()
-## produced, for the caller to inspect. Never calls
-## merge_battle_loot_into_party() or deposit_pending_reward() -- carried
-## rewards are restored exactly as exported, never banked.
+## produced, for the caller to inspect. Never calls resolve_battle_victory()
+## or deposit_party_carry() -- each party's own carry is restored exactly as
+## exported, never banked.
 ##
 ## Every Array/Dictionary field is duplicated (never assigned directly)
 ## when copied from result.snapshot onto this session's own fields, so the
@@ -5324,16 +5448,10 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	alchemy_craft_job = snapshot.alchemy_craft_job.duplicate(true)
 	runic_workshop_level = snapshot.runic_workshop_level
 	runic_craft_job = snapshot.runic_craft_job.duplicate(true)
-	pending_reward = snapshot.pending_reward
 	mana_crystals = snapshot.mana_crystals.duplicate(true)
 	banked_gear = snapshot.banked_gear.duplicate(true)
 	owned_item_instances = snapshot.owned_item_instances.duplicate(true)
 	banked_item_instance_ids.assign(snapshot.banked_item_instance_ids)
-	pending_mana_crystals = snapshot.pending_mana_crystals.duplicate(true)
-	pending_gear = snapshot.pending_gear.duplicate(true)
-	battle_reward = snapshot.battle_reward
-	battle_mana_crystals = snapshot.battle_mana_crystals.duplicate(true)
-	battle_gear = snapshot.battle_gear.duplicate(true)
 	has_trading_post = snapshot.has_trading_post
 	shop_level = snapshot.shop_level
 	shop_gold = snapshot.shop_gold
@@ -5539,6 +5657,21 @@ func _validate_owned_item_instance_ownership(snapshot: Dictionary) -> String:
 			return "banked owned item instance is unknown"
 		locations[instance_id] += 1
 
+	# A party's own carry (see get_party_carry()/PartyCarry's own contract) is
+	# a third valid location alongside the bank and an adventurer's equipped
+	# inventory -- a slain party member's salvaged unique gear lives here
+	# until deposit_party_carry() banks it (see transfer_dead_unit_gear_to_
+	# party_carry()).
+	for party in snapshot.parties:
+		var carry = party.get("carry", {})
+		if not carry is Dictionary:
+			continue
+		for raw_id in carry.get("item_instance_ids", []):
+			var instance_id := str(raw_id)
+			if not locations.has(instance_id):
+				return "carried owned item instance is unknown"
+			locations[instance_id] += 1
+
 	for adventurer in snapshot.adventurers:
 		var equipment = adventurer.get("equipment", {})
 		if not equipment is Dictionary:
@@ -5618,7 +5751,10 @@ func _is_campaign_guide_triggered(guide_id: String) -> bool:
 				and _campaign_guide_party_on_active_encounter()
 			)
 		CAMPAIGN_GUIDE_RETURN_BANK:
-			return has_deployed_party() and selected_encounter == "" and pending_reward > 0
+			return (
+				has_deployed_party() and selected_encounter == ""
+				and int(get_party_carry(selected_party_id).get("gold", 0)) > 0
+			)
 		CAMPAIGN_GUIDE_FIRST_IMPROVEMENT:
 			return (
 				not has_deployed_party() and gold > 0

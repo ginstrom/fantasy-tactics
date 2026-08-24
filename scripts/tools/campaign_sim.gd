@@ -747,6 +747,15 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary, party_losses_
 		return "error"
 
 	var battle_seed := ScenarioContractScript.derive_iteration_seed(sim_seed, encounter_id, telemetry.battles_fought)
+	# Mirrors GameManager.enter_battle()'s own explicit create_battle_context()
+	# call, made here rather than left to complete_current_encounter()'s
+	# _ensure_active_battle_context() auto-vivification: that auto-vivify only
+	# ever runs on the victory path, so a defeat/retreat outcome below would
+	# otherwise find no "active" context and resolve_battle_defeat()/
+	# resolve_battle_retreat() would silently no-op, leaving a wiped party's
+	# already-carried loot un-forfeited (see decision-ledger.md's PartyCarry
+	# isolation invariant).
+	GameSession.create_battle_context(GameSession.selected_party_id, encounter_id, battle_seed)
 	var controller: Node2D = BattleStateFactoryScript.build(scenario, battle_seed)
 
 	# Boxed in a single-element array, not a plain float, because a GDScript
@@ -783,14 +792,24 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary, party_losses_
 			party_losses_out.append_array(dead_ids)
 			_resolve_pending_perks(leveled_up)
 			GameSession.complete_current_encounter()
-			GameSession.merge_battle_loot_into_party()
+			GameSession.resolve_battle_victory(GameSession.get_active_battle_context().get("battle_id", ""))
 		"defeat":
 			var dead_ids := _persist_battle_state(controller)
 			telemetry.unit_deaths += dead_ids.size()
 			party_losses_out.append_array(dead_ids)
-			var lost: int = GameSession.gold + GameSession.pending_reward + GameSession.battle_reward
+			# PartyCarry (Stage 6 Step 2, decision-ledger.md): a wipe now only
+			# forfeits this party's own carry and discards the active battle
+			# context's own not-yet-banked reward -- unlike the pre-Stage-6
+			# resolve_party_wipe() this replaces, the shared Encampment bank
+			# (GameSession.gold) is never touched, so it is deliberately
+			# excluded from this telemetry figure.
+			var context := GameSession.get_active_battle_context()
+			var lost: int = (
+				int(GameSession.get_party_carry(GameSession.selected_party_id).get("gold", 0))
+				+ int(context.get("reward", {}).get("gold", 0))
+			)
 			GameSession.abandon_current_encounter()
-			GameSession.resolve_party_wipe()
+			GameSession.resolve_battle_defeat(context.get("battle_id", ""))
 			telemetry.gold_lost_wipes += lost
 			telemetry.party_wipes += 1
 		_:
@@ -799,7 +818,7 @@ func _fight_objective(encounter_id: String, telemetry: Dictionary, party_losses_
 			party_losses_out.append_array(dead_ids)
 			telemetry.stalemates += 1
 			GameSession.abandon_current_encounter()
-			GameSession.discard_battle_loot()
+			GameSession.resolve_battle_retreat(GameSession.get_active_battle_context().get("battle_id", ""))
 
 	controller.free()
 	return outcome
@@ -874,9 +893,10 @@ func _resolve_pending_perks(leveled_up: Array) -> void:
 
 
 func _return_to_encampment(telemetry: Dictionary) -> void:
+	var party_id: String = GameSession.selected_party_id
 	GameSession.return_deployed_party_to_settlement()
 	var before: int = GameSession.gold
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(party_id)
 	var delta := GameSession.gold - before
 	if delta > 0:
 		telemetry.gold_earned += delta

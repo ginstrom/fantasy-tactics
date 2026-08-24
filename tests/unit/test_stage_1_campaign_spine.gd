@@ -92,13 +92,19 @@ func test_a_fresh_save_names_withdraws_clears_wipes_recovers_and_round_trips_the
 	var completed_before: Array = GameSession.completed_objectives.duplicate()
 	var guild_hall_before: int = GameSession.guild_hall_level
 
+	var bank_gold_before_wipe: int = GameSession.gold
+
 	var health_by_id := {}
 	for member_id in GameSession.get_selected_party().member_ids:
 		health_by_id[member_id] = 0
 	GameSession.resolve_battle_deaths(health_by_id)
-	GameSession.resolve_party_wipe()
+	GameSession.forfeit_party_carry(party_id)
 
-	assert_eq(GameSession.gold, 0, "A wipe must forfeit gold")
+	assert_eq(
+		GameSession.gold, bank_gold_before_wipe,
+		"Stage 6 Step 2: a wipe forfeits only the wiped party's own carry, never the already-banked Encampment gold"
+	)
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "A wipe must forfeit the party's own unbanked carry")
 	assert_false(GameSession.has_deployed_party(), "A wipe must leave no deployed party")
 
 	var recovery_turns := 0
@@ -123,8 +129,7 @@ func test_a_fresh_save_names_withdraws_clears_wipes_recovers_and_round_trips_the
 	var objective_before: String = GameSession.campaign_objective_id
 	var roster_before: Array = GameSession.adventurers.duplicate(true)
 	var position_before: Vector2i = GameSession.get_deployed_party_position()
-	var pending_reward_before: int = GameSession.pending_reward
-	var pending_gear_before: Dictionary = GameSession.pending_gear.duplicate(true)
+	var carry_before: Dictionary = GameSession.get_party_carry(party_id)
 
 	var data := GameSession.export_campaign_snapshot()
 	var result := GameSession.import_campaign_snapshot(data)
@@ -133,5 +138,4 @@ func test_a_fresh_save_names_withdraws_clears_wipes_recovers_and_round_trips_the
 	assert_eq(GameSession.campaign_objective_id, objective_before)
 	assert_eq(GameSession.adventurers, roster_before)
 	assert_eq(GameSession.get_deployed_party_position(), position_before)
-	assert_eq(GameSession.pending_reward, pending_reward_before)
-	assert_eq(GameSession.pending_gear, pending_gear_before)
+	assert_eq(GameSession.get_party_carry(party_id), carry_before)

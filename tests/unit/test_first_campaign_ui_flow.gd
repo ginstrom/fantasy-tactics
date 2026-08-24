@@ -192,18 +192,18 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
 	assert_eq(GameSession.selected_encounter, "", "Victory should clear the encounter selection")
-	assert_eq(GameSession.battle_reward, 19, "The goblin camp's rolled reward should be queued in the battle store")
-	assert_eq(GameSession.pending_reward, 0, "The battle store only merges into the party's own once the player leaves the summary screen")
+	# Stage 6 Step 2 (decision-ledger.md): Battlefield._finish_victory()
+	# resolves the active battle context's own reward into the owning
+	# party's carry immediately, at battle-end time -- not deferred to a
+	# later "leave the summary screen" merge -- so this battle's reward is
+	# already sitting in the party's own carry the instant the encounter
+	# clears (see that function's own doc comment for why: it is also what
+	# frees the battle claim for a second party).
+	assert_eq(
+		GameSession.get_party_carry(GameSession.FIRST_PARTY_ID).gold, 19,
+		"The goblin camp's rolled reward should already be resolved into the party's own carry"
+	)
 	assert_eq(GameSession.gold, 0, "Winning the battle alone must not bank the reward")
-
-	# A real player always leaves the victory summary screen via its OK
-	# button before the World Map is reachable at all -- see GameManager.
-	# go_to_world_map(), which is what merges the battle store into the
-	# party's own. This test jumps position instead of driving the real
-	# scene transition (see the routing note above), so it calls the same
-	# merge go_to_world_map() would trigger directly.
-	GameSession.merge_battle_loot_into_party()
-	assert_eq(GameSession.pending_reward, 19, "Leaving the summary screen merges the battle store into the party's own")
 
 	# Move party back to encampment, bank reward: walk the party home (again
 	# jumping position, per this test's routing note above) and click the
@@ -220,7 +220,7 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 
 	assert_false(GameSession.has_deployed_party())
 	assert_eq(GameSession.gold, 19, "Returning to the encampment must bank the queued reward")
-	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.get_party_carry(GameSession.FIRST_PARTY_ID).gold, 0)
 
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)

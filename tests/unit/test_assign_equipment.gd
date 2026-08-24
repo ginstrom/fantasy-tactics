@@ -93,7 +93,7 @@ func test_activating_a_row_for_a_potion_adds_it_to_the_adventurers_carried_items
 func test_activating_a_row_when_party_scoped_equips_from_the_party_store_not_the_bank() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.parties[0].carry.gear = {"dagger_iron": 1}
 	GameSession.banked_gear = {"dagger_iron": 5}
 	GameManager.route_context_id = "dagger_iron"
 	GameManager.assign_equipment_party_id = GameSession.FIRST_PARTY_ID
@@ -104,8 +104,8 @@ func test_activating_a_row_when_party_scoped_equips_from_the_party_store_not_the
 
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "dagger_iron")
 	assert_eq(
-		GameSession.pending_gear, {"dagger_iron": 0},
-		"The party store's copy is the one consumed -- zero-count keys stay, matching equip_item_from_bank's pattern"
+		GameSession.get_party_carry(GameSession.FIRST_PARTY_ID).gear, {"dagger_iron": 0},
+		"The party's own carry is the one consumed -- zero-count keys stay, matching equip_item_from_bank's pattern"
 	)
 	assert_eq(GameSession.banked_gear, {"dagger_iron": 5}, "The bank must be untouched by a party-scoped equip")
 

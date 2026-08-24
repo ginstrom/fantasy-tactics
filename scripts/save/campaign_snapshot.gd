@@ -14,10 +14,21 @@ extends RefCounted
 ## into a separate scratch Dictionary before returning it -- GameSession only
 ## assigns its own fields once from_dictionary() reports "ok": true, so a
 ## rejected import can never partially land. Contains no disk I/O and never
-## triggers reward-banking side effects (merge_battle_loot_into_party(),
-## deposit_pending_reward()) -- it only moves values, never settles them.
+## triggers reward-banking side effects (GameSession.resolve_battle_victory(),
+## GameSession.deposit_party_carry()) -- it only moves values, never settles
+## them.
 
-const FORMAT_VERSION := 3
+## Stage 6 Step 2 (decision-ledger.md's "Playtest reset policy"): this bump
+## deliberately drops migration support for every prior format (1-3) rather
+## than teaching them the new per-party "carry" shape -- the old campaign-
+## wide pending_reward/pending_mana_crystals/pending_gear/battle_reward/
+## battle_mana_crystals/battle_gear fields have no well-defined owner to
+## migrate onto once carry becomes a per-party attribute (which party would
+## a pre-Stage-6 save's shared "loot in transit" belong to?). from_
+## dictionary() now rejects any version other than FORMAT_VERSION outright;
+## a pre-Stage-6 save must not be loaded -- the player deletes it and starts
+## a fresh campaign instead.
+const FORMAT_VERSION := 4
 
 ## Valid GameSession.QUEST_STATUS_* values (see game_session.gd's own
 ## consts) -- duplicated here as plain strings rather than reached via
@@ -87,16 +98,17 @@ var alchemy_workshop_level: int = 0
 var alchemy_craft_job: Dictionary = {}
 var runic_workshop_level: int = 0
 var runic_craft_job: Dictionary = {}
-var pending_reward: int = 0
+# PartyCarry (Stage 6 Step 2, decision-ledger.md) lives inside each entry of
+# `parties` below (see _normalize_party()'s "carry" handling) -- it replaces
+# the old campaign-wide pending_reward/pending_mana_crystals/pending_gear/
+# battle_reward/battle_mana_crystals/battle_gear fields this format version
+# removed. mana_crystals/banked_gear/owned_item_instances/
+# banked_item_instance_ids below remain campaign-wide: they are the shared
+# Encampment bank, not a per-party carry.
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
 var owned_item_instances: Dictionary = {}
 var banked_item_instance_ids: Array[String] = []
-var pending_mana_crystals: Dictionary = {}
-var pending_gear: Dictionary = {}
-var battle_reward: int = 0
-var battle_mana_crystals: Dictionary = {}
-var battle_gear: Dictionary = {}
 var has_trading_post: bool = false
 var shop_level: int = 1
 var shop_gold: int = 100
@@ -146,16 +158,10 @@ func to_dictionary() -> Dictionary:
 		"alchemy_craft_job": alchemy_craft_job.duplicate(true),
 		"runic_workshop_level": runic_workshop_level,
 		"runic_craft_job": runic_craft_job.duplicate(true),
-		"pending_reward": pending_reward,
 		"mana_crystals": mana_crystals.duplicate(true),
 		"banked_gear": banked_gear.duplicate(true),
 		"owned_item_instances": owned_item_instances.duplicate(true),
 		"banked_item_instance_ids": banked_item_instance_ids.duplicate(),
-		"pending_mana_crystals": pending_mana_crystals.duplicate(true),
-		"pending_gear": pending_gear.duplicate(true),
-		"battle_reward": battle_reward,
-		"battle_mana_crystals": battle_mana_crystals.duplicate(true),
-		"battle_gear": battle_gear.duplicate(true),
 		"has_trading_post": has_trading_post,
 		"shop_level": shop_level,
 		"shop_gold": shop_gold,
@@ -175,13 +181,13 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		return _invalid("snapshot data is not a dictionary")
 	if not data.get("version") is int:
 		return _invalid("missing or unsupported snapshot version")
-	# Version 1 predates campaign milestone progression (see
-	# _normalize_campaign_progress()) and version 2 predates Intelligence &
-	# Guild Hall quests (see the encounter_intel/quests block below); both
-	# migrate gracefully. Any other version besides the current
-	# FORMAT_VERSION is unsupported.
+	# Stage 6 Step 2 (decision-ledger.md's "Playtest reset policy"): unlike
+	# every earlier format bump, this one intentionally accepts only the
+	# current FORMAT_VERSION -- see FORMAT_VERSION's own doc comment for why
+	# a pre-Stage-6 payload (formats 1-3, which used to migrate gracefully
+	# here) is rejected outright instead.
 	var version: int = int(data.version)
-	if version != 1 and version != 2 and version != FORMAT_VERSION:
+	if version != FORMAT_VERSION:
 		return _invalid("missing or unsupported snapshot version")
 
 	var normalized: Dictionary = {}
@@ -254,7 +260,7 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		return _invalid("selected_encounter is not a string")
 	normalized["selected_encounter"] = data.selected_encounter
 
-	var campaign_progress_result := _normalize_campaign_progress(data, version)
+	var campaign_progress_result := _normalize_campaign_progress(data)
 	if not campaign_progress_result.ok:
 		return _invalid(campaign_progress_result.error)
 	var campaign_progress: Dictionary = campaign_progress_result.value
@@ -282,7 +288,7 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		if not _GameSessionScript.CAMPAIGN_OBJECTIVES.has(objective_id):
 			return _invalid("unlocked_authored_encounters contains an unknown campaign objective id: %s" % objective_id)
 
-	for scalar_key in ["world_turn", "gold", "guild_hall_level", "pending_reward", "battle_reward"]:
+	for scalar_key in ["world_turn", "gold", "guild_hall_level"]:
 		if not data.get(scalar_key) is int:
 			return _invalid("%s is not an int" % scalar_key)
 		normalized[scalar_key] = int(data[scalar_key])
@@ -393,16 +399,14 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		return _invalid("player_name is not a string")
 	normalized["player_name"] = data.player_name
 
-	for dict_key in [
-		"mana_crystals", "banked_gear", "pending_mana_crystals",
-		"pending_gear", "battle_mana_crystals", "battle_gear",
-	]:
+	for dict_key in ["mana_crystals", "banked_gear"]:
 		if not data.get(dict_key) is Dictionary:
 			return _invalid("%s is not a dictionary" % dict_key)
 		normalized[dict_key] = (data[dict_key] as Dictionary).duplicate(true)
 
-	# Version-one saves predate owned instances; normalize their absent fields
-	# to empty collections so loading an existing campaign remains safe.
+	# Tolerates an absent field (normalizing to an empty collection) rather
+	# than rejecting it outright, the same leniency has_trading_post/shop_*
+	# below extend to other optional fields.
 	for dict_key in ["owned_item_instances"]:
 		if data.has(dict_key) and not data[dict_key] is Dictionary:
 			return _invalid("%s is not a dictionary" % dict_key)
@@ -703,30 +707,12 @@ static func _is_recruitment_template_id(id: String) -> bool:
 
 
 ## Validates and normalizes the five durable campaign-milestone-progression
-## fields (see GameSession.CAMPAIGN_OBJECTIVES). A version-1 payload (which
-## predates this state) never carries these keys at all -- rather than
-## reject it or guess at progress from the legacy completed_encounters list
-## (a different id namespace entirely, see this field's own doc comment on
-## the class), it normalizes to the same fresh-campaign defaults campaign_
-## objective_id/completed_objectives/unlocked_authored_encounters/is_
-## campaign_completed/is_free_play_active themselves default to. A current-
-## format (version 2) payload is validated strictly: every field must be
-## present with the correct type, or the whole import is rejected exactly
-## like any other malformed field.
-static func _normalize_campaign_progress(data: Dictionary, version: int) -> Dictionary:
-	if version == 1:
-		return {
-			"ok": true,
-			"error": "",
-			"value": {
-				"campaign_objective_id": "obj_tier1_1_goblin_outpost",
-				"completed_objectives": [] as Array[String],
-				"unlocked_authored_encounters": ["obj_tier1_1_goblin_outpost"] as Array[String],
-				"is_campaign_completed": false,
-				"is_free_play_active": false,
-			},
-		}
-
+## fields (see GameSession.CAMPAIGN_OBJECTIVES). from_dictionary() only ever
+## calls this once version == FORMAT_VERSION has already been confirmed (see
+## its own doc comment on the Stage 6 Step 2 reset policy), so every field is
+## validated strictly here: it must be present with the correct type, or the
+## whole import is rejected exactly like any other malformed field.
+static func _normalize_campaign_progress(data: Dictionary) -> Dictionary:
 	if not data.get("campaign_objective_id") is String:
 		return {"ok": false, "error": "campaign_objective_id is not a string", "value": {}}
 
@@ -969,6 +955,10 @@ static func _normalize_party(raw: Variant) -> Dictionary:
 	if not party.get("metadata") is Dictionary:
 		return {"ok": false, "error": "party %s has an invalid metadata" % party.id}
 
+	var carry_result := _normalize_carry(party.get("carry"), String(party.id))
+	if not carry_result.ok:
+		return {"ok": false, "error": carry_result.error}
+
 	var normalized: Dictionary = party.duplicate(true)
 	normalized["id"] = String(party.id)
 	normalized["member_ids"] = member_ids
@@ -980,8 +970,46 @@ static func _normalize_party(raw: Variant) -> Dictionary:
 	normalized["name"] = String(party.name)
 	normalized["progression"] = (party.progression as Dictionary).duplicate(true)
 	normalized["metadata"] = (party.metadata as Dictionary).duplicate(true)
+	normalized["carry"] = carry_result.value
 
 	return {"ok": true, "error": "", "value": normalized}
+
+
+## PartyCarry (Stage 6 Step 2, decision-ledger.md's target contract):
+## { gold: int >= 0, gear: Dictionary, mana_crystals: Dictionary,
+## item_instance_ids: Array[String] }. Rejects (returning the whole party
+## atomically, per import_campaign_snapshot()'s "never partially lands"
+## promise) a missing/malformed field or a negative gold value rather than
+## clamping or defaulting it -- a hand-edited or corrupted carry record must
+## fail the whole import, exactly like every other malformed field in this
+## file.
+static func _normalize_carry(raw: Variant, party_id: String) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "party %s has an invalid carry" % party_id}
+	var carry: Dictionary = raw
+	if not carry.get("gold") is int or int(carry.gold) < 0:
+		return {"ok": false, "error": "party %s has an invalid carry gold" % party_id}
+	if not carry.get("gear") is Dictionary:
+		return {"ok": false, "error": "party %s has an invalid carry gear" % party_id}
+	if not carry.get("mana_crystals") is Dictionary:
+		return {"ok": false, "error": "party %s has an invalid carry mana_crystals" % party_id}
+	if not carry.get("item_instance_ids") is Array:
+		return {"ok": false, "error": "party %s has an invalid carry item_instance_ids" % party_id}
+	var item_instance_ids: Array[String] = []
+	for raw_id in carry.item_instance_ids:
+		if not raw_id is String:
+			return {"ok": false, "error": "party %s has a non-string carry item instance id" % party_id}
+		item_instance_ids.append(String(raw_id))
+	return {
+		"ok": true,
+		"error": "",
+		"value": {
+			"gold": int(carry.gold),
+			"gear": (carry.gear as Dictionary).duplicate(true),
+			"mana_crystals": (carry.mana_crystals as Dictionary).duplicate(true),
+			"item_instance_ids": item_instance_ids,
+		},
+	}
 
 
 ## Validates and restores each active-encounter instance's Vector2i "position"

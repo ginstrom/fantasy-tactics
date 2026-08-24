@@ -203,79 +203,87 @@ func test_tier_one_formation_fixture_demonstrates_the_front_line_absorbs_every_a
 ## Named for obj_tier1_1_goblin_outpost's real loot output (GameSession.
 ## complete_current_encounter()/_roll_and_queue_loot(), reading its own
 ## EXPEDITIONS entry's "enemies" groups and ENEMY_LOOT_TABLES) and the two
-## ways a battle's carried loot can resolve: merge_battle_loot_into_party()
-## (a completed battle) then either deposit_pending_reward() (a safe return
-## to bank it) or resolve_party_wipe() (a subsequent wipe before banking).
-## docs/designs/campaign-loop.md's loss rule -- "a wipe loses all gold and
-## loot" -- is proven here to mean exactly what it says: ALL current gold
-## (deposit_pending_reward() merges pending_reward directly into `gold`,
-## which resolve_party_wipe() always zeroes, banked or not) but only
-## UNBANKED gear/mana crystals (banked_gear/mana_crystals survive a wipe
-## once actually banked). The real decision this pattern teaches is
-## "banking secures gear and mana crystals, not carried gold" -- proven
-## precisely rather than assumed.
+## ways a battle's carried loot can resolve: resolve_battle_victory() (a
+## completed battle, moving the active battle context's reward into the
+## owning party's own carry) then either deposit_party_carry() (a safe
+## return to bank it) or forfeit_party_carry() (a subsequent wipe before
+## banking). Stage 6 Step 2 (decision-ledger.md's PartyCarry contract)
+## narrows docs/designs/campaign-loop.md's pre-Stage-6 "a wipe loses all
+## gold and loot" loss rule to per-party scope: forfeit_party_carry() only
+## ever forfeits the wiped party's own not-yet-banked carry (gold included)
+## -- once gold is actually banked into the shared Encampment `gold` via
+## deposit_party_carry(), a later wipe can never touch it, exactly like
+## banked_gear/mana_crystals already couldn't. The real decision this
+## pattern teaches is now "banking secures gold too, not only gear and mana
+## crystals" -- proven precisely rather than assumed.
 ##
 ## Deterministic loot: loot_gold_roll pinned to its own minimum, loot_gear_
 ## roll pinned to 0.0 (always below GEAR_DROP_CHANCE). A bare GameSessionScript
 ## instance (not the shared GameSession autoload) matches test_game_session.
-## gd's own loot-fixture convention (e.g. test_deposit_pending_reward_banks_
+## gd's own loot-fixture convention (e.g. test_deposit_party_carry_banks_
 ## gold_mana_crystals_and_gear()).
 func _completed_goblin_outpost_session() -> Node:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 0.0
 	session.enter_encounter("obj_tier1_1_goblin_outpost")
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 	return session
 
 
 func test_completing_the_goblin_outpost_leaves_its_loot_pending_not_yet_safe() -> void:
 	var session := _completed_goblin_outpost_session()
+	var party_id: String = session.selected_party_id
+	var carry: Dictionary = session.get_party_carry(party_id)
 
 	# One Goblin (loot_id "goblin", gold_min 1) + two Kobolds (loot_id
 	# "kobold", gold_min 0 each) + the flat first-clear bonus
 	# (loot_gold_roll(18, 22) * difficulty 1, pinned to 18) = 19.
-	assert_eq(session.pending_reward, 19)
-	assert_eq(session.pending_gear, {"shortsword_iron": 1, "dagger_iron": 2})
-	assert_eq(session.pending_mana_crystals, {1: 3})
+	assert_eq(carry.gold, 19)
+	assert_eq(carry.gear, {"shortsword_iron": 1, "dagger_iron": 2})
+	assert_eq(carry.mana_crystals, {1: 3})
 	# The core of the "return and bank" decision: victory alone never makes
 	# loot safe. It still sits in the party's carried, at-risk store.
-	assert_eq(session.gold, 0, "Pending reward is not yet real gold")
-	assert_eq(session.banked_gear, {}, "Pending gear is not yet banked")
-	assert_eq(session.mana_crystals, {}, "Pending crystals are not yet banked")
+	assert_eq(session.gold, 0, "Carried gold is not yet banked gold")
+	assert_eq(session.banked_gear, {}, "Carried gear is not yet banked")
+	assert_eq(session.mana_crystals, {}, "Carried crystals are not yet banked")
 
 
 func test_a_wipe_before_returning_forfeits_the_goblin_outposts_pending_loot() -> void:
 	var session := _completed_goblin_outpost_session()
-	assert_gt(session.pending_reward, 0, "Setup: the outpost must have queued real loot before the wipe")
+	var party_id: String = session.selected_party_id
+	assert_gt(session.get_party_carry(party_id).gold, 0, "Setup: the outpost must have queued real loot before the wipe")
 
-	session.resolve_party_wipe()
+	session.forfeit_party_carry(party_id)
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.pending_reward, 0)
-	assert_eq(session.pending_gear, {})
-	assert_eq(session.pending_mana_crystals, {})
+	var carry: Dictionary = session.get_party_carry(party_id)
+	assert_eq(carry.gold, 0)
+	assert_eq(carry.gear, {})
+	assert_eq(carry.mana_crystals, {})
 	assert_eq(session.banked_gear, {}, "Nothing was ever banked, so nothing here to preserve")
 
 
-func test_returning_to_deposit_the_goblin_outposts_loot_preserves_gear_and_crystals_through_a_later_wipe_but_not_gold() -> void:
+func test_returning_to_deposit_the_goblin_outposts_loot_preserves_gear_crystals_and_gold_through_a_later_wipe() -> void:
 	var session := _completed_goblin_outpost_session()
+	var party_id: String = session.selected_party_id
 
-	session.deposit_pending_reward()
+	session.deposit_party_carry(party_id)
 	assert_eq(session.gold, 19, "Setup: returning to bank must pay the outpost's queued reward")
 	assert_eq(session.banked_gear, {"shortsword_iron": 1, "dagger_iron": 2})
 	assert_eq(session.mana_crystals, {1: 3})
 
 	# Simulates the party pushing on to the next node and later wiping.
-	session.resolve_party_wipe()
+	session.forfeit_party_carry(party_id)
 
 	assert_eq(session.banked_gear, {"shortsword_iron": 1, "dagger_iron": 2}, "Banked gear must survive a later wipe")
 	assert_eq(session.mana_crystals, {1: 3}, "Banked mana crystals must survive a later wipe")
 	assert_eq(
-		session.gold, 0,
-		"Gold is carried currency, not stored gear -- a wipe always forfeits it, banked into `gold` or not"
+		session.gold, 19,
+		"Stage 6 Step 2: once gold is actually banked, a later wipe of this (or any) party can never touch it"
 	)
 
 

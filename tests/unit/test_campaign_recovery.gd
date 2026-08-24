@@ -23,11 +23,12 @@ func before_each() -> void:
 
 ## Sets up a party staffed from the starting roster, then wipes it outright
 ## via the same permadeath/forfeiture path a real full-party defeat takes
-## (GameSession.resolve_battle_deaths() + resolve_party_wipe(), the same two
+## (GameSession.resolve_battle_deaths() + forfeit_party_carry(), the same two
 ## calls battlefield.gd's _persist_battle_aftermath()/GameManager.fail_
 ## battle() make) -- not direct field mutation of GameSession.adventurers.
 func _wipe_party_and_forfeit_everything() -> void:
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	for adventurer in GameSession.adventurers.duplicate():
 		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
 
@@ -35,7 +36,7 @@ func _wipe_party_and_forfeit_everything() -> void:
 	for member_id in GameSession.get_selected_party().member_ids:
 		health_by_id[member_id] = 0
 	GameSession.resolve_battle_deaths(health_by_id)
-	GameSession.resolve_party_wipe()
+	GameSession.forfeit_party_carry(party_id)
 
 
 ## --- Zero-Gold Full Wipe at Tier 2 ------------------------------------------
@@ -199,6 +200,7 @@ func test_a_withdrawn_and_later_wiped_party_still_recovers_toward_the_unchanged_
 	GameSession.shop_level = 1
 	var encounter_id: String = GameSession.campaign_objective_id
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	for adventurer in GameSession.adventurers.duplicate():
 		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
 	GameSession.deploy_party(GameSession.selected_party_id)
@@ -211,7 +213,7 @@ func test_a_withdrawn_and_later_wiped_party_still_recovers_toward_the_unchanged_
 	for member_id in GameSession.get_selected_party().member_ids:
 		health_by_id[member_id] = 0
 	GameSession.resolve_battle_deaths(health_by_id)
-	GameSession.resolve_party_wipe()
+	GameSession.forfeit_party_carry(party_id)
 	# The real wipe path (GameManager.fail_battle()) always routes the party
 	# home through this same canonical API immediately afterward -- without
 	# it, the party stays "deployed" and purchase_recruit_for_party()'s own

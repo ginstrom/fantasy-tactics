@@ -499,11 +499,12 @@ func test_completing_the_goblin_camp_debug_scenario_queues_gold_and_a_mana_cryst
 
 	GameSession.complete_current_encounter()
 
+	var reward: Dictionary = GameSession.get_active_battle_context().reward
 	assert_eq(
-		GameSession.battle_mana_crystals, {1: 1},
+		reward.mana_crystals, {1: 1},
 		"Goblin's mana_crystal_tier is 1 and the fixture fields exactly one goblin"
 	)
 	assert_true(
-		GameSession.battle_reward > 0,
+		reward.gold > 0,
 		"Completing the encounter should queue gold from the goblin's loot table"
 	)

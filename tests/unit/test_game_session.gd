@@ -964,26 +964,29 @@ func test_get_expedition_returns_a_record_that_can_be_mutated_without_affecting_
 	)
 
 
-func test_new_session_has_zero_gold_and_pending_reward() -> void:
+func test_new_session_has_zero_gold_and_an_empty_party_carry() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.pending_reward, 0)
+	assert_eq(session.get_party_carry(party_id).gold, 0)
 
 
-func test_reset_clears_gold_and_pending_reward() -> void:
+func test_reset_clears_gold_and_any_in_flight_battle_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.gold = 5
-	session.pending_reward = 5
-	session.battle_reward = 5
+	session.create_battle_context(party_id, GameSessionScript.GOBLIN_CAMP_ID)
+	session._battle_context.reward.gold = 5
 
 	session.reset()
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.pending_reward, 0)
-	assert_eq(session.battle_reward, 0)
+	assert_eq(session.get_active_battle_context(), {})
 
 
 func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_gold() -> void:
@@ -995,47 +998,51 @@ func test_completing_the_entered_goblin_camp_queues_its_reward_without_paying_go
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 19, "Victory should queue the goblin camp's rolled reward in the battle store")
+	assert_eq(session.get_active_battle_context().reward.gold, 19, "Victory should queue the goblin camp's rolled reward in the active battle context")
 	assert_eq(session.gold, 0, "Completing an encounter must not bank gold directly")
 	assert_true(session.is_encounter_complete(GameSessionScript.GOBLIN_CAMP_ID))
 
 
-func test_deposit_pending_reward_pays_once_then_returns_zero_on_a_second_call() -> void:
+func test_deposit_party_carry_pays_once_then_returns_an_empty_carry_on_a_second_call() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 
-	var deposited: int = session.deposit_pending_reward()
+	var deposited: Dictionary = session.deposit_party_carry(party_id)
 
-	assert_eq(deposited, 19)
+	assert_eq(deposited.gold, 19)
 	assert_eq(session.gold, 19)
-	assert_eq(session.pending_reward, 0)
+	assert_eq(session.get_party_carry(party_id).gold, 0)
 
-	var second_deposit: int = session.deposit_pending_reward()
+	var second_deposit: Dictionary = session.deposit_party_carry(party_id)
 
-	assert_eq(second_deposit, 0, "A second deposit must not pay again")
+	assert_eq(second_deposit.gold, 0, "A second deposit must not pay again")
 	assert_eq(session.gold, 19, "Gold must not change on a second deposit")
 
 
 func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 
 	assert_eq(
-		session.pending_reward,
+		session.get_party_carry(party_id).gold,
 		57,
 		"Both rewards should accumulate when banking happens after both victories"
 	)
@@ -1046,37 +1053,41 @@ func test_chaining_two_victories_without_depositing_accumulates_both_rewards() -
 func test_depositing_after_chained_victories_banks_the_combined_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 
-	var deposited: int = session.deposit_pending_reward()
+	var deposited: Dictionary = session.deposit_party_carry(party_id)
 
-	assert_eq(deposited, 57)
+	assert_eq(deposited.gold, 57)
 	assert_eq(session.gold, 57)
-	assert_eq(session.pending_reward, 0)
+	assert_eq(session.get_party_carry(party_id).gold, 0)
 
 
 func test_completing_an_already_completed_encounter_does_not_requeue_its_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
-	session.deposit_pending_reward()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
+	session.deposit_party_carry(party_id)
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.complete_current_encounter()
 
 	assert_eq(
-		session.battle_reward,
+		session.get_active_battle_context().reward.gold,
 		0,
 		"Re-completing an already-completed site must not requeue its reward"
 	)
@@ -1092,12 +1103,10 @@ func test_completing_the_goblin_camp_queues_gold_a_mana_crystal_and_no_gear_when
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 19, "One goblin kill: randi_range(1, 6) stubbed to min (1) + completion (18)")
-	assert_eq(session.battle_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
-	assert_eq(session.battle_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
-
-	assert_eq(session.battle_mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
-	assert_eq(session.battle_gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
+	var reward: Dictionary = session.get_active_battle_context().reward
+	assert_eq(reward.gold, 19, "One goblin kill: randi_range(1, 6) stubbed to min (1) + completion (18)")
+	assert_eq(reward.mana_crystals, {1: 1}, "One goblin kill grants one tier-1 mana crystal")
+	assert_eq(reward.gear, {}, "A gear roll of 1.0 must never clear the 25% drop chance")
 
 
 func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> void:
@@ -1109,7 +1118,7 @@ func test_completing_the_goblin_camp_queues_gear_when_the_gear_roll_hits() -> vo
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_gear, {"shortsword_iron": 1}, "A gear roll of 0.0 must always clear the 25% drop chance")
+	assert_eq(session.get_active_battle_context().reward.gear, {"shortsword_iron": 1}, "A gear roll of 0.0 must always clear the 25% drop chance")
 
 
 func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() -> void:
@@ -1125,8 +1134,9 @@ func test_completing_the_orc_outpost_applies_the_documented_gold_multiplier() ->
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 38, "One orc kill (2) plus completion bonus (18 * 2)")
-	assert_eq(session.battle_mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
+	var reward: Dictionary = session.get_active_battle_context().reward
+	assert_eq(reward.gold, 38, "One orc kill (2) plus completion bonus (18 * 2)")
+	assert_eq(reward.mana_crystals, {2: 1}, "One orc kill grants one tier-2 mana crystal")
 
 
 func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
@@ -1139,9 +1149,10 @@ func test_completing_a_two_kill_encounter_rolls_loot_once_per_kill() -> void:
 
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, 38, "Two goblin kills (2) plus completion bonus (18 * 2)")
-	assert_eq(session.battle_mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
-	assert_eq(session.battle_gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
+	var reward: Dictionary = session.get_active_battle_context().reward
+	assert_eq(reward.gold, 38, "Two goblin kills (2) plus completion bonus (18 * 2)")
+	assert_eq(reward.mana_crystals, {1: 2}, "Two goblin kills grant two tier-1 mana crystals")
+	assert_eq(reward.gear, {"shortsword_iron": 2}, "A guaranteed-hit gear roll fires once per kill")
 
 
 func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() -> void:
@@ -1158,145 +1169,125 @@ func test_completing_an_encounter_adds_a_gold_bonus_scaled_by_star_difficulty() 
 
 	# Kill gold: one orc, randi_range(1, 5) stubbed to max (5) * multiplier 2 = 10.
 	# Encounter bonus: randi_range(18, 22) stubbed to max (22) * difficulty 2 = 44.
-	assert_eq(session.battle_reward, 54, "Kill gold (10) plus the encounter bonus (44) at 2-star difficulty")
+	assert_eq(session.get_active_battle_context().reward.gold, 54, "Kill gold (10) plus the encounter bonus (44) at 2-star difficulty")
 
 
 func test_recompleting_an_already_completed_encounter_does_not_requeue_the_bonus() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(_min_value: int, max_value: int) -> int: return max_value
 	session.loot_gear_roll = func() -> float: return 1.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
-	session.deposit_pending_reward()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
+	session.deposit_party_carry(party_id)
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.complete_current_encounter()
 
 	assert_eq(
-		session.battle_reward, 0,
+		session.get_active_battle_context().reward.gold, 0,
 		"Re-completing an already-completed site must not requeue its gold bonus either"
 	)
 
 
-func test_deposit_pending_reward_banks_gold_mana_crystals_and_gear() -> void:
+func test_deposit_party_carry_banks_gold_mana_crystals_and_gear() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
 	session.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	session.loot_gear_roll = func() -> float: return 0.0
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(session.get_active_battle_context().battle_id)
 
-	session.deposit_pending_reward()
+	session.deposit_party_carry(party_id)
 
 	assert_eq(session.gold, 19)
 	assert_eq(session.mana_crystals, {1: 1})
 	assert_eq(session.banked_gear, {"shortsword_iron": 1})
-	assert_eq(session.pending_mana_crystals, {})
-	assert_eq(session.pending_gear, {})
+	assert_eq(session.get_party_carry(party_id).mana_crystals, {})
+	assert_eq(session.get_party_carry(party_id).gear, {})
 
 
-
-func test_merge_battle_loot_into_party_moves_the_battle_store_into_the_partys_own() -> void:
+func test_resolve_battle_victory_moves_the_battle_contexts_reward_into_the_owning_partys_carry() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.battle_reward = 5
-	session.battle_mana_crystals = {1: 2}
-	session.battle_gear = {"dagger_iron": 1}
-	session.pending_reward = 10
-	session.pending_mana_crystals = {1: 1}
-	session.pending_gear = {"buckler_wood": 1}
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.create_battle_context(party_id, GameSessionScript.GOBLIN_CAMP_ID)
+	session._battle_context.reward = {"gold": 5, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 2}, "item_instance_ids": [] as Array[String]}
+	session.parties[0].carry = {"gold": 10, "gear": {"buckler_wood": 1}, "mana_crystals": {1: 1}, "item_instance_ids": [] as Array[String]}
+	var battle_id: String = session._battle_context.battle_id
 
-	session.merge_battle_loot_into_party()
+	var resolved: bool = session.resolve_battle_victory(battle_id)
 
-	assert_eq(session.pending_reward, 15)
-	assert_eq(session.pending_mana_crystals, {1: 3})
-	assert_eq(session.pending_gear, {"dagger_iron": 1, "buckler_wood": 1})
-	assert_eq(session.battle_reward, 0)
-	assert_eq(session.battle_mana_crystals, {})
-	assert_eq(session.battle_gear, {})
+	assert_true(resolved)
+	var carry: Dictionary = session.get_party_carry(party_id)
+	assert_eq(carry.gold, 15)
+	assert_eq(carry.mana_crystals, {1: 3})
+	assert_eq(carry.gear, {"dagger_iron": 1, "buckler_wood": 1})
+	assert_eq(session.get_active_battle_context().status, "victory")
 
 
-func test_merge_battle_loot_into_party_is_a_no_op_when_the_battle_store_is_empty() -> void:
+func test_resolve_battle_victory_returns_false_for_an_unknown_battle_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.pending_reward = 10
-	session.pending_mana_crystals = {1: 1}
-	session.pending_gear = {"buckler_wood": 1}
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.parties[0].carry.gold = 10
 
-	session.merge_battle_loot_into_party()
+	var resolved: bool = session.resolve_battle_victory("no_such_battle")
 
-	assert_eq(session.pending_reward, 10)
-	assert_eq(session.pending_mana_crystals, {1: 1})
-	assert_eq(session.pending_gear, {"buckler_wood": 1})
+	assert_false(resolved)
+	assert_eq(session.get_party_carry(party_id).gold, 10, "An unknown battle_id must never mutate carry")
 
 
-func test_has_unsettled_battle_loot_is_false_when_the_battle_store_is_empty() -> void:
+func test_has_unsettled_battle_loot_is_false_when_no_battle_context_exists() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 
 	assert_false(session.has_unsettled_battle_loot())
 
 
-func test_has_unsettled_battle_loot_is_true_for_a_nonzero_battle_reward() -> void:
+func test_has_unsettled_battle_loot_is_true_while_a_battle_context_is_active() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.battle_reward = 1
+	session.create_party()
+	session.create_battle_context(session.selected_party_id, GameSessionScript.GOBLIN_CAMP_ID)
 
 	assert_true(session.has_unsettled_battle_loot())
 
 
-func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_gear() -> void:
+func test_has_unsettled_battle_loot_is_false_once_the_battle_context_has_resolved() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
-	session.battle_gear = {"dagger_iron": 1}
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.create_battle_context(party_id, GameSessionScript.GOBLIN_CAMP_ID)
+	var battle_id: String = session.get_active_battle_context().battle_id
 
-	assert_true(session.has_unsettled_battle_loot())
-
-
-func test_has_unsettled_battle_loot_is_true_for_nonempty_battle_mana_crystals() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.battle_mana_crystals = {1: 1}
-
-	assert_true(session.has_unsettled_battle_loot())
-
-
-func test_has_unsettled_battle_loot_is_false_after_merging_it_into_the_party() -> void:
-	var session: Node = GameSessionScript.new()
-	autofree(session)
-	session.battle_reward = 5
-	session.battle_gear = {"dagger_iron": 1}
-	session.battle_mana_crystals = {1: 1}
-
-	session.merge_battle_loot_into_party()
+	session.resolve_battle_victory(battle_id)
 
 	assert_false(session.has_unsettled_battle_loot())
 
 
-func test_reset_clears_loot_state() -> void:
+func test_reset_clears_bank_state() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.mana_crystals = {1: 3}
 	session.banked_gear = {"shortsword_iron": 2}
-	session.pending_mana_crystals = {1: 1}
-	session.pending_gear = {"dagger_iron": 1}
-	session.battle_mana_crystals = {1: 1}
-	session.battle_gear = {"dagger_iron": 1}
 
 	session.reset()
 
 	assert_eq(session.mana_crystals, {})
 	assert_eq(session.banked_gear, {})
-	assert_eq(session.pending_mana_crystals, {})
-	assert_eq(session.pending_gear, {})
-	assert_eq(session.battle_mana_crystals, {})
-	assert_eq(session.battle_gear, {})
 
 
-func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward() -> void:
+func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_no_reward() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.enter_encounter(GameSessionScript.ORC_OUTPOST_ID)
@@ -1304,10 +1295,7 @@ func test_abandoning_the_entered_orc_outpost_leaves_zero_gold_and_pending_reward
 	session.abandon_current_encounter()
 
 	assert_eq(session.gold, 0)
-	assert_eq(session.pending_reward, 0)
-	assert_eq(session.battle_reward, 0)
 	assert_false(session.is_encounter_complete(GameSessionScript.ORC_OUTPOST_ID), "Abandoning must leave the site retryable")
-
 
 func test_default_warrior_has_level_and_availability() -> void:
 	var session: Node = GameSessionScript.new()
@@ -2171,27 +2159,34 @@ func test_resolve_battle_deaths_validates_every_id_before_mutating_and_ignores_u
 
 ## The slain unit's ordinary carried gear (its starting Iron Longsword and
 ## Leather Armor -- both plain stackable ids, not unique instances) and its
-## carried potion all move to pending_gear in one pass, retained until the
-## existing settlement transition (deposit_pending_reward()) banks them --
-## never banked directly by this transaction.
-func test_resolve_battle_deaths_transfers_ordinary_carried_gear_to_pending_loot() -> void:
+## carried potion all move to its own party's carry in one pass, retained
+## until the existing settlement transition (deposit_party_carry()) banks
+## them -- never banked directly by this transaction.
+func test_resolve_battle_deaths_transfers_ordinary_carried_gear_to_the_partys_carry() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.banked_gear["healing_potion"] = 1
 	GameSession.equip_item_from_bank("warrior_001", "healing_potion")
 
 	GameSession.resolve_battle_deaths({"warrior_001": 0})
 
-	assert_eq(GameSession.pending_gear, {"longsword_iron": 1, "leather_armor": 1, "healing_potion": 1})
+	assert_eq(GameSession.get_party_carry(party_id).gear, {"longsword_iron": 1, "leather_armor": 1, "healing_potion": 1})
 	assert_eq(GameSession.banked_gear.get("longsword_iron", 0), 0, "Not banked directly by the permadeath transaction")
 	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 0, "Not banked directly by the permadeath transaction")
 
 
-## A unique modified instance (e.g. a sharpened weapon) moves into pending_
-## gear by its own instance id, not folded into a plain item count, and its
-## owned_item_instances record (carrying its modifier tiers) is left
-## completely untouched -- "never delete a recovered owned-item record."
+## A unique modified instance (e.g. a sharpened weapon) moves into the
+## party's own carry.item_instance_ids by its own instance id, not folded
+## into a plain item count, and its owned_item_instances record (carrying
+## its modifier tiers) is left completely untouched -- "never delete a
+## recovered owned-item record."
 func test_resolve_battle_deaths_transfers_a_unique_item_instance_preserving_its_modifiers() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.banked_gear["dagger_steel"] = 1
 	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
 	GameSession.set_item_instance_modifier(instance_id, "treatment", GameSession.SHARPENED_TREATMENT_ID, 1)
@@ -2199,7 +2194,10 @@ func test_resolve_battle_deaths_transfers_a_unique_item_instance_preserving_its_
 
 	GameSession.resolve_battle_deaths({"warrior_001": 0})
 
-	assert_eq(GameSession.pending_gear.get(instance_id, 0), 1, "The instance id itself moves to pending loot")
+	assert_true(
+		GameSession.get_party_carry(party_id).item_instance_ids.has(instance_id),
+		"The instance id itself moves to the party's own carry"
+	)
 	assert_true(
 		GameSession.owned_item_instances.has(instance_id),
 		"The owned-instance record must never be deleted on a successful recovery"
@@ -2221,12 +2219,13 @@ func test_resolve_battle_deaths_only_transfers_the_dead_units_own_gear() -> void
 	GameSession.reset()
 	var survivor_id: String = GameSession.adventurers[1].id
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.assign_adventurer_to_selected_party(survivor_id)
 
 	GameSession.resolve_battle_deaths({"warrior_001": 0, survivor_id: 5})
 
-	assert_eq(GameSession.pending_gear, {"longsword_iron": 1, "leather_armor": 1})
+	assert_eq(GameSession.get_party_carry(party_id).gear, {"longsword_iron": 1, "leather_armor": 1})
 	assert_eq(
 		GameSession.get_adventurer(survivor_id).equipment.weapon_inventory, ["longsword_iron"],
 		"A surviving member's own equipment must be untouched"
@@ -2286,23 +2285,22 @@ func test_withdraw_from_encounter_applies_a_rounded_up_ten_percent_loss_that_can
 func test_withdraw_from_encounter_preserves_the_objective_and_records_a_homeward_route() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	var encounter_id := "obj_tier1_1_goblin_outpost"
 	var encounter_position: Vector2i = GameSession.get_expedition(encounter_id).position
 	GameSession.set_deployed_party_position(encounter_position)
-	var pending_reward_before := GameSession.pending_reward
-	var pending_gear_before := GameSession.pending_gear.duplicate(true)
-	var battle_reward_before := GameSession.battle_reward
+	var carry_before := GameSession.get_party_carry(party_id)
+	var battle_context_before := GameSession.get_active_battle_context()
 
 	GameSession.withdraw_from_encounter(encounter_id, func() -> float: return 0.95)
 
 	assert_eq(GameSession.campaign_objective_id, encounter_id, "The current objective must remain current")
 	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain enterable")
 	assert_false(GameSession.is_encounter_complete(encounter_id))
-	assert_eq(GameSession.pending_reward, pending_reward_before, "Withdraw must not touch reward buckets")
-	assert_eq(GameSession.pending_gear, pending_gear_before)
-	assert_eq(GameSession.battle_reward, battle_reward_before)
+	assert_eq(GameSession.get_party_carry(party_id), carry_before, "Withdraw must not touch reward buckets")
+	assert_eq(GameSession.get_active_battle_context(), battle_context_before)
 	var route := GameSession.get_deployed_party_route()
 	assert_false(route.is_empty(), "A homeward route must be recorded")
 	assert_eq(
@@ -2341,12 +2339,15 @@ func test_withdraw_from_encounter_is_a_no_op_once_a_battle_is_already_selected()
 	assert_eq(GameSession.selected_encounter, encounter_id, "The active battle selection must be untouched")
 
 
-## deposit_pending_reward() -- the existing party-to-Encampment settlement
+## deposit_party_carry() -- the existing party-to-Encampment settlement
 ## transition -- is the only thing that ever banks recovered permadeath
 ## loot; resolve_battle_deaths() alone never reaches banked_gear/banked_
 ## item_instance_ids.
 func test_recovered_permadeath_loot_is_only_banked_by_the_settlement_transition() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.banked_gear["dagger_steel"] = 1
 	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
 	GameSession.equip_item_from_bank("warrior_001", instance_id)
@@ -2355,11 +2356,11 @@ func test_recovered_permadeath_loot_is_only_banked_by_the_settlement_transition(
 	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 0, "Not banked yet")
 	assert_false(GameSession.banked_item_instance_ids.has(instance_id), "Not banked yet")
 
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(party_id)
 
 	assert_eq(GameSession.banked_gear.get("leather_armor", 0), 1, "Now banked by the settlement transition")
 	assert_true(GameSession.banked_item_instance_ids.has(instance_id), "The instance is now banked, not folded into a count")
-	assert_eq(GameSession.pending_gear, {})
+	assert_eq(GameSession.get_party_carry(party_id).gear, {})
 
 
 ## A dead id must not remain in live session state, parties, or save
@@ -5900,32 +5901,42 @@ func test_equip_item_from_bank_rejects_an_item_not_in_stock_or_an_unknown_advent
 	assert_eq(GameSession.banked_gear.dagger_steel, 1, "A rejected equip must not touch the bank")
 
 
-func test_equip_item_from_party_store_adds_and_activates_without_touching_the_bank() -> void:
+func test_equip_item_from_party_carry_adds_and_activates_without_touching_the_bank() -> void:
 	GameSession.reset()
-	GameSession.pending_gear = {"dagger_steel": 1}
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry.gear = {"dagger_steel": 1}
 
-	var equipped: bool = GameSession.equip_item_from_party_store(GameSession.WARRIOR_ID, "dagger_steel")
+	var equipped: bool = GameSession.equip_item_from_party_carry(party_id, GameSession.WARRIOR_ID, "dagger_steel")
 
 	assert_true(equipped)
 	var equipment: Dictionary = GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment
 	assert_eq(equipment.weapon, "dagger_steel")
 	assert_eq(equipment.weapon_inventory, ["longsword_iron", "dagger_steel"])
 	assert_eq(
-		GameSession.pending_gear, {"dagger_steel": 0},
-		"The party store loses the item -- zero-count keys stay, matching banked_gear's own equip/sell pattern"
+		GameSession.get_party_carry(party_id).gear, {"dagger_steel": 0},
+		"The party carry loses the item -- zero-count keys stay, matching banked_gear's own equip/sell pattern"
 	)
 	assert_eq(GameSession.banked_gear, {}, "The bank must never be touched by this method")
 
 
-func test_equip_item_from_party_store_rejects_an_item_not_in_the_party_store() -> void:
+func test_equip_item_from_party_carry_rejects_an_item_not_in_the_party_carry() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.banked_gear = {"dagger_steel": 1}
 
 	assert_false(
-		GameSession.equip_item_from_party_store(GameSession.WARRIOR_ID, "dagger_steel"),
-		"A bank copy does not satisfy the party store -- these are two separate pools"
+		GameSession.equip_item_from_party_carry(party_id, GameSession.WARRIOR_ID, "dagger_steel"),
+		"A bank copy does not satisfy the party's own carry -- these are two separate pools"
 	)
 	assert_eq(GameSession.get_adventurer(GameSession.WARRIOR_ID).equipment.weapon, "longsword_iron")
+
+
+func test_equip_item_from_party_carry_is_a_no_op_for_an_unknown_party_id() -> void:
+	GameSession.reset()
+
+	assert_false(GameSession.equip_item_from_party_carry("no_such_party", GameSession.WARRIOR_ID, "dagger_steel"))
 
 
 func test_activate_carried_item_switches_the_active_weapon_without_touching_the_bank() -> void:
@@ -6003,27 +6014,34 @@ func test_unequip_to_bank_rejects_the_active_item_an_uncarried_item_or_an_unknow
 	assert_eq(GameSession.banked_gear, {}, "Nothing rejected should ever reach the bank")
 
 
-## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: party-wipe
-## forfeiture (resolve_party_wipe()) -- "a wipe loses all gold and loot" but
-## must never touch already-completed campaign progress or anything already
-## banked before the run that ended in a wipe.
-func test_resolve_party_wipe_forfeits_unbanked_gold_and_pending_loot_but_preserves_progress_and_banked_state() -> void:
+## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement established party-
+## wipe forfeiture; must never touch already-completed campaign progress or
+## anything already banked before the run that ended in a wipe.
+## Stage 6 Step 2 (decision-ledger.md's PartyCarry contract) narrows the
+## pre-Stage-6 resolve_party_wipe()'s "a wipe loses all gold, banked
+## included" rule this test used to lock: forfeit_party_carry() only
+## forfeits the wiped party's OWN not-yet-banked carry, never the shared
+## Encampment bank (GameSession.gold/banked_gear/mana_crystals) -- see that
+## function's own doc comment for why. A second, still-encamped party's own
+## carry (or lack thereof) is also completely unaffected.
+func test_forfeit_party_carry_forfeits_only_that_partys_own_unbanked_carry() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry = {"gold": 40, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 2}, "item_instance_ids": [] as Array[String]}
 	GameSession.gold = 250
-	GameSession.pending_reward = 40
-	GameSession.pending_mana_crystals = {1: 2}
-	GameSession.pending_gear = {"dagger_iron": 1}
 	GameSession.banked_gear = {"leather_armor": 3}
 	GameSession.mana_crystals = {1: 5}
 	GameSession.guild_hall_level = 2
 	GameSession.completed_objectives = ["obj_tier1_1_goblin_outpost"]
 
-	GameSession.resolve_party_wipe()
+	GameSession.forfeit_party_carry(party_id)
 
-	assert_eq(GameSession.gold, 0, "A wipe loses all gold, banked included")
-	assert_eq(GameSession.pending_reward, 0)
-	assert_eq(GameSession.pending_mana_crystals, {})
-	assert_eq(GameSession.pending_gear, {})
+	assert_eq(GameSession.gold, 250, "The shared Encampment bank must never be touched by a party's own forfeiture")
+	var carry: Dictionary = GameSession.get_party_carry(party_id)
+	assert_eq(carry.gold, 0)
+	assert_eq(carry.mana_crystals, {})
+	assert_eq(carry.gear, {})
 	assert_eq(GameSession.banked_gear, {"leather_armor": 3}, "Already-banked gear is preserved")
 	assert_eq(GameSession.mana_crystals, {1: 5}, "Already-banked crystals are preserved")
 	assert_eq(GameSession.guild_hall_level, 2, "Building levels are preserved")
@@ -6033,21 +6051,43 @@ func test_resolve_party_wipe_forfeits_unbanked_gold_and_pending_loot_but_preserv
 	)
 
 
-## A unique item instance still sitting in pending_gear (recovered from a
-## fallen member this same run, never banked) is truly lost on a wipe, not
-## left as an orphaned, unreferenced owned_item_instances record.
-func test_resolve_party_wipe_discards_an_unbanked_recovered_item_instances_record() -> void:
+## A unique item instance still sitting in a party's own carry (recovered
+## from a fallen member this same run, never banked) is truly lost on a
+## wipe, not left as an orphaned, unreferenced owned_item_instances record.
+func test_forfeit_party_carry_discards_an_unbanked_recovered_item_instances_record() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.banked_gear["dagger_steel"] = 1
 	var instance_id: String = GameSession.materialize_banked_item_instance("dagger_steel")
 	GameSession.equip_item_from_bank("warrior_001", instance_id)
 	GameSession.resolve_battle_deaths({"warrior_001": 0})
-	assert_true(GameSession.pending_gear.has(instance_id), "Test setup: the instance is pending, not yet banked")
+	assert_true(GameSession.get_party_carry(party_id).item_instance_ids.has(instance_id), "Test setup: the instance is carried, not yet banked")
 
-	GameSession.resolve_party_wipe()
+	GameSession.forfeit_party_carry(party_id)
 
 	assert_false(GameSession.owned_item_instances.has(instance_id), "An unbanked recovered instance is lost on a wipe")
 	assert_false(GameSession.banked_item_instance_ids.has(instance_id))
+
+
+## The core multi-party isolation guarantee behind this whole step: wiping
+## one party's carry must never touch a different, still-encamped party's
+## own independent carry.
+func test_forfeit_party_carry_never_touches_a_different_partys_carry() -> void:
+	GameSession.reset()
+	GameSession.create_party("Party 1")
+	var party_a: String = GameSession.selected_party_id
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party("Party 2")
+	var party_b: String = GameSession.selected_party_id
+	GameSession.parties[0].carry.gold = 40
+	GameSession.parties[1].carry.gold = 75
+
+	GameSession.forfeit_party_carry(party_a)
+
+	assert_eq(GameSession.get_party_carry(party_a).gold, 0)
+	assert_eq(GameSession.get_party_carry(party_b).gold, 75, "A different party's own carry must be untouched")
 
 
 func test_reset_clears_the_trading_post() -> void:
@@ -6162,14 +6202,8 @@ func _capture_durable_fields() -> Dictionary:
 		"blacksmith_level": GameSession.blacksmith_level,
 		"blacksmith_craft_job": GameSession.blacksmith_craft_job.duplicate(true),
 		"blacksmith_sharpening_job": GameSession.blacksmith_sharpening_job.duplicate(true),
-		"pending_reward": GameSession.pending_reward,
 		"mana_crystals": GameSession.mana_crystals.duplicate(true),
 		"banked_gear": GameSession.banked_gear.duplicate(true),
-		"pending_mana_crystals": GameSession.pending_mana_crystals.duplicate(true),
-		"pending_gear": GameSession.pending_gear.duplicate(true),
-		"battle_reward": GameSession.battle_reward,
-		"battle_mana_crystals": GameSession.battle_mana_crystals.duplicate(true),
-		"battle_gear": GameSession.battle_gear.duplicate(true),
 		"has_trading_post": GameSession.has_trading_post,
 		"shop_level": GameSession.shop_level,
 		"shop_gold": GameSession.shop_gold,
@@ -6179,11 +6213,13 @@ func _capture_durable_fields() -> Dictionary:
 
 
 func test_import_keeps_carried_rewards_unbanked() -> void:
-	GameSession.pending_reward = 17
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry.gold = 17
 	var snapshot := GameSession.export_campaign_snapshot()
 	GameSession.reset()
 	assert_true(GameSession.import_campaign_snapshot(snapshot).ok)
-	assert_eq(GameSession.pending_reward, 17)
+	assert_eq(GameSession.get_party_carry(party_id).gold, 17)
 	assert_eq(GameSession.gold, 0)
 
 
@@ -6262,14 +6298,11 @@ func test_export_then_reset_then_import_restores_the_full_session() -> void:
 	GameSession.world_turn = 5
 	GameSession.gold = 123
 	GameSession.guild_hall_level = 2
-	GameSession.pending_reward = 9
+	GameSession.parties[0].carry = {
+		"gold": 9, "gear": {"longsword_iron": 1}, "mana_crystals": {2: 1}, "item_instance_ids": [] as Array[String],
+	}
 	GameSession.mana_crystals = {1: 2}
 	GameSession.banked_gear = {"shortsword_iron": 1}
-	GameSession.pending_mana_crystals = {2: 1}
-	GameSession.pending_gear = {"longsword_iron": 1}
-	GameSession.battle_reward = 4
-	GameSession.battle_mana_crystals = {1: 1}
-	GameSession.battle_gear = {"dagger_iron": 1}
 	GameSession.has_trading_post = true
 	GameSession.tutorial_progress = {"formed_party": true}
 	var expected := _capture_durable_fields()
@@ -6403,14 +6436,15 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		# GameConfig-backed (world_map.threat_turn_interval) rather than a
 		# plain constant, but still balance data, not player state.
 		"THREAT_TURN_INTERVAL": true,
-		# Stage 5 D5 (Step 6): the in-session battle-party claim is
-		# deliberately NOT part of the snapshot -- see its own doc comment on
-		# game_session.gd. It can only ever be non-empty for the same window
-		# selected_encounter is non-empty, and a save is only possible while
-		# selected_encounter == "" (GameManager.can_save_current_campaign()),
-		# so it can never be non-empty at a point a save could actually
-		# happen.
-		"active_battle_party_id": true,
+		# Stage 6 Step 2: the in-session battle context is deliberately NOT
+		# part of the snapshot -- see its own doc comment on game_session.gd.
+		# Its status can only ever be "active" for the same window
+		# selected_encounter is non-empty or a battle result screen is still
+		# showing unsettled loot, and a save is only possible while
+		# selected_encounter == "" and has_unsettled_battle_loot() is false
+		# (GameManager.can_save_current_campaign()), so it can never be
+		# "active" at a point a save could actually happen.
+		"_battle_context": true,
 	}
 
 
@@ -6488,13 +6522,18 @@ func test_import_campaign_snapshot_result_does_not_alias_live_session_state() ->
 
 
 
-func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
-	GameSession.battle_reward = 3
-	GameSession.battle_gear = {"dagger_iron": 1}
-	GameSession.battle_mana_crystals = {1: 1}
-	GameSession.pending_reward = 7
-	GameSession.pending_gear = {"longsword_iron": 1}
-	GameSession.pending_mana_crystals = {2: 1}
+## The in-progress battle context is deliberately NOT part of the snapshot
+## at all (see GameSession.export_campaign_snapshot()'s own doc comment) --
+## a save is only ever possible while has_unsettled_battle_loot() is false,
+## so there is never a live battle context to round-trip in the first
+## place. A party's own carry, by contrast, IS part of the snapshot (nested
+## in its `parties` entry) and must round-trip completely unbanked.
+func test_import_never_deposits_a_partys_carry_into_the_bank() -> void:
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry = {
+		"gold": 7, "gear": {"longsword_iron": 1}, "mana_crystals": {2: 1}, "item_instance_ids": [] as Array[String],
+	}
 	var snapshot := GameSession.export_campaign_snapshot()
 	GameSession.reset()
 
@@ -6503,12 +6542,10 @@ func test_import_never_merges_battle_or_pending_rewards_into_the_bank() -> void:
 	assert_eq(GameSession.gold, 0)
 	assert_eq(GameSession.banked_gear, {})
 	assert_eq(GameSession.mana_crystals, {})
-	assert_eq(GameSession.battle_reward, 3)
-	assert_eq(GameSession.battle_gear, {"dagger_iron": 1})
-	assert_eq(GameSession.battle_mana_crystals, {1: 1})
-	assert_eq(GameSession.pending_reward, 7)
-	assert_eq(GameSession.pending_gear, {"longsword_iron": 1})
-	assert_eq(GameSession.pending_mana_crystals, {2: 1})
+	var carry: Dictionary = GameSession.get_party_carry(party_id)
+	assert_eq(carry.gold, 7)
+	assert_eq(carry.gear, {"longsword_iron": 1})
+	assert_eq(carry.mana_crystals, {2: 1})
 
 
 func test_import_campaign_snapshot_rejects_invalid_data_and_leaves_a_prepared_session_unchanged() -> void:
@@ -6566,13 +6603,14 @@ func test_campaign_guide_moves_to_enter_site_once_the_party_reaches_an_active_en
 func test_campaign_guide_moves_to_return_bank_once_the_party_carries_a_reward() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	GameSession.merge_battle_loot_into_party()
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().battle_id)
 
-	assert_true(GameSession.pending_reward > 0)
+	assert_true(GameSession.get_party_carry(party_id).gold > 0)
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_RETURN_BANK)
 
 
@@ -6583,9 +6621,9 @@ func test_campaign_guide_offers_the_first_affordable_improvement_once_the_reward
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	GameSession.merge_battle_loot_into_party()
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().battle_id)
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(GameSession.selected_party_id)
 	GameSession.gold = 10  # guarantee an affordable recruit regardless of the rolled reward
 
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
@@ -6605,9 +6643,9 @@ func test_get_campaign_guide_state_never_writes_tutorial_progress() -> void:
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	GameSession.merge_battle_loot_into_party()
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().battle_id)
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(GameSession.selected_party_id)
 	GameSession.gold = 10
 	# At this point DEPLOY, SELECT_ROUTE, and FIRST_IMPROVEMENT can all be
 	# simultaneously live-triggered (see the priority-scan comment on
@@ -6632,9 +6670,9 @@ func test_record_campaign_guide_progress_retires_every_earlier_id() -> void:
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	GameSession.merge_battle_loot_into_party()
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().battle_id)
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(GameSession.selected_party_id)
 	GameSession.gold = 10
 	assert_eq(GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FIRST_IMPROVEMENT)
 
@@ -6905,7 +6943,7 @@ func test_tier_1_encounter_completion_reward_averages_25_gold() -> void:
 	session.complete_current_encounter()
 
 	# 20 base completion bonus (difficulty 1 * ~20) + 3 kill loot = 23 gold
-	assert_between(session.battle_reward, 22, 26, "Tier 1 encounter reward should average ~25 gold")
+	assert_between(session.get_active_battle_context().reward.gold, 22, 26, "Tier 1 encounter reward should average ~25 gold")
 
 
 func test_tier_2_encounter_completion_reward_averages_50_gold() -> void:
@@ -6917,7 +6955,7 @@ func test_tier_2_encounter_completion_reward_averages_50_gold() -> void:
 	session.complete_current_encounter()
 
 	# 40 base completion bonus (difficulty 2 * ~20) + 6 kill loot = 46 gold
-	assert_between(session.battle_reward, 44, 52, "Tier 2 encounter reward should average ~50 gold")
+	assert_between(session.get_active_battle_context().reward.gold, 44, 52, "Tier 2 encounter reward should average ~50 gold")
 
 
 ## ---------------------------------------------------------------------
@@ -7257,7 +7295,7 @@ func test_quest_reward_folds_into_battle_reward_only_when_its_target_clears_whil
 	baseline.reset()
 	baseline.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	baseline.complete_current_encounter()
-	var loot_only_reward: int = baseline.battle_reward
+	var loot_only_reward: int = int(baseline.get_active_battle_context().reward.gold)
 
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -7274,8 +7312,8 @@ func test_quest_reward_folds_into_battle_reward_only_when_its_target_clears_whil
 	session.complete_current_encounter()
 
 	assert_eq(
-		session.battle_reward, loot_only_reward + expected_reward,
-		"An active quest's reward gold must fold into battle_reward alongside normal loot on clear"
+		int(session.get_active_battle_context().reward.gold), loot_only_reward + expected_reward,
+		"An active quest's reward gold must fold into the active battle context's reward alongside normal loot on clear"
 	)
 	assert_eq(session.gold, 0, "Gold is only banked once the party reaches the Encampment, not at the moment of clearing")
 
@@ -7293,7 +7331,7 @@ func test_an_expired_quests_target_clears_without_its_reward() -> void:
 	baseline.reset()
 	baseline.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	baseline.complete_current_encounter()
-	var loot_only_reward: int = baseline.battle_reward
+	var loot_only_reward: int = int(baseline.get_active_battle_context().reward.gold)
 
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -7310,7 +7348,7 @@ func test_an_expired_quests_target_clears_without_its_reward() -> void:
 	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
 	session.complete_current_encounter()
 
-	assert_eq(session.battle_reward, loot_only_reward, "An expired quest awards no reward, even once its target clears")
+	assert_eq(int(session.get_active_battle_context().reward.gold), loot_only_reward, "An expired quest awards no reward, even once its target clears")
 	assert_false(session.quests.has(quest_id), "The expired quest's record is still removed once its target clears")
 
 
@@ -7352,7 +7390,13 @@ func test_watchtower_upgrade_cost_and_detection_scale_by_tier() -> void:
 ## snapshot() backfills a fresh record for every such id. A backfilled
 ## sandbox instance never gets a retroactive quest roll; a backfilled
 ## authored node still gets its usual discovery guarantee.
-func test_importing_a_pre_stage_5_snapshot_backfills_missing_intel_records_for_live_and_authored_encounters() -> void:
+## Encounter_intel/quests/quest_posting_blocked_until_turn/watchtower_level
+## are still optional-with-default fields even on a current-FORMAT_VERSION
+## payload (see CampaignSnapshot.from_dictionary()'s own leniency for these
+## four keys) -- a payload missing them entirely must still import cleanly
+## and have _backfill_missing_intel_records() populate live/authored
+## encounter records, the same as it always has.
+func test_importing_a_snapshot_missing_intel_fields_backfills_missing_intel_records_for_live_and_authored_encounters() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	var legacy_snapshot: Dictionary = session.export_campaign_snapshot()
@@ -7360,7 +7404,6 @@ func test_importing_a_pre_stage_5_snapshot_backfills_missing_intel_records_for_l
 	legacy_snapshot.erase("quests")
 	legacy_snapshot.erase("quest_posting_blocked_until_turn")
 	legacy_snapshot.erase("watchtower_level")
-	legacy_snapshot.version = 2
 
 	var result: Dictionary = session.import_campaign_snapshot(legacy_snapshot)
 
@@ -7718,36 +7761,40 @@ func test_end_world_turn_auto_steps_every_deployed_partys_own_route_independentl
 	assert_false(session.get_party(bravo_id).movement_spent)
 
 
-## Battle-party tie-break (D5's approved value): whichever party's Enter is
-## claimed first owns the single active battle; a second party's claim
-## attempt is rejected until the first is released.
-func test_battle_claim_is_exclusive_to_one_party_until_released() -> void:
+## Battle-party tie-break (D5's approved value; Stage 6 Step 2's BattleContext
+## re-expression): whichever party's Enter is claimed first owns the single
+## active battle; a second party's claim attempt is rejected until the first
+## resolves (see resolve_battle_victory()/resolve_battle_retreat()/
+## resolve_battle_defeat(), which each flip the context's status away from
+## "active" and so free the claim -- there is no longer a separate release
+## step).
+func test_battle_claim_is_exclusive_to_one_party_until_resolved() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.reset()
 
 	assert_true(session.can_party_enter_battle("party_a"))
-	assert_true(session.claim_battle_for_party("party_a"))
+	assert_false(session.create_battle_context("party_a", GameSessionScript.GOBLIN_CAMP_ID).is_empty())
 	assert_true(session.can_party_enter_battle("party_a"), "The owning party may re-enter its own claimed battle")
 	assert_false(session.can_party_enter_battle("party_b"))
-	assert_false(session.claim_battle_for_party("party_b"))
+	assert_true(session.create_battle_context("party_b", GameSessionScript.GOBLIN_CAMP_ID).is_empty(), "A second party's claim attempt must be rejected")
 
-	session.release_battle_claim()
+	session.resolve_battle_retreat(session.get_active_battle_context().battle_id)
 
 	assert_true(session.can_party_enter_battle("party_b"))
-	assert_true(session.claim_battle_for_party("party_b"))
+	assert_false(session.create_battle_context("party_b", GameSessionScript.GOBLIN_CAMP_ID).is_empty())
 
 
 func test_reset_clears_any_held_battle_claim() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
 	session.reset()
-	session.claim_battle_for_party("party_a")
+	session.create_battle_context("party_a", GameSessionScript.GOBLIN_CAMP_ID)
 
 	session.reset()
 
 	assert_true(session.can_party_enter_battle("party_a"))
-	assert_eq(session.active_battle_party_id, "")
+	assert_eq(session.get_active_battle_context(), {})
 
 
 ## Turns-until-next-threat-star UI counter (D5's approved time-escalation

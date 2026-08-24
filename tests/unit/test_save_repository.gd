@@ -39,7 +39,8 @@ func _populated_session() -> Node:
 	autofree(session)
 	session.world_turn = 9
 	session.gold = 42
-	session.pending_mana_crystals = {1: 3, 2: 1}
+	session.create_party()
+	session.parties[0].carry.mana_crystals = {1: 3, 2: 1}
 	return session
 
 
@@ -207,7 +208,7 @@ func test_failed_load_does_not_mutate_a_prepared_session_when_the_file_is_absent
 	assert_false(result.ok)
 	assert_eq(session.world_turn, 9)
 	assert_eq(session.gold, 42)
-	assert_eq(session.pending_mana_crystals, {1: 3, 2: 1})
+	assert_eq(session.get_party_carry(session.parties[0].id).mana_crystals, {1: 3, 2: 1})
 
 
 func test_failed_load_does_not_mutate_a_prepared_session_when_the_file_is_corrupt() -> void:
@@ -267,9 +268,10 @@ func test_round_trip_preserves_int_keyed_mana_crystal_tiers() -> void:
 	var result := repository.load_campaign(loaded_session)
 
 	assert_true(result.ok, result.get("error", ""))
-	assert_eq(loaded_session.pending_mana_crystals, {1: 3, 2: 1})
+	var carry: Dictionary = loaded_session.get_party_carry(loaded_session.parties[0].id)
+	assert_eq(carry.mana_crystals, {1: 3, 2: 1})
 	assert_eq(
-		loaded_session.pending_mana_crystals.get(1, 0), 3,
+		carry.mana_crystals.get(1, 0), 3,
 		"An int-keyed lookup must work after a real JSON round trip, not just a plain dictionary equality check"
 	)
 

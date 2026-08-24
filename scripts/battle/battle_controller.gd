@@ -1764,10 +1764,11 @@ func _spawn_reaction_combat_text(mover, result: Dictionary) -> void:
 ## Ends the battle immediately -- every living player unit rolls its own
 ## distance-based consequence against the nearest living enemy (see
 ## RETREAT_OUTCOME_THRESHOLDS), this battle's own unbanked loot is
-## discarded outright (a retreat never banks battle_reward/battle_gear/
-## battle_mana_crystals -- see GameSession.discard_battle_loot()), and
-## retreat_resolved fires once with every unit's result so Battlefield can
-## log the outcome and hand off routing to GameManager.retreat_from_battle().
+## discarded outright (a retreat never banks the active battle context's own
+## reward into the owning party's carry -- see GameSession.
+## resolve_battle_retreat()), and retreat_resolved fires once with every
+## unit's result so Battlefield can log the outcome and hand off routing to
+## GameManager.retreat_from_battle().
 func try_retreat() -> Array[Dictionary]:
 	if input_locked or active_side != Side.PLAYER:
 		return []
@@ -1792,7 +1793,7 @@ func try_retreat() -> Array[Dictionary]:
 			"died": not unit.is_alive(),
 		})
 
-	GameSession.discard_battle_loot()
+	GameSession.resolve_battle_retreat(GameSession.get_active_battle_context().get("battle_id", ""))
 	retreat_resolved.emit(results)
 	return results
 

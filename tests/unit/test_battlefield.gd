@@ -1548,8 +1548,10 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 	battlefield._apply_battle_outcome(true)
 
 	assert_true(GameSession.is_encounter_complete("goblin_camp"))
-	assert_eq(GameSession.battle_reward, 19, "Victory should queue the goblin camp's rolled reward in the battle store")
-
+	assert_eq(
+		GameSession.get_party_carry(GameSession.selected_party_id).gold, 19,
+		"Victory should resolve the goblin camp's rolled reward straight into the party's own carry"
+	)
 	assert_eq(GameSession.gold, 0, "Victory alone must not bank the reward")
 
 
@@ -1558,10 +1560,15 @@ func test_apply_battle_outcome_true_completes_the_encounter() -> void:
 ## comment) -- it routes straight to battle_result.gd/victory_screen.gd, both
 ## of which call GameManager.go_to_world_map()/go_to_encampment() directly.
 ## Before this fix, only complete_battle()/fail_battle()/retreat_from_battle()
-## released GameSession.active_battle_party_id, so a party that actually won
-## through Battlefield (this scene, driven the same way _apply_battle_
-## outcome()'s other tests already drive it) left the claim permanently held,
-## locking a second fielded party out of ever entering battle again.
+## released the battle claim, so a party that actually won through
+## Battlefield (this scene, driven the same way _apply_battle_outcome()'s
+## other tests already drive it) left the claim permanently held, locking a
+## second fielded party out of ever entering battle again. Stage 6 Step 2
+## re-expresses the claim as a BattleContext's own status (see
+## can_party_enter_battle()) instead of a dedicated active_battle_party_id
+## field, but the same guarantee -- a real victory frees the claim
+## immediately, not only once the player dismisses the result screen -- must
+## still hold (see battlefield.gd's _finish_victory() own doc comment).
 func test_a_real_victory_through_battlefield_releases_the_battle_claim_for_a_second_party() -> void:
 	GameSession.reset()
 	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
@@ -1571,7 +1578,7 @@ func test_a_real_victory_through_battlefield_releases_the_battle_claim_for_a_sec
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
 	# Alpha's Enter claimed the battle -- see GameManager.enter_battle().
-	GameSession.claim_battle_for_party(alpha_id)
+	GameSession.create_battle_context(alpha_id, "goblin_camp")
 	GameSession.create_party("Bravo")
 	var bravo_id: String = GameSession.selected_party_id
 	GameSession.adventurers.append(GameSession.get_default_warrior("warrior_bravo", "Bravo Warrior"))
@@ -1582,7 +1589,7 @@ func test_a_real_victory_through_battlefield_releases_the_battle_claim_for_a_sec
 
 	battlefield._apply_battle_outcome(true)
 
-	assert_eq(GameSession.active_battle_party_id, "", "Victory must release the battle claim")
+	assert_eq(GameSession.get_active_battle_context().status, "victory", "Victory must resolve the battle claim")
 	assert_true(
 		GameSession.can_party_enter_battle(bravo_id),
 		"A second fielded party must be able to enter battle after the first party's real victory"
@@ -1592,6 +1599,7 @@ func test_a_real_victory_through_battlefield_releases_the_battle_claim_for_a_sec
 func test_apply_battle_outcome_false_returns_the_party_home_without_completing() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter("goblin_camp")
@@ -1603,7 +1611,7 @@ func test_apply_battle_outcome_false_returns_the_party_home_without_completing()
 	assert_false(GameSession.has_deployed_party())
 	assert_false(GameSession.is_encounter_complete("goblin_camp"))
 	assert_eq(GameSession.gold, 0, "Defeat must not queue or bank any gold")
-	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue or bank any gold")
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "Defeat must not queue or bank any gold")
 
 
 func test_battle_start_reads_stored_adventurer_health() -> void:
@@ -1899,7 +1907,7 @@ func test_defeat_awards_no_clear_xp_but_keeps_xp_already_earned_from_a_kill() ->
 		"Defeat must keep XP already earned from a kill but award no clear XP"
 	)
 	assert_eq(GameSession.gold, 0, "Defeat must not bank any gold")
-	assert_eq(GameSession.pending_reward, 0, "Defeat must not queue any pending gold")
+	assert_eq(GameSession.get_party_carry(GameSession.FIRST_PARTY_ID).gold, 0, "Defeat must not queue any carried gold")
 
 
 func test_a_level_up_from_kill_xp_raises_the_active_units_max_and_current_health() -> void:
@@ -2125,23 +2133,21 @@ func test_a_victorious_battle_with_no_level_up_reports_an_empty_leveled_up_list(
 	assert_eq(GameManager.battle_result_summary.leveled_up_ids, [])
 
 
-## Regression test: the battle store (GameSession.battle_reward/battle_
-## mana_crystals/battle_gear) holds only the current battle's own loot,
-## separate from the party's own running totals (pending_reward/pending_
-## mana_crystals/pending_gear) until the player leaves the summary screen
-## (see GameSession.merge_battle_loot_into_party()) -- so a party's second
-## victory in one deployment must not report the first battle's already-
-## carried loot alongside its own in the summary, and must not touch the
-## party's own totals at all until that merge happens.
+## Regression test: the active BattleContext's own reward holds only the
+## current battle's own loot, separate from the party's own running carry --
+## the summary built from it must not report a party's already-carried loot
+## alongside this battle's own. See _finish_victory()'s own doc comment for
+## why the context resolves into carry immediately rather than waiting for
+## the player to leave the summary screen.
 func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void:
 	var battlefield := _setup_goblin_camp_battle()
-	# Simulate an earlier battle's loot already merged into the party's own
-	# store this deployment (see GameManager.go_to_world_map() ->
-	# GameSession.merge_battle_loot_into_party()), not yet deposited back at
-	# the settlement.
-	GameSession.pending_reward = 50
-	GameSession.pending_mana_crystals = {1: 3}
-	GameSession.pending_gear = {"dagger_iron": 1, "buckler_wood": 1}
+	var party_id: String = GameSession.FIRST_PARTY_ID
+	# Simulate an earlier battle's loot already resolved into the party's own
+	# carry this deployment (see GameSession.resolve_battle_victory()), not
+	# yet deposited back at the settlement.
+	GameSession.parties[0].carry = {
+		"gold": 50, "gear": {"dagger_iron": 1, "buckler_wood": 1}, "mana_crystals": {1: 3}, "item_instance_ids": [] as Array[String],
+	}
 	GameSession.loot_gold_roll = func(min_value: int, _max_value: int) -> int: return min_value
 	GameSession.loot_gear_roll = func() -> float: return 0.0
 
@@ -2150,7 +2156,7 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 	# Goblin camp's single goblin: gold_min 1 * multiplier 1, one mana
 	# crystal, and (since loot_gear_roll always rolls below GEAR_DROP_CHANCE
 	# here) one gear drop -- this battle's own loot, freshly rolled into the
-	# battle store and reported straight from there.
+	# battle context and reported straight from there.
 	assert_eq(
 		GameManager.battle_result_summary.loot_gold, 19,
 		"Only this battle's own gold, not the 50 already carried over"
@@ -2164,12 +2170,14 @@ func test_a_second_victory_in_one_deployment_reports_only_its_own_loot() -> void
 		GameManager.battle_result_summary.loot_gear_counts, {"shortsword_iron": 1},
 		"Only this battle's own gear, not the 2 pieces already carried over"
 	)
-	# The battle store and the party's own store stay separate until the
-	# player leaves the summary screen for the World Map -- so the
-	# pre-seeded party totals above must still read exactly as seeded.
-	assert_eq(GameSession.pending_reward, 50)
-	assert_eq(GameSession.pending_mana_crystals, {1: 3})
-	assert_eq(GameSession.pending_gear, {"dagger_iron": 1, "buckler_wood": 1})
+	# _finish_victory() resolves the battle context into the party's own
+	# carry immediately (Stage 6 Step 2: this is also what frees the battle
+	# claim for a second party -- see that function's own doc comment), so
+	# this battle's own loot is already folded on top of what was carried in.
+	var carry: Dictionary = GameSession.get_party_carry(party_id)
+	assert_eq(carry.gold, 69)
+	assert_eq(carry.mana_crystals, {1: 4})
+	assert_eq(carry.gear, {"dagger_iron": 1, "buckler_wood": 1, "shortsword_iron": 1})
 
 
 func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary() -> void:
@@ -2672,19 +2680,27 @@ func test_a_survived_retreat_persists_hp_loss_discards_loot_and_stays_on_the_enc
 	assert_false(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID), "Retreat leaves the encounter unconquered")
 	assert_true(GameSession.has_deployed_party(), "A survived retreat keeps the party deployed, not sent home")
 	assert_eq(GameSession.get_deployed_party_position(), encounter_position, "The party stays on the encounter tile")
-	assert_eq(GameSession.battle_reward, 0, "Unbanked battle loot is discarded")
+	assert_eq(GameSession.get_active_battle_context().get("reward", {}).get("gold", 0), 0, "Unbanked battle loot is discarded")
 
 
 func test_a_full_wipe_from_retreats_own_risk_roll_routes_home_and_forfeits_gold_and_loot() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(party_id, GameSession.GOBLIN_CAMP_ID)
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	var battlefield: Node2D = _make_battlefield()
 	battlefield.enemy_turn_beat_seconds = 0.0
 	add_child_autofree(battlefield)
+	# Bank gold (already-deposited, shared Encampment funds) must survive a
+	# wipe untouched -- only the wiped party's own not-yet-banked carry is
+	# forfeited (Stage 6 Step 2, decision-ledger.md's PartyCarry contract
+	# narrows the pre-Stage-6 "a wipe loses all gold" rule to per-party carry;
+	# see GameSession.forfeit_party_carry()'s own doc comment).
 	GameSession.gold = 40
+	GameSession.parties[0].carry.gold = 25
 	# 0.99 lands in the death region of every distance bucket.
 	battlefield.grid.retreat_roll = func() -> float: return 0.99
 
@@ -2702,5 +2718,6 @@ func test_a_full_wipe_from_retreats_own_risk_roll_routes_home_and_forfeits_gold_
 		GameSession.get_deployed_party_position(), GameSession.STARTING_SETTLEMENT_WORLD_POSITION,
 		"An undeployed party's position reads back as the settlement"
 	)
-	assert_eq(GameSession.gold, 0, "A wipe forfeits all gold")
+	assert_eq(GameSession.gold, 40, "The shared Encampment bank must never be touched by a wipe")
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "The wiped party's own carried gold is forfeited")
 

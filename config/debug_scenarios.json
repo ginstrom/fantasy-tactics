@@ -177,9 +177,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -217,9 +214,6 @@
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -370,7 +364,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -557,9 +551,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -597,9 +588,6 @@
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -750,7 +738,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -937,9 +925,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -977,9 +962,6 @@
         "mana_crystals": {},
         "owned_item_instances": {},
         "parties": [],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -1130,7 +1112,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1317,9 +1299,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -1372,12 +1351,15 @@
             "world_position": {
               "x": 3,
               "y": 3
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -1528,7 +1510,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -1715,9 +1697,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -1768,12 +1747,15 @@
             "world_position": {
               "x": 3,
               "y": 3
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -1924,7 +1906,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Campaign",
@@ -2111,9 +2093,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -2166,12 +2145,15 @@
             "world_position": {
               "x": 1,
               "y": 0
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -2322,7 +2304,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "World",
@@ -2509,9 +2491,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -2564,12 +2543,15 @@
             "world_position": {
               "x": 4,
               "y": 4
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -2720,7 +2702,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3000,9 +2982,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -3058,12 +3037,15 @@
             "world_position": {
               "x": 4,
               "y": 0
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -3214,7 +3196,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3484,9 +3466,6 @@
         "alchemy_workshop_level": 0,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -3546,12 +3525,15 @@
             "world_position": {
               "x": 0,
               "y": 4
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -3702,7 +3684,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Battle",
@@ -3891,9 +3873,6 @@
           "shortsword_iron": 1
         },
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 0,
         "blacksmith_sharpening_job": {},
@@ -3948,12 +3927,15 @@
             "world_position": {
               "x": 3,
               "y": 3
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [
           {
@@ -4104,7 +4086,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 1
       },
       "category": "Shop",
@@ -4427,9 +4409,6 @@
         "alchemy_workshop_level": 1,
         "banked_gear": {},
         "banked_item_instance_ids": [],
-        "battle_gear": {},
-        "battle_mana_crystals": {},
-        "battle_reward": 0,
         "blacksmith_craft_job": {},
         "blacksmith_level": 2,
         "blacksmith_sharpening_job": {},
@@ -4554,12 +4533,15 @@
             "world_position": {
               "x": 6,
               "y": 2
+            },
+            "carry": {
+              "gold": 0,
+              "gear": {},
+              "mana_crystals": {},
+              "item_instance_ids": []
             }
           }
         ],
-        "pending_gear": {},
-        "pending_mana_crystals": {},
-        "pending_reward": 0,
         "player_name": "Player",
         "recruitment_candidates": [],
         "recruitment_vacancies": [],
@@ -4588,7 +4570,7 @@
           "goblin_camp",
           "orc_outpost"
         ],
-        "version": 3,
+        "version": 4,
         "world_turn": 60
       },
       "category": "Battle",

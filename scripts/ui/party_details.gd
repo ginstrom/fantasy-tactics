@@ -10,19 +10,19 @@ extends Control
 ## and disabled for an encamped party with no available adventurer left to
 ## add.
 ##
-## Loot: a deployed party's LootTable shows everything it's carrying
-## (GameSession.pending_gear/pending_mana_crystals, itemized) with a
+## Loot: a deployed party's LootTable shows everything it's carrying (this
+## party's own GameSession.get_party_carry(party_id), itemized) with a
 ## party-scoped [Equip] and no [Sell]. An encamped party shows no loot
-## table at all — deposit_pending_reward() has already moved that loot
-## into GameSession.banked_gear/mana_crystals (Stores' inventory) by the
-## time a party is back at the Encampment. GoldLabel shows this party's own
-## carried gold (GameSession.pending_reward) while deployed, not the
+## table at all — deposit_party_carry() has already moved that party's
+## carry into GameSession.banked_gear/mana_crystals (Stores' inventory) by
+## the time it is back at the Encampment, so its own carry reads empty
+## again. GoldLabel shows this party's own carried gold
+## (GameSession.get_party_carry(party_id).gold) while deployed, not the
 ## Encampment's banked GameSession.gold -- that belongs to Stores, not to
-## one party. An encamped party always reads 0 here: partly because
-## deposit_pending_reward() already zeroed it for that party, but also
-## because pending_reward only ever tracks the single currently-deployed
-## party (GameSession.selected_party_id) and must never be read for any
-## other, encamped party's page.
+## one party. Each party's own carry is independent (Stage 6 Step 2,
+## decision-ledger.md's PartyCarry contract) -- unlike the old campaign-wide
+## pending_reward this replaced, reading another party's page can never
+## show this party's carry or vice versa.
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
@@ -60,14 +60,11 @@ func refresh() -> void:
 	var party := GameSession.get_party(party_id)
 	party_name_label.text = "" if party.is_empty() else party.name
 	var deployed: bool = party.get("deployed", false)
-	# pending_reward tracks the single currently-deployed party (see
-	# GameSession.selected_party_id) -- reading it unconditionally would
-	# misattribute the deployed party's carried gold to a different,
-	# encamped party's page, so an encamped party always reads 0 here.
-	gold_label.text = tr("party_details.gold") % (GameSession.pending_reward if deployed else 0)
+	var carry := GameSession.get_party_carry(party_id)
+	gold_label.text = tr("party_details.gold") % int(carry.get("gold", 0))
 	loot_table.visible = deployed
 	if deployed:
-		loot_table.set_rows(GameSession.build_loot_rows(GameSession.pending_gear, GameSession.pending_mana_crystals))
+		loot_table.set_rows(GameSession.build_loot_rows(carry.get("gear", {}), carry.get("mana_crystals", {})))
 	var rows := _build_rows(party)
 	member_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()

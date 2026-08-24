@@ -157,7 +157,7 @@ func test_a_deployed_partys_gold_label_shows_its_own_carried_reward() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	GameSession.pending_reward = 15
+	GameSession.parties[0].carry.gold = 15
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 15)
@@ -167,10 +167,10 @@ func test_a_returned_partys_gold_label_reads_zero_once_its_reward_is_deposited()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	GameSession.pending_reward = 15
+	GameSession.parties[0].carry.gold = 15
 
 	GameSession.return_deployed_party_to_settlement()
-	GameSession.deposit_pending_reward()
+	GameSession.deposit_party_carry(GameSession.FIRST_PARTY_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 
 	assert_eq(screen.get_node("Body/Center/VBox/GoldLabel").text, tr("party_details.gold") % 0)
@@ -180,8 +180,8 @@ func test_a_deployed_partys_loot_table_shows_everything_it_is_carrying() -> void
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	GameSession.pending_mana_crystals = {1: 2}
-	GameSession.pending_gear = {"dagger_iron": 2}
+	GameSession.parties[0].carry.mana_crystals = {1: 2}
+	GameSession.parties[0].carry.gear = {"dagger_iron": 2}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
 
@@ -201,7 +201,7 @@ func test_deployed_loot_table_has_an_equip_action_but_no_sell_action() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
-	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.parties[0].carry.gear = {"dagger_iron": 1}
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
 	var tree: Tree = screen.get_node("Body/Center/VBox/LootTable/Content/Table/Tree")
 	var item := tree.get_root().get_first_child()

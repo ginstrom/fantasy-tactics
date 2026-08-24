@@ -12,10 +12,10 @@ func after_each() -> void:
 
 
 ## A fully-populated snapshot covering every durable category: roster,
-## recruitment offers/vacancies, a party with a travel route, selected ids,
-## world turn, active encounters/completions/vacancies, gold/buildings,
-## every battle/pending/banked reward store, player name, and tutorial
-## progress.
+## recruitment offers/vacancies, a party with a travel route and its own
+## PartyCarry, selected ids, world turn, active encounters/completions/
+## vacancies, gold/buildings, banked reward stores, player name, and
+## tutorial progress.
 func _full_snapshot() -> CampaignSnapshot:
 	var snapshot := CampaignSnapshot.new()
 	snapshot.adventurers = [
@@ -40,6 +40,7 @@ func _full_snapshot() -> CampaignSnapshot:
 			"name": "Party 1",
 			"progression": {},
 			"metadata": {},
+			"carry": {"gold": 17, "gear": {"longsword_iron": 1}, "mana_crystals": {2: 1}, "item_instance_ids": [] as Array[String]},
 		},
 	]
 	snapshot.selected_party_id = "party_001"
@@ -65,14 +66,8 @@ func _full_snapshot() -> CampaignSnapshot:
 	snapshot.gold = 42
 	snapshot.guild_hall_level = 2
 	snapshot.temple_level = 1
-	snapshot.pending_reward = 17
 	snapshot.mana_crystals = {1: 3}
 	snapshot.banked_gear = {"shortsword_iron": 1}
-	snapshot.pending_mana_crystals = {2: 1}
-	snapshot.pending_gear = {"longsword_iron": 1}
-	snapshot.battle_reward = 5
-	snapshot.battle_mana_crystals = {1: 1}
-	snapshot.battle_gear = {"dagger_iron": 1}
 	snapshot.has_trading_post = true
 	snapshot.shop_level = 2
 	snapshot.shop_gold = 150
@@ -81,13 +76,13 @@ func _full_snapshot() -> CampaignSnapshot:
 	return snapshot
 
 
-func test_format_version_is_3() -> void:
-	assert_eq(CampaignSnapshot.FORMAT_VERSION, 3)
+func test_format_version_is_4() -> void:
+	assert_eq(CampaignSnapshot.FORMAT_VERSION, 4)
 
 
 func test_to_dictionary_tags_the_format_version() -> void:
 	var data := CampaignSnapshot.new().to_dictionary()
-	assert_eq(data.version, 3)
+	assert_eq(data.version, 4)
 
 
 ## Task-list item 3: to_dictionary() exports the current format version with
@@ -96,7 +91,7 @@ func test_to_dictionary_tags_the_format_version() -> void:
 func test_to_dictionary_exports_current_version_with_all_campaign_progression_fields() -> void:
 	var data := CampaignSnapshot.new().to_dictionary()
 
-	assert_eq(data.version, 3)
+	assert_eq(data.version, 4)
 	assert_eq(data.campaign_objective_id, "obj_tier1_1_goblin_outpost")
 	assert_eq(data.completed_objectives, [])
 	assert_eq(data.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
@@ -140,14 +135,9 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.gold, 42)
 	assert_eq(snapshot.guild_hall_level, 2)
 	assert_eq(snapshot.temple_level, 1)
-	assert_eq(snapshot.pending_reward, 17)
+	assert_eq(snapshot.parties[0].carry, {"gold": 17, "gear": {"longsword_iron": 1}, "mana_crystals": {2: 1}, "item_instance_ids": [] as Array[String]})
 	assert_eq(snapshot.mana_crystals, {1: 3})
 	assert_eq(snapshot.banked_gear, {"shortsword_iron": 1})
-	assert_eq(snapshot.pending_mana_crystals, {2: 1})
-	assert_eq(snapshot.pending_gear, {"longsword_iron": 1})
-	assert_eq(snapshot.battle_reward, 5)
-	assert_eq(snapshot.battle_mana_crystals, {1: 1})
-	assert_eq(snapshot.battle_gear, {"dagger_iron": 1})
 	assert_eq(snapshot.has_trading_post, true)
 	assert_eq(snapshot.shop_level, 2)
 	assert_eq(snapshot.shop_gold, 150)
@@ -174,8 +164,8 @@ func test_a_withdrawn_partys_state_round_trips_through_the_real_game_session_sna
 	var route_before := GameSession.get_deployed_party_route()
 	var position_before := GameSession.get_deployed_party_position()
 	var objective_before := GameSession.campaign_objective_id
-	var pending_reward_before := GameSession.pending_reward
-	var pending_gear_before := GameSession.pending_gear.duplicate(true)
+	var party_id: String = GameSession.selected_party_id
+	var carry_before := GameSession.get_party_carry(party_id)
 	var data := GameSession.export_campaign_snapshot()
 	GameSession.reset()
 
@@ -187,8 +177,7 @@ func test_a_withdrawn_partys_state_round_trips_through_the_real_game_session_sna
 	assert_eq(GameSession.get_deployed_party_position(), position_before)
 	assert_eq(GameSession.campaign_objective_id, objective_before)
 	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain available after import")
-	assert_eq(GameSession.pending_reward, pending_reward_before)
-	assert_eq(GameSession.pending_gear, pending_gear_before)
+	assert_eq(GameSession.get_party_carry(party_id), carry_before)
 
 
 ## Step 3 (docs/plans/2026-08-22-stage-3-campaign-assembly/03-final-victory-
@@ -231,32 +220,28 @@ func test_import_rejects_free_play_active_without_campaign_completed() -> void:
 	assert_false(result.ok, "An incomplete campaign must never import as free play")
 
 
-## export_campaign_snapshot()/import_campaign_snapshot() only ever carry the
-## transient battle_reward/battle_gear/battle_mana_crystals store across
-## exactly as it stands (see both functions' own doc comments) -- import
-## must never fold it into pending_reward/gold the way merge_battle_loot_
-## into_party()/deposit_pending_reward() do.
-func test_import_never_settles_transient_battle_loot() -> void:
+## export_campaign_snapshot() deliberately never exports the in-progress
+## battle context at all (see its own doc comment) -- a save is only ever
+## possible while has_unsettled_battle_loot() is false, so there is never a
+## live battle context to round-trip. A party's own not-yet-banked carry, by
+## contrast, IS part of the snapshot and must round-trip untouched, never
+## folded into gold the way deposit_party_carry() does.
+func test_import_never_settles_a_partys_carry_into_the_bank() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.set_campaign_victory()
-	GameSession.battle_reward = 37
-	GameSession.battle_gear = {"dagger_iron": 1}
-	GameSession.battle_mana_crystals = {1: 2}
+	GameSession.parties[0].carry = {"gold": 37, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 2}, "item_instance_ids": [] as Array[String]}
 	var gold_before := GameSession.gold
-	var pending_reward_before := GameSession.pending_reward
-	var pending_gear_before := GameSession.pending_gear.duplicate(true)
+	var carry_before := GameSession.get_party_carry(party_id)
 	var data := GameSession.export_campaign_snapshot()
 	GameSession.reset()
 
 	var result := GameSession.import_campaign_snapshot(data)
 
 	assert_true(result.ok, result.get("error", ""))
-	assert_eq(GameSession.battle_reward, 37, "Transient battle loot must round-trip untouched")
-	assert_eq(GameSession.battle_gear, {"dagger_iron": 1})
-	assert_eq(GameSession.battle_mana_crystals, {1: 2})
-	assert_eq(GameSession.pending_reward, pending_reward_before, "Import must never settle transient loot into pending")
-	assert_eq(GameSession.pending_gear, pending_gear_before)
-	assert_eq(GameSession.gold, gold_before, "Import must never bank transient loot into gold")
+	assert_eq(GameSession.get_party_carry(party_id), carry_before, "A party's own carry must round-trip untouched")
+	assert_eq(GameSession.gold, gold_before, "Import must never bank a party's carry into gold")
 
 
 ## Step 3 of docs/plans/2026-08-18-core-loop-and-engagement: temple_level
@@ -368,39 +353,30 @@ func test_rejects_missing_version() -> void:
 	assert_ne(result.error, "")
 
 
+## Stage 6 Step 2 (decision-ledger.md's "Playtest reset policy"): unlike
+## every earlier version bump, this one rejects EVERY prior format (1-3),
+## not only versions strictly newer than FORMAT_VERSION -- see FORMAT_
+## VERSION's own doc comment. data.version = 3 (this format's own previous
+## value, and the exact version _full_snapshot() would have carried before
+## this step) is deliberately included alongside a version that never
+## existed, to lock that a pre-Stage-6 save is rejected outright rather than
+## migrated.
 func test_rejects_unknown_version() -> void:
 	var data := _full_snapshot().to_dictionary()
-	data.version = 4
+	data.version = 99
 
 	var result := CampaignSnapshot.from_dictionary(data)
 
 	assert_false(result.ok)
 
 
-## Task-list item 3: a version 1 payload predates campaign milestone
-## progression entirely, so it never carries these five keys at all --
-## from_dictionary() must migrate it to a fresh campaign's starting values
-## rather than reject it, and must not drop any of its own real (non-
-## campaign) roster/building state in the process.
-func test_version_1_migrates_missing_campaign_fields_to_starting_values() -> void:
+func test_rejects_a_pre_stage_6_format_version() -> void:
 	var data := _full_snapshot().to_dictionary()
-	data.version = 1
-	data.erase("campaign_objective_id")
-	data.erase("completed_objectives")
-	data.erase("unlocked_authored_encounters")
-	data.erase("is_campaign_completed")
-	data.erase("is_free_play_active")
+	data.version = 3
 
 	var result := CampaignSnapshot.from_dictionary(data)
 
-	assert_true(result.ok, result.error)
-	assert_eq(result.snapshot.campaign_objective_id, "obj_tier1_1_goblin_outpost")
-	assert_eq(result.snapshot.completed_objectives, [])
-	assert_eq(result.snapshot.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
-	assert_eq(result.snapshot.is_campaign_completed, false)
-	assert_eq(result.snapshot.is_free_play_active, false)
-	assert_eq(result.snapshot.gold, 42, "Version 1 migration must not drop the payload's own non-campaign state")
-	assert_eq(result.snapshot.guild_hall_level, 2)
+	assert_false(result.ok)
 
 
 ## Task-list item 4 (Stage 5 Step 2, docs/designs/intelligence.md): format
@@ -439,26 +415,58 @@ func test_to_dictionary_and_from_dictionary_round_trip_intelligence_and_quest_st
 	assert_eq(result.snapshot.watchtower_level, 2)
 
 
-## Backward-compatible migration: a pre-Stage-5 (format version 2) payload
-## carries none of the four Intelligence/quest keys at all. from_dictionary()
-## must still import it cleanly, normalizing to the same empty/zero defaults
-## a fresh campaign starts with, rather than rejecting the whole save.
-func test_a_pre_stage_5_payload_migrates_with_no_quest_or_intel_state() -> void:
-	var data := _full_snapshot().to_dictionary()
-	data.version = 2
-	data.erase("encounter_intel")
-	data.erase("quests")
-	data.erase("quest_posting_blocked_until_turn")
-	data.erase("watchtower_level")
+## Stage 6 Step 2 (decision-ledger.md PartyCarry contract): negative gold,
+## a non-Dictionary gear/mana_crystals, or a non-Array item_instance_ids
+## describes a carry record real play can never produce (GameSession's own
+## carry mutators only ever add non-negative counts) -- CampaignSnapshot must
+## reject it rather than silently accept a hand-edited or corrupted save.
+func test_rejects_a_party_with_negative_carry_gold() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.parties[0].carry.gold = -1
+	var data := snapshot.to_dictionary()
 
 	var result := CampaignSnapshot.from_dictionary(data)
 
-	assert_true(result.ok, result.error)
-	assert_eq(result.snapshot.encounter_intel, {})
-	assert_eq(result.snapshot.quests, {})
-	assert_eq(result.snapshot.quest_posting_blocked_until_turn, 0)
-	assert_eq(result.snapshot.watchtower_level, 0)
-	assert_eq(result.snapshot.gold, 42, "Migration must not drop the payload's own non-quest state")
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {}, "A rejected import returns no partial snapshot")
+
+
+func test_rejects_a_party_with_a_non_dictionary_carry_gear() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.parties[0].carry.gear = "not a dictionary"
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+func test_rejects_a_party_with_a_non_array_carry_item_instance_ids() -> void:
+	var snapshot := _full_snapshot()
+	snapshot.parties[0].carry.item_instance_ids = "not an array"
+	var data := snapshot.to_dictionary()
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok)
+
+
+## Transactional import: a malformed party carry record must reject the
+## entire payload without ever assigning it into a live GameSession, mirroring
+## test_import_rejects_a_malformed_encounter_intel_entry_without_mutating_the_
+## live_session() below.
+func test_import_rejects_a_malformed_party_carry_without_mutating_the_live_session() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	var before := GameSession.export_campaign_snapshot()
+
+	var snapshot := GameSession.export_campaign_snapshot()
+	snapshot.parties[0].carry.gold = -5
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_false(result.ok)
+	assert_eq(GameSession.export_campaign_snapshot(), before)
 
 
 func test_rejects_an_encounter_intel_entry_with_an_out_of_range_known_tier() -> void:

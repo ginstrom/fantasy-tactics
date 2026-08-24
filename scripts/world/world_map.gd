@@ -839,7 +839,8 @@ func _refresh_information_panel() -> void:
 	# isn't selected, so mid-route-planning hover never clobbers the party
 	# summary the player is actively looking at.
 	if party_selected:
-		information_panel.refresh_party(GameSession.selected_party_id, GameSession.pending_reward)
+		var carried_gold: int = GameSession.get_party_carry(GameSession.selected_party_id).get("gold", 0)
+		information_panel.refresh_party(GameSession.selected_party_id, carried_gold)
 	elif hovered_encounter_id != "":
 		information_panel.refresh_encounter(GameSession.selected_party_id, hovered_encounter_id)
 		# Intelligence system (docs/designs/intelligence.md, Stage 5 Step 2):

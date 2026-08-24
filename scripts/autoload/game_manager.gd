@@ -125,18 +125,21 @@ func open_party_manager() -> Error:
 
 func go_to_encampment() -> Error:
 	if not GameSession.has_deployed_party():
-		GameSession.deposit_pending_reward()
+		GameSession.deposit_party_carry(GameSession.selected_party_id)
 	return _change_scene(ENCAMPMENT_SCENE)
 
 
-## Merges the battle store into the party's own store before ever showing
-## the World Map -- see GameSession.merge_battle_loot_into_party(). This is
-## the single call site both the real "leave the victory summary" path
-## (battle_result.gd's OK button) and the screenshot-tour shortcut
-## (complete_battle()) route through, so the merge lives here rather than
-## in battle_result.gd itself.
+## Resolves the active battle context's own reward into its owning party's
+## carry before ever showing the World Map -- see GameSession.
+## resolve_battle_victory(). This is the single call site both the real
+## "leave the victory summary" path (battle_result.gd's OK button) and the
+## screenshot-tour shortcut (complete_battle()) route through, so the
+## resolution lives here rather than in battle_result.gd itself. A harmless
+## no-op (GameSession.resolve_battle_victory() returns false, changes
+## nothing) whenever this is reached from anywhere other than straight out
+## of a battle -- there is no active battle context to resolve.
 func go_to_world_map() -> Error:
-	GameSession.merge_battle_loot_into_party()
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().get("battle_id", ""))
 	_clear_detail_context()
 	return _change_scene(WORLD_MAP_SCENE)
 
@@ -188,13 +191,13 @@ func return_party_to_encampment() -> Error:
 ## party against an encounter it was never actually standing at. Mirrors the
 ## exact guard GameSession.withdraw_from_encounter() already applies
 ## (expedition.position != get_deployed_party_position()). Checked before
-## claim_battle_for_party() so a rejected call mutates no session state at
+## create_battle_context() so a rejected call mutates no session state at
 ## all -- not even a claim that would need rolling back on failure.
 func enter_battle(encounter_id: String) -> Error:
 	var expedition := GameSession.get_expedition(encounter_id)
 	if not expedition.has("position") or expedition.position != GameSession.get_deployed_party_position():
 		return ERR_INVALID_DATA
-	if not GameSession.claim_battle_for_party(GameSession.selected_party_id):
+	if GameSession.create_battle_context(GameSession.selected_party_id, encounter_id).is_empty():
 		return ERR_INVALID_DATA
 	GameSession.enter_encounter(encounter_id)
 	return _change_scene(BATTLEFIELD_SCENE)
@@ -214,57 +217,67 @@ func withdraw_from_encounter(encounter_id: String) -> Error:
 	return OK if not results.is_empty() else ERR_INVALID_DATA
 
 
-## Stage 5 D5 (Step 6 task 2 audit): resolves the battle against the party
-## that actually claimed it (GameSession.active_battle_party_id), not
-## whatever selected_party_id happens to be right now. In real play these
-## always agree -- selected_party_id cannot change while Battlefield is on
-## screen -- but resolving explicitly keeps this call correct on its own
-## terms rather than depending on that incidental ordering, and matters for
-## any caller (a debug scenario, a future replay tool) that reaches these
-## paths without going through the normal World Map click flow.
-## select_party()'s own "unknown id is a no-op" contract means an empty/no
-## claim (any call site still using GameSession.enter_encounter() directly,
-## bypassing GameManager.enter_battle()) leaves selected_party_id completely
-## untouched, preserving every pre-existing single-party call site's exact
-## behavior.
+## Stage 5 D5 (Step 6 task 2 audit); Stage 6 Step 2: resolves the battle
+## against the party that actually claimed it (GameSession.
+## get_active_battle_context().owner_party_id), not whatever selected_
+## party_id happens to be right now. In real play these always agree --
+## selected_party_id cannot change while Battlefield is on screen -- but
+## resolving explicitly keeps this call correct on its own terms rather than
+## depending on that incidental ordering, and matters for any caller (a
+## debug scenario, a future replay tool) that reaches these paths without
+## going through the normal World Map click flow. select_party()'s own
+## "unknown id is a no-op" contract means no active claim (any call site
+## still using GameSession.enter_encounter() directly, bypassing GameManager.
+## enter_battle()) leaves selected_party_id completely untouched, preserving
+## every pre-existing single-party call site's exact behavior. Release of
+## the claim itself now happens inside go_to_world_map()'s own resolve_
+## battle_victory() call, not as a separate step here.
 func complete_battle() -> Error:
-	GameSession.select_party(GameSession.active_battle_party_id)
+	GameSession.select_party(GameSession.get_active_battle_context().get("owner_party_id", ""))
 	GameSession.complete_current_encounter()
-	GameSession.release_battle_claim()
 	return go_to_world_map()
 
 
 ## is_battle_lost() (the only real call site -- see battlefield.gd's
 ## _apply_battle_outcome()) requires every player unit to already be dead, so
 ## every real call here is unconditionally a full party wipe: apply the same
-## forfeiture GameSession.resolve_party_wipe() defines (lose all gold and
-## pending loot, keep completed objectives/buildings) before the party ever
-## reaches return_party_to_encampment() -> go_to_encampment(), which would
-## otherwise bank the now-already-cleared pending reward as a harmless no-op.
+## forfeiture GameSession.resolve_battle_defeat() defines (discards the
+## battle's own unbanked reward and forfeits the owning party's own carry,
+## keeping completed objectives/buildings and every other party's own carry
+## and the Encampment bank untouched -- see forfeit_party_carry()'s own doc
+## comment for the narrower-than-Stage-5 scope) before the party ever reaches
+## return_party_to_encampment() -> go_to_encampment(), which would otherwise
+## bank the now-already-forfeited carry as a harmless no-op.
 func fail_battle() -> Error:
-	GameSession.select_party(GameSession.active_battle_party_id)
+	var context := GameSession.get_active_battle_context()
+	GameSession.select_party(context.get("owner_party_id", ""))
 	GameSession.abandon_current_encounter()
-	GameSession.resolve_party_wipe()
-	GameSession.release_battle_claim()
+	GameSession.resolve_battle_defeat(context.get("battle_id", ""))
 	return return_party_to_encampment()
 
 
 ## BattleController.try_retreat()'s routing decision (see battlefield.gd's
 ## _on_retreat_resolved(), called after aftermath -- unit permadeath and
-## surviving HP -- is already persisted). abandon_current_encounter() alone
-## (not complete_current_encounter()) keeps the encounter active and
-## unconquered. Two outcomes: any surviving party member routes to the World
-## Map, landing back on the same encounter tile the party never left
-## (world_position is untouched by anything in this path); every unit having
-## died from the retreat's own risk roll is a full party wipe exactly like
-## fail_battle()'s, so it takes the identical forfeit-and-go-home path
-## instead.
+## surviving HP -- is already persisted). try_retreat() itself already
+## called GameSession.resolve_battle_retreat() to discard the battle's own
+## unbanked reward and flip the battle context out of "active" (see that
+## function's own doc comment), so this reads the now-resolved context's own
+## owner_party_id/battle_id back out rather than needing to receive them as
+## a parameter. abandon_current_encounter() alone (not complete_current_
+## encounter()) keeps the encounter active and unconquered. Two outcomes:
+## any surviving party member routes to the World Map, landing back on the
+## same encounter tile the party never left (world_position is untouched by
+## anything in this path); every unit having died from the retreat's own
+## risk roll is a full party wipe -- exactly like fail_battle()'s own carry
+## forfeiture, but the battle's own reward was already discarded by try_
+## retreat(), so only forfeit_party_carry() (not the full resolve_battle_
+## defeat()) is needed here.
 func retreat_from_battle() -> Error:
-	GameSession.select_party(GameSession.active_battle_party_id)
+	var owner_party_id: String = GameSession.get_active_battle_context().get("owner_party_id", "")
+	GameSession.select_party(owner_party_id)
 	GameSession.abandon_current_encounter()
-	GameSession.release_battle_claim()
 	if GameSession.get_selected_party().get("member_ids", []).is_empty():
-		GameSession.resolve_party_wipe()
+		GameSession.forfeit_party_carry(owner_party_id)
 		return return_party_to_encampment()
 	return go_to_world_map()
 
@@ -412,11 +425,11 @@ func go_to_battle_result(summary: Dictionary) -> Error:
 ## snapshotted here.
 ##
 ## Unlike the ordinary battle-result path, this route also fully settles the
-## boss battle's loot straight into the party's banked totals -- merge_
-## battle_loot_into_party() (the same merge go_to_world_map() performs) folds
-## the battle store into the party's carried pending_* store, then deposit_
-## pending_reward() (normally gated behind go_to_encampment()'s "party is
-## home" check, called directly here instead) folds that into the durable
+## boss battle's loot straight into the party's banked totals -- resolve_
+## battle_victory() (the same resolution go_to_world_map() performs) folds
+## the battle context's own reward into the owning party's carry, then
+## deposit_party_carry() (normally gated behind go_to_encampment()'s "party
+## is home" check, called directly here instead) folds that into the durable
 ## gold/banked_gear/mana_crystals totals unconditionally -- the campaign is
 ## over, so there is no more "carried vs. banked" distinction left to
 ## preserve. This clears has_unsettled_battle_loot() immediately, so
@@ -424,8 +437,9 @@ func go_to_battle_result(summary: Dictionary) -> Error:
 ## get_campaign_victory_summary()'s "gold_banked" figure reflects the full
 ## merged total rather than under-reporting it.
 func go_to_victory_screen() -> Error:
-	GameSession.merge_battle_loot_into_party()
-	GameSession.deposit_pending_reward()
+	var context := GameSession.get_active_battle_context()
+	GameSession.resolve_battle_victory(context.get("battle_id", ""))
+	GameSession.deposit_party_carry(context.get("owner_party_id", ""))
 	_clear_detail_context()
 	return _change_scene(VICTORY_SCREEN_SCENE)
 
@@ -572,9 +586,10 @@ func _debug_launch_scene_path(launch_scene: String) -> String:
 ## from manifest data, then applies the scenario's campaign_snapshot fixture
 ## and changes directly to that scene. Never calls go_to_encampment(),
 ## go_to_world_map(), or enter_battle() -- those carry real reward-banking/
-## encounter-entry side effects (deposit_pending_reward(), merge_battle_
-## loot_into_party(), GameSession.enter_encounter()) a debug launch must not
-## trigger. A battlefield launch's enemy composition therefore comes
+## encounter-entry side effects (GameSession.deposit_party_carry(),
+## GameSession.resolve_battle_victory(), GameSession.enter_encounter()) a
+## debug launch must not trigger. A battlefield launch's enemy composition
+## therefore comes
 ## entirely from its fixture's own active_encounters entry, never a fresh
 ## roll. Every validation happens before DebugScenarios.apply() runs, so
 ## every failure path -- an unknown scenario id, an unrecognized launch
@@ -681,10 +696,10 @@ func load_current_campaign() -> Dictionary:
 ## but by calling the underlying routing primitives (_clear_detail_context()
 ## / _change_scene()) directly rather than those two functions themselves.
 ## This keeps the save/load invariant "preserve, never settle" true by
-## construction: go_to_world_map() calls GameSession.
-## merge_battle_loot_into_party() and go_to_encampment() calls GameSession.
-## deposit_pending_reward(), and neither reward-banking side effect may ever
-## sit in the load path, even as a currently-unreachable no-op. A failed
+## construction: go_to_world_map() calls GameSession.resolve_battle_victory()
+## and go_to_encampment() calls GameSession.deposit_party_carry(), and
+## neither reward-banking side effect may ever sit in the load path, even as
+## a currently-unreachable no-op. A failed
 ## load changes nothing at all: no scene change, GameSession left completely
 ## untouched, so whichever screen called this is exactly as it was. Returns
 ## load_current_campaign()'s own {"ok", "snapshot", "error", "status"}

@@ -795,7 +795,7 @@ func test_pressing_the_panels_view_party_button_routes_to_party_details() -> voi
 
 
 func test_information_panel_shows_the_party_gold_for_a_selected_party_with_one() -> void:
-	GameSession.pending_reward = 15
+	GameSession.parties[0].carry.gold = 15
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	var panel: Control = world_map.get_node("%InformationPanel")
@@ -809,7 +809,7 @@ func test_information_panel_shows_the_party_gold_for_a_selected_party_with_one()
 
 
 func test_information_panel_hides_the_party_gold_row_when_there_is_none() -> void:
-	GameSession.pending_reward = 0
+	GameSession.parties[0].carry.gold = 0
 	var world_map: Node2D = WorldMapScene.instantiate()
 	add_child_autofree(world_map)
 	var panel: Control = world_map.get_node("%InformationPanel")
@@ -2117,7 +2117,7 @@ func test_clicking_a_different_deployed_partys_tile_switches_the_selected_party_
 ## stay visible but disabled while a different party already owns the active
 ## battle.
 func test_arrival_panel_enter_is_disabled_when_another_party_already_owns_the_active_battle() -> void:
-	GameSession.claim_battle_for_party("some_other_party_already_fighting")
+	GameSession.create_battle_context("some_other_party_already_fighting", "goblin_camp")
 	var encounter_id := "obj_tier1_1_goblin_outpost"
 	GameSession.set_deployed_party_position(GameSession.get_expedition(encounter_id).position)
 	var world_map: Node2D = WorldMapScene.instantiate()
@@ -2390,7 +2390,7 @@ func test_clicking_the_other_partys_tile_while_its_arrival_panel_is_open_refresh
 		"Enter must resolve Bravo's own encounter, never Alpha's stale one"
 	)
 	assert_eq(
-		GameSession.active_battle_party_id, bravo_id,
+		GameSession.get_active_battle_context().owner_party_id, bravo_id,
 		"The battle claim must belong to Bravo, who actually entered"
 	)
 	assert_false(panel.visible, "Entering battle must close the arrival panel")

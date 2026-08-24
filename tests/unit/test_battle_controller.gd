@@ -3636,9 +3636,10 @@ func test_retreat_far_distance_outcome_distribution() -> void:
 
 func test_try_retreat_discards_unbanked_battle_loot_and_emits_retreat_resolved() -> void:
 	GameSession.reset()
-	GameSession.battle_reward = 5
-	GameSession.battle_gear = {"dagger_iron": 1}
-	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.create_battle_context(party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward = {"gold": 5, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 1}, "item_instance_ids": [] as Array[String]}
 	var scene := _make_retreat_scene(2, 10)
 	scene.controller.retreat_roll = func() -> float: return 0.0
 	var emitted: Array = []
@@ -3646,9 +3647,8 @@ func test_try_retreat_discards_unbanked_battle_loot_and_emits_retreat_resolved()
 
 	var results: Array[Dictionary] = scene.controller.try_retreat()
 
-	assert_eq(GameSession.battle_reward, 0)
-	assert_eq(GameSession.battle_gear, {})
-	assert_eq(GameSession.battle_mana_crystals, {})
+	assert_eq(GameSession.get_active_battle_context().reward, {"gold": 0, "gear": {}, "mana_crystals": {}, "item_instance_ids": [] as Array[String]})
+	assert_eq(GameSession.get_active_battle_context().status, "retreat")
 	assert_eq(emitted.size(), 1, "retreat_resolved must fire exactly once")
 	assert_eq(emitted[0], results)
 

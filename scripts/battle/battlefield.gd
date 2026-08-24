@@ -629,16 +629,27 @@ func _on_level_up_queue_drained() -> void:
 	_finish_victory()
 
 
-## Rolls this battle's loot into GameSession's battle_* store (see
-## GameSession.complete_current_encounter() -> _roll_and_queue_loot()) and
+## Rolls this battle's loot into the active BattleContext's own reward (see
+## GameSession.complete_current_encounter() -> _roll_and_queue_loot()),
+## resolves that context into the owning party's own carry immediately, and
 ## routes to the victory summary screen with everything this battle
-## accumulated. The battle store stays separate from the party's own
-## pending_* store until the player leaves this summary screen for the
-## World Map (see GameManager.go_to_world_map() -> GameSession.merge_
-## battle_loot_into_party()) -- including via GameManager.complete_battle()
-## (still used by scripts/tools/screenshot_tour.gd to skip straight to the
-## World Map), which also routes through go_to_world_map() and so also
-## merges correctly.
+## accumulated. Stage 5 D5 (decision-ledger.md): the real victory path never
+## routes through GameManager.complete_battle() (it goes straight to
+## battle_result.gd/victory_screen.gd, which call go_to_world_map()/go_to_
+## encampment() directly), so this is the one place that resolution has to
+## happen for an actual player win -- covering both branches below it,
+## ordinary victory and campaign victory alike. Resolving here, rather than
+## deferring it to go_to_world_map()'s own resolve_battle_victory() call
+## (still made there too -- a harmless no-op once already resolved, see its
+## own doc comment), matters because resolve_battle_victory() is also what
+## frees the battle claim (a BattleContext's status, not a dedicated field,
+## is now the claim record -- Stage 6 Step 2, decision-ledger.md's G4
+## disposition): a second fielded party must be able to enter its own battle
+## the instant this one is decided, not only once the player has clicked
+## through this battle's own result/victory screen. summary below is built
+## from a plain, already-captured Dictionary of the reward, not a live read,
+## so resolving before or after building it is equivalent -- resolve_battle_
+## victory() copies the reward into carry without clearing it.
 ##
 ## Defeating the final boss is the one victory that does NOT land on the
 ## ordinary battle-result summary: complete_current_encounter() completing
@@ -651,27 +662,23 @@ func _finish_victory() -> void:
 	_persist_battle_aftermath()
 	var was_campaign_completed := GameSession.is_campaign_completed
 	GameSession.complete_current_encounter()
-	# Stage 5 D5 (decision-ledger.md): the real victory path never routes
-	# through GameManager.complete_battle() (it goes straight to battle_
-	# result.gd/victory_screen.gd, which call go_to_world_map()/go_to_
-	# encampment() directly), so this is the one place that release has to
-	# happen for an actual player win -- covering both branches below it,
-	# ordinary victory and campaign victory alike.
-	GameSession.release_battle_claim()
 	var just_won_campaign: bool = GameSession.is_campaign_completed and not was_campaign_completed
 
 	var party := GameSession.get_party(GameSession.selected_party_id)
+	var reward: Dictionary = GameSession.get_active_battle_context().get("reward", {})
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().get("battle_id", ""))
 	var summary := {
 		"kills_by_type": _kills_by_type,
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
-		# Read straight from the battle store -- this battle's own loot only,
-		# never merged into the party's full running totals until the player
-		# leaves this screen (see the docstring above).
-		"loot_gold": GameSession.battle_reward,
-		"loot_mana_crystal_counts": GameSession.battle_mana_crystals.duplicate(),
-		"loot_gear_counts": GameSession.battle_gear.duplicate(),
+		# Read straight from the active battle context's own reward -- this
+		# battle's own loot only, never merged into the party's full running
+		# totals until the player leaves this screen (see the docstring
+		# above).
+		"loot_gold": int(reward.get("gold", 0)),
+		"loot_mana_crystal_counts": (reward.get("mana_crystals", {}) as Dictionary).duplicate(),
+		"loot_gear_counts": (reward.get("gear", {}) as Dictionary).duplicate(),
 	}
 	if just_won_campaign:
 		GameManager.go_to_victory_screen()

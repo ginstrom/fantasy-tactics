@@ -93,33 +93,32 @@ func test_full_arc_survives_checkpoint_export_reset_import_to_final_victory_and_
 		assert_ne(outcome, "error", "Setup: %s must resolve to a legal scenario" % encounter_id)
 
 		# --- 2. Checkpoint 1: fires the instant the third tier-1 node clears
-		# (the early-arc checkpoint) -- captured right after the win merges
-		# loot into pending_reward (_fight_objective()'s victory branch
-		# already ran merge_battle_loot_into_party()) but BEFORE _return_to_
-		# encampment() deposits it. This is a real, legitimate save point --
-		# production reaches this exact window between the Battle Result
-		# screen and returning to the Encampment. ---
+		# (the early-arc checkpoint) -- captured right after the win resolves
+		# the active battle context's reward into the party's own carry
+		# (_fight_objective()'s victory branch already ran resolve_battle_
+		# victory()) but BEFORE _return_to_encampment() deposits it. This is a
+		# real, legitimate save point -- production reaches this exact window
+		# between the Battle Result screen and returning to the Encampment. ---
 		if not checkpoint_1_done and encounter_id == TIER1_3_ID and outcome == "victory":
 			checkpoint_1_done = true
 			var expected := _run_full_export_reset_import_checkpoint("checkpoint 1 (tier-1 clear)")
-			assert_gt(expected.pending_reward, 0, "Setup: checkpoint 1 must be captured with a real unsettled reward")
-			assert_eq(expected.battle_reward, 0, "Setup: checkpoint 1 must be captured after merge_battle_loot_into_party() already ran")
+			assert_gt(int(expected.parties[0].carry.gold), 0, "Setup: checkpoint 1 must be captured with a real unsettled reward")
 			assert_eq(expected.campaign_objective_id, "obj_tier2_1_orc_outpost", "Setup: clearing the third tier-1 node must unlock tier 2")
 			assert_true(expected.completed_objectives.has(TIER1_3_ID))
 
 		# --- 3. Checkpoint 2: fires the instant the pre-boss sequence clears
 		# (right before the Ogre unlocks), same mid-victory-flow timing as
 		# checkpoint 1 -- BEFORE _return_to_encampment() below, so this
-		# objective's own reward is still sitting unsettled in pending_reward
-		# -- but asserted far more broadly per this step's spec: objective
-		# id/order, unlocked/cleared ids, full roster (HP/MP/level/equipment/
-		# perks), party location/route, every reward bucket, building levels
-		# and jobs (recovery timing), and the seeded RNG injection wiring the
+		# objective's own reward is still sitting unsettled in the party's own
+		# carry -- but asserted far more broadly per this step's spec:
+		# objective id/order, unlocked/cleared ids, full roster (HP/MP/level/
+		# equipment/perks), party location/route/carry, building levels and
+		# jobs (recovery timing), and the seeded RNG injection wiring the
 		# next real action (the boss fight) depends on to stay reproducible. ---
 		if not checkpoint_2_done and encounter_id == PREBOSS_2_ID and outcome == "victory":
 			checkpoint_2_done = true
 			var expected := _run_full_export_reset_import_checkpoint("checkpoint 2 (pre-boss clear)")
-			assert_gt(expected.pending_reward, 0, "Setup: checkpoint 2 must also be captured with a real unsettled reward")
+			assert_gt(int(expected.parties[0].carry.gold), 0, "Setup: checkpoint 2 must also be captured with a real unsettled reward")
 			assert_eq(expected.campaign_objective_id, BOSS_ID, "Setup: clearing the pre-boss sequence must unlock exactly the Ogre")
 			assert_true(expected.completed_objectives.has(PREBOSS_2_ID))
 			assert_false(expected.completed_objectives.has(BOSS_ID), "Setup: the boss must not be completed yet")
@@ -279,12 +278,6 @@ func _capture_durable_state() -> Dictionary:
 		"selected_encounter": GameSession.selected_encounter,
 		"world_turn": GameSession.world_turn,
 		"gold": GameSession.gold,
-		"pending_reward": GameSession.pending_reward,
-		"battle_reward": GameSession.battle_reward,
-		"pending_gear": GameSession.pending_gear.duplicate(true),
-		"battle_gear": GameSession.battle_gear.duplicate(true),
-		"pending_mana_crystals": GameSession.pending_mana_crystals.duplicate(true),
-		"battle_mana_crystals": GameSession.battle_mana_crystals.duplicate(true),
 		"mana_crystals": GameSession.mana_crystals.duplicate(true),
 		"banked_gear": GameSession.banked_gear.duplicate(true),
 		"guild_hall_level": GameSession.guild_hall_level,
@@ -316,12 +309,6 @@ func _assert_durable_state_matches(expected: Dictionary, context: String) -> voi
 	assert_eq(GameSession.selected_encounter, expected.selected_encounter, "%s: selected_encounter" % context)
 	assert_eq(GameSession.world_turn, expected.world_turn, "%s: world_turn" % context)
 	assert_eq(GameSession.gold, expected.gold, "%s: gold" % context)
-	assert_eq(GameSession.pending_reward, expected.pending_reward, "%s: pending_reward" % context)
-	assert_eq(GameSession.battle_reward, expected.battle_reward, "%s: battle_reward" % context)
-	assert_eq(GameSession.pending_gear, expected.pending_gear, "%s: pending_gear" % context)
-	assert_eq(GameSession.battle_gear, expected.battle_gear, "%s: battle_gear" % context)
-	assert_eq(GameSession.pending_mana_crystals, expected.pending_mana_crystals, "%s: pending_mana_crystals" % context)
-	assert_eq(GameSession.battle_mana_crystals, expected.battle_mana_crystals, "%s: battle_mana_crystals" % context)
 	assert_eq(GameSession.mana_crystals, expected.mana_crystals, "%s: mana_crystals" % context)
 	assert_eq(GameSession.banked_gear, expected.banked_gear, "%s: banked_gear" % context)
 	assert_eq(GameSession.guild_hall_level, expected.guild_hall_level, "%s: guild_hall_level" % context)

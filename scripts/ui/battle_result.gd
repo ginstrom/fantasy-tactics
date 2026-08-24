@@ -5,20 +5,19 @@ extends Control
 ## _ready(), the same "transient payload set right before navigating"
 ## pattern route_context_id uses elsewhere in this codebase. Loot is part of
 ## that summary dict ("loot_gold" plus the itemized
-## "loot_gear_counts"/"loot_mana_crystal_counts") -- reading
-## GameSession.pending_reward/pending_mana_crystals/pending_gear directly
-## would show the party's full running totals for the deployment, not just
-## this battle's own loot; the summary instead carries a snapshot of
-## GameSession's battle_reward/battle_mana_crystals/battle_gear (the battle
-## store -- see GameSession.merge_battle_loot_into_party()), which holds
-## only this battle's own drops until the player leaves this screen. The
-## gear/mana-crystal table reuses LootTable, but purely as a read-only
-## record: no [Sell] (loot only sells once banked at the Encampment) and no
-## [Equip] either -- this is a frozen snapshot, taken once and never
-## re-read, so letting the player mutate live state through it would
-## silently desync the two. Equipping happens once the party is back on the
-## World Map (Party Details, which reads pending_gear live, after the
-## battle store has already merged into it).
+## "loot_gear_counts"/"loot_mana_crystal_counts") -- reading the owning
+## party's own GameSession.get_party_carry() directly would show its full
+## running carry for the deployment, not just this battle's own loot; the
+## summary instead carries a snapshot of the active BattleContext's own
+## reward (see GameSession.resolve_battle_victory()), which holds only this
+## battle's own drops until the player leaves this screen. The gear/mana-
+## crystal table reuses LootTable, but purely as a read-only record: no
+## [Sell] (loot only sells once banked at the Encampment) and no [Equip]
+## either -- this is a frozen snapshot, taken once and never re-read, so
+## letting the player mutate live state through it would silently desync
+## the two. Equipping happens once the party is back on the World Map
+## (Party Details, which reads that party's own carry live, after the
+## battle context has already resolved into it).
 
 @onready var kills_label: Label = $Center/VBox/KillsLabel
 @onready var xp_label: Label = $Center/VBox/XpLabel

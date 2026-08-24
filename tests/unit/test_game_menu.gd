@@ -74,7 +74,9 @@ func test_save_button_is_disabled_during_an_active_encounter() -> void:
 
 
 func test_save_button_is_disabled_when_battle_loot_is_unsettled() -> void:
-	GameSession.battle_reward = 5
+	GameSession.create_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward.gold = 5
 
 	var menu: CanvasLayer = GameMenuScene.instantiate()
 	add_child_autofree(menu)

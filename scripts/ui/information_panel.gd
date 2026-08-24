@@ -87,10 +87,10 @@ func refresh() -> void:
 ## Shows the permanent rows plus the named party's name, member count, and a
 ## View action. An unknown party_id clears the optional section instead of
 ## raising an error, so a stale selection never leaves the panel broken.
-## pending_reward is the caller's unbanked GameSession.pending_reward for this
-## party (World Map is the only caller that has one to show); it renders as
-## an extra row only when positive, and stays hidden otherwise.
-func refresh_party(party_id: String, pending_reward: int = 0) -> void:
+## carried_gold is the caller's unbanked GameSession.get_party_carry(party_id)
+## .gold for this party (World Map is the only caller that has one to show);
+## it renders as an extra row only when positive, and stays hidden otherwise.
+func refresh_party(party_id: String, carried_gold: int = 0) -> void:
 	_refresh_permanent_rows()
 	_clear_adventurer_section()
 	_clear_recruitment_section()
@@ -108,9 +108,9 @@ func refresh_party(party_id: String, pending_reward: int = 0) -> void:
 	party_name_label.visible = true
 	party_members_label.visible = true
 	party_view_button.visible = true
-	party_gold_label.visible = pending_reward > 0
-	if pending_reward > 0:
-		party_gold_label.text = tr("information.party_gold") % pending_reward
+	party_gold_label.visible = carried_gold > 0
+	if carried_gold > 0:
+		party_gold_label.text = tr("information.party_gold") % carried_gold
 
 	# Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future
 	# multi-party model": "Selecting a party shows its destination and

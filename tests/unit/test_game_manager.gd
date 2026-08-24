@@ -132,7 +132,8 @@ func _write_debug_manifest(scenarios: Array) -> void:
 ## Builds a manifest scenario entry from a REAL shipped scenario's own
 ## fixture (so the embedded campaign_snapshot always passes CampaignSnapshot
 ## validation) with campaign_snapshot field overrides layered on top -- e.g.
-## a non-zero pending_reward a real "encampment"-launch fixture never has.
+## a non-default selected_encounter a real "encampment"-launch fixture never
+## has.
 func _scenario_with_snapshot_overrides(id: String, base_id: String, launch_scene: String, snapshot_overrides: Dictionary) -> Dictionary:
 	var base := DebugScenariosScript.get_scenario(base_id)
 	var snapshot: Dictionary = (base.campaign_snapshot as Dictionary).duplicate(true)
@@ -202,11 +203,12 @@ func test_run_debug_scenario_launches_the_battlefield_with_its_fixtures_selected
 	)
 
 
-## Every permitted launch.scene reaches its screen without banking a pending
-## reward, merging battle loot, or otherwise touching any field the fixture
-## itself declared -- in particular Encampment (which normally deposits a
-## pending reward) and World Map (which normally merges battle loot).
-## Reuses one manager for the whole test, rather than this file's usual
+## Every permitted launch.scene reaches its screen without banking a party's
+## carried gold, resolving battle loot, or otherwise touching any field the
+## fixture itself declared -- in particular Encampment (which normally
+## deposits a party's carry) and World Map (which normally resolves the
+## active battle context). Reuses one manager for the whole test, rather
+## than this file's usual
 ## _run() helper (which builds a fresh manager per call): a manager's own
 ## _ready() reloads the REAL default manifest (see GameManager._ready()),
 ## which would silently replace the synthetic scenarios this test loads
@@ -231,10 +233,6 @@ func test_run_debug_scenario_leaves_every_fixtures_snapshot_unchanged_after_rout
 		scenarios.append(_scenario_with_snapshot_overrides(
 			"test_%s" % launch_scene, base_id, launch_scene,
 			{
-				"pending_reward": 42,
-				"battle_reward": 17,
-				"battle_mana_crystals": {1: 2},
-				"battle_gear": {"dagger_iron": 1},
 				# GOBLIN_CAMP_ID is always a valid EXPEDITIONS template id
 				# (CampaignSnapshot's selected_encounter check falls back to
 				# EXPEDITIONS when the id names no active instance), so it's
@@ -254,7 +252,7 @@ func test_run_debug_scenario_leaves_every_fixtures_snapshot_unchanged_after_rout
 		assert_eq(manager.run_debug_scenario(scenario_id), OK, "launching %s should succeed" % launch_scene)
 		assert_eq(
 			GameSession.export_campaign_snapshot(), expected_snapshot,
-			"launching %s must not mutate any fixture field, including pending_reward/battle_reward" % launch_scene
+			"launching %s must not mutate any fixture field, including a party's own carry" % launch_scene
 		)
 
 
@@ -342,7 +340,7 @@ func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
-	GameSession.pending_reward = 15
+	GameSession.parties[0].carry.gold = 15
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
@@ -354,24 +352,26 @@ func test_return_party_to_encampment_returns_party_and_deposits_reward() -> void
 
 func test_go_to_world_map_merges_the_battle_store_into_the_party_store() -> void:
 	GameSession.reset()
-	GameSession.battle_reward = 5
-	GameSession.battle_mana_crystals = {1: 1}
-	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.create_battle_context(party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward = {"gold": 5, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 1}, "item_instance_ids": [] as Array[String]}
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
 	manager.go_to_world_map()
 
-	assert_eq(GameSession.pending_reward, 5)
-	assert_eq(GameSession.pending_mana_crystals, {1: 1})
-	assert_eq(GameSession.pending_gear, {"dagger_iron": 1})
-	assert_eq(GameSession.battle_reward, 0)
-	assert_eq(GameSession.battle_mana_crystals, {})
-	assert_eq(GameSession.battle_gear, {})
+	var carry: Dictionary = GameSession.get_party_carry(party_id)
+	assert_eq(carry.gold, 5)
+	assert_eq(carry.mana_crystals, {1: 1})
+	assert_eq(carry.gear, {"dagger_iron": 1})
+	assert_eq(GameSession.get_active_battle_context().status, "victory")
 
 
 func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	GameSession.reset()
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	# Pinned explicitly (not just left at the real-random default) so this
 	# test's expected gold total does not depend on some earlier test in this
 	# file leaving GameSession.enemy_count_roll pinned to a different value --
@@ -391,13 +391,12 @@ func test_go_to_encampment_deposits_pending_gold_once() -> void:
 	# at loot_gold_roll's pinned minimum of 1, plus the flat completion bonus
 	# loot_gold_roll(18, 22) * difficulty(1) = 18.
 	assert_eq(GameSession.gold, 19, "Entering the encampment must bank the queued reward")
-	assert_eq(GameSession.pending_reward, 0)
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0)
 
 	manager.go_to_encampment()
 
 	assert_eq(GameSession.gold, 19, "A second visit must not pay the reward again")
-	assert_eq(GameSession.pending_reward, 0)
-
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0)
 
 
 
@@ -408,7 +407,7 @@ func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_dep
 	GameSession.depart_selected_party()
 	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
 	GameSession.complete_current_encounter()
-	var queued_reward: int = GameSession.battle_reward
+	var queued_reward: int = GameSession.get_active_battle_context().reward.gold
 	assert_true(queued_reward > 0, "Test setup must actually queue a reward")
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
@@ -417,7 +416,7 @@ func test_go_to_encampment_does_not_bank_the_reward_while_the_party_is_still_dep
 
 	assert_eq(GameSession.gold, 0, "Gold must not be banked while the party is still deployed away from home")
 	assert_eq(
-		GameSession.battle_reward, queued_reward,
+		GameSession.get_active_battle_context().reward.gold, queued_reward,
 		"The queued reward must remain untouched until the party actually returns"
 	)
 	assert_true(
@@ -444,10 +443,11 @@ func test_fail_battle_abandons_the_encounter_and_returns_the_party_home() -> voi
 
 ## Step 2 of docs/plans/2026-08-18-core-loop-and-engagement: fail_battle()'s
 ## only real call site (is_battle_lost()) always means a full party wipe, so
-## it must apply the same forfeiture GameSession.resolve_party_wipe() defines
-## -- returning the party to the Encampment settlement position and losing
-## all gold/pending loot -- while completed objectives and building levels
-## survive untouched.
+## it must apply the same forfeiture GameSession.resolve_battle_defeat()
+## defines -- returning the party to the Encampment settlement position and
+## forfeiting the wiped party's own carry -- while completed objectives and
+## building levels (and, per Stage 6 Step 2's PartyCarry contract, the
+## shared Encampment bank and any other party) survive untouched.
 func test_fail_battle_wipe_returns_party_position_to_the_encampment_settlement() -> void:
 	GameSession.reset()
 	GameSession.create_party()
@@ -467,12 +467,14 @@ func test_fail_battle_wipe_returns_party_position_to_the_encampment_settlement()
 func test_fail_battle_wipe_forfeits_pending_loot_and_gold_but_preserves_progress_and_buildings() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(party_id, "goblin_camp")
 	GameSession.enter_encounter("goblin_camp")
 	GameSession.gold = 80
-	GameSession.pending_reward = 25
-	GameSession.pending_gear = {"dagger_iron": 1}
+	GameSession.parties[0].carry.gold = 25
+	GameSession.parties[0].carry.gear = {"dagger_iron": 1}
 	GameSession.guild_hall_level = 2
 	GameSession.completed_objectives = ["obj_tier1_1_goblin_outpost"]
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
@@ -480,9 +482,13 @@ func test_fail_battle_wipe_forfeits_pending_loot_and_gold_but_preserves_progress
 
 	manager.fail_battle()
 
-	assert_eq(GameSession.gold, 0, "A wipe loses all gold")
-	assert_eq(GameSession.pending_reward, 0)
-	assert_eq(GameSession.pending_gear, {})
+	# Stage 6 Step 2 (decision-ledger.md's PartyCarry contract) narrows the
+	# pre-Stage-6 "a wipe loses all gold" rule: only the wiped party's own
+	# carry is forfeited; the shared Encampment bank is untouched (see
+	# GameSession.forfeit_party_carry()'s own doc comment).
+	assert_eq(GameSession.gold, 80, "The shared Encampment bank must never be touched by a wipe")
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0)
+	assert_eq(GameSession.get_party_carry(party_id).gear, {})
 	assert_eq(GameSession.guild_hall_level, 2, "Building levels survive a wipe")
 	assert_eq(
 		GameSession.completed_objectives, ["obj_tier1_1_goblin_outpost"],
@@ -510,7 +516,7 @@ func test_fail_battle_wipe_recovers_only_the_wiped_party_leaving_a_second_deploy
 	GameSession.set_deployed_party_position(Vector2i(1, 1), bravo_id)
 	GameSession.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i], bravo_id)
 	# Alpha's Enter claimed the battle -- see GameManager.enter_battle().
-	GameSession.claim_battle_for_party(alpha_id)
+	GameSession.create_battle_context(alpha_id, "goblin_camp")
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
@@ -520,7 +526,8 @@ func test_fail_battle_wipe_recovers_only_the_wiped_party_leaving_a_second_deploy
 	assert_true(GameSession.has_deployed_party(bravo_id), "Bravo must stay deployed and untouched")
 	assert_eq(GameSession.get_deployed_party_position(bravo_id), Vector2i(1, 1))
 	assert_eq(GameSession.get_deployed_party_route(bravo_id), [Vector2i(1, 0)] as Array[Vector2i])
-	assert_eq(GameSession.active_battle_party_id, "", "The battle claim must be released")
+	assert_eq(GameSession.get_active_battle_context().status, "defeat", "The battle claim must be released")
+	assert_true(GameSession.can_party_enter_battle(bravo_id), "Bravo must be free to claim its own battle next")
 
 
 func test_retreat_from_battle_routes_survivors_to_the_world_map_leaving_the_encounter_active() -> void:
@@ -545,11 +552,14 @@ func test_retreat_from_battle_routes_survivors_to_the_world_map_leaving_the_enco
 func test_retreat_from_battle_wipe_routes_home_and_forfeits_loot() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(party_id, "goblin_camp")
 	GameSession.enter_encounter("goblin_camp")
 	GameSession.resolve_battle_deaths({"warrior_001": 0})
 	GameSession.gold = 60
+	GameSession.parties[0].carry.gold = 30
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
@@ -557,7 +567,8 @@ func test_retreat_from_battle_wipe_routes_home_and_forfeits_loot() -> void:
 
 	assert_false(GameSession.has_deployed_party())
 	assert_eq(GameSession.get_deployed_party_position(), GameSession.STARTING_SETTLEMENT_WORLD_POSITION)
-	assert_eq(GameSession.gold, 0)
+	assert_eq(GameSession.gold, 60, "The shared Encampment bank must never be touched by a wipe")
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "The wiped party's own carried gold is forfeited")
 
 
 ## Step 1 of docs/plans/2026-08-21-stage-1-campaign-spine: withdraw_from_
@@ -615,7 +626,7 @@ func test_enter_battle_claims_the_battle_for_the_currently_selected_party() -> v
 	var result: Error = manager.enter_battle("goblin_camp")
 
 	assert_eq(result, OK)
-	assert_eq(GameSession.active_battle_party_id, party_id)
+	assert_eq(GameSession.get_active_battle_context().owner_party_id, party_id)
 	assert_eq(GameSession.selected_encounter, "goblin_camp")
 
 
@@ -644,7 +655,7 @@ func test_enter_battle_is_rejected_for_a_party_not_at_the_encounters_position() 
 
 	assert_eq(result, ERR_INVALID_DATA)
 	assert_eq(GameSession.selected_encounter, "", "A rejected claim must never select the encounter")
-	assert_eq(GameSession.active_battle_party_id, "", "A rejected claim must never be granted")
+	assert_eq(GameSession.get_active_battle_context(), {}, "A rejected claim must never be granted")
 
 
 ## Whichever party's Enter is clicked first claims the active battle; a
@@ -655,7 +666,7 @@ func test_enter_battle_is_rejected_while_another_party_already_owns_the_active_b
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
-	GameSession.claim_battle_for_party("some_other_party")
+	GameSession.create_battle_context("some_other_party", "goblin_camp")
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
@@ -663,7 +674,7 @@ func test_enter_battle_is_rejected_while_another_party_already_owns_the_active_b
 
 	assert_eq(result, ERR_INVALID_DATA)
 	assert_eq(GameSession.selected_encounter, "", "A rejected claim must never select the encounter")
-	assert_eq(GameSession.active_battle_party_id, "some_other_party", "The existing claim must be untouched")
+	assert_eq(GameSession.get_active_battle_context().owner_party_id, "some_other_party", "The existing claim must be untouched")
 
 
 func test_complete_battle_releases_the_battle_claim() -> void:
@@ -671,14 +682,14 @@ func test_complete_battle_releases_the_battle_claim() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, "goblin_camp")
 	GameSession.enter_encounter("goblin_camp")
-	GameSession.claim_battle_for_party(GameSession.selected_party_id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
 	manager.complete_battle()
 
-	assert_eq(GameSession.active_battle_party_id, "")
+	assert_ne(GameSession.get_active_battle_context().status, "active")
 
 
 func test_fail_battle_releases_the_battle_claim() -> void:
@@ -686,14 +697,14 @@ func test_fail_battle_releases_the_battle_claim() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, "goblin_camp")
 	GameSession.enter_encounter("goblin_camp")
-	GameSession.claim_battle_for_party(GameSession.selected_party_id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
 	manager.fail_battle()
 
-	assert_eq(GameSession.active_battle_party_id, "")
+	assert_ne(GameSession.get_active_battle_context().status, "active")
 
 
 func test_retreat_from_battle_releases_the_battle_claim() -> void:
@@ -701,14 +712,14 @@ func test_retreat_from_battle_releases_the_battle_claim() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.depart_selected_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, "goblin_camp")
 	GameSession.enter_encounter("goblin_camp")
-	GameSession.claim_battle_for_party(GameSession.selected_party_id)
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
 	manager.retreat_from_battle()
 
-	assert_eq(GameSession.active_battle_party_id, "")
+	assert_ne(GameSession.get_active_battle_context().status, "active")
 
 
 func test_apply_super_power_reports_unavailable_without_an_active_battlefield() -> void:
@@ -1311,9 +1322,10 @@ func test_defeating_final_boss_routes_to_the_victory_screen() -> void:
 func test_go_to_victory_screen_settles_battle_loot_so_saving_is_immediately_possible() -> void:
 	GameSession.reset()
 	GameSession.gold = 100
-	GameSession.battle_reward = 5
-	GameSession.battle_mana_crystals = {1: 1}
-	GameSession.battle_gear = {"dagger_iron": 1}
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.create_battle_context(party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward = {"gold": 5, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 1}, "item_instance_ids": [] as Array[String]}
 	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
 	add_child_autofree(manager)
 
@@ -1332,9 +1344,8 @@ func test_go_to_victory_screen_settles_battle_loot_so_saving_is_immediately_poss
 		int(GameSession.get_campaign_victory_summary().get("gold_banked", 0)), 105,
 		"The victory summary's gold figure must reflect the merged total, not the pre-victory bank alone"
 	)
-	assert_eq(GameSession.battle_reward, 0)
-	assert_eq(GameSession.battle_mana_crystals, {})
-	assert_eq(GameSession.battle_gear, {})
+	assert_eq(GameSession.get_active_battle_context().status, "victory")
+	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "The resolved reward must be fully deposited, not left carried")
 	assert_eq(GameSession.mana_crystals, {1: 1})
 	assert_eq(GameSession.banked_gear, {"dagger_iron": 1})
 
@@ -1438,16 +1449,19 @@ func test_can_save_current_campaign_is_false_during_an_active_encounter() -> voi
 	GameSession.abandon_current_encounter()
 
 
-## complete_current_encounter() clears selected_encounter *before* battle_
-## reward/battle_gear/battle_mana_crystals are merged into the party (that
-## happens later, in go_to_world_map()) -- so on the Battle Result screen,
+## complete_current_encounter() clears selected_encounter *before* the
+## active battle context's own reward is resolved into the party's carry
+## (that happens later, in go_to_world_map()) -- so on the Battle Result
+## screen,
 ## selected_encounter == "" even though this battle's loot has not yet been
 ## settled. can_save_current_campaign() must not rely solely on
 ## selected_encounter to cover this window; see GameSession.
 ## has_unsettled_battle_loot().
 func test_can_save_current_campaign_is_false_when_battle_loot_is_unsettled() -> void:
 	GameSession.reset()
-	GameSession.battle_reward = 5
+	GameSession.create_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward.gold = 5
 
 	assert_eq(GameSession.selected_encounter, "", "Sanity check: no active encounter is blocking the save")
 	assert_false(GameManager.can_save_current_campaign())
@@ -1455,8 +1469,10 @@ func test_can_save_current_campaign_is_false_when_battle_loot_is_unsettled() -> 
 
 func test_can_save_current_campaign_is_true_again_once_unsettled_battle_loot_is_merged() -> void:
 	GameSession.reset()
-	GameSession.battle_reward = 5
-	GameSession.merge_battle_loot_into_party()
+	GameSession.create_party()
+	GameSession.create_battle_context(GameSession.selected_party_id, GameSession.GOBLIN_CAMP_ID)
+	GameSession._battle_context.reward.gold = 5
+	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().battle_id)
 
 	assert_true(GameManager.can_save_current_campaign())
 
@@ -1488,7 +1504,9 @@ func test_save_current_campaign_writes_when_no_encounter_is_active() -> void:
 func test_successful_save_does_not_change_reward_buckets() -> void:
 	GameSession.reset()
 	GameSession.gold = 42
-	GameSession.pending_reward = 7
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry.gold = 7
 	GameSession.mana_crystals = {1: 3}
 	GameSession.banked_gear = {"dagger_iron": 2}
 	GameManager.save_repository = FakeSaveRepository.new()
@@ -1496,7 +1514,7 @@ func test_successful_save_does_not_change_reward_buckets() -> void:
 	GameManager.save_current_campaign()
 
 	assert_eq(GameSession.gold, 42)
-	assert_eq(GameSession.pending_reward, 7)
+	assert_eq(GameSession.get_party_carry(party_id).gold, 7)
 	assert_eq(GameSession.mana_crystals, {1: 3})
 	assert_eq(GameSession.banked_gear, {"dagger_iron": 2})
 
@@ -1549,21 +1567,22 @@ func test_go_to_loaded_campaign_routes_to_the_encampment_for_an_undeployed_party
 ## / _change_scene()) rather than go_to_world_map()/go_to_encampment()
 ## themselves, so this is a structural guarantee, not merely an argument
 ## about which states a real save can reach: GameSession.
-## merge_battle_loot_into_party() and GameSession.deposit_pending_reward()
-## are never called from anywhere in the load path, for any state. These
-## tests set every reward bucket nonzero -- including combinations (e.g.
-## nonzero battle_reward, or nonzero pending_reward on an undeployed party)
-## that a real save could probably never actually contain -- specifically to
-## prove the guarantee does not depend on reachability.
+## resolve_battle_victory() and GameSession.deposit_party_carry() are never
+## called from anywhere in the load path, for any state. These tests set
+## every reward bucket nonzero -- including combinations (e.g. a nonzero
+## carry on an undeployed party) that a real save could probably never
+## actually contain -- specifically to prove the guarantee does not depend
+## on reachability.
 func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to_the_encampment() -> void:
 	GameSession.reset()
 	GameSession.gold = 10
-	GameSession.pending_reward = 12
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	GameSession.parties[0].carry = {
+		"gold": 12, "gear": {}, "mana_crystals": {}, "item_instance_ids": [] as Array[String],
+	}
 	GameSession.banked_gear = {"dagger_iron": 3}
 	GameSession.mana_crystals = {1: 2}
-	GameSession.battle_reward = 3
-	GameSession.battle_gear = {"buckler_wood": 1}
-	GameSession.battle_mana_crystals = {2: 1}
 	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
 	writer_repository.save_campaign(GameSession)
 	GameSession.reset()
@@ -1574,12 +1593,9 @@ func test_go_to_loaded_campaign_preserves_settled_reward_buckets_when_routing_to
 	assert_true(result.ok, result.get("error", ""))
 	assert_false(GameSession.has_deployed_party(), "Sanity check: this must route through the Encampment branch")
 	assert_eq(GameSession.gold, 10)
-	assert_eq(GameSession.pending_reward, 12)
+	assert_eq(GameSession.get_party_carry(party_id).gold, 12)
 	assert_eq(GameSession.banked_gear, {"dagger_iron": 3})
 	assert_eq(GameSession.mana_crystals, {1: 2})
-	assert_eq(GameSession.battle_reward, 3)
-	assert_eq(GameSession.battle_gear, {"buckler_wood": 1})
-	assert_eq(GameSession.battle_mana_crystals, {2: 1})
 
 
 ## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: a withdrawn
@@ -1614,22 +1630,20 @@ func test_go_to_loaded_campaign_returns_a_withdrawn_deployed_party_to_the_world_
 	assert_eq(GameSession.get_current_health(GameSession.WARRIOR_ID), health_before)
 	assert_eq(GameSession.selected_encounter, "")
 	assert_true(GameSession.can_enter_encounter(encounter_id), "The encounter must remain available after a load")
-	assert_eq(GameSession.pending_reward, 0)
-	assert_eq(GameSession.pending_gear, {})
+	assert_eq(GameSession.get_party_carry(GameSession.selected_party_id).gold, 0)
+	assert_eq(GameSession.get_party_carry(GameSession.selected_party_id).gear, {})
 
 
 func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_world_map() -> void:
 	GameSession.reset()
 	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	GameSession.depart_selected_party()
 	GameSession.gold = 5
-	GameSession.pending_reward = 25
-	GameSession.pending_gear = {"dagger_iron": 1}
-	GameSession.pending_mana_crystals = {1: 4}
-	GameSession.battle_reward = 7
-	GameSession.battle_gear = {"shortsword_iron": 1}
-	GameSession.battle_mana_crystals = {1: 1}
+	GameSession.parties[0].carry = {
+		"gold": 25, "gear": {"dagger_iron": 1}, "mana_crystals": {1: 4}, "item_instance_ids": [] as Array[String],
+	}
 	var writer_repository := SaveRepositoryScript.new(TEST_SAVE_PATH)
 	writer_repository.save_campaign(GameSession)
 	GameSession.reset()
@@ -1640,12 +1654,10 @@ func test_go_to_loaded_campaign_preserves_reward_buckets_when_routing_to_the_wor
 	assert_true(result.ok, result.get("error", ""))
 	assert_true(GameSession.has_deployed_party(), "Sanity check: this must route through the World Map branch")
 	assert_eq(GameSession.gold, 5)
-	assert_eq(GameSession.pending_reward, 25)
-	assert_eq(GameSession.pending_gear, {"dagger_iron": 1})
-	assert_eq(GameSession.pending_mana_crystals, {1: 4})
-	assert_eq(GameSession.battle_reward, 7)
-	assert_eq(GameSession.battle_gear, {"shortsword_iron": 1})
-	assert_eq(GameSession.battle_mana_crystals, {1: 1})
+	var carry: Dictionary = GameSession.get_party_carry(party_id)
+	assert_eq(carry.gold, 25)
+	assert_eq(carry.gear, {"dagger_iron": 1})
+	assert_eq(carry.mana_crystals, {1: 4})
 
 
 func test_go_to_loaded_campaign_closes_an_open_pause_menu_on_success() -> void:

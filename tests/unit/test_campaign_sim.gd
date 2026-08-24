@@ -399,6 +399,65 @@ func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -
 	)
 
 
+## --- Stage 6 Step 2 fix: a wipe through _fight_objective() must forfeit the
+## party's own already-carried loot, not just this battle's own reward -------
+
+## Solo variant of _FragileCasualtyCampaignSim above: a single 1-HP unit at
+## the same guaranteed-target adjacency (Manhattan distance 1 from the
+## enemy's default start) with no tank counterpart to finish the enemy off,
+## so the party wipes outright instead of losing only that one member.
+class _SoloWipeCampaignSim extends CampaignSimScript:
+	var solo_id: String = ""
+
+	func _build_player_units() -> Array:
+		var adventurer := GameSession.get_adventurer(solo_id)
+		return [{
+			"id": solo_id,
+			"template_id": String(adventurer.get("class", "warrior")),
+			"weapon_id": String(adventurer.equipment.get("weapon", GameSession.DEFAULT_WEAPON_ID)),
+			"armor_id": String(adventurer.equipment.get("armor", GameSession.DEFAULT_ARMOR_ID)),
+			"level": int(adventurer.get("level", 1)),
+			"modifiers": {"max_health": -9},
+			"position": {"x": 4, "y": 5},
+		}]
+
+	func _build_enemy_units(_expedition: Dictionary) -> Array:
+		return [{"id": "enemy_0", "template_id": "orc_bruiser"}]
+
+
+## Regression test for a bug this review found: complete_current_encounter()
+## only auto-vivifies an "active" BattleContext on the victory path (see its
+## own _ensure_active_battle_context() doc comment) -- _fight_objective()'s
+## defeat/stalemate branches called abandon_current_encounter() instead and
+## never created one at all, so resolve_battle_defeat()'s battle_id/status
+## guard always failed and forfeit_party_carry() silently never ran. A wiped
+## party's own already-carried gold from earlier victories this deployment
+## would then survive to be banked by _return_to_encampment()'s unconditional
+## deposit_party_carry() call -- exactly the cross-battle carry leak this
+## step's own isolation invariant forbids. Fixed by _fight_objective() calling
+## GameSession.create_battle_context() explicitly before the battle starts,
+## mirroring GameManager.enter_battle()'s real-flow ordering.
+func test_a_full_party_wipe_through_fight_objective_forfeits_the_partys_own_already_carried_loot() -> void:
+	GameSession.create_party()
+	var party_id: String = GameSession.selected_party_id
+	var solo_id := String(GameSession.adventurers[0].id)
+	GameSession.assign_adventurer_to_selected_party(solo_id)
+	GameSession.parties[0].carry.gold = 500
+
+	var sim := _SoloWipeCampaignSim.new()
+	sim.sim_seed = 4242
+	sim.solo_id = solo_id
+	var telemetry := sim._new_telemetry(4242)
+
+	var outcome := sim._fight_objective(GameSession.GOBLIN_CAMP_ID, telemetry)
+
+	assert_eq(outcome, "defeat", "The engineered 1-HP solo unit vs. one orc_bruiser, with no tank to finish it off, must resolve as a wipe")
+	assert_eq(
+		GameSession.get_party_carry(party_id).gold, 0,
+		"A full-party wipe must forfeit the party's own already-carried gold from earlier victories, not just discard this battle's own not-yet-banked reward"
+	)
+
+
 ## --- Stage 5 exit-gate fix: _build_player_units() must thread a promoted
 ## specialization, not just its perks --------------------------------------
 
@@ -820,3 +879,48 @@ func test_metrics_aggregate_reports_failed_seed_details_and_per_objective_summar
 	assert_true(parsed.has("per_objective_summary"), "JSON report must include per_objective_summary")
 	assert_true(parsed.has("failed_seeds"))
 	assert_eq(String(parsed.mode), CampaignSimMetricsScript.MODE_SWEEP)
+
+
+## --- Stage 6 Step 2 (decision-ledger.md PartyCarry/BattleContext) ---------
+
+## Proves party-owned carry isolation through CampaignSim's own scene-free
+## battle path, not just GameSession's direct unit tests: Party A fights and
+## banks its own loot while Party B, independently deployed via the same
+## select_party()-then-call pattern _fight_objective()/deposit_party_carry()
+## already support (both take/imply an explicit party_id -- see game_
+## session.gd's create_battle_context()/get_party_carry()/deposit_party_
+## carry()), keeps its own untouched carry throughout. Two parties require
+## GUILD_HALL_MAX_LEVEL (see get_max_party_count()), exactly like GameSession's
+## own test_forfeit_party_carry_never_touches_a_different_partys_carry().
+func test_two_deployed_parties_carry_and_bank_loot_independently() -> void:
+	GameSession.create_party()
+	var party_a_id: String = GameSession.selected_party_id
+	for adventurer in GameSession.adventurers.duplicate():
+		GameSession.assign_adventurer_to_selected_party(String(adventurer.id))
+	GameSession.deploy_party(party_a_id)
+
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.recruit_adventurer()
+	GameSession.create_party()
+	var party_b_id: String = GameSession.selected_party_id
+	var recruit_id: String = String(GameSession.adventurers[GameSession.adventurers.size() - 1].id)
+	GameSession.assign_adventurer_to_selected_party(recruit_id)
+	GameSession.deploy_party(party_b_id)
+	GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.ORC_OUTPOST_ID).position, party_b_id)
+
+	GameSession.select_party(party_a_id)
+	var sim := CampaignSimScript.new()
+	var telemetry := sim._new_telemetry(4242)
+	var outcome := sim._fight_objective(GameSession.GOBLIN_CAMP_ID, telemetry)
+	assert_eq(outcome, "victory", "The full starting 4-Warrior party must win the first tier-1 sandbox objective")
+
+	assert_gt(GameSession.get_party_carry(party_a_id).gold, 0, "Party A's carry must hold its own battle reward gold")
+	assert_eq(GameSession.get_party_carry(party_b_id).gold, 0, "Party B's carry must be untouched by Party A's battle")
+
+	var bank_before: int = GameSession.gold
+	GameSession.deposit_party_carry(party_a_id)
+	assert_gt(GameSession.gold, bank_before, "Party A's banked gold must reach the shared Encampment bank")
+	assert_eq(GameSession.get_party_carry(party_a_id).gold, 0, "Party A's own carry must be empty once banked")
+
+	assert_true(GameSession.has_deployed_party(party_b_id), "Party B must remain deployed in the field, undisturbed by Party A's return")
+	assert_eq(GameSession.get_party_carry(party_b_id).gold, 0, "Party B's carry must remain independently empty after Party A's own carry is banked")
