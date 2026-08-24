@@ -402,10 +402,15 @@ func test_class_label_shows_the_specialization_once_promoted() -> void:
 func test_perks_label_shows_a_chosen_knight_perk_with_its_effect() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	# Stage 6 Step 4 (G3): Shield Bash now requires the shared "knight_
+	# discipline" tier-1 gate first -- a third Knight-specific slot on top of
+	# the two root perks, so level 8 (350 XP) is needed for the 4 total slots
+	# this test now spends (2 root + Discipline + Shield Bash).
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 350.0)
 	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
 	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_DISCIPLINE_PERK_ID)
 	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
 	var screen := _open_unit_details(GameSession.WARRIOR_ID)
 
@@ -415,6 +420,36 @@ func test_perks_label_shows_a_chosen_knight_perk_with_its_effect() -> void:
 			tr("perk.knight_shield_bash.name"),
 			tr("perk.knight_shield_bash.effect") % GameSession.OFF_BALANCE_GUARD_PENALTY,
 		]
+	)
+
+
+## Stage 6 Step 4 (task 5, G3): once Shield Bash is chosen, Chain Blow -- its
+## permanently foreclosed mutually exclusive sibling -- is annotated as
+## excluded rather than just silently never appearing, so a player later
+## reviewing this Knight's sheet can see WHY it is absent. Every other
+## class's perks-label rendering is completely unaffected (see this test
+## file's own exact-match tests above) since only Knight's perks carry a
+## mutually_exclusive_with relationship at all.
+func test_perks_label_annotates_the_excluded_sibling_of_a_chosen_knight_branch() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 350.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_DISCIPLINE_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	var screen := _open_unit_details(GameSession.WARRIOR_ID)
+
+	var perks_text: String = screen.get_node("Body/Center/VBox/PerksLabel").text
+	assert_string_contains(
+		perks_text,
+		tr("unit_details.perk_excluded") % tr("perk.knight_chain_blow.name"),
+		"Chain Blow must be shown as excluded, not simply omitted"
+	)
+	assert_false(
+		perks_text.contains("* %s (%s)" % [tr("perk.knight_chain_blow.name"), tr("perk.knight_chain_blow.effect")]),
+		"Chain Blow must never render as though it were owned"
 	)
 
 

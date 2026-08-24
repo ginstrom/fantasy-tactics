@@ -162,9 +162,7 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	# effective_max_health()'s own doc comment on why this is a shared static
 	# helper): applied on top of the scenario's own level/modifiers-derived
 	# base, exactly mirroring get_effective_max_health()'s live-route formula.
-	max_health = GameSession.compute_effective_max_health(
-		max_health, perks, GameSession.WARRIOR_JUGGERNAUT_HP_PERCENT, GameSession.CLERIC_DEVOUT_HP_PERCENT
-	)
+	max_health = GameSession.compute_effective_max_health(max_health, perks)
 
 	# Every gain below defaults to 0, not 1, when the class's own skills_def
 	# omits that skill entirely (Stage 5 D3: Mage's skills dict deliberately
@@ -195,14 +193,14 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	# Bonus Move/Quickdraw's flat AP bonus -- see GameSession.compute_
 	# effective_action_points()'s own doc comment.
 	var action_points: int = GameSession.compute_effective_action_points(
-		BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0)), perks, 1, GameSession.SCOUT_QUICKDRAW_ACTION_POINTS
+		BattleControllerScript.BASE_ACTION_POINTS + int(modifiers.get("action_points", 0)), perks
 	)
 	var damage_min: int = int(weapon.get("damage_min", 0)) + int(modifiers.get("damage_min", 0))
 	var damage_max: int = int(weapon.get("damage_max", 0)) + int(modifiers.get("damage_max", 0))
 	# Bulwark's flat Guard bonus -- see GameSession.compute_effective_
 	# defense()'s own doc comment.
 	var defense: int = GameSession.compute_effective_defense(
-		int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0)), perks, GameSession.WARRIOR_BULWARK_GUARD
+		int(armor.get("defense", 0)) + guard + int(modifiers.get("defense", 0)), perks
 	)
 	var resistance: int = int(armor.get("resistance", 0)) + int(modifiers.get("resistance", 0))
 	# Ranged weapon attack range hydration (Step 4 of docs/plans/2026-08-21-

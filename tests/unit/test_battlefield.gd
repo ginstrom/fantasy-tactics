@@ -333,10 +333,17 @@ func _setup_knight_party() -> String:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 200.0)
+	# Stage 6 Step 4 (G3): Shield Bash now requires the shared "knight_
+	# discipline" tier-1 gate first (see PerkCatalogScript's own doc comment),
+	# a third Knight-specific slot on top of the two root perks -- level 8
+	# (350 XP) earns the 4 total slots (2 root + Discipline + Shield Bash)
+	# this fixture now spends, where level 6 (200 XP) used to be enough for
+	# 2 root + Shield Bash alone.
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 350.0)
 	GameSession.choose_perk("warrior_001", GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	GameSession.choose_perk("warrior_001", GameSession.WARRIOR_BULWARK_PERK_ID)
 	GameSession.promote_adventurer("warrior_001", "knight")
+	GameSession.choose_perk("warrior_001", GameSession.KNIGHT_DISCIPLINE_PERK_ID)
 	GameSession.choose_perk("warrior_001", GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
 	return "warrior_001"
 

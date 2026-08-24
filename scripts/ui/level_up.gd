@@ -92,6 +92,15 @@ func refresh() -> void:
 ## choice is pending, including once both of a class's perks are already
 ## chosen (get_available_perks() then returns [] and is_perk_choice_pending()
 ## is already permanently false -- no empty-tree state needed).
+##
+## Stage 6 Step 4 (task 5, G3): ALSO renders a disabled row for any perk in
+## the adventurer's own tree GameSession.get_perk_tree_status() reports as
+## "locked" (prerequisites not yet met, e.g. Knight's Shield Bash/Chain Blow
+## before Discipline is chosen) -- prerequisite fulfillment is visible up
+## front rather than the child perk silently not existing yet. Every existing
+## non-branching class's own perks are never "locked" (empty prerequisite_ids
+## -- see PerkCatalogScript's own doc comment), so this is a pure no-op
+## addition for them.
 func _refresh_perk_options(pending: bool) -> void:
 	for child in perk_options_container.get_children():
 		perk_options_container.remove_child(child)
@@ -101,15 +110,33 @@ func _refresh_perk_options(pending: bool) -> void:
 		return
 
 	for perk_id in GameSession.get_available_perks(adventurer_id):
-		var button := Button.new()
-		button.name = "PerkOption_%s" % perk_id
-		var effect := GameSession.get_perk_effect_description(perk_id)
-		button.text = (
-			"%s (%s)" % [GameSession.get_perk_display_name(perk_id), effect] if not effect.is_empty()
-			else GameSession.get_perk_display_name(perk_id)
-		)
+		var button := _perk_option_button(perk_id)
 		button.pressed.connect(_on_perk_option_pressed.bind(perk_id))
 		perk_options_container.add_child(button)
+
+	for status in GameSession.get_perk_tree_status(adventurer_id):
+		if status.state != "locked":
+			continue
+		var button := _perk_option_button(status.id)
+		button.text = tr("level_up.perk_locked") % button.text
+		button.disabled = true
+		perk_options_container.add_child(button)
+
+
+## Shared button-building for both a real choosable option and a disabled
+## locked row above -- identical text/name shape either way, so a locked
+## perk reads exactly like the real thing it will become once its
+## prerequisite is chosen, distinguished by its "(Locked)" suffix and
+## .disabled.
+func _perk_option_button(perk_id: String) -> Button:
+	var button := Button.new()
+	button.name = "PerkOption_%s" % perk_id
+	var effect := GameSession.get_perk_effect_description(perk_id)
+	button.text = (
+		"%s (%s)" % [GameSession.get_perk_display_name(perk_id), effect] if not effect.is_empty()
+		else GameSession.get_perk_display_name(perk_id)
+	)
+	return button
 
 
 func _on_perk_option_pressed(perk_id: String) -> void:

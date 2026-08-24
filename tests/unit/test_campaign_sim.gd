@@ -487,7 +487,14 @@ func test_build_player_units_threads_a_promoted_specialization_so_its_perks_vali
 	GameSession.choose_perk(knight_id, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
 	GameSession.choose_perk(knight_id, GameSession.WARRIOR_BULWARK_PERK_ID)
 	assert_true(GameSession.promote_adventurer(knight_id, "knight"), "Setup: both root perks are chosen, so promotion must succeed")
-	assert_true(GameSession.choose_perk(knight_id, GameSession.KNIGHT_SHIELD_BASH_PERK_ID), "Setup: promotion must open a Knight perk slot")
+	assert_true(
+		GameSession.choose_perk(knight_id, GameSession.KNIGHT_DISCIPLINE_PERK_ID),
+		"Setup: promotion must open a Knight perk slot"
+	)
+	assert_true(
+		GameSession.choose_perk(knight_id, GameSession.KNIGHT_SHIELD_BASH_PERK_ID),
+		"Setup: Shield Bash is available once Discipline is chosen"
+	)
 
 	var sim := CampaignSimScript.new()
 	var units := sim._build_player_units()

@@ -151,12 +151,24 @@ func _show_adventurer(adventurer: Dictionary) -> void:
 	skills_label.text = "\n".join(skills_lines)
 
 	var perks: Array = adventurer.progression.get("perks", [])
-	if perks.is_empty():
+	# Stage 6 Step 4 (task 5, G3): excluded_names below is ALWAYS empty for
+	# every non-branching class (Warrior/Scout/Cleric/Archer/Battle Mage --
+	# their perks all carry empty mutually_exclusive_with, see
+	# PerkCatalogScript's own doc comment), so this addition is a pure no-op
+	# for them -- "Perks: None" and the plain owned-perk list below render
+	# exactly as before. Only Knight ever has an excluded entry to annotate.
+	var excluded_ids: Array[String] = []
+	for status in GameSession.get_perk_tree_status(adventurer_id):
+		if status.state == "excluded":
+			excluded_ids.append(status.id)
+	if perks.is_empty() and excluded_ids.is_empty():
 		perks_label.text = "Perks: None"
 	else:
 		var perk_lines: Array[String] = ["Perks:"]
 		for perk_id in perks:
 			perk_lines.append("* %s" % _get_perk_display_name(perk_id))
+		for perk_id in excluded_ids:
+			perk_lines.append("* %s" % (tr("unit_details.perk_excluded") % GameSession.get_perk_display_name(perk_id)))
 		perks_label.text = "\n".join(perk_lines)
 
 	_refresh_equipment_sections(adventurer)

@@ -2580,6 +2580,49 @@ func test_get_available_perks_lists_only_the_adventurers_own_class_perks_not_yet
 	)
 
 
+## Stage 6 Step 4 (task 5): get_perk_tree_status() is the fuller "every perk
+## in scope, with its DAG state" query level_up.gd/unit_details.gd read for
+## locked/available/excluded/owned rendering -- unlike get_available_perks(),
+## it also reports a perk NOT yet reachable (locked) or permanently
+## foreclosed (excluded), across the whole class + specialization scope.
+func test_get_perk_tree_status_reports_locked_available_owned_and_excluded_for_a_knight() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 350.0)  # level 8: 4 total slots
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	session.promote_adventurer("warrior_001", "knight")
+
+	var status_by_id := {}
+	for entry in session.get_perk_tree_status("warrior_001"):
+		status_by_id[entry.id] = entry.state
+	assert_eq(status_by_id[GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID], "owned")
+	assert_eq(status_by_id[GameSessionScript.WARRIOR_BULWARK_PERK_ID], "owned")
+	assert_eq(status_by_id[GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID], "available")
+	assert_eq(
+		status_by_id[GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID], "locked",
+		"Shield Bash is not yet reachable -- Discipline has not been chosen"
+	)
+	assert_eq(status_by_id[GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID], "locked")
+
+	session.choose_perk("warrior_001", GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID)
+	status_by_id.clear()
+	for entry in session.get_perk_tree_status("warrior_001"):
+		status_by_id[entry.id] = entry.state
+	assert_eq(status_by_id[GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID], "owned")
+	assert_eq(
+		status_by_id[GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID], "excluded",
+		"Chain Blow is permanently foreclosed once Shield Bash, its mutually exclusive sibling, is chosen"
+	)
+
+
+func test_get_perk_tree_status_is_empty_for_an_unknown_adventurer() -> void:
+	assert_eq(GameSession.get_perk_tree_status("no_such_adventurer"), [] as Array[Dictionary])
+
+
 ## Legacy compatibility (docs/designs/class-system.md): an adventurer who
 ## already holds the retired universal bonus_move perk is never migrated --
 ## it keeps its own effect exactly as before, sits alongside the class-owned
@@ -2657,6 +2700,14 @@ func test_get_available_specializations_is_empty_until_both_warrior_perks_are_ch
 ## The decision-contract shape task 1 of the step file asks for: Shield Bash/
 ## Chain Blow are unavailable before promotion, available after a legal
 ## promotion, and promotion itself is rejected when ineligible.
+##
+## Stage 6 Step 4 (G3, decision-ledger.md): Shield Bash and Chain Blow are no
+## longer two independent perks -- both now require the new "knight_
+## discipline" tier-1 gate first, and are mutually exclusive with each other
+## once either is chosen. A Knight's total specialization-perk slot cap stays
+## exactly 2 (PERK_TREE_SIZE, unchanged -- see SPECIALIZATION_PERKS' own doc
+## comment), so a Knight still spends exactly 2 Knight-specific slots:
+## Discipline, then EITHER Shield Bash OR Chain Blow, never both.
 func test_promote_adventurer_unlocks_knight_perks_on_the_existing_perk_tree_mechanism() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
@@ -2669,8 +2720,8 @@ func test_promote_adventurer_unlocks_knight_perks_on_the_existing_perk_tree_mech
 	)
 	assert_eq(session.get_adventurer_specialization("warrior_001"), "")
 	assert_false(
-		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID),
-		"Shield Bash is unavailable before promotion"
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID),
+		"Discipline is unavailable before promotion"
 	)
 
 	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
@@ -2681,21 +2732,41 @@ func test_promote_adventurer_unlocks_knight_perks_on_the_existing_perk_tree_mech
 	# Level 6 already earns 3 of the 4 total slots (2 root + 1 specialization,
 	# see _pending_perk_slot_count()'s specialization-aware cap) -- both root
 	# perks are already spent, so exactly one Knight perk slot is pending
-	# immediately on promotion, with no further leveling required.
+	# immediately on promotion, with no further leveling required. Only
+	# Discipline is offered -- Shield Bash/Chain Blow are still gated behind
+	# it.
 	assert_true(session.is_perk_choice_pending("warrior_001"))
-	assert_eq(
-		session.get_available_perks("warrior_001"),
-		[GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID, GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID]
-	)
-	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID))
+	assert_eq(session.get_available_perks("warrior_001"), [GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID])
 	assert_false(
-		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID),
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID),
+		"Shield Bash still requires Discipline first, even with a slot pending"
+	)
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID))
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID),
 		"Only one Knight slot is pending at level 6 -- the second needs another level-interval"
 	)
 
 	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 250.0)  # level 9: all 4 slots earned
-	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID))
-	assert_false(session.is_perk_choice_pending("warrior_001"), "All 4 slots (2 root + 2 Knight) are now spent")
+	assert_eq(
+		session.get_available_perks("warrior_001"),
+		[GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID, GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID],
+		"Discipline is chosen -- both branches are now offered"
+	)
+	assert_true(session.choose_perk("warrior_001", GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID))
+	assert_false(session.is_perk_choice_pending("warrior_001"), "All 4 slots (2 root + Discipline + one branch) are now spent")
+	assert_false(
+		session.choose_perk("warrior_001", GameSessionScript.KNIGHT_CHAIN_BLOW_PERK_ID),
+		"Chain Blow is permanently excluded once Shield Bash, its mutually exclusive sibling, is chosen"
+	)
+	assert_eq(
+		session.get_adventurer("warrior_001").progression.perks,
+		[
+			GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
+			GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID, GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID,
+		],
+		"Chain Blow must never have been appended"
+	)
 	assert_eq(session.get_available_specializations("warrior_001"), [] as Array[String], "Already promoted")
 	assert_false(session.promote_adventurer("warrior_001", "knight"), "Cannot promote a second time")
 
@@ -2778,12 +2849,16 @@ func test_promote_adventurer_rejects_a_specialization_foreign_to_the_adventurers
 ## reset/import, and a save with no "specialization" field at all (every
 ## pre-Stage-5-D4 save) imports cleanly as not promoted rather than a
 ## partial/corrupt state.
+## Stage 6 Step 4 (G3): Shield Bash now requires the new "knight_discipline"
+## tier-1 gate first (see the Knight promotion test above) -- both the gate
+## and the chosen branch must survive the round trip.
 func test_specialization_and_knight_perks_persist_through_a_snapshot_round_trip() -> void:
-	GameSession.adventurers[0].level = 6
+	GameSession.adventurers[0].level = 8
 	GameSession.adventurers[0].progression.perks = [
 		GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
 	]
 	assert_true(GameSession.promote_adventurer(GameSessionScript.WARRIOR_ID, "knight"))
+	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID))
 	assert_true(GameSession.choose_perk(GameSessionScript.WARRIOR_ID, GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID))
 	var snapshot := GameSession.export_campaign_snapshot()
 	GameSession.reset()
@@ -2796,7 +2871,7 @@ func test_specialization_and_knight_perks_persist_through_a_snapshot_round_trip(
 		GameSession.get_adventurer(GameSessionScript.WARRIOR_ID).progression.perks,
 		[
 			GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID, GameSessionScript.WARRIOR_BULWARK_PERK_ID,
-			GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID,
+			GameSessionScript.KNIGHT_DISCIPLINE_PERK_ID, GameSessionScript.KNIGHT_SHIELD_BASH_PERK_ID,
 		]
 	)
 
@@ -6395,6 +6470,15 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"PERK_TREE_SIZE": true,
 		"WARRIOR_JUGGERNAUT_HP_PERCENT": true,
 		"WARRIOR_BULWARK_GUARD": true,
+		# Stage 6 Step 4: generated once at construction from PerkCatalog's own
+		# authored catalog (PerkCatalogScript.get_scope_ids()) -- balance/
+		# content data, not player state, same non-durable reasoning as every
+		# other catalog/config-derived var already excluded on this list (e.g.
+		# WARRIOR_BULWARK_GUARD immediately above). Became a plain `var`
+		# (rather than `const`) only because its initializer is now a function
+		# call, not because it is durable session state.
+		"CLASS_PERKS": true,
+		"SPECIALIZATION_PERKS": true,
 		# Stage 5 D4: a cached copy of GameConfig's combat.off_balance_guard_
 		# penalty key (already durable-free, since it is battle-config balance
 		# data, not player state -- BattleController reads the same key

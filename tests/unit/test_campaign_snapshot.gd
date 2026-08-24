@@ -961,7 +961,14 @@ func test_a_knight_perk_validates_only_alongside_the_matching_specialization_fie
 			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
 			"progression": {
 				"xp": 200.0,
-				"perks": ["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash", "knight_chain_blow"],
+				# Stage 6 Step 4 (G3): Shield Bash requires "knight_discipline"
+				# first and is mutually exclusive with Chain Blow -- this test's
+				# own concern is the "specialization" field, not the DAG, so it
+				# uses a legally reachable graph (Discipline then one branch)
+				# rather than both halves of the exclusive pair. See
+				# test_campaign_snapshot.gd's own dedicated DAG-rejection test
+				# for the adversarial "both branches" case.
+				"perks": ["warrior_juggernaut", "warrior_bulwark", "knight_discipline", "knight_shield_bash"],
 			},
 		},
 	]
@@ -972,8 +979,61 @@ func test_a_knight_perk_validates_only_alongside_the_matching_specialization_fie
 	assert_eq(result.snapshot.adventurers[0].specialization, "knight")
 	assert_eq(
 		result.snapshot.adventurers[0].progression.perks,
-		["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash", "knight_chain_blow"]
+		["warrior_juggernaut", "warrior_bulwark", "knight_discipline", "knight_shield_bash"]
 	)
+
+
+## Stage 6 Step 4 (task 7, G3): the adversarial case task 7 exists for -- a
+## hand-edited or corrupted save claiming BOTH halves of Knight's mutually
+## exclusive Shield Bash/Chain Blow pair. Both ids individually pass
+## ownership (each is a real "knight_*" perk), so only PerkCatalog's own DAG/
+## mutual-exclusion check (is_valid_perk_graph(), wired into _validate_perks_
+## field()) can catch this -- a player must never be able to end up with
+## both branches by hand-editing a save.
+func test_import_rejects_a_saved_perk_list_containing_both_halves_of_a_mutually_exclusive_pair() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 8,
+			"specialization": "knight",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {
+				"xp": 350.0,
+				"perks": [
+					"warrior_juggernaut", "warrior_bulwark", "knight_discipline",
+					"knight_shield_bash", "knight_chain_blow",
+				],
+			},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "A saved perk list claiming both mutually exclusive branches must be rejected")
+	assert_string_contains(result.error, "warrior_001")
+
+
+## The same adversarial case, but missing Discipline entirely -- Shield Bash
+## chosen with its own prerequisite never satisfied. Individually a real
+## "knight_*" id owned by the Knight specialization, so again only the DAG
+## check (not ordinary ownership) can catch it.
+func test_import_rejects_a_saved_perk_missing_its_own_prerequisite() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "warrior_001", "name": "Warrior", "class": "warrior", "level": 8,
+			"specialization": "knight",
+			"stats": {"melee": 60, "missile": 60, "guard": 0, "might": 0, "vitality": 10, "max_health": 60},
+			"progression": {
+				"xp": 350.0,
+				"perks": ["warrior_juggernaut", "warrior_bulwark", "knight_shield_bash"],
+			},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "Shield Bash without its own Discipline prerequisite must be rejected")
 
 
 ## Archer's own validation (Stage 5 D4): mirrors the Knight test immediately

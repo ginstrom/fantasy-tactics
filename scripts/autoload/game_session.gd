@@ -5,6 +5,17 @@ extends Node
 ## get_expedition() overlays onto EXPEDITIONS for any encounter id that has
 ## migrated into config/content/ -- see _overlay_content_catalog_definition().
 const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
+## Stage 6 Step 4 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/04-branching-perk-definitions.md): the DAG-shaped
+## PerkDefinition catalog -- see CLASS_PERKS/SPECIALIZATION_PERKS/PERK_
+## DEFINITIONS below, all three now generated from this single source rather
+## than hand-duplicated, and get_available_perks()/choose_perk(), which
+## additionally consult it for prerequisite/mutual-exclusion legality (only
+## Knight's Shield Bash/Chain Blow carry a real DAG relationship -- every
+## other class's perks have empty prerequisite_ids/mutually_exclusive_with,
+## so this is a behavior-preserving migration for them).
+const PerkCatalogScript := preload("res://scripts/progression/perk_catalog.gd")
+const PerkEffectResolverScript := preload("res://scripts/battle/perk_effect_resolver.gd")
 
 ## Emitted whenever campaign_objective_id, completed_objectives,
 ## unlocked_authored_encounters, is_campaign_completed, or
@@ -907,8 +918,20 @@ const CLERIC_DEVOUT_PERK_ID := "cleric_devout"
 ## flat-10% Parry for every unit; re-implementing it as a Knight-only perk
 ## would require inventing a new numeric upgrade the ledger explicitly
 ## rejected.
+##
+## Stage 6 Step 4 (G3, decision-ledger.md): these two are no longer
+## independent -- KNIGHT_DISCIPLINE_PERK_ID below is a new shared tier-1
+## prerequisite both now require, and PerkCatalog marks them mutually
+## exclusive with each other (a real "offensive vs. defensive" branch,
+## reusing their existing effect values verbatim -- no new numeric balance
+## value is invented). See PerkCatalogScript's own doc comment.
 const KNIGHT_SHIELD_BASH_PERK_ID := "knight_shield_bash"
 const KNIGHT_CHAIN_BLOW_PERK_ID := "knight_chain_blow"
+## The new tier-1 gate node (Stage 6 Step 4, G3): a purely structural choice
+## with no mechanical effect of its own -- see PerkCatalogScript's
+## "knight_discipline" entry -- that must be chosen before either Shield Bash
+## or Chain Blow becomes available.
+const KNIGHT_DISCIPLINE_PERK_ID := "knight_discipline"
 ## Archer (Stage 5 D4, decision-ledger.md): the second Warrior specialization
 ## -- verified against docs/designs/class-system.md's own roadmap table
 ## ("Warrior becomes Knight or Archer") rather than Scout, despite the
@@ -951,10 +974,13 @@ const BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID := "battle_mage_temporary_guard"
 ## adventurer's ADDITIONAL perk catalog -- the two dicts are deliberately
 ## separate rather than merged, since only a promoted adventurer of the
 ## matching root class ever sees a specialization's entries.
-const CLASS_PERKS: Dictionary = {
-	"warrior": [WARRIOR_JUGGERNAUT_PERK_ID, WARRIOR_BULWARK_PERK_ID],
-	"scout": [SCOUT_QUICKDRAW_PERK_ID, SCOUT_KEEN_EYES_PERK_ID],
-	"cleric": [CLERIC_MEDITATION_PERK_ID, CLERIC_DEVOUT_PERK_ID],
+## Stage 6 Step 4: generated from PerkCatalog's own authored catalog (see
+## PerkCatalogScript's doc comment) rather than hand-duplicated -- the ids
+## themselves, and every existing call site's behavior, are unchanged.
+var CLASS_PERKS: Dictionary = {
+	"warrior": PerkCatalogScript.get_scope_ids("warrior"),
+	"scout": PerkCatalogScript.get_scope_ids("scout"),
+	"cleric": PerkCatalogScript.get_scope_ids("cleric"),
 }
 ## Specialization id -> ordered Array of that specialization's OWN perk ids,
 ## unlocked only once an adventurer has promoted into it (adventurer.
@@ -968,10 +994,22 @@ const CLASS_PERKS: Dictionary = {
 ## immediately below) -- a fully-perked Warrior sees BOTH offered by
 ## get_available_specializations() and may promote into only one (promotion
 ## is at most once per adventurer, see that function's own doc comment).
-const SPECIALIZATION_PERKS: Dictionary = {
-	"knight": [KNIGHT_SHIELD_BASH_PERK_ID, KNIGHT_CHAIN_BLOW_PERK_ID],
-	"archer": [ARCHER_LOCK_ON_PERK_ID, ARCHER_CALLED_SHOT_PERK_ID],
-	"battle_mage": [BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID],
+## Stage 6 Step 4 (G3, decision-ledger.md): "knight" now names THREE ids --
+## the new "knight_discipline" tier-1 gate plus Shield Bash/Chain Blow, which
+## now carry a real prerequisite/mutual-exclusion relationship (see
+## PerkCatalog's own doc comment) instead of being two independent perks. The
+## per-adventurer slot CAP a Knight ever earns stays exactly 2 (PERK_TREE_
+## SIZE, unchanged -- see _perk_catalog_perk_cap()'s mini(PERK_TREE_SIZE,
+## SPECIALIZATION_PERKS[id].size()) clamp, which simply clamps 3 down to 2
+## the same way it always clamped a class with MORE than PERK_TREE_SIZE
+## perks), so a Knight still spends exactly 2 specialization perk slots --
+## Discipline, then EITHER Shield Bash OR Chain Blow, never both. Archer and
+## Battle Mage are migrated unchanged (still independent, still no DAG
+## relationship).
+var SPECIALIZATION_PERKS: Dictionary = {
+	"knight": PerkCatalogScript.get_scope_ids("knight"),
+	"archer": PerkCatalogScript.get_scope_ids("archer"),
+	"battle_mage": PerkCatalogScript.get_scope_ids("battle_mage"),
 }
 ## Specialization id -> ordered Array of spell ids GRANTED to a promoted
 ## adventurer, on top of whatever its own root CLASS_DEFINITIONS entry already
@@ -1009,27 +1047,11 @@ const SPECIALIZATION_ROOT_CLASS: Dictionary = {
 	"battle_mage": "mage",
 	"paladin": "cleric",
 }
-## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
-## name and effect description through this catalog (get_perk_definition(),
-## get_perk_display_name(), get_perk_effect_description()) rather than any
-## UI file hard-coding perk copy or a class-name switch -- see level_up.gd's
-## dynamic option rendering and unit_details.gd's perk line. effect_key's
-## format argument (where present) is filled from this same file's own
-## config-driven balance var (see get_perk_effect_description()), never a
-## number invented in the UI layer.
-const PERK_DEFINITIONS: Dictionary = {
-	"warrior_juggernaut": {"class": "warrior", "name_key": "perk.warrior_juggernaut.name", "effect_key": "perk.warrior_juggernaut.effect"},
-	"warrior_bulwark": {"class": "warrior", "name_key": "perk.warrior_bulwark.name", "effect_key": "perk.warrior_bulwark.effect"},
-	"scout_quickdraw": {"class": "scout", "name_key": "perk.scout_quickdraw.name", "effect_key": "perk.scout_quickdraw.effect"},
-	"scout_keen_eyes": {"class": "scout", "name_key": "perk.scout_keen_eyes.name", "effect_key": "perk.scout_keen_eyes.effect"},
-	"cleric_meditation": {"class": "cleric", "name_key": "perk.cleric_meditation.name", "effect_key": "perk.cleric_meditation.effect"},
-	"cleric_devout": {"class": "cleric", "name_key": "perk.cleric_devout.name", "effect_key": "perk.cleric_devout.effect"},
-	"knight_shield_bash": {"class": "warrior", "name_key": "perk.knight_shield_bash.name", "effect_key": "perk.knight_shield_bash.effect"},
-	"knight_chain_blow": {"class": "warrior", "name_key": "perk.knight_chain_blow.name", "effect_key": "perk.knight_chain_blow.effect"},
-	"archer_lock_on": {"class": "warrior", "name_key": "perk.archer_lock_on.name", "effect_key": "perk.archer_lock_on.effect"},
-	"archer_called_shot": {"class": "warrior", "name_key": "perk.archer_called_shot.name", "effect_key": "perk.archer_called_shot.effect"},
-	"battle_mage_temporary_guard": {"class": "mage", "name_key": "perk.battle_mage_temporary_guard.name", "effect_key": "perk.battle_mage_temporary_guard.effect"},
-}
+## Stage 6 Step 4: PERK_DEFINITIONS itself is retired -- get_perk_definition()
+## now delegates straight to PerkCatalogScript.get_definition(), whose own
+## PerkDefinition schema already carries a `name_key` field (the only field
+## get_perk_display_name() ever reads from this). See PerkCatalogScript's own
+## doc comment for the full schema.
 # Stage 2 locked balance values (see docs/designs/class-system.md and
 # config/game_config.json's "progression" section) -- loaded from config in
 # _load_balance_config() same as every other UPPER_SNAKE_CASE var above.
@@ -4547,27 +4569,53 @@ func _pending_perk_slot_count(adventurer: Dictionary) -> int:
 ## perk offered -- this is the sole gate that keeps Shield Bash/Chain Blow
 ## unavailable before promotion (see get_available_specializations()/
 ## promote_adventurer()).
+## Stage 6 Step 4: delegates to PerkCatalog.get_available_perks(), which
+## additionally enforces prerequisite/mutual-exclusion legality (only
+## Knight's Shield Bash/Chain Blow carry a real DAG relationship -- see
+## PerkCatalogScript's own doc comment). Behaviorally identical to the old
+## flat CLASS_PERKS/SPECIALIZATION_PERKS lookup for every other class, since
+## their perks all have empty prerequisite_ids/mutually_exclusive_with.
 func get_available_perks(adventurer_id: String) -> Array[String]:
 	var adventurer := get_adventurer(adventurer_id)
 	var available: Array[String] = []
 	if adventurer.is_empty():
 		return available
+	for definition in PerkCatalogScript.get_available_perks(adventurer):
+		available.append(String(definition.id))
+	return available
+
+
+## Stage 6 Step 4 (task 5): the full per-perk DAG state (see PerkCatalog.
+## get_perk_status()'s own doc comment) across adventurer_id's ENTIRE class +
+## (once promoted) specialization scope -- not just the still-choosable ids
+## get_available_perks() returns. level_up.gd's choice-card rendering uses
+## this to show a not-yet-reachable perk (e.g. Shield Bash before Discipline
+## is chosen) as a locked, disabled row instead of silently omitting it;
+## unit_details.gd's perk-tree rendering uses it to annotate a permanently
+## foreclosed branch (e.g. Chain Blow once Shield Bash is chosen) as
+## excluded rather than just vanishing. Returns [] for an unknown adventurer.
+## Every non-branching class's own perks all resolve to "owned" or
+## "available" here -- "locked"/"excluded" only ever appear for a class with
+## a real prerequisite/mutual-exclusion relationship (Knight today).
+func get_perk_tree_status(adventurer_id: String) -> Array[Dictionary]:
+	var adventurer := get_adventurer(adventurer_id)
+	var result: Array[Dictionary] = []
+	if adventurer.is_empty():
+		return result
 	var class_id := str(adventurer.get("class", ""))
-	var chosen: Array = adventurer.progression.get("perks", [])
-	var catalog: Array = (CLASS_PERKS.get(class_id, []) as Array).duplicate()
+	var scope_ids: Array[String] = PerkCatalogScript.get_scope_ids(class_id)
 	var specialization_id := str(adventurer.get("specialization", ""))
 	if not specialization_id.is_empty():
-		catalog.append_array(SPECIALIZATION_PERKS.get(specialization_id, []))
-	for perk_id in catalog:
-		if not chosen.has(perk_id):
-			available.append(perk_id)
-	return available
+		scope_ids.append_array(PerkCatalogScript.get_scope_ids(specialization_id))
+	for perk_id in scope_ids:
+		result.append({"id": perk_id, "state": PerkCatalogScript.get_perk_status(adventurer, perk_id)})
+	return result
 
 
 ## A safe copy of PERK_DEFINITIONS' own entry for perk_id, or {} for an
 ## unknown id.
 func get_perk_definition(perk_id: String) -> Dictionary:
-	return (PERK_DEFINITIONS.get(perk_id, {}) as Dictionary).duplicate(true)
+	return PerkCatalogScript.get_definition(perk_id)
 
 
 ## Localized display name for perk_id -- BONUS_MOVE_PERK_ID (not in
@@ -4601,6 +4649,8 @@ func get_perk_effect_description(perk_id: String) -> String:
 			return tr("perk.cleric_meditation.effect") % CLERIC_MEDITATION_SPELL_RANGE_BONUS
 		CLERIC_DEVOUT_PERK_ID:
 			return tr("perk.cleric_devout.effect") % CLERIC_DEVOUT_HP_PERCENT
+		KNIGHT_DISCIPLINE_PERK_ID:
+			return tr("perk.knight_discipline.effect")
 		KNIGHT_SHIELD_BASH_PERK_ID:
 			# Reuses the exact same off-balance magnitude Dodge/Parry already
 			# apply (GameConfig's combat.off_balance_guard_penalty) -- see
@@ -4635,21 +4685,21 @@ func get_perk_effect_description(perk_id: String) -> String:
 ## adventurer_id, and only once per adventurer (a perk already in
 ## progression.perks cannot be re-chosen). Every check runs before any
 ## mutation, so a rejected call leaves progression.perks untouched.
+##
+## Stage 6 Step 4: PerkCatalog.can_choose_perk() now owns eligibility/
+## already-chosen/prerequisite/mutual-exclusion legality (the DAG concern);
+## this function keeps owning the level-derived slot-economy concern
+## (_pending_perk_slot_count()) on top -- e.g. Knight's Shield Bash and Chain
+## Blow are permanently mutually exclusive once either is chosen (see
+## PerkCatalogScript's own doc comment), so choosing one here can never be
+## followed by a true return for the other, regardless of remaining slots.
 func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 	var adventurer_index := _get_adventurer_index(adventurer_id)
 	if adventurer_index == -1:
 		return false
 
 	var adventurer: Dictionary = adventurers[adventurer_index]
-	var class_id := str(adventurer.get("class", ""))
-	var is_class_perk: bool = (CLASS_PERKS.get(class_id, []) as Array).has(perk_id)
-	var specialization_id := str(adventurer.get("specialization", ""))
-	var is_specialization_perk: bool = (
-		not specialization_id.is_empty() and (SPECIALIZATION_PERKS.get(specialization_id, []) as Array).has(perk_id)
-	)
-	if not is_class_perk and not is_specialization_perk:
-		return false
-	if adventurer.progression.perks.has(perk_id):
+	if not PerkCatalogScript.can_choose_perk(adventurer, perk_id):
 		return false
 	if _pending_perk_slot_count(adventurer) <= 0:
 		return false
@@ -4873,9 +4923,7 @@ func get_effective_max_health(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return 0
 	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_max_health(
-		int(adventurer.stats.max_health), perks, WARRIOR_JUGGERNAUT_HP_PERCENT, CLERIC_DEVOUT_HP_PERCENT
-	)
+	return compute_effective_max_health(int(adventurer.stats.max_health), perks)
 
 
 ## Pure Juggernaut/Devout percent-bonus math, factored out of get_effective_
@@ -4883,22 +4931,19 @@ func get_effective_max_health(adventurer_id: String) -> int:
 ## _normalize_roster_records() in campaign_snapshot.gd) can compute the same
 ## effective max for a record that is not yet -- and may never be -- part of
 ## GameSession.adventurers, without duplicating this formula in two files.
-## Static and side-effect-free: takes every input explicitly (base max
-## health, the record's own progression.perks, and both percentages) rather
-## than reading any session state, so campaign_snapshot.gd can call it via
-## the preloaded script reference the same way it already does for
-## CLASS_PERKS, reading the percentages from GameConfig directly instead of
-## a live GameSession instance (see that file's own doc comment for why it
-## avoids the stateful singleton).
-static func compute_effective_max_health(
-	base_max_health: int, perks: Array, juggernaut_percent: int, devout_percent: int
-) -> int:
-	var percent_bonus := 0
-	if perks.has(WARRIOR_JUGGERNAUT_PERK_ID):
-		percent_bonus += juggernaut_percent
-	if perks.has(CLERIC_DEVOUT_PERK_ID):
-		percent_bonus += devout_percent
-	return base_max_health + int(round(base_max_health * percent_bonus / 100.0))
+## Static and side-effect-free: takes every input explicitly (base max health
+## and the record's own progression.perks) rather than reading any session
+## state, so campaign_snapshot.gd/battle_state_factory.gd can call it via the
+## preloaded script reference the same way they already do for CLASS_PERKS.
+##
+## Stage 6 Step 4: delegates to PerkEffectResolver.compute_stat_modifier(),
+## which reads every perk's own percent_bonus straight out of PerkCatalog
+## (itself reading the same GameConfig keys this file's own WARRIOR_
+## JUGGERNAUT_HP_PERCENT/CLERIC_DEVOUT_HP_PERCENT vars cache) -- so this no
+## longer takes explicit percentage arguments; a caller never needs to thread
+## GameSession's own cached balance vars through just to compute this.
+static func compute_effective_max_health(base_max_health: int, perks: Array) -> int:
+	return PerkEffectResolverScript.compute_stat_modifier(base_max_health, perks, "max_health")
 
 
 ## Returns current persistent health for adventurer_id (clamped in [1, max_health]),
@@ -5228,7 +5273,7 @@ func get_effective_action_points(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return 0
 	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_action_points(6, perks, 1, SCOUT_QUICKDRAW_ACTION_POINTS)
+	return compute_effective_action_points(6, perks)
 
 
 ## Pure Bonus Move/Quickdraw AP-bonus math, factored out of get_effective_
@@ -5240,15 +5285,13 @@ func get_effective_action_points(adventurer_id: String) -> int:
 ## factory.gd's own doc comment on why it never touches GameSession's
 ## mutable campaign fields). Static and side-effect-free, mirroring compute_
 ## effective_max_health()'s identical pattern.
-static func compute_effective_action_points(
-	base_action_points: int, perks: Array, bonus_move_bonus: int, quickdraw_bonus: int
-) -> int:
-	var bonus := 0
-	if perks.has(BONUS_MOVE_PERK_ID):
-		bonus += bonus_move_bonus
-	if perks.has(SCOUT_QUICKDRAW_PERK_ID):
-		bonus += quickdraw_bonus
-	return base_action_points + bonus
+##
+## Stage 6 Step 4: delegates to PerkEffectResolver.compute_stat_modifier() --
+## Bonus Move's own +1 (a retired legacy perk, see BONUS_MOVE_PERK_ID's own
+## doc comment) and Quickdraw's configured bonus are both looked up from
+## PerkCatalog now, so this no longer takes them as explicit arguments.
+static func compute_effective_action_points(base_action_points: int, perks: Array) -> int:
+	return PerkEffectResolverScript.compute_stat_modifier(base_action_points, perks, "action_points")
 
 
 ## Returns (damage_min, damage_max) from the adventurer's equipped weapon, or
@@ -5314,7 +5357,7 @@ func get_effective_defense(adventurer_id: String) -> int:
 	var armor_def: int = 0 if armor.is_empty() else int(armor.defense)
 	var guard_stat: int = int(adventurer.stats.get("guard", 0))
 	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_defense(armor_def + guard_stat, perks, WARRIOR_BULWARK_GUARD)
+	return compute_effective_defense(armor_def + guard_stat, perks)
 
 
 ## Pure Bulwark Guard-bonus math, factored out of get_effective_defense() so
@@ -5324,8 +5367,12 @@ func get_effective_defense(adventurer_id: String) -> int:
 ## action_points()'s identical doc comment for why this is static and takes
 ## every input explicitly rather than reading GameSession's mutable
 ## adventurer records.
-static func compute_effective_defense(base_defense: int, perks: Array, bulwark_bonus: int) -> int:
-	return base_defense + (bulwark_bonus if perks.has(WARRIOR_BULWARK_PERK_ID) else 0)
+##
+## Stage 6 Step 4: delegates to PerkEffectResolver.compute_stat_modifier() --
+## Bulwark's flat Guard bonus is now looked up from PerkCatalog, so this no
+## longer takes it as an explicit argument.
+static func compute_effective_defense(base_defense: int, perks: Array) -> int:
+	return PerkEffectResolverScript.compute_stat_modifier(base_defense, perks, "defense")
 
 
 ## Scout strategic reconnaissance detection range (see get_party_scouting_
@@ -5338,8 +5385,7 @@ func get_effective_scout_intel_range(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return BASE_SCOUT_INTEL_RANGE
 	var perks: Array = adventurer.progression.get("perks", [])
-	var bonus := SCOUT_KEEN_EYES_INTEL_RANGE_BONUS if perks.has(SCOUT_KEEN_EYES_PERK_ID) else 0
-	return BASE_SCOUT_INTEL_RANGE + bonus
+	return PerkEffectResolverScript.compute_stat_modifier(BASE_SCOUT_INTEL_RANGE, perks, "scout_intel_range")
 
 
 ## Cleric Heal/Bless spell range (see BattleController.try_cast_spell(),
@@ -5351,8 +5397,7 @@ func get_effective_spell_range(adventurer_id: String) -> int:
 	if adventurer.is_empty():
 		return BASE_CLERIC_SPELL_RANGE
 	var perks: Array = adventurer.progression.get("perks", [])
-	var bonus := CLERIC_MEDITATION_SPELL_RANGE_BONUS if perks.has(CLERIC_MEDITATION_PERK_ID) else 0
-	return BASE_CLERIC_SPELL_RANGE + bonus
+	return PerkEffectResolverScript.compute_stat_modifier(BASE_CLERIC_SPELL_RANGE, perks, "spell_range")
 
 
 func get_effective_might(adventurer_id: String) -> int:

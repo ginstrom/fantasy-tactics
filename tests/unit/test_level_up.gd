@@ -163,6 +163,55 @@ func test_a_level_with_no_perks_left_to_offer_shows_no_perk_controls_and_never_b
 	assert_false(level_up.continue_button.disabled)
 
 
+## Stage 6 Step 4 (task 5, G3): a Knight with a pending slot but Discipline
+## not yet chosen sees Shield Bash/Chain Blow rendered as disabled, locked
+## rows (not silently omitted) -- so the player can see the branch choice
+## coming before it is actually reachable.
+func test_a_knights_locked_branch_perks_render_as_disabled_rows_before_discipline_is_chosen() -> void:
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 350.0)  # level 8: 4 total slots
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+
+	var discipline_button := _perk_option_button(level_up, GameSession.KNIGHT_DISCIPLINE_PERK_ID)
+	assert_not_null(discipline_button)
+	assert_false(discipline_button.disabled, "Discipline is the real, currently choosable option")
+
+	var shield_bash_row := _perk_option_button(level_up, GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	assert_not_null(shield_bash_row, "Shield Bash must still be shown -- as a locked row, not omitted")
+	assert_true(shield_bash_row.disabled, "A locked perk must not be choosable yet")
+
+	var chain_blow_row := _perk_option_button(level_up, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID)
+	assert_not_null(chain_blow_row)
+	assert_true(chain_blow_row.disabled)
+
+
+## Once Discipline is chosen, both branches become real choosable options --
+## no locked rows remain for them.
+func test_a_knights_branch_perks_become_choosable_once_discipline_is_chosen() -> void:
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 350.0)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.WARRIOR_BULWARK_PERK_ID)
+	GameSession.promote_adventurer(GameSession.WARRIOR_ID, "knight")
+	GameSession.choose_perk(GameSession.WARRIOR_ID, GameSession.KNIGHT_DISCIPLINE_PERK_ID)
+	var level_up := _open_level_up(GameSession.WARRIOR_ID, 3)
+
+	var shield_bash_button := _perk_option_button(level_up, GameSession.KNIGHT_SHIELD_BASH_PERK_ID)
+	assert_not_null(shield_bash_button)
+	assert_false(shield_bash_button.disabled)
+	var chain_blow_button := _perk_option_button(level_up, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID)
+	assert_not_null(chain_blow_button)
+	assert_false(chain_blow_button.disabled)
+
+	shield_bash_button.emit_signal("pressed")
+
+	assert_null(
+		level_up.perk_options_container.get_node_or_null("PerkOption_%s" % GameSession.KNIGHT_CHAIN_BLOW_PERK_ID),
+		"Once Shield Bash is chosen and no slot remains pending, the perk section shows nothing at all"
+	)
+
+
 func test_level_up_never_calls_game_manager_or_changes_scenes() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/ui/level_up.gd")
 	assert_false(source.contains("GameManager"))

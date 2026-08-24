@@ -47,6 +47,13 @@ const UnitScript := preload("res://scripts/battle/unit.gd")
 const FloatingTextScript := preload("res://scripts/battle/floating_text.gd")
 const FloatingTextScene := preload("res://scenes/battle/floating_text.tscn")
 const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
+## Stage 6 Step 4 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/04-branching-perk-definitions.md): the bounded perk-effect
+## rule evaluator -- see _unit_has_perk()'s replacement doc comment for why
+## every "does this unit's perk grant this action" gate below now routes
+## through PerkEffectResolverScript.has_granted_action() instead of a
+## hardcoded GameSession.SOME_PERK_ID comparison.
+const PerkEffectResolverScript := preload("res://scripts/battle/perk_effect_resolver.gd")
 
 const GRID_WIDTH := 6
 const GRID_HEIGHT := 6
@@ -391,7 +398,7 @@ func _ready() -> void:
 		player_unit.spellcasting = GameSession.get_effective_spellcasting(adventurer_id)
 		player_unit.magic_resistance = GameSession.get_effective_magic_resistance(adventurer_id)
 		# Stage 5 D4: hydrated so Shield Bash/Chain Blow gate correctly for a
-		# promoted Knight (see Unit.perks' own doc comment/_unit_has_perk()) --
+		# promoted Knight (see Unit.perks' own doc comment/_unit_grants_action()) --
 		# the same adventurer.progression.perks list get_effective_defense()/
 		# get_effective_max_health() already read for Bulwark/Juggernaut, just
 		# copied onto the battle-local unit directly rather than pre-folded
@@ -1181,7 +1188,7 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 	# already carries (Unit.last_attacked_target/last_attacked_round are
 	# populated unconditionally -- see _execute_direct_attack()).
 	var lock_on_applied: bool = (
-		_unit_has_perk(attacker, GameSession.ARCHER_LOCK_ON_PERK_ID)
+		_unit_grants_action(attacker, "lock_on")
 		and attacker.last_attacked_target == defender
 		and attacker.last_attacked_round == current_round - 1
 	)
@@ -1282,7 +1289,7 @@ func try_temporary_guard_selected_unit() -> bool:
 	if is_incapacitated(selected_unit):
 		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit}
 		return false
-	if not _unit_has_perk(selected_unit, GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID):
+	if not _unit_grants_action(selected_unit, "temporary_guard"):
 		return false
 	if has_status(selected_unit, TEMPORARY_GUARD_STATUS_ID):
 		return false
@@ -1312,7 +1319,7 @@ func try_temporary_guard_selected_unit() -> bool:
 ## own the knight_shield_bash perk -- mirrors try_cast_spell()'s own
 ## adventurer_knows_spell()-style gate, just read from Unit.perks instead.
 func try_shield_bash_selected_unit(target_pos: Vector2i) -> bool:
-	if selected_unit == null or not _unit_has_perk(selected_unit, GameSession.KNIGHT_SHIELD_BASH_PERK_ID):
+	if selected_unit == null or not _unit_grants_action(selected_unit, "shield_bash"):
 		return false
 	return _execute_direct_attack(target_pos, true)
 
@@ -1326,7 +1333,7 @@ func try_shield_bash_selected_unit(target_pos: Vector2i) -> bool:
 ## that does not own the archer_called_shot perk -- mirrors try_shield_bash_
 ## selected_unit()'s identical gate.
 func try_called_shot_selected_unit(target_pos: Vector2i) -> bool:
-	if selected_unit == null or not _unit_has_perk(selected_unit, GameSession.ARCHER_CALLED_SHOT_PERK_ID):
+	if selected_unit == null or not _unit_grants_action(selected_unit, "called_shot"):
 		return false
 	return _execute_direct_attack(target_pos, false, true)
 
@@ -1527,7 +1534,7 @@ func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool, is_calle
 	# after the primary strike's own bookkeeping above so a defeated primary
 	# target is already erased from `units` before the second-target search
 	# below (which reads `units`) runs.
-	if hit and is_melee_attack and _unit_has_perk(selected_unit, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID):
+	if hit and is_melee_attack and _unit_grants_action(selected_unit, "chain_blow"):
 		if not selected_unit.chain_blow_used_this_round:
 			var second_target = _find_chain_blow_second_target(selected_unit, target)
 			if second_target != null:
@@ -2317,22 +2324,32 @@ func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
 	return grid.has_line_of_sight(from_pos, target.grid_position, blocking_tiles)
 
 
-## Stage 5 D4 (Knight specialization): true iff `unit` carries perk_id among
-## its own hydrated perks (see Unit.perks' own doc comment -- populated from
-## GameSession.get_adventurer(...).progression.perks in _ready(), or from a
-## scenario's explicit "perks" field in BattleStateFactory._build_player_
-## unit()). Gates Shield Bash/Chain Blow the same way is_caster/knows_*
-## already gate spellcasting in Battlefield._update_action_bar(), just read
-## here instead since these two abilities are melee actions, not spells.
-func _unit_has_perk(unit, perk_id: String) -> bool:
-	return unit != null and (unit.perks as Array).has(perk_id)
+## Stage 5 D4 (Knight specialization): true iff `unit` (never null-checked by
+## itself -- every caller below already guards selected_unit/attacker first)
+## carries a perk among its own hydrated perks (see Unit.perks' own doc
+## comment -- populated from GameSession.get_adventurer(...).progression.
+## perks in _ready(), or from a scenario's explicit "perks" field in
+## BattleStateFactory._build_player_unit()) that GRANTS action_id.
+##
+## Stage 6 Step 4: replaces the old per-perk-id `_unit_has_perk(unit,
+## GameSession.KNIGHT_SHIELD_BASH_PERK_ID)`-shaped ad-hoc boolean branch at
+## every one of this function's 5 call sites with a single PerkEffectResolver
+## lookup keyed by the ACTION the caller needs ("shield_bash"/"chain_blow"/
+## "called_shot"/"temporary_guard"/"lock_on") -- which specific perk id
+## currently grants that action is now PerkCatalog's own data, not a fact
+## repeated at every gate. Gates Shield Bash/Chain Blow/Called Shot/Temporary
+## Guard/Lock On the same way is_caster/knows_* already gate spellcasting in
+## Battlefield._update_action_bar(), just read here instead since these are
+## melee/self actions, not spells.
+func _unit_grants_action(unit, action_id: String) -> bool:
+	return unit != null and PerkEffectResolverScript.has_granted_action(unit.perks, action_id)
 
 
 ## Stage 5 D4 (Paladin specialization): true iff `unit` is itself a promoted
 ## Paladin (see Unit.specialization's own doc comment -- hydrated from
 ## GameSession.get_adventurer_specialization() in _ready(), or from a
 ## scenario's explicit "specialization" field in BattleStateFactory._build_
-## player_unit()). Unlike _unit_has_perk() above, Paladin owns no perk id at
+## player_unit()). Unlike _unit_grants_action() above, Paladin owns no perk id at
 ## all -- its ability is keyed purely to caster identity -- so try_cast_
 ## spell()'s "bless" match arm reads this directly instead.
 func _unit_is_paladin(unit) -> bool:

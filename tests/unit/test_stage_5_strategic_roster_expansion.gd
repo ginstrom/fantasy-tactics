@@ -180,8 +180,17 @@ func test_stage_5_slices_compose_across_one_real_campaign_journey() -> void:
 	assert_true(GameSession.choose_perk(KNIGHT_ID, GameSession.WARRIOR_BULWARK_PERK_ID))
 	assert_true(GameSession.get_available_specializations(KNIGHT_ID).has("knight"), "Setup: both root perks chosen must open Knight promotion eligibility")
 	assert_true(GameSession.promote_adventurer(KNIGHT_ID, "knight"))
+	# Stage 6 Step 4 (G3, decision-ledger.md): Shield Bash and Chain Blow are
+	# now a mutually exclusive branch pair gated behind the shared "knight_
+	# discipline" tier-1 node -- a real Knight can hold Discipline plus
+	# EXACTLY ONE of the two, never both (see PerkCatalogScript's own doc
+	# comment). This journey picks Discipline then Shield Bash; Part 6b below
+	# demonstrates Shield Bash landing on this real roster Knight only --
+	# Chain Blow's own resolution mechanics are already covered exhaustively
+	# by test_battle_controller.gd's dedicated Chain Blow suite, and are no
+	# longer representable on the SAME real Knight this journey fields.
+	assert_true(GameSession.choose_perk(KNIGHT_ID, GameSession.KNIGHT_DISCIPLINE_PERK_ID))
 	assert_true(GameSession.choose_perk(KNIGHT_ID, GameSession.KNIGHT_SHIELD_BASH_PERK_ID))
-	assert_true(GameSession.choose_perk(KNIGHT_ID, GameSession.KNIGHT_CHAIN_BLOW_PERK_ID))
 	assert_eq(GameSession.get_adventurer_specialization(KNIGHT_ID), "knight")
 
 	# CampaignSim's own _run_encampment_phase() (Part 2 above) already spends
@@ -307,41 +316,30 @@ func test_stage_5_slices_compose_across_one_real_campaign_journey() -> void:
 	assert_true(mage_dead_ids.is_empty(), "Setup: the Mage/escort pairing must not lose anyone against a single Orc")
 	assert_true(GameSession.get_current_health(MAGE_ID) > 0)
 
-	# --- 6b. Promoted Knight vs. its composition-dependent counter (D4) -----
-	var knight_favorable_controller: Node2D = BattleStateFactoryScript.build(_knight_scenario(2), 1)
-	autofree(knight_favorable_controller)
-	var knight_unit = knight_favorable_controller.get_unit_at(Vector2i(0, 0))
-	var primary_kobold = knight_favorable_controller.get_unit_at(Vector2i(1, 0))
-	var second_kobold = knight_favorable_controller.get_unit_at(Vector2i(1, 1))
-	knight_favorable_controller.selected_unit = knight_unit
-	knight_favorable_controller.hit_roll = func() -> float: return 0.0
-	knight_favorable_controller.crit_roll = func() -> float: return 1.0
-	assert_true(knight_favorable_controller.try_shield_bash_selected_unit(primary_kobold.grid_position))
-	assert_true(knight_favorable_controller.last_attack_result.hit)
-	assert_true(primary_kobold.off_balance_pending, "A landed Shield Bash must off-balance its target")
-	assert_false(knight_favorable_controller.last_chain_blow_result.is_empty(), "A clustered composition must let Chain Blow find a second target")
-	assert_eq(knight_favorable_controller.last_chain_blow_result.defender, second_kobold)
+	# --- 6b. Promoted Knight's chosen branch, Shield Bash (D4/G3) -----------
+	# Stage 6 Step 4 (G3): this journey's real roster Knight holds Discipline
+	# + Shield Bash only (see Part 3's own doc comment above) -- Chain Blow's
+	# composition-dependent counter demonstration (clustered vs. solitary
+	# kobolds) that used to run against this SAME Knight is no longer
+	# representable now that the two are mutually exclusive on one
+	# adventurer; Chain Blow's own resolution mechanics (including its
+	# composition-dependent second-target counter) are already covered
+	# exhaustively by test_battle_controller.gd's dedicated Chain Blow suite.
+	# This section keeps proving what this journey is actually responsible
+	# for: the real roster's chosen ability threads through BattleStateFactory
+	# and resolves correctly in a real battle.
+	var knight_controller: Node2D = BattleStateFactoryScript.build(_knight_scenario(1), 1)
+	autofree(knight_controller)
+	var knight_unit = knight_controller.get_unit_at(Vector2i(0, 0))
+	var target_kobold = knight_controller.get_unit_at(Vector2i(1, 0))
+	knight_controller.selected_unit = knight_unit
+	knight_controller.hit_roll = func() -> float: return 0.0
+	knight_controller.crit_roll = func() -> float: return 1.0
+	assert_true(knight_controller.try_shield_bash_selected_unit(target_kobold.grid_position))
+	assert_true(knight_controller.last_attack_result.hit)
+	assert_true(target_kobold.off_balance_pending, "A landed Shield Bash must off-balance its target")
 
-	# The counter: the exact same promoted Knight against a solitary enemy --
-	# Shield Bash still lands, but Chain Blow (present on the Knight either
-	# way) finds nothing to strike. A real counterplay interaction, not a
-	# flat stat check: composition, not the Knight's own numbers, decides
-	# whether Chain Blow pays off.
-	var knight_countered_controller: Node2D = BattleStateFactoryScript.build(_knight_scenario(1), 1)
-	autofree(knight_countered_controller)
-	var solitary_knight_unit = knight_countered_controller.get_unit_at(Vector2i(0, 0))
-	var solitary_kobold = knight_countered_controller.get_unit_at(Vector2i(1, 0))
-	knight_countered_controller.selected_unit = solitary_knight_unit
-	knight_countered_controller.hit_roll = func() -> float: return 0.0
-	knight_countered_controller.crit_roll = func() -> float: return 1.0
-	assert_true(knight_countered_controller.try_shield_bash_selected_unit(solitary_kobold.grid_position))
-	assert_true(knight_countered_controller.last_attack_result.hit, "Shield Bash itself is unaffected by the solitary composition")
-	assert_true(
-		knight_countered_controller.last_chain_blow_result.is_empty(),
-		"A solitary enemy denies Chain Blow's bonus strike entirely -- the counter this composition-dependent perk carries"
-	)
-
-	var knight_dead_ids := sim._persist_battle_state(knight_favorable_controller)
+	var knight_dead_ids := sim._persist_battle_state(knight_controller)
 	assert_true(knight_dead_ids.is_empty())
 	assert_true(GameSession.get_current_health(KNIGHT_ID) > 0)
 

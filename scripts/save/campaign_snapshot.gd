@@ -42,6 +42,19 @@ const _QUEST_STATUSES := ["posted", "active", "completed", "expired"]
 ## contract depends on the constant table, not on the autoload existing.
 const _GameSessionScript := preload("res://scripts/autoload/game_session.gd")
 
+## Stage 6 Step 4 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/04-branching-perk-definitions.md): the DAG-shaped
+## PerkDefinition catalog -- see _validate_perks_field()'s own doc comment.
+## Reached the same "preload the script itself, a compile-time constant
+## lookup" way as _GameSessionScript immediately above (PerkCatalog is
+## already a pure, singleton-free script -- see its own doc comment), rather
+## than through _GameSessionScript.CLASS_PERKS/SPECIALIZATION_PERKS: those
+## are now plain (non-const) vars generated FROM this same catalog at
+## GameSession construction time, which a bare Script reference (no live
+## instance) cannot resolve -- reading PerkCatalog directly here is both the
+## fix for that and the more correct source to read to begin with.
+const _PerkCatalogScript := preload("res://scripts/progression/perk_catalog.gd")
+
 var adventurers: Array[Dictionary] = []
 var recruitment_candidates: Array[Dictionary] = []
 var recruitment_vacancies: Array[Dictionary] = []
@@ -564,19 +577,19 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 		# merely stats.max_health. Clamping to the base alone would silently
 		# clip a perked holder's stored health back down on every save/load
 		# round trip (docs/plans/2026-08-21-stage-2-party-readiness/
-		# 02-class-progression-and-perks.md review finding). Reads the two
-		# percentages straight from GameConfig rather than the live
-		# GameSession singleton (see EXPEDITIONS' own doc comment above for
-		# why this file avoids that stateful autoload), so this stays a pure
-		# normalization needing no session state.
+		# 02-class-progression-and-perks.md review finding). Stage 6 Step 4:
+		# compute_effective_max_health() itself now delegates to
+		# PerkEffectResolver, which reads PerkCatalog's own percent_bonus
+		# straight from GameConfig -- this file no longer threads the two
+		# percentages through by hand, but still calls the static
+		# GameSessionScript reference rather than the live GameSession
+		# singleton (see EXPEDITIONS' own doc comment above for why this file
+		# avoids that stateful autoload), so this stays a pure normalization
+		# needing no session state.
 		var perks: Array = []
 		if copy.get("progression") is Dictionary and (copy.progression as Dictionary).get("perks") is Array:
 			perks = (copy.progression as Dictionary).perks
-		var juggernaut_percent := GameConfig.get_int("progression", "warrior_juggernaut_hp_percent", 15)
-		var devout_percent := GameConfig.get_int("progression", "cleric_devout_hp_percent", 10)
-		var max_hp: int = _GameSessionScript.compute_effective_max_health(
-			int(stats.max_health), perks, juggernaut_percent, devout_percent
-		)
+		var max_hp: int = _GameSessionScript.compute_effective_max_health(int(stats.max_health), perks)
 		if copy.has("health"):
 			copy["health"] = clampi(int(copy.health), 1, max_hp)
 		else:
@@ -605,16 +618,27 @@ static func _normalize_roster_records(records: Array[Dictionary]) -> Array[Dicti
 ## GameSession.BONUS_MOVE_PERK_ID (the retired-but-still-valid legacy
 ## universal perk -- see GameSession.choose_perk()'s doc comment for why it
 ## is never migrated away from an existing holder), one of the record's own
-## class's perk ids (GameSession.CLASS_PERKS), or -- once promoted, Stage 5
-## D4 -- one of the record's own "specialization" field's perk ids
-## (GameSession.SPECIALIZATION_PERKS, e.g. Knight's Shield Bash/Chain Blow);
-## a perk belonging to a different class/specialization, or any other
-## unrecognized id, fails the *whole* snapshot atomically here rather than
-## being silently dropped from just that record. A record with no
-## progression field, or a progression with no perks field (legacy pre-
-## progression saves), is left alone -- only a present perks array is
-## checked. Returns "" when every record passes, or the first failure's
-## error message.
+## class's perk ids, or -- once promoted, Stage 5 D4 -- one of the record's
+## own "specialization" field's perk ids (e.g. Knight's Shield Bash/Chain
+## Blow) -- read from PerkCatalog.get_scope_ids() (Stage 6 Step 4) rather
+## than GameSession's own CLASS_PERKS/SPECIALIZATION_PERKS vars, since this
+## file deliberately never touches the live GameSession singleton. A perk
+## belonging to a different class/specialization, or any other unrecognized
+## id, fails the *whole* snapshot atomically here rather than being silently
+## dropped from just that record.
+##
+## Stage 6 Step 4 (task 7): ALSO requires the chosen set to be a legally
+## reachable perk graph -- PerkCatalog.is_valid_perk_graph() rejects a
+## prerequisite chosen out of order (Shield Bash/Chain Blow without Discipline
+## first) and, critically, a saved perk list naming BOTH halves of a mutually
+## exclusive pair (e.g. a hand-edited save claiming both Shield Bash AND
+## Chain Blow) -- that adversarial case is exactly what a player could
+## otherwise smuggle in through a hand-edited or corrupted save file, since
+## nothing else in this file's normalization pass would catch it (ownership
+## alone permits either id individually). A record with no progression
+## field, or a progression with no perks field (legacy pre-progression
+## saves), is left alone -- only a present perks array is checked. Returns ""
+## when every record passes, or the first failure's error message.
 static func _validate_perks_field(records: Array[Dictionary], field_name: String) -> String:
 	for record in records:
 		var progression: Variant = record.get("progression")
@@ -624,10 +648,10 @@ static func _validate_perks_field(records: Array[Dictionary], field_name: String
 		if not perks is Array:
 			return "%s entry %s has a non-array perks field" % [field_name, record.get("id", "?")]
 		var class_id := str(record.get("class", "warrior"))
-		var valid_ids: Array = (_GameSessionScript.CLASS_PERKS.get(class_id, []) as Array).duplicate()
+		var valid_ids: Array = _PerkCatalogScript.get_scope_ids(class_id)
 		var specialization_id := str(record.get("specialization", ""))
 		if not specialization_id.is_empty():
-			valid_ids.append_array(_GameSessionScript.SPECIALIZATION_PERKS.get(specialization_id, []))
+			valid_ids.append_array(_PerkCatalogScript.get_scope_ids(specialization_id))
 		var seen: Dictionary = {}
 		for perk_id in perks as Array:
 			if not perk_id is String:
@@ -638,6 +662,19 @@ static func _validate_perks_field(records: Array[Dictionary], field_name: String
 			if seen.has(id):
 				return "%s entry %s has a duplicate perk id: %s" % [field_name, record.get("id", "?"), id]
 			seen[id] = true
+		# DAG-integrity/mutual-exclusion check (task 7): BONUS_MOVE_PERK_ID is
+		# not part of PerkCatalog's own DAG (it is a "legacy" scope id -- see
+		# PerkCatalogScript's own doc comment), so it is excluded from this
+		# check the same way it is excluded from ordinary ownership above.
+		var dag_checked_perks: Array = []
+		for perk_id in perks as Array:
+			if String(perk_id) != _GameSessionScript.BONUS_MOVE_PERK_ID:
+				dag_checked_perks.append(perk_id)
+		if not _PerkCatalogScript.is_valid_perk_graph(dag_checked_perks):
+			return (
+				"%s entry %s has an unreachable perk graph (a missing prerequisite or two mutually exclusive perks chosen together): %s"
+				% [field_name, record.get("id", "?"), perks]
+			)
 	return ""
 
 
