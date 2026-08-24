@@ -419,3 +419,40 @@ D5 (multi-party: cap of 2 gated on Guild Hall level 3, the existing
 threat-star mechanic made config-backed with a new turns-until-escalation
 counter, and a click-order battle tie-break) approved with the user
 2026-08-24 ahead of Step 6 — recorded above.
+
+**Known limitation, accepted 2026-08-24 (user):** `pending_reward`/
+`pending_gear`/`pending_mana_crystals` (`game_session.gd`) remain single
+campaign-wide "loot in transit" buckets, not attributes of each party.
+A single battle's own reward is never misattributed — only one party can
+hold the active battle claim at a time (`active_battle_party_id`) — but if
+two parties are simultaneously carrying unbanked loot toward the Encampment
+after separate encounters, it pools into one shared bucket rather than
+staying separate per party. **The correct fix is to make these three fields
+attributes of each entry in `parties` — the same way `member_ids`/
+`travel_route` already are — rather than campaign-wide globals**, not to
+add ad hoc cross-party guards. That touches roughly ten files outside Step
+6's declared list (`party_details.gd`, `victory_screen.gd`,
+`battle_result.gd`, `campaign_sim.gd`, and others that read the shared
+fields), which is why it was scoped out of Step 6 rather than fixed inline.
+A matching doc comment is planted directly above `pending_reward`'s
+declaration in `game_session.gd` so the fix direction is visible at the
+point a future step would actually touch. The user explicitly chose to
+leave this as scoped rather than expand Step 6 to cover it; revisit if it
+proves to matter in play, and before Step 7's exit gate treats "no
+battle/quest/objective state is attributed to the wrong party" as fully
+proven for the loot-in-transit case specifically.
+
+**Arrival-visibility clarification, approved 2026-08-24 (user).** Independent
+review found `world_map.gd`'s `_check_for_arrival()` only checks the
+currently-selected party's tile on End Turn, so a non-selected party arriving
+at a live encounter the same turn never auto-opens its arrival panel — the
+player would have to manually click that party's marker to notice, risking a
+missed quest/threat window. Approved resolution: on End Turn, if a
+non-selected deployed party has arrived at a live encounter, selection
+auto-switches to it and its arrival panel opens immediately — the same
+behavior single-party play already has, extended to whichever party actually
+arrived. Given the party cap is 2 (see above), if both parties arrive
+simultaneously the already-selected party's own arrival panel takes priority
+(existing behavior unchanged); the other party's arrival is picked up on the
+player's next click, same as today for any change made to a non-selected
+party.

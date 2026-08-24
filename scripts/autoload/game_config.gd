@@ -109,6 +109,13 @@ const DEFAULTS: Dictionary = {
 		"quest_tier_cap_level_4": 5,
 		"scout_scouting_skill": 20,
 	},
+	# Stage 5 D5 (decision-ledger.md, Step 6): the pre-existing threat-star
+	# escalation interval (see GameSession.get_threat_stars()), finally
+	# GameConfig-backed rather than a plain constant -- the value itself is
+	# unchanged, only its home moves. See GameSession.THREAT_TURN_INTERVAL.
+	"world_map": {
+		"threat_turn_interval": 15,
+	},
 }
 
 var _data: Dictionary = {}

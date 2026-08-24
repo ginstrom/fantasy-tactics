@@ -96,5 +96,8 @@
 		"quest_tier_cap_level_3": 4,
 		"quest_tier_cap_level_4": 5,
 		"scout_scouting_skill": 20
+	},
+	"world_map": {
+		"threat_turn_interval": 15
 	}
 }

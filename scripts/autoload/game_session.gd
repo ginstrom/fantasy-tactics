@@ -1404,6 +1404,19 @@ var recruitment_vacancies: Array[Dictionary] = []
 var parties: Array[Dictionary] = []
 var selected_party_id: String = ""
 var selected_encounter: String = ""
+## Battle-party tie-break (Stage 5 D5, decision-ledger.md): whichever party's
+## Enter GameManager.enter_battle() claims first owns the single active
+## battle (relying on the existing single-BattleController-instance
+## invariant -- no per-party lock/ownership field is added to the parties
+## array itself). "" means no battle is currently claimed. Deliberately NOT
+## part of CampaignSnapshot: a save is only ever possible while
+## selected_encounter == "" (see GameManager.can_save_current_campaign()),
+## and this is only ever non-empty for the same window selected_encounter is
+## non-empty (claimed in GameManager.enter_battle(), released in
+## complete_battle()/fail_battle()/retreat_from_battle()), so it can never be
+## non-empty at a point a save could actually happen. Never reset except by
+## reset() itself -- see release_battle_claim().
+var active_battle_party_id: String = ""
 # Injectable so tests can force a specific composition (see hit_roll on
 # BattleController for the same pattern) instead of depending on real
 # randomness. Never reset by reset() — every call site that needs a specific
@@ -1618,6 +1631,24 @@ var alchemy_workshop_level: int = 0
 var alchemy_craft_job: Dictionary = {}
 var runic_workshop_level: int = 0
 var runic_craft_job: Dictionary = {}
+## KNOWN LIMITATION (Stage 5 D5, decision-ledger.md, accepted by the user
+## 2026-08-24, not fixed in Step 6 -- see the Step 6 entry there for the
+## full writeup): pending_reward/pending_mana_crystals/pending_gear below
+## are single campaign-wide "loot in transit" buckets, not fields on each
+## entry in `parties`. Now that get_max_party_count() can return 2
+## (Step 6), two parties can each be independently travelling home with
+## their own unbanked battle reward at once, and this shared-bucket shape
+## pools them together instead of keeping them separate per party. A single
+## battle's own reward is never misattributed at the moment it's earned
+## (active_battle_party_id only ever lets one party hold the active battle
+## claim at a time), so this is a real but narrow gap: it only bites during
+## the post-battle travel-home window with two unbanked rewards in flight
+## together. The correct fix is to make these three fields attributes of
+## each party dictionary in `parties` (like member_ids/travel_route already
+## are) rather than campaign-wide globals; that touches every reader,
+## including party_details.gd, victory_screen.gd, battle_result.gd, and
+## campaign_sim.gd, which is why it was scoped out of Step 6 rather than
+## fixed inline.
 var pending_reward: int = 0
 var mana_crystals: Dictionary = {}
 var banked_gear: Dictionary = {}
@@ -1718,6 +1749,7 @@ func _load_balance_config() -> void:
 	QUEST_TIER_CAP_LEVEL_3 = GameConfig.get_int("intelligence", "quest_tier_cap_level_3", QUEST_TIER_CAP_LEVEL_3)
 	QUEST_TIER_CAP_LEVEL_4 = GameConfig.get_int("intelligence", "quest_tier_cap_level_4", QUEST_TIER_CAP_LEVEL_4)
 	SCOUT_SCOUTING_SKILL = GameConfig.get_int("intelligence", "scout_scouting_skill", SCOUT_SCOUTING_SKILL)
+	THREAT_TURN_INTERVAL = GameConfig.get_int("world_map", "threat_turn_interval", THREAT_TURN_INTERVAL)
 
 
 func start_new_game(new_player_name: String = DEFAULT_PLAYER_NAME) -> void:
@@ -1743,6 +1775,7 @@ func reset() -> void:
 	parties = []
 	selected_party_id = ""
 	selected_encounter = ""
+	active_battle_party_id = ""
 	campaign_objective_id = "obj_tier1_1_goblin_outpost"
 	completed_objectives = []
 	unlocked_authored_encounters = ["obj_tier1_1_goblin_outpost"]
@@ -1795,20 +1828,30 @@ func reset() -> void:
 	tutorial_progress = {}
 
 
-## Maximum number of parties a campaign may have at once. The Guild Hall
-## level 2 -> 3 upgrade raising this from 1 to 2 is a recorded progression
-## rule, but its implementation is deferred to roadmap part 4 (multi-party
-## play) — see the onboarding decision recorded in docs/gap-analysis.md.
+## Maximum number of parties a campaign may have at once (Stage 5 D5,
+## decision-ledger.md): 1 below Guild Hall level GUILD_HALL_MAX_LEVEL (today's
+## behavior, unchanged), 2 once it reaches that top tier. Reuses the existing
+## top-tier gate rather than a new threshold -- this function's own prior
+## doc comment already named the Guild Hall level 2 -> 3 upgrade as the
+## intended trigger for this raise.
 func get_max_party_count() -> int:
-	return 1
+	return 2 if guild_hall_level >= GUILD_HALL_MAX_LEVEL else 1
+
+
+## Mints the next sequential party id ("party_001", "party_002", ...) --
+## FIRST_PARTY_ID names exactly the first of these, kept as its own constant
+## since it is referenced by id throughout the codebase and test suite.
+func _new_party_id() -> String:
+	return "party_%03d" % (parties.size() + 1)
 
 
 func create_party(party_name: String = "Party 1") -> bool:
 	if parties.size() >= get_max_party_count():
 		return false
 
+	var party_id := _new_party_id()
 	parties.append({
-		"id": FIRST_PARTY_ID,
+		"id": party_id,
 		"member_ids": [] as Array[String],
 		"location_id": STARTING_SETTLEMENT_ID,
 		"world_position": STARTING_SETTLEMENT_WORLD_POSITION,
@@ -1821,7 +1864,19 @@ func create_party(party_name: String = "Party 1") -> bool:
 		# TBD: free-form party metadata. Placeholder only.
 		"metadata": {},
 	})
-	selected_party_id = FIRST_PARTY_ID
+	selected_party_id = party_id
+	return true
+
+
+## Switches which party the World Map (and every other "selected party"
+## reader -- see the no-arg overloads of has_deployed_party()/
+## get_deployed_party_position()/etc. below) treats as "the" party, without
+## deploying, moving, or otherwise mutating anything. False (no change) for
+## an unknown party id.
+func select_party(party_id: String) -> bool:
+	if _get_party_index(party_id) == -1:
+		return false
+	selected_party_id = party_id
 	return true
 
 
@@ -1865,6 +1920,19 @@ func get_encamped_parties() -> Array[Dictionary]:
 		if _is_party_encamped(party):
 			encamped.append(party.duplicate(true))
 	return encamped
+
+
+## Every currently deployed party (out in the field), regardless of
+## eligibility for anything else -- the multi-party counterpart to
+## get_encamped_parties() (Stage 5 D5): used by the World Map to render every
+## deployed party's own marker/route, not only the selected one, and by the
+## Send Party modal to list every party a new destination could be sent to.
+func get_deployed_parties() -> Array[Dictionary]:
+	var deployed: Array[Dictionary] = []
+	for party in parties:
+		if bool(party.get("deployed", false)):
+			deployed.append(party.duplicate(true))
+	return deployed
 
 
 func deploy_party(party_id: String) -> bool:
@@ -2088,56 +2156,70 @@ func depart_selected_party() -> bool:
 	return true
 
 
-func has_deployed_party() -> bool:
-	var party := get_selected_party()
+## Resolves an explicit-or-defaulted party id: every travel/position/route
+## function below takes an optional party_id, defaulting to "" which resolves
+## to selected_party_id -- the audited replacement for this file's former
+## single-selected-party-only assumption (Stage 5 D5, decision-ledger.md).
+## This keeps every pre-existing no-arg call site (world_map.gd,
+## campaign_guide's triggers, etc.) working unchanged against "the" (selected)
+## party, while multi-party-aware callers (end_world_turn() below, the World
+## Map's Send Party flow) pass an explicit id for a party that may not be
+## selected at all.
+func _resolve_party_id(party_id: String) -> String:
+	return party_id if party_id != "" else selected_party_id
+
+
+func has_deployed_party(party_id: String = "") -> bool:
+	var party := get_party(_resolve_party_id(party_id))
 	return not party.is_empty() and party.deployed
 
 
-func get_deployed_party_position() -> Vector2i:
-	if not has_deployed_party():
+func get_deployed_party_position(party_id: String = "") -> Vector2i:
+	if not has_deployed_party(party_id):
 		return STARTING_SETTLEMENT_WORLD_POSITION
-	return get_selected_party().world_position
+	return get_party(_resolve_party_id(party_id)).world_position
 
 
-func set_deployed_party_position(position: Vector2i) -> bool:
-	if not has_deployed_party():
+func set_deployed_party_position(position: Vector2i, party_id: String = "") -> bool:
+	if not has_deployed_party(party_id):
 		return false
 
-	parties[_get_selected_party_index()].world_position = position
+	parties[_get_party_index(_resolve_party_id(party_id))].world_position = position
 	return true
 
 
-func get_deployed_party_route() -> Array[Vector2i]:
-	if not has_deployed_party():
+func get_deployed_party_route(party_id: String = "") -> Array[Vector2i]:
+	if not has_deployed_party(party_id):
 		return []
-	return get_selected_party().travel_route
+	return get_party(_resolve_party_id(party_id)).travel_route
 
 
-func set_deployed_party_route(route: Array[Vector2i]) -> bool:
-	if not has_deployed_party() or route.is_empty():
+func set_deployed_party_route(route: Array[Vector2i], party_id: String = "") -> bool:
+	if not has_deployed_party(party_id) or route.is_empty():
 		return false
 
-	var previous: Vector2i = get_selected_party().world_position
+	var resolved_id := _resolve_party_id(party_id)
+	var previous: Vector2i = get_party(resolved_id).world_position
 	for step in route:
 		if _grid_distance(previous, step) != 1:
 			return false
 		previous = step
 
-	parties[_get_selected_party_index()].travel_route = route
+	parties[_get_party_index(resolved_id)].travel_route = route
 	return true
 
 
-func clear_deployed_party_route() -> void:
-	if not has_deployed_party():
+func clear_deployed_party_route(party_id: String = "") -> void:
+	if not has_deployed_party(party_id):
 		return
-	parties[_get_selected_party_index()].travel_route = [] as Array[Vector2i]
+	parties[_get_party_index(_resolve_party_id(party_id))].travel_route = [] as Array[Vector2i]
 
 
-func take_next_route_step() -> bool:
-	if not has_deployed_party():
+func take_next_route_step(party_id: String = "") -> bool:
+	if not has_deployed_party(party_id):
 		return false
 
-	var party_index := _get_selected_party_index()
+	var party_index := _get_party_index(_resolve_party_id(party_id))
 	var party: Dictionary = parties[party_index]
 	if party.movement_spent or party.travel_route.is_empty():
 		return false
@@ -2149,6 +2231,12 @@ func take_next_route_step() -> bool:
 	return true
 
 
+## Advances one World Map Turn for every deployed party at once, not only the
+## selected one (Stage 5 D5): each deployed party auto-steps its own unspent
+## route independently, and every deployed party's movement_spent resets
+## together, so a non-selected party keeps travelling exactly like the
+## selected one does. Returns true if ANY party auto-moved, matching the
+## previous single-party return contract world_map.gd's debug logging reads.
 func end_world_turn() -> bool:
 	# A selected encounter is the durable marker for an unresolved battle. The
 	# World Map may be opened to inspect it, but time cannot pass until the
@@ -2157,8 +2245,10 @@ func end_world_turn() -> bool:
 		return false
 
 	var auto_moved := false
-	if has_deployed_party() and not get_selected_party().movement_spent:
-		auto_moved = take_next_route_step()
+	for party in parties:
+		if bool(party.get("deployed", false)) and not bool(party.get("movement_spent", false)):
+			if take_next_route_step(str(party.id)):
+				auto_moved = true
 
 	world_turn += 1
 	_advance_blacksmith_jobs()
@@ -2169,8 +2259,9 @@ func end_world_turn() -> bool:
 	if shop_level >= 1 and world_turn % 10 == 0:
 		shop_gold = max(shop_gold, shop_gold_cap())
 	_apply_natural_recovery()
-	if has_deployed_party():
-		parties[_get_selected_party_index()].movement_spent = false
+	for party_index in parties.size():
+		if bool(parties[party_index].get("deployed", false)):
+			parties[party_index].movement_spent = false
 	_advance_intelligence_and_quests()
 	_advance_encounter_vacancies()
 	_advance_recruitment_vacancies()
@@ -2189,11 +2280,11 @@ func _shop_income_per_turn() -> int:
 	return SHOP_INCOME_PER_TURN
 
 
-func return_deployed_party_to_settlement() -> bool:
-	if not has_deployed_party():
+func return_deployed_party_to_settlement(party_id: String = "") -> bool:
+	if not has_deployed_party(party_id):
 		return false
 
-	var party_index := _get_selected_party_index()
+	var party_index := _get_party_index(_resolve_party_id(party_id))
 	parties[party_index].deployed = false
 	parties[party_index].location_id = STARTING_SETTLEMENT_ID
 	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
@@ -2288,6 +2379,37 @@ func can_enter_encounter(encounter_id: String) -> bool:
 	if not is_authored_encounter(encounter_id):
 		return true
 	return unlocked_authored_encounters.has(encounter_id) and not completed_encounters.has(encounter_id)
+
+
+## True when party_id may enter/continue the single active battle: no battle
+## is currently claimed, or party_id itself already owns it (re-entering its
+## own claim is always legal, e.g. a debug re-launch mid-battle). False for
+## any other party while a different one holds the claim -- see
+## claim_battle_for_party()/release_battle_claim().
+func can_party_enter_battle(party_id: String) -> bool:
+	return active_battle_party_id == "" or active_battle_party_id == party_id
+
+
+## Claims the single active battle for party_id. Returns false (no state
+## change) if a different party already holds the claim -- GameManager.
+## enter_battle() must check this before ever changing scene to Battlefield,
+## and world_map.gd's arrival panel disables Enter accordingly (Stage 5 D5's
+## approved battle-party tie-break: "whichever party's Enter the player
+## clicks first claims the active battle; the other party's Enter stays
+## visible but disabled until that battle resolves").
+func claim_battle_for_party(party_id: String) -> bool:
+	if not can_party_enter_battle(party_id):
+		return false
+	active_battle_party_id = party_id
+	return true
+
+
+## Releases the current battle claim, if any -- called from every path that
+## ends a battle (GameManager.complete_battle()/fail_battle()/
+## retreat_from_battle()), so the next Enter click (from either party) can
+## claim a fresh battle.
+func release_battle_claim() -> void:
+	active_battle_party_id = ""
 
 
 func enter_encounter(encounter_id: String) -> void:
@@ -2963,18 +3085,34 @@ func get_expedition(encounter_id: String) -> Dictionary:
 ## Every THREAT_TURN_INTERVAL world turns elapsed adds one star on top of an
 ## encounter's own base "difficulty", clamped to the 1-5 range World Map
 ## markers render (docs/plans/2026-08-18-core-loop-and-engagement/
-## 05-authored-encounters-and-final-boss.md). A tunable constant, not
-## GameConfig-backed like the balance vars above it in this file -- Step 6's
-## simulation/balance harness is the step that revisits its exact value.
-## Returns 1 for an unknown encounter id, matching get_expedition()'s own
-## "difficulty" fallback.
-const THREAT_TURN_INTERVAL := 15
+## 05-authored-encounters-and-final-boss.md). GameConfig-backed (Stage 5 D5,
+## decision-ledger.md, Step 6) -- see _load_balance_config()'s own
+## "world_map"/"threat_turn_interval" read; the value itself (15) is
+## unchanged, only its home moves out of a plain code constant. Returns 1 for
+## an unknown encounter id, matching get_expedition()'s own "difficulty"
+## fallback.
+var THREAT_TURN_INTERVAL: int = 15
 
 
 func get_threat_stars(encounter_id: String) -> int:
 	var expedition := get_expedition(encounter_id)
 	var base_difficulty: int = int(expedition.get("difficulty", 1))
 	return clampi(base_difficulty + int(world_turn / THREAT_TURN_INTERVAL), 1, 5)
+
+
+## World Map/information-panel "turns until next threat star" counter (Stage
+## 5 D5's approved time-escalation value): how many more World Map Turns
+## until get_threat_stars(encounter_id) would rise by one more star, mirroring
+## that function's own THREAT_TURN_INTERVAL math exactly rather than
+## re-deriving a separate formula. Returns -1 once the encounter's stars are
+## already clamped at 5 -- there is no further escalation left to count down
+## to, so the UI must not claim one is coming (see get_threat_stars()'s own
+## clampi upper bound).
+func get_turns_until_next_threat_star(encounter_id: String) -> int:
+	if get_threat_stars(encounter_id) >= 5:
+		return -1
+	var next_interval_turn := (int(world_turn / THREAT_TURN_INTERVAL) + 1) * THREAT_TURN_INTERVAL
+	return next_interval_turn - world_turn
 
 
 ## Scout strategic reconnaissance (docs/plans/2026-08-18-core-loop-and-
@@ -5131,6 +5269,12 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 		return result
 
 	var snapshot: Dictionary = result.snapshot
+	var party_membership_error := _validate_party_membership_state(snapshot)
+	if not party_membership_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": party_membership_error}
+	var party_route_error := _validate_party_route_state(snapshot)
+	if not party_route_error.is_empty():
+		return {"ok": false, "snapshot": {}, "error": party_route_error}
 	var campaign_completion_error := _validate_campaign_completion_state(snapshot)
 	if not campaign_completion_error.is_empty():
 		return {"ok": false, "snapshot": {}, "error": campaign_completion_error}
@@ -5197,6 +5341,46 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
 	_backfill_missing_intel_records()
 	return result
+
+
+## Stage 5 D5 (decision-ledger.md, Step 6 task 1): "a party may never share an
+## adventurer with another party" -- CampaignSnapshot.from_dictionary() checks
+## each party's own shape (see _normalize_party()) but has no cross-party
+## concept, so a hand-edited or corrupted multi-party save could otherwise
+## import two parties both claiming the same adventurer id. Structurally
+## impossible to reach through normal play (assign_adventurer_to_party()/
+## _is_adventurer_assigned() already forbid it at runtime), but import must
+## still reject it atomically, exactly like every other malformed-field
+## rejection in this pipeline.
+func _validate_party_membership_state(snapshot: Dictionary) -> String:
+	var claimed_by: Dictionary = {}
+	for party in snapshot.parties:
+		for raw_member_id in party.member_ids:
+			var member_id := str(raw_member_id)
+			if claimed_by.has(member_id):
+				return "adventurer %s is assigned to more than one party (%s and %s)" % [
+					member_id, claimed_by[member_id], party.id
+				]
+			claimed_by[member_id] = party.id
+	return ""
+
+
+## Stage 5 D5 (Step 6 task 1): "malformed... route imports must fail
+## transactionally". CampaignSnapshot.from_dictionary() already validates
+## each travel_route step's own shape (a real Vector2i), but not that
+## consecutive steps -- starting from the party's own world_position -- are
+## reachable one cardinal tile at a time, the same adjacency
+## set_deployed_party_route() enforces at runtime. A hand-edited or corrupted
+## save could otherwise silently teleport a party; reject the whole import
+## atomically instead.
+func _validate_party_route_state(snapshot: Dictionary) -> String:
+	for party in snapshot.parties:
+		var previous: Vector2i = party.world_position
+		for step in party.travel_route:
+			if _grid_distance(previous, step) != 1:
+				return "party %s has a non-adjacent travel_route step" % party.id
+			previous = step
+	return ""
 
 
 ## set_campaign_victory() is the only place real play ever sets is_free_play_

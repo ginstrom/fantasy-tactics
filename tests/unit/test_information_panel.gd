@@ -114,6 +114,52 @@ func test_a_bare_refresh_hides_the_party_gold_row_again() -> void:
 	assert_false(panel.get_node("Content/PartyGold").visible)
 
 
+## Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future multi-party
+## model": "Selecting a party shows its destination and remaining travel time
+## in the right information panel." Resolved entirely from GameSession's own
+## records (route destination -> a live encounter/authored-node name, or the
+## Encampment) rather than needing world_map.gd to pass anything extra in.
+func test_refresh_party_shows_the_deployed_partys_destination_and_turns_remaining() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var goblin_camp: Dictionary = GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID)
+	# Settlement (3, 3) -> Goblin Camp (4, 4) is not a single cardinal step;
+	# build a real two-step Manhattan route, matching build_route()'s own
+	# horizontal-then-vertical convention.
+	var route: Array[Vector2i] = [Vector2i(4, 3), goblin_camp.position]
+	GameSession.set_deployed_party_route(route)
+	var panel := _make_panel()
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	assert_true(panel.get_node("Content/PartyDestination").visible)
+	assert_eq(
+		panel.get_node("Content/PartyDestination").text,
+		tr("information.party_destination") % [tr(goblin_camp.name_key), 2]
+	)
+
+
+func test_refresh_party_hides_destination_when_the_party_has_no_route() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var panel := _make_panel()
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	assert_false(panel.get_node("Content/PartyDestination").visible)
+
+
+func test_refresh_party_hides_destination_for_an_encamped_party() -> void:
+	GameSession.create_party()
+	var panel := _make_panel()
+
+	panel.refresh_party(GameSession.FIRST_PARTY_ID)
+
+	assert_false(panel.get_node("Content/PartyDestination").visible)
+
+
 func test_refresh_party_with_an_unknown_id_clears_optional_content_without_hiding_player_or_gold() -> void:
 	GameSession.gold = 25
 	var panel := _make_panel()
@@ -480,6 +526,102 @@ func test_refresh_encounter_intel_shows_enemy_counts_once_the_monster_counts_tie
 		panel.get_node("Content/EncounterIntelEnemies").text,
 		tr("information.encounter_enemies") % [tr("battle.enemy.goblin"), 1]
 	)
+
+
+## Stage 5 D5 (Step 6): the new "turns until next threat star" counter mirrors
+## the tier-stars row's own visibility threshold (known_tier >=
+## INTEL_TIER_LEVEL) and reads GameSession.get_turns_until_next_threat_star()
+## directly rather than re-deriving the interval math.
+func test_refresh_encounter_intel_shows_turns_until_next_threat_star_once_tier_level_is_known() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_LEVEL, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/EncounterEscalation").visible)
+	assert_eq(
+		panel.get_node("Content/EncounterEscalation").text,
+		tr("information.turns_until_next_threat_star") % GameSession.get_turns_until_next_threat_star(GameSession.GOBLIN_CAMP_ID)
+	)
+
+
+## Once an encounter's threat is already clamped at 5 stars, there is no
+## further escalation left to count down to -- the counter must not claim a
+## next star is coming (see GameSession.get_turns_until_next_threat_star()'s
+## own -1 "capped" sentinel).
+func test_refresh_encounter_intel_hides_the_escalation_counter_once_threat_is_capped_at_five() -> void:
+	GameSession.world_turn = 1 + GameSession.THREAT_TURN_INTERVAL * 20
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_LEVEL, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_eq(GameSession.get_turns_until_next_threat_star(GameSession.GOBLIN_CAMP_ID), -1)
+	assert_false(panel.get_node("Content/EncounterEscalation").visible)
+
+
+func test_refresh_encounter_intel_hides_the_escalation_counter_below_tier_level() -> void:
+	GameSession.encounter_intel[GameSession.GOBLIN_CAMP_ID] = {
+		"discovered": true, "known_tier": GameSession.INTEL_TIER_NONE, "quest_id": "",
+	}
+	var panel := _make_panel()
+
+	panel.refresh_encounter_intel(GameSession.GOBLIN_CAMP_ID)
+
+	assert_false(panel.get_node("Content/EncounterEscalation").visible)
+
+
+## Send Party (Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future
+## multi-party model"): a strictly additive third call alongside refresh_
+## encounter()/refresh_encounter_intel() -- see that pair's own doc comments
+## for why Send Party's eligibility (any deployed party at all) is
+## independent of Scout intel, so it must not be gated behind refresh_
+## encounter()'s own "no intel" early clear. The button only appears once
+## there is at least one deployed party eligible to be redirected, and never
+## navigates or mutates anything itself -- it only forwards the encounter id
+## up to the owning screen (world_map.gd), the same signal-forwarding pattern
+## party_selected/adventurer_selected/recruit_selected already use.
+func test_send_party_button_appears_once_a_party_is_deployed_and_emits_the_encounter_id() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var panel := _make_panel()
+	watch_signals(panel)
+
+	panel.refresh_encounter_send_party(GameSession.GOBLIN_CAMP_ID)
+
+	assert_true(panel.get_node("Content/SendPartyButton").visible)
+	panel.get_node("Content/SendPartyButton").emit_signal("pressed")
+	assert_signal_emitted_with_parameters(panel, "send_party_requested", [GameSession.GOBLIN_CAMP_ID])
+
+
+func test_send_party_button_stays_hidden_without_any_deployed_party() -> void:
+	var panel := _make_panel()
+
+	panel.refresh_encounter_send_party(GameSession.GOBLIN_CAMP_ID)
+
+	assert_false(panel.get_node("Content/SendPartyButton").visible)
+
+
+## refresh_encounter()'s own "no Scout intel" early clear must not suppress a
+## Send Party affordance a later refresh_encounter_send_party() call already
+## set -- mirrors world_map.gd's own call order (refresh_encounter(), then
+## refresh_encounter_intel(), then refresh_encounter_send_party()).
+func test_send_party_button_survives_a_no_intel_refresh_encounter_call_that_follows_it() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.depart_selected_party()
+	var panel := _make_panel()
+
+	panel.refresh_encounter_send_party(GameSession.GOBLIN_CAMP_ID)
+	panel.refresh_encounter(GameSession.selected_party_id, GameSession.ORC_OUTPOST_ID)
+	panel.refresh_encounter_send_party(GameSession.ORC_OUTPOST_ID)
+
+	assert_true(panel.get_node("Content/SendPartyButton").visible)
 
 
 ## Accepting a quest reveals only its documented initial information (Tier

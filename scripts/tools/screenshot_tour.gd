@@ -92,6 +92,12 @@ func _build_steps() -> Array[Dictionary]:
 		{"name": "world_map", "action": func() -> void:
 			GameManager.depart_selected_party()},
 		{"name": "battlefield", "action": func() -> void:
+			# GameManager.enter_battle() now guards on position (Stage 5 D5
+			# regression fix) -- the "world_map" step above only departed the
+			# party to the settlement tile, not goblin_camp's own position, so
+			# it must be moved there first or this step would silently no-op
+			# instead of reaching Battlefield.
+			GameSession.set_deployed_party_position(GameSession.get_expedition(GameSession.GOBLIN_CAMP_ID).position)
 			GameManager.enter_battle(GameSession.GOBLIN_CAMP_ID)},
 		{"name": "debug_menu", "action": func() -> void:
 			GameManager.toggle_debug_menu()},

@@ -23,6 +23,16 @@ const ROUTE_SEGMENT_COLOR := Color(0.9, 0.9, 0.3, 0.6)
 const ROUTE_TARGET_COLOR := Color(0.9, 0.9, 0.3, 0.9)
 const HOVER_ROUTE_SEGMENT_COLOR := Color(0.4, 0.9, 0.9, 0.5)
 const HOVER_ROUTE_TARGET_COLOR := Color(0.4, 0.9, 0.9, 0.8)
+## Stage 5 D5 (Step 6): a second deployed party's own committed route renders
+## in a third, distinct color family so it is never confused with the
+## selected party's own committed route (ROUTE_SEGMENT_COLOR/ROUTE_TARGET_
+## COLOR) or its hover preview (HOVER_ROUTE_SEGMENT_COLOR/HOVER_ROUTE_TARGET_
+## COLOR).
+const OTHER_PARTY_ROUTE_SEGMENT_COLOR := Color(0.7, 0.5, 0.9, 0.5)
+const OTHER_PARTY_ROUTE_TARGET_COLOR := Color(0.7, 0.5, 0.9, 0.8)
+## An other (non-selected) deployed party's own marker renders dimmer than
+## the selected party's, so the two are visually distinguishable at a glance.
+const OTHER_PARTY_MODULATE := Color(0.75, 0.75, 0.75, 0.85)
 ## World Map Fog & Strategic Scouting Visuals (Technical Design §4,
 ## docs/plans/2026-08-18-core-loop-and-engagement/
 ## 07-visual-perspective-and-tactical-polish.md): once a Scout has earned
@@ -74,6 +84,18 @@ var pending_arrival_encounter_id: String = ""
 @onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 @onready var hint_label: Label = %Hint
 @onready var arrival_panel: PanelContainer = %ArrivalPanel
+@onready var enter_button: Button = %EnterButton
+## Send Party modal (Stage 5 D5, docs/designs/world-map-and-encounters.md's
+## "Future multi-party model") -- see _open_send_party_modal()'s own doc
+## comment.
+@onready var send_party_modal: PanelContainer = %SendPartyModal
+@onready var send_party_list: VBoxContainer = %SendPartyList
+@onready var send_party_empty_label: Label = %SendPartyEmptyLabel
+
+## The encounter id the Send Party modal is currently offering as every
+## listed party's new destination, or "" when the modal is closed (mirrors
+## pending_arrival_encounter_id's own convention).
+var _send_party_target_encounter_id: String = ""
 
 
 func _ready() -> void:
@@ -81,6 +103,7 @@ func _ready() -> void:
 	grid = GridScript.new(GRID_WIDTH, GRID_HEIGHT)
 	party_position = GameSession.get_deployed_party_position()
 	information_panel.party_selected.connect(_on_information_panel_party_selected)
+	information_panel.send_party_requested.connect(_on_information_panel_send_party_requested)
 	_draw_tiles()
 	_draw_markers()
 	_draw_routes()
@@ -330,7 +353,69 @@ func _on_end_turn_pressed() -> void:
 	board_changed.emit()
 
 
+## Stage 5 D5 (Step 6): the id of a DIFFERENT deployed party (not the
+## currently selected one) currently standing on tile_pos, or "" when none.
+## When two parties happen to share a tile, the currently selected party's
+## own tile always takes priority in _handle_tile_click() -- see that
+## function's own doc comment -- so this only ever fires for a genuinely
+## distinct tile.
+func _other_deployed_party_id_at(tile_pos: Vector2i) -> String:
+	for party in GameSession.get_deployed_parties():
+		if party.id != GameSession.selected_party_id and party.world_position == tile_pos:
+			return str(party.id)
+	return ""
+
+
 func _handle_tile_click(tile_pos: Vector2i) -> void:
+	# Switching which party is "selected" (Stage 5 D5) takes priority over
+	# every other click behavior below -- but only when tile_pos names a
+	# DIFFERENT party's own tile than the one already selected/tracked as
+	# party_position, so a co-located pair of parties still falls through to
+	# the existing single-party click flow below (an ambiguous case; use the
+	# Send Party modal or the Parties screen to redirect a co-located party
+	# instead). Selecting never moves anything -- only GameSession.
+	# select_party() and this screen's own mirrored party_position change.
+	var other_party_id := _other_deployed_party_id_at(tile_pos)
+	if other_party_id != "" and tile_pos != party_position:
+		GameSession.select_party(other_party_id)
+		party_selected = false
+		hover_route = []
+		repathing = false
+		party_position = GameSession.get_deployed_party_position()
+		# Stale-panel fix (independent review finding against Stage 5 D5's own
+		# "Arrival-visibility clarification"): a previously-selected party's
+		# arrival panel may still be open and pointing at ITS OWN encounter
+		# (pending_arrival_encounter_id) at the moment selection switches here.
+		# _check_for_arrival() below no-ops whenever arrival_panel.visible is
+		# already true (see that function's own doc comment), so without
+		# closing it first, switching selection would leave the panel showing
+		# the PREVIOUS party's stale encounter id while GameSession.
+		# selected_party_id now names the new party -- exactly the mismatch
+		# GameManager.enter_battle()'s own position guard exists to catch.
+		# Reuses _close_arrival_panel()'s exact close logic (also used by
+		# Cancel) rather than duplicating it; this silently dismisses an
+		# un-actioned panel, same as any other click ever could.
+		_close_arrival_panel()
+		_draw_markers()
+		_draw_routes()
+		_update_highlights()
+		_refresh_information_panel()
+		_refresh_campaign_guide()
+		# Deliberately check ONLY the newly-selected party's own position here
+		# (_arrivable_encounter_at(), not the full _check_for_arrival()).
+		# _check_for_arrival()'s "other party" loop (see its own doc comment)
+		# exists for End Turn, where a NON-selected party's arrival must still
+		# surface -- but reused here it would immediately re-select whichever
+		# party this block just switched AWAY from (that party may still have
+		# its own live, unresolved arrival), silently undoing the player's
+		# explicit click and violating this block's own "selecting never
+		# moves anything" contract. This block's whole point is showing
+		# exactly the party the player clicked, nothing else.
+		var arrival_encounter_id := _arrivable_encounter_at(party_position)
+		if arrival_encounter_id != "":
+			_on_encounter_activated(arrival_encounter_id)
+		return
+
 	if not GameSession.has_deployed_party():
 		# The World Map remains reachable from the pause menu before a party is
 		# formed. Its always-visible settlement marker is the recovery route
@@ -427,12 +512,53 @@ func _check_for_arrival() -> void:
 	# use for exactly that reason.
 	if not is_inside_tree() or arrival_panel.visible:
 		return
-	var encounter_id := _expedition_id_at(party_position)
+
+	var own_encounter_id := _arrivable_encounter_at(party_position)
+	if own_encounter_id != "":
+		_on_encounter_activated(own_encounter_id)
+		return
+
+	# Arrival-visibility clarification (Stage 5 D5, decision-ledger.md's
+	# "Arrival-visibility clarification, approved 2026-08-24" paragraph): the
+	# check above only ever looks at the currently-selected party's own
+	# tracked position, so a NON-selected deployed party that arrived at a
+	# live encounter this same End Turn (e.g. via GameSession.
+	# end_world_turn()'s own per-party auto route step) would otherwise never
+	# open its arrival panel -- the player would have to notice and click
+	# that party's marker to find out, risking a missed quest/threat window.
+	# Approved resolution: auto-switch selection to the first such other
+	# party found and open its panel immediately, mirroring the exact
+	# state-reset shape _handle_tile_click()'s own switch-selection block
+	# uses. The party cap is 2, so at most one "other" party exists; when
+	# both the selected and the other party arrive simultaneously, the check
+	# above already returned, so the selected party's own panel always wins
+	# (unchanged tie-break) and this loop is never reached.
+	for party in GameSession.get_deployed_parties():
+		if party.id == GameSession.selected_party_id:
+			continue
+		var other_encounter_id := _arrivable_encounter_at(party.world_position)
+		if other_encounter_id == "":
+			continue
+		GameSession.select_party(str(party.id))
+		party_selected = false
+		hover_route = []
+		repathing = false
+		party_position = GameSession.get_deployed_party_position()
+		_on_encounter_activated(other_encounter_id)
+		return
+
+
+## Shared eligibility check reused by both branches of _check_for_arrival()
+## above: the id of a live, incomplete encounter at pos that the current
+## GameSession.selected_encounter guard also allows opening right now, or ""
+## when no such encounter qualifies.
+func _arrivable_encounter_at(pos: Vector2i) -> String:
+	var encounter_id := _expedition_id_at(pos)
 	if encounter_id == "" or GameSession.is_encounter_complete(encounter_id):
-		return
+		return ""
 	if GameSession.selected_encounter != "" and GameSession.selected_encounter != encounter_id:
-		return
-	_on_encounter_activated(encounter_id)
+		return ""
+	return encounter_id
 
 
 ## Pre-battle Withdraw (docs/plans/2026-08-21-stage-1-campaign-spine/
@@ -442,6 +568,11 @@ func _check_for_arrival() -> void:
 func _on_encounter_activated(encounter_id: String) -> void:
 	pending_arrival_encounter_id = encounter_id
 	arrival_panel.visible = true
+	# Battle-party tie-break (Stage 5 D5): Enter stays visible but disabled
+	# whenever a DIFFERENT party already owns the single active battle (see
+	# GameSession.can_party_enter_battle()) -- GameManager.enter_battle()
+	# enforces the same rule server-side, this is only the UI affordance.
+	enter_button.disabled = not GameSession.can_party_enter_battle(GameSession.selected_party_id)
 	_refresh_turn_controls()
 
 
@@ -602,6 +733,32 @@ func _draw_markers() -> void:
 	)
 	marker_container.add_child(party_sprite)
 
+	# Stage 5 D5 (Step 6): every OTHER deployed party (not the selected one)
+	# also renders its own marker, dimmed so the selected party stays visually
+	# primary -- see _other_deployed_party_id_at()'s own doc comment for how
+	# clicking one switches selection. A fresh single-party campaign never has
+	# a second deployed party, so this loop is a no-op there.
+	for party in GameSession.get_deployed_parties():
+		if party.id != GameSession.selected_party_id:
+			_draw_other_party_marker(party.world_position)
+
+
+## Mirrors the selected party's own sprite placement math exactly (see the
+## block immediately above), only dimmed and carrying no node name other
+## deployed-party-marker code depends on.
+func _draw_other_party_marker(position: Vector2i) -> void:
+	var sprite := Sprite2D.new()
+	sprite.name = "OtherPartySprite"
+	sprite.texture = SpriteCatalog.get_unit_texture("world_party")
+	sprite.scale = Vector2(4, 4)
+	sprite.modulate = OTHER_PARTY_MODULATE
+	var tile_origin: Vector2 = Vector2(position) * TILE_SIZE
+	sprite.position = Vector2(
+		tile_origin.x + TILE_SIZE / 2.0,
+		round(tile_origin.y + TILE_SIZE - (sprite.texture.get_height() * sprite.scale.y) / 2.0)
+	)
+	marker_container.add_child(sprite)
+
 
 func _draw_routes() -> void:
 	if not is_inside_tree():
@@ -615,6 +772,14 @@ func _draw_routes() -> void:
 
 	if _has_route_affordance() and not hover_route.is_empty() and hover_route != committed_route:
 		_draw_route_path(hover_route, HOVER_ROUTE_SEGMENT_COLOR, HOVER_ROUTE_TARGET_COLOR)
+
+	# Stage 5 D5 (Step 6): every OTHER deployed party's own committed route
+	# renders too, in its own distinct color -- see OTHER_PARTY_ROUTE_
+	# SEGMENT_COLOR's own doc comment. A fresh single-party campaign never has
+	# a second deployed party, so this loop is a no-op there.
+	for party in GameSession.get_deployed_parties():
+		if party.id != GameSession.selected_party_id:
+			_draw_route_path(party.travel_route, OTHER_PARTY_ROUTE_SEGMENT_COLOR, OTHER_PARTY_ROUTE_TARGET_COLOR)
 
 
 func _draw_route_path(
@@ -683,6 +848,12 @@ func _refresh_information_panel() -> void:
 		# above. Called second so its own section wins over refresh_
 		# encounter()'s "no legacy intel" branch, which also clears it.
 		information_panel.refresh_encounter_intel(hovered_encounter_id)
+		# Send Party (Stage 5 D5): a third, equally additive call -- see
+		# refresh_encounter_send_party()'s own doc comment for why its
+		# eligibility (any deployed party at all) is independent of Scout
+		# intel, so it must run after refresh_encounter()'s own "no intel"
+		# clear rather than being folded into it.
+		information_panel.refresh_encounter_send_party(hovered_encounter_id)
 	else:
 		information_panel.refresh()
 
@@ -692,6 +863,102 @@ func _refresh_information_panel() -> void:
 ## screen decides that pressing View Party opens Party Details.
 func _on_information_panel_party_selected(party_id: String) -> void:
 	GameManager.go_to_party_details(party_id)
+
+
+## Send Party (Stage 5 D5, docs/designs/world-map-and-encounters.md's "Future
+## multi-party model"): "Choosing it opens a modal showing available parties,
+## their current destinations, and their turns to the selected location."
+## Forwarded from InformationPanel's own send_party_requested signal (see
+## information_panel.gd's refresh_encounter_send_party()) -- the panel never
+## opens the modal itself, this screen owns that, the same signal-forwarding
+## split every other InformationPanel action already uses.
+func _on_information_panel_send_party_requested(encounter_id: String) -> void:
+	_send_party_target_encounter_id = encounter_id
+	_refresh_send_party_list()
+	send_party_modal.visible = true
+
+
+## Rebuilds SendPartyList from scratch every open -- the same "clear then
+## redraw" pattern guild_hall.gd's own _refresh_quests() uses for its dynamic,
+## GameSession-sourced list, rather than diffing rows in place.
+func _refresh_send_party_list() -> void:
+	for child in send_party_list.get_children():
+		send_party_list.remove_child(child)
+		child.queue_free()
+
+	var expedition := GameSession.get_expedition(_send_party_target_encounter_id)
+	var deployed_parties := GameSession.get_deployed_parties() if expedition.has("position") else []
+	send_party_empty_label.visible = deployed_parties.is_empty()
+	for party in deployed_parties:
+		send_party_list.add_child(_build_send_party_row(party, expedition.position))
+
+
+## One row per deployed party: name, its own CURRENT destination (before this
+## action -- see _current_destination_label()), and how many turns a fresh
+## route from its own current position to target would take (build_route()'s
+## own length, the same Manhattan-step metric GameSession.take_next_route_
+## step() consumes one of per World Map Turn).
+func _build_send_party_row(party: Dictionary, target: Vector2i) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "SendPartyRow_%s" % party.id
+
+	var label := Label.new()
+	label.name = "Label"
+	var turns := build_route(party.world_position, target).size()
+	label.text = tr("send_party.row") % [party.name, _current_destination_label(party), turns]
+	row.add_child(label)
+
+	var send_button := Button.new()
+	send_button.name = "SendButton"
+	send_button.text = tr("send_party.send")
+	send_button.pressed.connect(_on_send_party_row_pressed.bind(str(party.id), target))
+	row.add_child(send_button)
+
+	return row
+
+
+## The destination a party is ALREADY headed for (its committed route's final
+## tile, or its own current position if it has none) -- resolved to a display
+## name the same three ways _draw_markers()/_expedition_id_at() already
+## resolve a World Map position: the settlement, a live sandbox encounter
+## instance, or the current authored campaign objective's own node.
+func _current_destination_label(party: Dictionary) -> String:
+	var route: Array = party.get("travel_route", [])
+	var position: Vector2i = route[route.size() - 1] if not route.is_empty() else party.world_position
+	if position == SETTLEMENT_POSITION:
+		return tr("encampment.title")
+	var encounter_id := _expedition_id_at(position)
+	if encounter_id != "":
+		return tr(str(GameSession.get_expedition(encounter_id).get("name_key", "")))
+	return tr("information.party_destination_unknown")
+
+
+## Replaces ONLY the clicked party's own route with a fresh one to target --
+## every other party's route is untouched (D5: "Selecting a new destination
+## for a party replaces only that party's route, never another party's").
+## An unreachable/invalid target (should not happen -- target always comes
+## from a real expedition's own position) leaves that party's route
+## untouched rather than clearing it.
+func _on_send_party_row_pressed(party_id: String, target: Vector2i) -> void:
+	var route := build_route(GameSession.get_party(party_id).world_position, target)
+	if not route.is_empty():
+		GameSession.set_deployed_party_route(route, party_id)
+	_close_send_party_modal()
+	if party_id == GameSession.selected_party_id:
+		party_position = GameSession.get_deployed_party_position()
+	_draw_markers()
+	_draw_routes()
+	_update_highlights()
+	_refresh_information_panel()
+
+
+func _on_send_party_cancel_pressed() -> void:
+	_close_send_party_modal()
+
+
+func _close_send_party_modal() -> void:
+	_send_party_target_encounter_id = ""
+	send_party_modal.visible = false
 
 
 func _refresh_campaign_guide() -> void:

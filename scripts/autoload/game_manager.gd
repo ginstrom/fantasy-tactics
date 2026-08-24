@@ -170,7 +170,32 @@ func return_party_to_encampment() -> Error:
 	return go_to_encampment()
 
 
+## Battle-party tie-break (Stage 5 D5, decision-ledger.md): claims the single
+## active battle for the currently selected party before ever changing scene
+## to Battlefield. A claim already held by a DIFFERENT party (the other
+## party's Enter was clicked first, and that battle has not yet resolved)
+## rejects this call outright -- no encounter selection, no scene change --
+## so World Map's arrival panel must disable Enter for that other party
+## rather than let a second battle start (see GameSession.
+## can_party_enter_battle()/claim_battle_for_party()).
+##
+## Position guard (independent review finding against Stage 5 D5's own
+## "Arrival-visibility clarification", decision-ledger.md): world_map.gd's
+## arrival panel can go stale -- e.g. clicking a second deployed party's tile
+## while the first party's panel is still open switches GameSession.
+## selected_party_id without refreshing pending_arrival_encounter_id, so a
+## leftover Enter press would otherwise claim a battle for the now-selected
+## party against an encounter it was never actually standing at. Mirrors the
+## exact guard GameSession.withdraw_from_encounter() already applies
+## (expedition.position != get_deployed_party_position()). Checked before
+## claim_battle_for_party() so a rejected call mutates no session state at
+## all -- not even a claim that would need rolling back on failure.
 func enter_battle(encounter_id: String) -> Error:
+	var expedition := GameSession.get_expedition(encounter_id)
+	if not expedition.has("position") or expedition.position != GameSession.get_deployed_party_position():
+		return ERR_INVALID_DATA
+	if not GameSession.claim_battle_for_party(GameSession.selected_party_id):
+		return ERR_INVALID_DATA
 	GameSession.enter_encounter(encounter_id)
 	return _change_scene(BATTLEFIELD_SCENE)
 
@@ -189,8 +214,23 @@ func withdraw_from_encounter(encounter_id: String) -> Error:
 	return OK if not results.is_empty() else ERR_INVALID_DATA
 
 
+## Stage 5 D5 (Step 6 task 2 audit): resolves the battle against the party
+## that actually claimed it (GameSession.active_battle_party_id), not
+## whatever selected_party_id happens to be right now. In real play these
+## always agree -- selected_party_id cannot change while Battlefield is on
+## screen -- but resolving explicitly keeps this call correct on its own
+## terms rather than depending on that incidental ordering, and matters for
+## any caller (a debug scenario, a future replay tool) that reaches these
+## paths without going through the normal World Map click flow.
+## select_party()'s own "unknown id is a no-op" contract means an empty/no
+## claim (any call site still using GameSession.enter_encounter() directly,
+## bypassing GameManager.enter_battle()) leaves selected_party_id completely
+## untouched, preserving every pre-existing single-party call site's exact
+## behavior.
 func complete_battle() -> Error:
+	GameSession.select_party(GameSession.active_battle_party_id)
 	GameSession.complete_current_encounter()
+	GameSession.release_battle_claim()
 	return go_to_world_map()
 
 
@@ -202,8 +242,10 @@ func complete_battle() -> Error:
 ## reaches return_party_to_encampment() -> go_to_encampment(), which would
 ## otherwise bank the now-already-cleared pending reward as a harmless no-op.
 func fail_battle() -> Error:
+	GameSession.select_party(GameSession.active_battle_party_id)
 	GameSession.abandon_current_encounter()
 	GameSession.resolve_party_wipe()
+	GameSession.release_battle_claim()
 	return return_party_to_encampment()
 
 
@@ -218,7 +260,9 @@ func fail_battle() -> Error:
 ## fail_battle()'s, so it takes the identical forfeit-and-go-home path
 ## instead.
 func retreat_from_battle() -> Error:
+	GameSession.select_party(GameSession.active_battle_party_id)
 	GameSession.abandon_current_encounter()
+	GameSession.release_battle_claim()
 	if GameSession.get_selected_party().get("member_ids", []).is_empty():
 		GameSession.resolve_party_wipe()
 		return return_party_to_encampment()

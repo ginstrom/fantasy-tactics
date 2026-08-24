@@ -490,6 +490,39 @@ func test_fail_battle_wipe_forfeits_pending_loot_and_gold_but_preserves_progress
 	)
 
 
+## Stage 5 D5 (Step 6 task 6): a party wipe must recover only the wiped
+## party -- a second, independently deployed party must keep its own
+## position/route/deployment completely untouched. This is the "wipe
+## recovery" scenario the step file's task 6 requires focused coverage for.
+func test_fail_battle_wipe_recovers_only_the_wiped_party_leaving_a_second_deployed_party_untouched() -> void:
+	GameSession.reset()
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party("Alpha")
+	var alpha_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_party(alpha_id, "warrior_001")
+	GameSession.deploy_party(alpha_id)
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.create_party("Bravo")
+	var bravo_id: String = GameSession.selected_party_id
+	GameSession.adventurers.append(GameSession.get_default_warrior("warrior_bravo", "Bravo Warrior"))
+	GameSession.assign_adventurer_to_party(bravo_id, "warrior_bravo")
+	GameSession.deploy_party(bravo_id)
+	GameSession.set_deployed_party_position(Vector2i(1, 1), bravo_id)
+	GameSession.set_deployed_party_route([Vector2i(1, 0)] as Array[Vector2i], bravo_id)
+	# Alpha's Enter claimed the battle -- see GameManager.enter_battle().
+	GameSession.claim_battle_for_party(alpha_id)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.fail_battle()
+
+	assert_false(GameSession.has_deployed_party(alpha_id), "Alpha's wipe must send it home")
+	assert_true(GameSession.has_deployed_party(bravo_id), "Bravo must stay deployed and untouched")
+	assert_eq(GameSession.get_deployed_party_position(bravo_id), Vector2i(1, 1))
+	assert_eq(GameSession.get_deployed_party_route(bravo_id), [Vector2i(1, 0)] as Array[Vector2i])
+	assert_eq(GameSession.active_battle_party_id, "", "The battle claim must be released")
+
+
 func test_retreat_from_battle_routes_survivors_to_the_world_map_leaving_the_encounter_active() -> void:
 	GameSession.reset()
 	GameSession.create_party()
@@ -564,6 +597,118 @@ func test_withdraw_from_encounter_is_a_no_op_for_an_out_of_position_encounter() 
 	assert_eq(result, ERR_INVALID_DATA)
 	assert_true(GameSession.get_deployed_party_route().is_empty(), "Session routing must be untouched")
 	assert_eq(GameSession.get_current_health("warrior_001"), 10, "Session health must be untouched")
+
+
+## --- Step 6: multi-party battle-party tie-break (decision-ledger.md's D5) --
+
+
+func test_enter_battle_claims_the_battle_for_the_currently_selected_party() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	var party_id := GameSession.selected_party_id
+	GameSession.set_deployed_party_position(GameSession.get_expedition("goblin_camp").position)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var result: Error = manager.enter_battle("goblin_camp")
+
+	assert_eq(result, OK)
+	assert_eq(GameSession.active_battle_party_id, party_id)
+	assert_eq(GameSession.selected_encounter, "goblin_camp")
+
+
+## Part A regression (independent review finding against Stage 5 D5's own
+## "Arrival-visibility clarification", decision-ledger.md): mirrors the exact
+## position guard GameSession.withdraw_from_encounter() already applies -- a
+## party that is not actually standing at an encounter's own position must
+## never be able to claim/enter battle there, however it names the encounter
+## id (a stale arrival panel, a hand-typed debug call, etc). No claim, no
+## encounter selection, no scene change.
+func test_enter_battle_is_rejected_for_a_party_not_at_the_encounters_position() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	# Setup: depart_selected_party() places the party at the settlement tile
+	# (3, 3) -- goblin_camp's own expedition position, (4, 4), is different.
+	assert_ne(
+		GameSession.get_deployed_party_position(), GameSession.get_expedition("goblin_camp").position,
+		"Setup: the deployed party must not already be standing at goblin_camp"
+	)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var result: Error = manager.enter_battle("goblin_camp")
+
+	assert_eq(result, ERR_INVALID_DATA)
+	assert_eq(GameSession.selected_encounter, "", "A rejected claim must never select the encounter")
+	assert_eq(GameSession.active_battle_party_id, "", "A rejected claim must never be granted")
+
+
+## Whichever party's Enter is clicked first claims the active battle; a
+## second party's Enter attempt must be rejected outright -- it must not
+## select the encounter for battle or change scene at all.
+func test_enter_battle_is_rejected_while_another_party_already_owns_the_active_battle() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.claim_battle_for_party("some_other_party")
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	var result: Error = manager.enter_battle("goblin_camp")
+
+	assert_eq(result, ERR_INVALID_DATA)
+	assert_eq(GameSession.selected_encounter, "", "A rejected claim must never select the encounter")
+	assert_eq(GameSession.active_battle_party_id, "some_other_party", "The existing claim must be untouched")
+
+
+func test_complete_battle_releases_the_battle_claim() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.claim_battle_for_party(GameSession.selected_party_id)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.complete_battle()
+
+	assert_eq(GameSession.active_battle_party_id, "")
+
+
+func test_fail_battle_releases_the_battle_claim() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.claim_battle_for_party(GameSession.selected_party_id)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.fail_battle()
+
+	assert_eq(GameSession.active_battle_party_id, "")
+
+
+func test_retreat_from_battle_releases_the_battle_claim() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter("goblin_camp")
+	GameSession.claim_battle_for_party(GameSession.selected_party_id)
+	var manager: Node = preload("res://scripts/autoload/game_manager.gd").new()
+	add_child_autofree(manager)
+
+	manager.retreat_from_battle()
+
+	assert_eq(GameSession.active_battle_party_id, "")
 
 
 func test_apply_super_power_reports_unavailable_without_an_active_battlefield() -> void:
