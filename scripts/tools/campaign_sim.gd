@@ -934,6 +934,24 @@ func _build_player_units() -> Array:
 		var chosen_perks: Array = adventurer.progression.get("perks", [])
 		if not chosen_perks.is_empty():
 			unit_spec["perks"] = chosen_perks.duplicate()
+		# Promoted specialization (Stage 5 D4, decision-ledger.md): the exact
+		# same "silently ignored" gap the perks-threading comment above
+		# already fixed once for Juggernaut/Bulwark/Quickdraw/Devout applies
+		# here too -- ScenarioContract._validate_side() only accepts a
+		# specialization's own perk ids (e.g. Knight's "knight_shield_bash")
+		# when the unit's own "specialization" field names it (see that
+		# function's own doc comment); a fielded Knight/Archer/Paladin whose
+		# unit_spec carried its specialization perks above with no
+		# "specialization" field would fail ScenarioContract.validate() as an
+		# "unknown perk", turning _fight_objective() into a hard "error"
+		# outcome the instant any fieldable root (Warrior/Cleric) promotes.
+		# Battle Mage never reaches this loop at all -- its root class
+		# ("mage") is not in FIELDABLE_CLASSES, so _is_fieldable() already
+		# skips it above -- but Knight/Archer (warrior root) and Paladin
+		# (cleric root) are both real, reachable fieldable roots.
+		var specialization_id := str(adventurer.get("specialization", ""))
+		if not specialization_id.is_empty():
+			unit_spec["specialization"] = specialization_id
 		units.append(unit_spec)
 	return units
 
