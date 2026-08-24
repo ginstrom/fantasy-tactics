@@ -58,6 +58,13 @@ const TYPE_LOCKED_ON := "locked_on"
 ## TYPE_RESISTED directly (see try_cast_spell()'s "fire_bolt" match arm) --
 ## it needs no new type of its own.
 const TYPE_TEMPORARY_GUARD := "temporary_guard"
+## Paladin specialization (Stage 5 D4): a promoted Paladin's own self/ally
+## Bless cast ("BLESSED+!") is a distinct outcome from a regular Cleric Bless
+## -- which spawns no floating text of its own at all today -- so a player
+## can tell the doubled bonus actually applied, not just a stronger flat
+## number on the same-looking cast. See battle_controller.gd's try_cast_
+## spell() "bless" match arm, the sole spawn site.
+const TYPE_PALADIN_BLESS := "paladin_bless"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -74,6 +81,7 @@ const COLORS := {
 	TYPE_CALLED_SHOT: Color(0.9, 0.5, 0.15),
 	TYPE_LOCKED_ON: Color(0.3, 0.75, 0.95),
 	TYPE_TEMPORARY_GUARD: Color(0.4, 0.6, 0.95),
+	TYPE_PALADIN_BLESS: Color(1.0, 0.92, 0.65),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6

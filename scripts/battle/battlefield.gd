@@ -775,6 +775,14 @@ func _describe_step(step: Dictionary) -> String:
 			return _describe_sleep_entry(step, "battle.status.spell_sleep_applied", "battle.status.spell_sleep_resisted")
 		if step.spell_id == "fire_bolt":
 			return _describe_fire_bolt_entry(step, "battle.status.spell_fire_bolt", "battle.status.spell_fire_bolt_resisted")
+		# Paladin's doubled Bless (Stage 5 D4): step.doubled is only ever set
+		# true by try_cast_spell()'s "bless" match arm when the CASTER is a
+		# promoted Paladin (see BattleController._unit_is_paladin()) -- its own
+		# distinct status line, never colour-only feedback (Stage 4's
+		# accessibility carryover), so a player can tell the promotion
+		# mattered without inspecting the caster's class.
+		if step.spell_id == "bless" and step.get("doubled", false):
+			return _describe_spell_entry(step, "battle.status.spell_heal", "battle.status.spell_bless_paladin")
 		return _describe_spell_entry(step, "battle.status.spell_heal", "battle.status.spell_bless")
 	# Temporary Guard (Stage 5 D4, Battle Mage specialization): a perk action,
 	# not a spell -- see try_temporary_guard_selected_unit()'s own doc
@@ -948,6 +956,12 @@ func _log_spell(step: Dictionary) -> void:
 		return
 	if step.spell_id == "fire_bolt":
 		_append_log_line(_describe_fire_bolt_entry(step, "battle.log.spell.fire_bolt", "battle.log.spell.fire_bolt_resisted"))
+		return
+	# Paladin's doubled Bless (Stage 5 D4): mirrors _describe_step()'s own
+	# identical "doubled" branch above, for the persistent combat log instead
+	# of the transient status line.
+	if step.spell_id == "bless" and step.get("doubled", false):
+		_append_log_line(_describe_spell_entry(step, "battle.log.spell.heal", "battle.log.spell.bless_paladin"))
 		return
 	_append_log_line(_describe_spell_entry(step, "battle.log.spell.heal", "battle.log.spell.bless"))
 

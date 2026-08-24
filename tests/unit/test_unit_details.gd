@@ -535,6 +535,87 @@ func test_perks_label_shows_the_chosen_temporary_guard_perk_with_its_effect() ->
 	)
 
 
+## --- Paladin specialization promotion (Stage 5 D4) --------------------------
+## Mirrors the Knight/Archer/Battle Mage sections above, but for the ONLY
+## specialization with an ADDITIONAL eligibility gate (a built Temple) and
+## the ONLY one with ZERO perks of its own -- no PerksLabel test is needed
+## here since there is no perk to render (Paladin grants a caster-identity-
+## keyed Bless amplification, not a perk-tree choice, see battle_
+## controller.gd's PALADIN_BLESSED_STATUS_ID).
+
+func test_no_paladin_promote_button_shows_before_a_temple_is_built_even_with_both_root_perks_chosen() -> void:
+	var cleric: Dictionary = GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	cleric.progression.perks = [GameSession.CLERIC_MEDITATION_PERK_ID, GameSession.CLERIC_DEVOUT_PERK_ID]
+	GameSession.adventurers.append(cleric)
+	var screen := _open_unit_details("cleric_test")
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_false(container.visible, "Both Cleric root perks are chosen, but no Temple has been built yet")
+	assert_eq(container.get_child_count(), 0)
+
+
+## The decision-contract shape task 1 of the step file asks for, at the UI
+## layer: promotion is unavailable (no button) until both the root-perk AND
+## Temple gates clear, becomes available (a button appears) once they do, and
+## pressing it actually promotes through GameSession.promote_adventurer() --
+## never deciding eligibility itself.
+func test_paladin_promote_button_appears_once_a_temple_is_built_and_promotes_on_press() -> void:
+	var cleric: Dictionary = GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	cleric.progression.perks = [GameSession.CLERIC_MEDITATION_PERK_ID, GameSession.CLERIC_DEVOUT_PERK_ID]
+	GameSession.adventurers.append(cleric)
+	GameSession.temple_level = 1
+	var screen := _open_unit_details("cleric_test")
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_true(container.visible)
+	assert_eq(container.get_child_count(), 1)
+	var button: Button = container.get_node("PromoteButton_paladin")
+	assert_eq(button.text, tr("unit_details.promote_button") % tr("class.paladin"))
+
+	button.pressed.emit()
+
+	assert_eq(GameSession.get_adventurer_specialization("cleric_test"), "paladin")
+	assert_false(container.visible, "Already promoted -- the button disappears on refresh")
+	assert_eq(container.get_child_count(), 0)
+
+
+func test_class_label_shows_paladin_specialization_once_promoted() -> void:
+	var cleric: Dictionary = GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	cleric.progression.perks = [GameSession.CLERIC_MEDITATION_PERK_ID, GameSession.CLERIC_DEVOUT_PERK_ID]
+	GameSession.adventurers.append(cleric)
+	GameSession.temple_level = 1
+	GameSession.promote_adventurer("cleric_test", "paladin")
+	var screen := _open_unit_details("cleric_test")
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/ClassLabel").text,
+		tr("information.class") % (tr("unit_details.class_specialized") % [tr("class.cleric"), tr("class.paladin")])
+	)
+
+
+## Verifies the Temple-gate concern the task description raises directly:
+## re-opening this screen (a fresh scene instantiation on every navigation,
+## per GameManager._change_scene()) after the Temple gets built elsewhere
+## always reflects the CURRENT temple_level, not a stale value from when the
+## panel was first opened -- this screen has no live signal/process watching
+## temple_level, so a fresh refresh() (via a fresh _ready()) is what makes
+## this correct, not any polling.
+func test_reopening_unit_details_after_the_temple_is_built_elsewhere_reflects_the_new_gate() -> void:
+	var cleric: Dictionary = GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	cleric.progression.perks = [GameSession.CLERIC_MEDITATION_PERK_ID, GameSession.CLERIC_DEVOUT_PERK_ID]
+	GameSession.adventurers.append(cleric)
+	var first_screen := _open_unit_details("cleric_test")
+	var first_container: VBoxContainer = first_screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_false(first_container.visible, "Precondition: no Temple built yet")
+
+	GameSession.temple_level = 1  # Built "elsewhere" (the Temple screen), not through this screen at all.
+	var second_screen := _open_unit_details("cleric_test")
+
+	var second_container: VBoxContainer = second_screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_true(second_container.visible, "A fresh screen instantiation re-reads the CURRENT temple_level")
+	assert_eq(second_container.get_child_count(), 1)
+
+
 ## --- Durable MP row and "Heal party member" (docs/plans/2026-08-21-
 ## stage-2-party-readiness/03-persistent-mp-temple-and-details-healing.md) ---
 

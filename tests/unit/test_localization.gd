@@ -175,8 +175,18 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 		"Cleric casts Heal on Warrior, restoring 5 HP."
 	)
 	assert_eq(tr("battle.log.spell.bless") % ["Cleric", "Warrior"], "Cleric casts Bless on Warrior.")
+	assert_eq(
+		tr("battle.status.spell_bless_paladin") % ["Paladin", "Warrior"],
+		"Paladin blesses Warrior with a Paladin's doubled Bless!"
+	)
+	assert_eq(
+		tr("battle.log.spell.bless_paladin") % ["Paladin", "Warrior"],
+		"Paladin casts a Paladin's doubled Bless on Warrior."
+	)
+	assert_eq(tr("battle.floating.bless_paladin"), "BLESSED+!")
 	assert_eq(tr("battle.feedback.spell_invalid_target"), "That target is not a legal spell target.")
 	assert_eq(tr("class.cleric"), "Cleric")
+	assert_eq(tr("class.paladin"), "Paladin")
 	assert_eq(tr("item.mace_iron"), "Iron Mace")
 	assert_eq(tr("information.encounter_danger") % "★★", "Danger: ★★")
 	assert_eq(tr("information.encounter_enemies") % ["Goblin", 3], "Enemies: Goblin x3")

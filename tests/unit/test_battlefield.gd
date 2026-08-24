@@ -162,6 +162,40 @@ func test_describe_step_reports_an_enemy_move() -> void:
 	assert_eq(battlefield._describe_step(step), tr("battle.status.enemy_move") % tr("battle.side.enemy"))
 
 
+## Paladin's doubled Bless (Stage 5 D4): step.doubled (only ever set true by
+## BattleController.try_cast_spell()'s "bless" match arm when the CASTER is a
+## promoted Paladin) gets its own distinct status line -- never the same text
+## as a regular Bless, so a player can tell the promotion mattered.
+func test_describe_step_reports_a_paladins_doubled_bless_with_its_own_distinct_text() -> void:
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var caster = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var target = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var step := {"type": "spell", "spell_id": "bless", "caster": caster, "target": target, "doubled": true}
+
+	assert_eq(
+		battlefield._describe_step(step),
+		tr("battle.status.spell_bless_paladin") % [caster.display_name, target.display_name]
+	)
+
+
+## Regression: the exact same step shape with doubled == false (a plain
+## Cleric's cast) must still resolve to the ORIGINAL regular-Bless text --
+## proving the new branch is additive, not a behavior change for every
+## existing Bless caster.
+func test_describe_step_reports_a_regular_bless_when_doubled_is_false() -> void:
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var caster = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var target = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	var step := {"type": "spell", "spell_id": "bless", "caster": caster, "target": target, "doubled": false}
+
+	assert_eq(
+		battlefield._describe_step(step),
+		tr("battle.status.spell_bless") % [caster.display_name, target.display_name]
+	)
+
+
 func test_battlefield_exposes_the_selected_units_potion_as_a_separate_two_ap_action() -> void:
 	GameSession.banked_gear = {"healing_potion": 1}
 	assert_true(GameSession.equip_item_from_bank(GameSession.WARRIOR_ID, "healing_potion"))

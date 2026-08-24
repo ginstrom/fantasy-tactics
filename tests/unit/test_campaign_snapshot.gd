@@ -1017,6 +1017,55 @@ func test_a_battle_mage_perk_validates_only_alongside_the_matching_specializatio
 	assert_eq(result.snapshot.adventurers[0].progression.perks, ["battle_mage_temporary_guard"])
 
 
+## Paladin's own validation (Stage 5 D4): mirrors the Knight/Archer/Battle
+## Mage tests above, but with a record that keeps its ROOT perks (Cleric's
+## own CLASS_PERKS is non-empty, unlike Mage's) while carrying ZERO
+## specialization perks of its own at all -- SPECIALIZATION_PERKS has no
+## "paladin" entry, since Paladin's whole ability is keyed to caster
+## identity, not a perk-tree choice. This is the real test of whether
+## _validate_perks_field()/_validate_specialization_field() are truly
+## generic for a zero-perk specialization: Battle Mage above still had ONE
+## perk, Knight/Archer had two -- Paladin has none.
+func test_a_paladin_record_validates_cleanly_with_its_root_perks_and_zero_specialization_perks() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 6,
+			"specialization": "paladin",
+			"stats": {"melee": 45, "missile": 30, "guard": 10, "might": 1, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 200.0, "perks": ["cleric_meditation", "cleric_devout"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].specialization, "paladin")
+	assert_eq(result.snapshot.adventurers[0].progression.perks, ["cleric_meditation", "cleric_devout"])
+
+
+## Regression: a Paladin record that ALSO tries to claim a perk id foreign to
+## both Cleric's own CLASS_PERKS and SPECIALIZATION_PERKS.get("paladin", [])
+## (empty) must still be rejected atomically, exactly like every other
+## specialization's own foreign-perk rejection -- proving the empty Paladin
+## entry doesn't accidentally widen validation into accepting anything.
+func test_a_perk_foreign_to_paladin_is_rejected_atomically_even_though_paladin_has_no_perks_of_its_own() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "cleric_001", "name": "Cleric", "class": "cleric", "level": 6,
+			"specialization": "paladin",
+			"stats": {"melee": 45, "missile": 30, "guard": 10, "might": 1, "vitality": 12, "max_health": 12},
+			"progression": {"xp": 200.0, "perks": ["cleric_meditation", "cleric_devout", "knight_shield_bash"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_false(result.ok, "A Knight perk on a Paladin record must be rejected -- Paladin grants no perks of its own")
+	assert_eq(result.snapshot, {})
+
+
 func test_a_knight_perk_without_the_specialization_field_is_rejected_atomically() -> void:
 	var data := _full_snapshot().to_dictionary()
 	data.adventurers = [
