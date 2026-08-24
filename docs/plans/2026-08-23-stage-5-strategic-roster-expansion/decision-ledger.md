@@ -337,16 +337,58 @@ separately accepted, per the plan index.
 
 ### D5 — Multi-party: cap, battle-party selection, time-escalation rule
 
-**Status: Blocked** — required before `feat/stage-5-multi-party` (Step 6) starts.
+**Status: Approved 2026-08-24 (user, this step).**
 
-- **Player decision:** TBD — how many parties, and how the player selects
-  which party acts/battles.
-- **Counterplay:** TBD.
-- **Encounter use:** TBD.
-- **Durable-state/snapshot change:** TBD — `get_max_party_count()` currently
-  hardcodes `1` (`game_session.gd:1443`).
-- **Deterministic scenario assertion:** TBD.
-- **Manual acceptance check:** TBD.
+- **Player decision:** Whether to field and independently dispatch a second
+  party — once the Guild Hall reaches its top tier — to a different
+  encounter/location than the first, splitting scouting and battle coverage
+  across two fronts at once, versus keeping the whole roster in one party;
+  and, when both parties are simultaneously staged at an encounter ready to
+  fight, which one to send into battle first.
+- **Counterplay:** Guild Hall level 3 is the existing top-tier upgrade cost
+  (unchanged, no new price invented); splitting the roster across two
+  parties means neither party can draw on the full roster's strongest
+  configuration at once. The shared `world_turn` clock and its bounded
+  threat-star escalation advance once per End Turn regardless of party
+  count, so fielding a second party doesn't buy free strategic time — it
+  only lets that time be spent on two fronts instead of one. Only one
+  battle can be active at a time (single `BattleController` instance), so a
+  party staged at an encounter while the other is mid-battle must wait.
+- **Encounter use:** No new authored/repeatable encounter is added by this
+  step; the existing authored and optional encounter roster becomes
+  reachable by two independently routed parties instead of one.
+- **Durable-state/snapshot change:** `GameSession.get_max_party_count()`
+  becomes Guild-Hall-level-gated instead of hardcoded `1`
+  (`game_session.gd:1443`); `parties: Array[Dictionary]` (already
+  multi-entry-shaped), `FIRST_PARTY_ID`/`selected_party_id`, and every
+  one-party-assumption call site the step file's task 2 requires auditing
+  first, are replaced with explicit party-id APIs. `THREAT_TURN_INTERVAL`
+  moves from a hardcoded constant into `GameConfig`
+  (`world_map.threat_turn_interval`, default unchanged). No new per-party
+  "in battle" lock field is added — battle exclusivity continues to rely on
+  the existing single-`BattleController`-instance invariant.
+- **Deterministic scenario assertion:** Seeded fixtures proving (a)
+  `get_max_party_count()` returns `1` below Guild Hall level 3 and `2` at
+  level 3, (b) two parties hold independent routes/destinations/
+  `movement_spent` without cross-contaminating each other's state, (c) the
+  threat-star and quest-expiry counters read correctly off the
+  config-backed interval and each quest's own timer, and (d) a party cannot
+  claim a battle already owned by another party's encounter, and quest/
+  reward progress never attributes to the wrong party.
+- **Manual acceptance check:** Per the step file's documented manual check:
+  in `make play`, form two parties, send them to different destinations,
+  switch selection, advance turns, inspect independent routes/scouting,
+  resolve an encounter with one while the other remains valid, save/load
+  mid-travel, and confirm the threat/quest counters are visible and that
+  time/quest feedback never hides the authored objective.
+
+**Approved values:**
+
+| Parameter | Value | Basis |
+|---|---|---|
+| Party cap | 2, unlocked once the Guild Hall reaches level 3 (`GUILD_HALL_MAX_LEVEL`); 1 below that (today's behavior, unchanged) | Matches `game_session.gd`'s own pre-existing forward-looking comment on `get_max_party_count()`, which already ties the 1->2 raise to the Guild Hall level 2->3 upgrade — reuses an already-planted precedent and the existing top-tier gate rather than inventing a new threshold |
+| Time-escalation source | The existing `get_threat_stars()`/`THREAT_TURN_INTERVAL` mechanic, moved into `GameConfig` (`world_map.threat_turn_interval`, default `15` unchanged) plus a new World Map/info-panel "turns until next threat star" counter shown alongside the existing Step 2 quest-expiry counter | Finishes wiring a mechanism the codebase already planted and pointed at this exact step (`THREAT_TURN_INTERVAL`'s own comment: "Step 6's simulation/balance harness is the step that revisits its exact value") — no new escalation curve or number invented |
+| Battle-party tie-break | Whichever party's Enter the player clicks first claims the active battle; the other party's Enter stays visible but disabled/queued until that battle resolves | Reuses the existing single-`BattleController`-instance constraint rather than adding new concurrency/lock state or a new modal; identical in spirit to today's single-party Enter/Withdraw flow |
 
 ## Manual check record
 
@@ -372,3 +414,8 @@ Battle Mage promotion permanently unreachable under the existing
 eligibility gate), Paladin (`0c52a6d`, gated additionally on a built
 Temple, granting a doubled Bless rather than a new perk). Rogue remains
 deferred per the plan; Step 5 is complete.
+
+D5 (multi-party: cap of 2 gated on Guild Hall level 3, the existing
+threat-star mechanic made config-backed with a new turns-until-escalation
+counter, and a click-order battle tie-break) approved with the user
+2026-08-24 ahead of Step 6 — recorded above.
