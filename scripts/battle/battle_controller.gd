@@ -175,6 +175,15 @@ const THORN_TRIGGER_CHANCE := 0.25
 ## move/attack/cast identically (see is_incapacitated()), so both are erased
 ## at the same round-boundary in _clear_expired_statuses().
 const SLEEPING_STATUS_ID := "sleeping"
+## Battle Mage's Temporary Guard perk (Stage 5 D4): +10 Guard (same magnitude
+## as the existing Bulwark perk, GameSession.WARRIOR_BULWARK_GUARD -- see
+## _compute_effective_attack_chances()'s own doc comment on how this is
+## applied) for the caster itself, until the start of its next Round -- same
+## round-boundary Sleep/Paralyzed already clear on, see _clear_expired_
+## statuses(). A distinct status id from PARALYZED_STATUS_ID/SLEEPING_
+## STATUS_ID: it never incapacitates (is_incapacitated() does not check it),
+## it only ever modifies Guard.
+const TEMPORARY_GUARD_STATUS_ID := "temporary_guard"
 
 ## Retreat outcome ids (see try_retreat()).
 const RETREAT_OUTCOME_NO_LOSS := "no_loss"
@@ -231,6 +240,18 @@ var parry_roll: Callable = func() -> float: return randf()
 ## scenario never falls back to global randf() for this new stochastic
 ## check either.
 var sleep_resist_roll: Callable = func() -> float: return randf()
+## Fire Bolt's damage/resistance rolls (Battle Mage specialization, Stage 5
+## D4): the same injectable pattern as healing_roll/sleep_resist_roll above,
+## kept as their own distinct Callables (not a literal reuse of either) so a
+## deterministic scenario fielding both a Cleric's Heal and a Battle Mage's
+## Fire Bolt can seed each roll independently -- see BattleStateFactory.
+## build(), which seeds both from the same per-iteration RNG healing_roll/
+## sleep_resist_roll already draw from. fire_bolt_damage_roll shares healing_
+## roll's exact 2-8 magnitude (SPELL_HEAL_MIN/SPELL_HEAL_MAX) and fire_bolt_
+## resist_roll shares sleep_resist_roll's exact resist-chance formula -- see
+## try_cast_spell()'s "fire_bolt" match arm.
+var fire_bolt_damage_roll: Callable = func(min_value: int, max_value: int) -> int: return randi_range(min_value, max_value)
+var fire_bolt_resist_roll: Callable = func() -> float: return randf()
 ## Injectable so tests can seed an exact Retreat outcome per unit instead of
 ## depending on real randomness (see hit_roll for the same pattern). Called
 ## once per living player unit in try_retreat(), in the same stable unit
@@ -358,7 +379,17 @@ func _ready() -> void:
 		# key -- see Unit.visual_key's own doc comment.
 		player_unit.visual_key = "player_%s" % class_id
 		var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, {})
-		var spell_ids: Array = class_def.get("spells", [])
+		# Stage 5 D4: a promoted specialization's own SPECIALIZATION_SPELLS
+		# entries (Battle Mage's "fire_bolt") are appended onto the root
+		# class_def's own "spells" list before hydration -- mirrors get_
+		# available_perks()' identical "root catalog, then specialization
+		# catalog" append pattern, just for spells instead of perks. An
+		# unpromoted adventurer's specialization_id is empty, so this is a
+		# no-op for every existing class exactly as before.
+		var spell_ids: Array = (class_def.get("spells", []) as Array).duplicate()
+		var specialization_id := GameSession.get_adventurer_specialization(adventurer_id)
+		if not specialization_id.is_empty():
+			spell_ids.append_array(GameSession.SPECIALIZATION_SPELLS.get(specialization_id, []))
 		if not spell_ids.is_empty():
 			player_unit.spells = spell_ids.duplicate()
 			player_unit.mp_max = int(class_def.get("mp_max", 0))
@@ -1028,6 +1059,20 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if defender.off_balance_active else 0
 	)
 
+	# Temporary Guard (Stage 5 D4, Battle Mage specialization): the exact
+	# opposite of off-balance above -- a defender who self-cast Temporary
+	# Guard gains WARRIOR_BULWARK_GUARD's own +10 Guard magnitude (decision-
+	# ledger.md's "same magnitude as the existing Bulwark perk" row) for the
+	# whole of its own current marked Round, applied dynamically here rather
+	# than baked into defender.defense the way Bulwark's PERMANENT bonus is
+	# (see GameSession.get_effective_defense()) -- Temporary Guard is a
+	# battle-local, round-boundary-cleared buff (see TEMPORARY_GUARD_STATUS_
+	# ID's own doc comment/_clear_expired_statuses()), not a stat baked in at
+	# battle start.
+	var temporary_guard_bonus: int = (
+		GameSession.WARRIOR_BULWARK_GUARD if has_status(defender, TEMPORARY_GUARD_STATUS_ID) else 0
+	)
+
 	# Called Shot (Stage 5 D4, Archer specialization): "ignores the defender's
 	# Guard entirely for that one attack" (decision-ledger.md's exact wording)
 	# -- effective_defense drops to 0 outright rather than subtracting flank/
@@ -1037,7 +1082,8 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 	# to-hit penalty (below) is the only cost, applied on top of the
 	# attacker's raw hit_chance with no Guard subtraction at all.
 	var effective_defense: int = (
-		0 if is_called_shot else maxi(0, defender.defense - guard_penalty - off_balance_penalty + cover_bonus)
+		0 if is_called_shot
+		else maxi(0, defender.defense - guard_penalty - off_balance_penalty + cover_bonus + temporary_guard_bonus)
 	)
 	var called_shot_penalty: float = (
 		GameConfig.get_float("combat", "called_shot_to_hit_penalty", 0.10) if is_called_shot else 0.0
@@ -1148,6 +1194,49 @@ func try_move_selected_unit(target: Vector2i) -> bool:
 ## position, AP, last_attack_result, and the target's health untouched.
 func try_attack_selected_unit(target_pos: Vector2i) -> bool:
 	return _execute_direct_attack(target_pos, false)
+
+
+## Battle Mage's Temporary Guard perk (Stage 5 D4): a SELF-CAST-ONLY perk
+## action, unlike Bless (an ally-targeted spell whose ally-only gate happens
+## to also permit self-targeting) -- there is no target parameter and no
+## targeting UI at all; a successful call always applies TEMPORARY_GUARD_
+## STATUS_ID to selected_unit itself (see _compute_effective_attack_chances()/
+## _resolve_opportunity_attack()'s own doc comments for where the +10 Guard
+## actually applies). Costs Sleep's exact 3 AP / 1 MP economy (SPELL_ACTION_
+## POINT_COST/SPELL_MP_COST, decision-ledger.md's approved value) even though
+## it is a perk (Unit.perks), not a spell (Unit.spells) -- mirrors try_cast_
+## spell()'s AP/MP gate exactly, just read selected_unit.mp_remaining the same
+## way. Rejects outright (no AP/MP spent, no state touched) for a unit that
+## does not own the battle_mage_temporary_guard perk, is incapacitated, or is
+## already carrying the status (re-casting would waste AP/MP for no further
+## effect) -- mirrors try_shield_bash_selected_unit()'s perk gate.
+func try_temporary_guard_selected_unit() -> bool:
+	if input_locked or selected_unit == null or not selected_unit.is_alive():
+		return false
+	if selected_unit.side != Side.PLAYER or active_side != Side.PLAYER:
+		return false
+	if is_incapacitated(selected_unit):
+		last_targeting_failure = {"reason": "paralyzed", "attacker": selected_unit}
+		return false
+	if not _unit_has_perk(selected_unit, GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID):
+		return false
+	if has_status(selected_unit, TEMPORARY_GUARD_STATUS_ID):
+		return false
+	if selected_unit.action_points_remaining < SPELL_ACTION_POINT_COST or selected_unit.mp_remaining < SPELL_MP_COST:
+		last_targeting_failure = {"reason": "insufficient_ap"}
+		return false
+
+	apply_status(selected_unit, TEMPORARY_GUARD_STATUS_ID)
+	selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
+	selected_unit.mp_remaining -= SPELL_MP_COST
+	last_targeting_failure = {}
+	last_attack_result = {
+		"type": "perk", "perk_id": GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID, "caster": selected_unit,
+	}
+	_spawn_combat_text(
+		_floating_text_anchor(selected_unit), tr("battle.floating.temporary_guard"), FloatingTextScript.TYPE_TEMPORARY_GUARD
+	)
+	return true
 
 
 ## Stage 5 D4's Shield Bash perk: identical action to a plain attack (same AP
@@ -1551,7 +1640,16 @@ func _resolve_opportunity_attack(reactor, mover) -> Dictionary:
 	var off_balance_penalty: int = (
 		GameConfig.get_int("combat", "off_balance_guard_penalty", 10) if mover.off_balance_active else 0
 	)
-	var effective_defense: int = maxi(0, mover.defense - off_balance_penalty)
+	# Temporary Guard (Stage 5 D4, Battle Mage specialization): mirrors off_
+	# balance_penalty's own precedent immediately above -- a dynamic, per-
+	# defender status must apply here too, not only in _compute_effective_
+	# attack_chances(), or a Temporary-Guarded mover would be inconsistently
+	# easier to hit via an Attack of Opportunity than via a direct attack.
+	# See that function's own doc comment on this bonus.
+	var temporary_guard_bonus: int = (
+		GameSession.WARRIOR_BULWARK_GUARD if has_status(mover, TEMPORARY_GUARD_STATUS_ID) else 0
+	)
+	var effective_defense: int = maxi(0, mover.defense - off_balance_penalty + temporary_guard_bonus)
 	var opportunity_penalty: float = GameConfig.get_float("combat", "opportunity_attack_melee_hit_penalty", 0.10)
 	var effective_hit_chance: float = clampf(
 		reactor.hit_chance - effective_defense / 100.0 - opportunity_penalty, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
@@ -1765,9 +1863,13 @@ func try_use_selected_potion(potion_id: String) -> bool:
 ## blessed) both target an ALLY. Stage 5 D3 adds "sleep" (apply the battle-
 ## local SLEEPING_STATUS_ID status -- see is_incapacitated() -- to a living
 ## ENEMY, gated by a magic-resistance roll that can fully negate the effect
-## without refunding the cast; see the "sleep" match arm below) -- the one
-## spell here with its own, ENEMY-only targeting branch rather than sharing
-## Heal/Bless's ally-only one. All three share the same 3 AP / 1 MP cost and
+## without refunding the cast; see the "sleep" match arm below) -- an
+## ENEMY-only targeting branch rather than sharing Heal/Bless's ally-only one.
+## Stage 5 D4 adds "fire_bolt" (Battle Mage specialization): also ENEMY-only,
+## dealing an injectable 2-8 damage (SPELL_HEAL_MIN/SPELL_HEAL_MAX's own
+## magnitude), HALVED (not negated) by the same magic-resistance roll --
+## unlike Sleep's binary negate, matching combat-system.md's literal "Fire
+## Bolt damage reduced by half" wording. All four share the same 3 AP / 1 MP cost and
 ## the same occupied-endpoint line-of-sight range (see grid.has_line_of_
 ## sight()/get_manhattan_distance(), the same primitives ranged attacks
 ## already use via get_legal_attack_targets()) -- 0-3 tiles by default, 0-4
@@ -1795,11 +1897,11 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 	var target = get_unit_at(target_pos)
 	if target == null or not target.is_alive():
 		return false
-	# Sleep targets a living ENEMY; Heal/Bless target a living ALLY -- see
-	# this function's own doc comment above. Deliberately its own branch,
+	# Sleep/Fire Bolt target a living ENEMY; Heal/Bless target a living ALLY --
+	# see this function's own doc comment above. Deliberately its own branch,
 	# not a shared ally-only gate, so a future enemy-targeted spell has an
 	# obvious place to join without touching Heal/Bless's existing rule.
-	if spell_id == "sleep":
+	if spell_id == "sleep" or spell_id == "fire_bolt":
 		if target.side == selected_unit.side:
 			return false
 	elif target.side != selected_unit.side:
@@ -1874,6 +1976,47 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 				tr("battle.floating.sleep_resisted") if resisted else tr("battle.floating.sleep"),
 				FloatingTextScript.TYPE_RESISTED if resisted else FloatingTextScript.TYPE_SLEEP
 			)
+			return true
+		"fire_bolt":
+			selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
+			selected_unit.mp_remaining -= SPELL_MP_COST
+			# Same magic-resistance formula as Sleep (Stage 5 D4's approved
+			# reuse), but HALVES the roll rather than negating it outright --
+			# see this function's own doc comment above. maxi(1, ...) mirrors
+			# every other damage source in this file (_resolve_attack_core())
+			# never landing a zero-damage hit.
+			var resist_chance: float = clampf(
+				(float(target.magic_resistance) - float(selected_unit.spellcasting)) / 100.0, 0.0, 1.0
+			)
+			var resisted: bool = fire_bolt_resist_roll.call() < resist_chance
+			var raw_damage: int = fire_bolt_damage_roll.call(SPELL_HEAL_MIN, SPELL_HEAL_MAX)
+			var damage: int = maxi(1, int(round(raw_damage / 2.0))) if resisted else raw_damage
+			target.take_damage(damage)
+			# Fire Bolt can kill (unlike Heal/Bless/Sleep, which never deal
+			# damage) -- mirrors _execute_direct_attack()'s own defeated
+			# handling exactly: erase from `units` (frees the tile, stops
+			# rendering a corpse) and emit enemy_defeated so kill XP still
+			# fires (Battlefield._award_kill_xp() is wired to this signal, not
+			# to last_attack_result). Fire Bolt is enemy-only (see this
+			# function's own targeting gate above), so there is no player-side
+			# permadeath bookkeeping to mirror here.
+			var defeated: bool = not target.is_alive()
+			if defeated:
+				AudioManager.play_sfx("sfx_unit_death")
+				units.erase(target)
+			last_targeting_failure = {}
+			last_attack_result = {
+				"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target,
+				"damage": damage, "resisted": resisted, "outcome": "resisted" if resisted else "hit",
+				"defeated": defeated,
+			}
+			_spawn_combat_text(
+				_floating_text_anchor(target),
+				tr("battle.floating.fire_bolt_resisted") % damage if resisted else tr("battle.floating.damage") % damage,
+				FloatingTextScript.TYPE_RESISTED if resisted else FloatingTextScript.TYPE_DAMAGE
+			)
+			if defeated:
+				enemy_defeated.emit(target)
 			return true
 		_:
 			return false
@@ -2122,6 +2265,10 @@ func _clear_expired_statuses() -> void:
 	for unit in units:
 		unit.statuses.erase(PARALYZED_STATUS_ID)
 		unit.statuses.erase(SLEEPING_STATUS_ID)
+		# Temporary Guard (Stage 5 D4): round-boundary cleared at the exact
+		# same point as Sleep/Paralyzed, per decision-ledger.md's "same round-
+		# boundary Sleep/Paralyzed already clear on" row.
+		unit.statuses.erase(TEMPORARY_GUARD_STATUS_ID)
 		# Chain Blow (Stage 5 D4): resets at the exact same Round boundary as
 		# every other round-scoped state cleared in this loop, so it triggers
 		# at most once per Round per Knight, however many attacks they make.

@@ -912,6 +912,16 @@ const KNIGHT_CHAIN_BLOW_PERK_ID := "knight_chain_blow"
 ## perks" row).
 const ARCHER_LOCK_ON_PERK_ID := "archer_lock_on"
 const ARCHER_CALLED_SHOT_PERK_ID := "archer_called_shot"
+## Battle Mage (Stage 5 D4): the Mage specialization -- a single perk
+## (Temporary Guard) rather than the usual two, since the class-system.md
+## roadmap gives Battle Mage a perk PLUS a granted spell ("fire_bolt", see
+## SPECIALIZATION_SPELLS below), not two perks. Mage's own CLASS_PERKS entry
+## is deliberately absent (Mage has no Stage 2 locked perk tree at all -- see
+## CLASS_PERKS' own doc comment), so Battle Mage's promotion eligibility is
+## satisfied vacuously (see get_available_specializations()'s own doc comment
+## on this) rather than by exhausting a root tree the way Knight/Archer's
+## Warrior root does.
+const BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID := "battle_mage_temporary_guard"
 ## Class id -> ordered Array of that class's own ROOT perk ids (Stage 2's
 ## locked set). The order here is purely presentational (get_available_
 ## perks() returns eligible ids in this order); selection has no
@@ -941,6 +951,24 @@ const CLASS_PERKS: Dictionary = {
 const SPECIALIZATION_PERKS: Dictionary = {
 	"knight": [KNIGHT_SHIELD_BASH_PERK_ID, KNIGHT_CHAIN_BLOW_PERK_ID],
 	"archer": [ARCHER_LOCK_ON_PERK_ID, ARCHER_CALLED_SHOT_PERK_ID],
+	"battle_mage": [BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID],
+}
+## Specialization id -> ordered Array of spell ids GRANTED to a promoted
+## adventurer, on top of whatever its own root CLASS_DEFINITIONS entry already
+## lists (Stage 5 D4's Battle Mage: "fire_bolt", mirroring how "sleep" itself
+## was granted directly to base Mage's own CLASS_DEFINITIONS entry). Spells
+## named here are never chosen through the perk-tree/choose_perk() mechanism
+## SPECIALIZATION_PERKS drives -- they are unconditionally granted the moment
+## adventurer.specialization is set, exactly like a root class's own "spells"
+## list is unconditionally granted at creation. The two live spell-hydration
+## call sites (BattleController._ready(), BattleStateFactory._build_player_
+## unit()) both append this specialization's own entries onto the root class_
+## def's "spells" list before hydrating Unit.spells -- see either file's own
+## doc comment for the exact append point. adventurer_knows_spell() (this
+## file) reads it too. A specialization id absent here simply grants no
+## additional spells (Knight/Archer today).
+const SPECIALIZATION_SPELLS: Dictionary = {
+	"battle_mage": ["fire_bolt"],
 }
 ## Specialization id -> the root CLASS_DEFINITIONS id an adventurer must
 ## already belong to (with both that root's own CLASS_PERKS already chosen,
@@ -955,6 +983,7 @@ const SPECIALIZATION_PERKS: Dictionary = {
 const SPECIALIZATION_ROOT_CLASS: Dictionary = {
 	"knight": "warrior",
 	"archer": "warrior",
+	"battle_mage": "mage",
 }
 ## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
 ## name and effect description through this catalog (get_perk_definition(),
@@ -975,6 +1004,7 @@ const PERK_DEFINITIONS: Dictionary = {
 	"knight_chain_blow": {"class": "warrior", "name_key": "perk.knight_chain_blow.name", "effect_key": "perk.knight_chain_blow.effect"},
 	"archer_lock_on": {"class": "warrior", "name_key": "perk.archer_lock_on.name", "effect_key": "perk.archer_lock_on.effect"},
 	"archer_called_shot": {"class": "warrior", "name_key": "perk.archer_called_shot.name", "effect_key": "perk.archer_called_shot.effect"},
+	"battle_mage_temporary_guard": {"class": "mage", "name_key": "perk.battle_mage_temporary_guard.name", "effect_key": "perk.battle_mage_temporary_guard.effect"},
 }
 # Stage 2 locked balance values (see docs/designs/class-system.md and
 # config/game_config.json's "progression" section) -- loaded from config in
@@ -4261,6 +4291,12 @@ func get_perk_effect_description(perk_id: String) -> String:
 			return tr("perk.archer_lock_on.effect") % int(round(ARCHER_LOCK_ON_HIT_CHANCE_BONUS * 100))
 		ARCHER_CALLED_SHOT_PERK_ID:
 			return tr("perk.archer_called_shot.effect") % int(round(ARCHER_CALLED_SHOT_TO_HIT_PENALTY * 100))
+		BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID:
+			# Reuses Bulwark's exact +10 Guard magnitude (decision-ledger.md's
+			# "Temporary Guard effect" row) -- no new balance value invented for
+			# this description, same reuse pattern as Shield Bash's off-balance
+			# magnitude just above.
+			return tr("perk.battle_mage_temporary_guard.effect") % WARRIOR_BULWARK_GUARD
 		BONUS_MOVE_PERK_ID:
 			return tr("perk.bonus_move.effect")
 		_:
@@ -4311,7 +4347,17 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 ## promoted (adventurer.specialization is still empty -- promotion happens
 ## at most once). Returns [] for an unknown adventurer. Paladin's later slice
 ## adds its own additional built-Temple gate on top of this same check, per
-## the ledger; Knight has no additional gate.
+## the ledger; Knight/Archer have no additional gate.
+##
+## Deliberately does NOT early-return for a class whose CLASS_PERKS entry is
+## empty or absent (Mage today -- see CLASS_PERKS' own doc comment: Mage has
+## no Stage 2 locked perk tree at all). "Both of the root class's two perks
+## are chosen" is vacuously TRUE when there are zero such perks -- the for
+## loop below simply never executes for an empty root_perks, falling straight
+## through to the specialization loop, so Battle Mage becomes available to a
+## fresh, non-promoted Mage immediately. Warrior/Scout/Cleric are completely
+## unaffected: their CLASS_PERKS entries are non-empty, so the for loop below
+## still gates them on actually choosing both perks, exactly as before.
 func get_available_specializations(adventurer_id: String) -> Array[String]:
 	var available: Array[String] = []
 	var adventurer := get_adventurer(adventurer_id)
@@ -4321,8 +4367,6 @@ func get_available_specializations(adventurer_id: String) -> Array[String]:
 		return available
 	var class_id := str(adventurer.get("class", ""))
 	var root_perks: Array = CLASS_PERKS.get(class_id, [])
-	if root_perks.is_empty():
-		return available
 	var chosen: Array = adventurer.progression.get("perks", [])
 	for perk_id in root_perks:
 		if not chosen.has(perk_id):
@@ -4752,7 +4796,17 @@ func adventurer_knows_spell(adventurer_id: String, spell_id: String) -> bool:
 	if adventurer.is_empty():
 		return false
 	var class_def: Dictionary = CLASS_DEFINITIONS.get(str(adventurer.get("class", "")), {})
-	return (class_def.get("spells", []) as Array).has(spell_id)
+	if (class_def.get("spells", []) as Array).has(spell_id):
+		return true
+	# Stage 5 D4: a promoted specialization can GRANT an additional spell on
+	# top of its root class's own list (Battle Mage's "fire_bolt" -- see
+	# SPECIALIZATION_SPELLS' own doc comment) without that spell ever
+	# appearing on the root CLASS_DEFINITIONS entry itself, so an unpromoted
+	# Mage never knows it.
+	var specialization_id := str(adventurer.get("specialization", ""))
+	if specialization_id.is_empty():
+		return false
+	return (SPECIALIZATION_SPELLS.get(specialization_id, []) as Array).has(spell_id)
 
 
 ## Details-view "Heal party member" transaction (docs/designs/campaign-

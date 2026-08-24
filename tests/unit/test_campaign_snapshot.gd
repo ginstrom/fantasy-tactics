@@ -995,6 +995,28 @@ func test_an_archer_perk_validates_only_alongside_the_matching_specialization_fi
 	)
 
 
+## Battle Mage's own validation (Stage 5 D4): mirrors the Knight/Archer tests
+## above exactly, proving the general mechanism also holds for a root class
+## (Mage) with an EMPTY CLASS_PERKS entry and a specialization with only ONE
+## perk instead of two.
+func test_a_battle_mage_perk_validates_only_alongside_the_matching_specialization_field() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.adventurers = [
+		{
+			"id": "mage_001", "name": "Mage", "class": "mage", "level": 2,
+			"specialization": "battle_mage",
+			"stats": {"missile": 25, "spellcasting": 20, "vitality": 8, "max_health": 8},
+			"progression": {"xp": 20.0, "perks": ["battle_mage_temporary_guard"]},
+		},
+	]
+
+	var result := CampaignSnapshot.from_dictionary(data)
+
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.adventurers[0].specialization, "battle_mage")
+	assert_eq(result.snapshot.adventurers[0].progression.perks, ["battle_mage_temporary_guard"])
+
+
 func test_a_knight_perk_without_the_specialization_field_is_rejected_atomically() -> void:
 	var data := _full_snapshot().to_dictionary()
 	data.adventurers = [

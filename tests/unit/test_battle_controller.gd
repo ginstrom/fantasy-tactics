@@ -5136,3 +5136,289 @@ func test_current_round_increments_only_on_the_enemy_to_player_boundary() -> voi
 
 	controller.end_turn()  # ENEMY -> PLAYER: Round 3 begins
 	assert_eq(controller.current_round, 3)
+
+
+## --- Battle Mage specialization: Temporary Guard (Stage 5 D4) ---------------
+## Unit.perks (same mechanism Knight/Archer already use) is what gates
+## Temporary Guard -- set directly on a manually-constructed Unit here, the
+## same way every other test in this file constructs its own fixture state
+## rather than going through GameSession.
+
+func test_temporary_guard_is_rejected_for_a_unit_without_the_perk() -> void:
+	var controller := _make_controller(3, 3)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	mage.mp_max = 3
+	mage.mp_remaining = 3
+	controller.units = [mage]
+	controller.selected_unit = mage
+
+	assert_false(controller.try_temporary_guard_selected_unit())
+	assert_eq(mage.action_points_remaining, 6, "A rejected Temporary Guard must not spend any AP")
+	assert_eq(mage.mp_remaining, 3, "A rejected Temporary Guard must not spend any MP")
+	assert_false(controller.has_status(mage, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID))
+
+
+func test_temporary_guard_costs_sleeps_exact_ap_and_mp_economy() -> void:
+	var controller := _make_controller(3, 3)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	mage.perks = [GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID]
+	mage.mp_max = 3
+	mage.mp_remaining = 3
+	controller.units = [mage]
+	controller.selected_unit = mage
+
+	assert_true(controller.try_temporary_guard_selected_unit())
+
+	assert_eq(
+		mage.action_points_remaining, 6 - BattleControllerScript.SPELL_ACTION_POINT_COST,
+		"Temporary Guard must cost exactly the same AP as a spell cast, not a plain melee attack"
+	)
+	assert_eq(mage.mp_remaining, 3 - BattleControllerScript.SPELL_MP_COST)
+	assert_true(controller.has_status(mage, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID))
+	assert_eq(controller.last_attack_result.type, "perk")
+	assert_eq(controller.last_attack_result.perk_id, GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID)
+	assert_eq(controller.last_attack_result.caster, mage)
+
+
+func test_temporary_guard_cannot_be_reapplied_while_already_active() -> void:
+	var controller := _make_controller(3, 3)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	mage.perks = [GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID]
+	mage.mp_max = 3
+	mage.mp_remaining = 3
+	controller.units = [mage]
+	controller.selected_unit = mage
+	assert_true(controller.try_temporary_guard_selected_unit())
+
+	assert_false(controller.try_temporary_guard_selected_unit())
+	assert_eq(mage.mp_remaining, 2, "A rejected re-cast must not spend a second MP")
+
+
+func test_temporary_guard_is_rejected_without_enough_ap_or_mp() -> void:
+	var controller := _make_controller(3, 3)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 2, 10)
+	mage.perks = [GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID]
+	mage.mp_max = 3
+	mage.mp_remaining = 3
+	controller.units = [mage]
+	controller.selected_unit = mage
+
+	assert_false(controller.try_temporary_guard_selected_unit(), "2 AP is not enough for Temporary Guard's 3 AP cost")
+
+	mage.action_points_remaining = 6
+	mage.mp_remaining = 0
+	assert_false(controller.try_temporary_guard_selected_unit(), "0 MP is not enough for Temporary Guard's 1 MP cost")
+
+
+## The load-bearing mechanism test: Temporary Guard's +10 Guard is applied
+## dynamically in _compute_effective_attack_chances() (never baked into
+## Unit.defense the way Bulwark's PERMANENT bonus is), and must change a REAL
+## outcome, not just a displayed stat -- the same stubbed roll that hits the
+## Battle Mage without the status must miss once it is active.
+func test_temporary_guard_flips_an_incoming_attack_from_hit_to_miss() -> void:
+	var controller := _make_controller(3, 3)
+	# Attacker directly to the defender's right (default facing RIGHT) keeps
+	# get_flank_type() at "front" (no flank guard_penalty/crit_bonus) so the
+	# math below is exactly Guard vs. hit_chance, nothing else.
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20)
+	var attacker = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 0.5)
+	controller.units = [attacker, mage]
+	controller.selected_unit = attacker
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.45  # inside [0.40, 0.50)
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(mage.grid_position))
+	assert_true(controller.last_attack_result.hit, "Without Temporary Guard, 0.45 beats the 50% effective hit chance (0 Guard)")
+
+	controller.apply_status(mage, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID)
+
+	assert_true(controller.try_attack_selected_unit(mage.grid_position))
+	assert_false(
+		controller.last_attack_result.hit,
+		"Temporary Guard's +10 Guard drops effective hit chance to 40% -- the exact same 0.45 roll now misses"
+	)
+
+
+## Mirrors the primary-attack test above, but for an Attack of Opportunity's
+## own separate (simplified) effective-defense formula -- Temporary Guard
+## must apply consistently in both places, not just the primary formula.
+## Geometry mirrors test_moving_out_of_an_adjacent_enemys_reach_triggers_
+## exactly_one_free_attack() exactly: mover at (1,0) departs reactor (0,0)'s
+## adjacency by moving to (2,0).
+func test_temporary_guard_also_raises_effective_defense_against_an_opportunity_attack() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 20)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 0.5)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	# 0 Guard: 50% - the flat 10% opportunity-attack penalty = 40% without
+	# Temporary Guard; +10 Guard with it active drops that to 30%. 0.35 sits
+	# inside that [0.30, 0.40) flip band.
+	controller.hit_roll = func() -> float: return 0.35
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+	assert_eq(controller.last_reaction_results.size(), 1)
+	assert_true(controller.last_reaction_results[0].hit, "Without Temporary Guard, 0.35 beats the 40% effective hit chance")
+
+	# Reposition directly (re-entering adjacency via try_move_selected_unit()
+	# would not itself trigger a reaction -- only a departure does) and depart
+	# again with Temporary Guard now active. try_move_selected_unit() itself
+	# resets last_reaction_results at its own start, so no manual reset here.
+	mover.grid_position = Vector2i(1, 0)
+	mover.action_points_remaining = mover.max_action_points
+	controller.apply_status(mover, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID)
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+	assert_eq(controller.last_reaction_results.size(), 1)
+	assert_false(
+		controller.last_reaction_results[0].hit,
+		"Temporary Guard's +10 Guard also lowers an Attack of Opportunity's own effective hit chance to 30%"
+	)
+
+
+func test_temporary_guard_resets_at_the_next_player_round() -> void:
+	var controller := _make_controller(3, 3)
+	var mage = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [mage]
+	controller.apply_status(mage, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID)
+
+	controller.end_turn()  # PLAYER -> ENEMY
+	controller.end_turn()  # ENEMY -> PLAYER: a new Round starts, clearing round-scoped state
+
+	assert_false(
+		controller.has_status(mage, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID),
+		"_clear_expired_statuses() must reset Temporary Guard at the same round boundary as Sleep/Paralyzed"
+	)
+
+
+## --- Battle Mage specialization: Fire Bolt (Stage 5 D4) ---------------------
+
+func test_fire_bolt_deals_damage_and_spends_ap_and_mp() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["fire_bolt"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.magic_resistance = 0
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.fire_bolt_damage_roll = func(_min_v: int, max_v: int) -> int: return max_v  # 8
+
+	assert_true(controller.try_cast_spell("fire_bolt", enemy.grid_position))
+
+	assert_eq(caster.action_points_remaining, 3)
+	assert_eq(caster.mp_remaining, 2)
+	assert_eq(enemy.health, 2, "10 max health - 8 damage")
+	assert_eq(controller.last_attack_result.type, "spell")
+	assert_eq(controller.last_attack_result.spell_id, "fire_bolt")
+	assert_eq(controller.last_attack_result.damage, 8)
+	assert_false(controller.last_attack_result.resisted)
+
+
+## Resistance formula (reused from Sleep, Stage 5 D3): (magic_resistance -
+## spellcasting) / 100. 50 - 20 = 30% resist chance -- a roll strictly below
+## 0.30 must resist, HALVING (not negating) the damage; AP/MP are still spent.
+func test_fire_bolt_is_halved_by_a_successful_magic_resistance_roll_but_still_spends_ap_and_mp() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["fire_bolt"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	enemy.magic_resistance = 50
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.fire_bolt_resist_roll = func() -> float: return 0.10  # strictly below the 30% resist chance
+	controller.fire_bolt_damage_roll = func(_min_v: int, max_v: int) -> int: return max_v  # 8 raw, halved to 4
+
+	assert_true(controller.try_cast_spell("fire_bolt", enemy.grid_position))
+
+	assert_eq(caster.action_points_remaining, 3, "A resisted cast still costs its AP")
+	assert_eq(caster.mp_remaining, 2, "A resisted cast still costs its MP")
+	assert_true(controller.last_attack_result.resisted)
+	assert_eq(controller.last_attack_result.damage, 4, "8 raw damage halved by a successful resist roll")
+	assert_eq(enemy.health, 16, "20 max health - 4 halved damage")
+
+
+func test_fire_bolt_roll_exactly_at_the_resist_chance_boundary_deals_full_damage() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["fire_bolt"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	enemy.magic_resistance = 50
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.fire_bolt_resist_roll = func() -> float: return 0.30  # exactly at the boundary -- not below it
+	controller.fire_bolt_damage_roll = func(_min_v: int, max_v: int) -> int: return max_v  # 8
+
+	assert_true(controller.try_cast_spell("fire_bolt", enemy.grid_position))
+
+	assert_false(controller.last_attack_result.resisted)
+	assert_eq(controller.last_attack_result.damage, 8)
+
+
+## Fire Bolt is the first spell that can defeat its target (Heal/Bless/Sleep
+## never deal damage) -- it independently reimplements
+## _execute_direct_attack()'s own defeated handling (erase from `units`, emit
+## `enemy_defeated`), so it needs its own kill-path regression coverage.
+## Mirrors test_attack_defeats_and_removes_the_target_when_health_reaches_zero().
+func test_fire_bolt_defeats_and_removes_the_target_when_health_reaches_zero() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["fire_bolt"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	caster.spellcasting = 20
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3)
+	enemy.magic_resistance = 50
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+	controller.fire_bolt_resist_roll = func() -> float: return 0.30  # exactly at the boundary -- fails to resist
+	controller.fire_bolt_damage_roll = func(_min_v: int, max_v: int) -> int: return max_v  # 8, well past the 3 HP target
+	watch_signals(controller)
+
+	assert_true(controller.try_cast_spell("fire_bolt", enemy.grid_position))
+
+	assert_true(controller.last_attack_result.defeated)
+	assert_false(enemy.is_alive())
+	assert_eq(controller.units, [caster], "A defeated unit is removed from the board")
+	assert_null(controller.get_unit_at(enemy.grid_position))
+	assert_signal_emitted_with_parameters(controller, "enemy_defeated", [enemy])
+
+
+func test_fire_bolt_cannot_target_an_ally() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["fire_bolt"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [caster, ally]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("fire_bolt", ally.grid_position))
+	assert_eq(caster.mp_remaining, 3)
+	assert_eq(ally.health, ally.max_health)
+
+
+func test_heal_and_bless_still_cannot_target_an_enemy_after_fire_bolts_own_targeting_branch() -> void:
+	var controller := _make_controller(6, 6)
+	var caster = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	caster.spells = ["heal", "bless"]
+	caster.mp_max = 3
+	caster.mp_remaining = 3
+	var enemy = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10)
+	enemy.health = 4
+	controller.units = [caster, enemy]
+	controller.selected_unit = caster
+
+	assert_false(controller.try_cast_spell("heal", enemy.grid_position))
+	assert_false(controller.try_cast_spell("bless", enemy.grid_position))
+	assert_eq(caster.mp_remaining, 3)

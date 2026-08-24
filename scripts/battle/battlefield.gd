@@ -27,6 +27,8 @@ const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 @onready var heal_button: Button = %HealButton
 @onready var bless_button: Button = %BlessButton
 @onready var sleep_button: Button = %SleepButton
+@onready var fire_bolt_button: Button = %FireBoltButton
+@onready var temporary_guard_button: Button = %TemporaryGuardButton
 @onready var mp_label: Label = %MPLabel
 @onready var potion_option: OptionButton = %PotionOption
 @onready var use_potion_button: Button = %UsePotionButton
@@ -201,6 +203,25 @@ func _on_sleep_button_pressed() -> void:
 	_on_action_mode_changed(grid.action_mode)
 
 
+## Stage 5 D4 (Battle Mage specialization): Fire Bolt's own action-bar entry
+## point, identical shape to Sleep above (an enemy-only spell) -- try_cast_
+## spell()'s own "fire_bolt" targeting branch is what actually restricts the
+## next click to an enemy tile, not this handler.
+func _on_fire_bolt_button_pressed() -> void:
+	grid.begin_spell_targeting("fire_bolt")
+	_on_action_mode_changed(grid.action_mode)
+
+
+## Stage 5 D4 (Battle Mage specialization): Temporary Guard's own action-bar
+## entry point -- unlike every other spell/perk button above, it is SELF-CAST
+## ONLY (see try_temporary_guard_selected_unit()'s own doc comment): no
+## targeting mode, no tile click, just an immediate call mirroring _on_use_
+## potion_pressed()'s identical "call try_*, refresh on success" shape.
+func _on_temporary_guard_button_pressed() -> void:
+	if grid.try_temporary_guard_selected_unit():
+		_on_board_changed()
+
+
 ## Only the active-mode highlight lives here -- disabled state is driven
 ## separately by _update_action_bar(), since it depends on the selected
 ## unit's AP and the input lock, neither of which action_mode_changed alone
@@ -214,6 +235,7 @@ func _on_action_mode_changed(mode: int) -> void:
 	heal_button.button_pressed = spell_mode and grid.pending_spell_id == "heal"
 	bless_button.button_pressed = spell_mode and grid.pending_spell_id == "bless"
 	sleep_button.button_pressed = spell_mode and grid.pending_spell_id == "sleep"
+	fire_bolt_button.button_pressed = spell_mode and grid.pending_spell_id == "fire_bolt"
 
 
 ## Move requires at least one AP (its own cost); Attack requires enough AP
@@ -261,13 +283,39 @@ func _update_action_bar() -> void:
 			not can_act or selected_unit.action_points_remaining < BattleControllerScript.BASIC_ATTACK_ACTION_POINT_COST
 		)
 
+	# Temporary Guard (Stage 5 D4, Battle Mage specialization): shown only for
+	# a unit that actually owns the battle_mage_temporary_guard perk, same
+	# "don't offer an action this unit doesn't own" rule as Shield Bash/Called
+	# Shot above -- but AP/MP costed like a spell cast (see try_temporary_
+	# guard_selected_unit()'s own doc comment), not the flat melee attack cost
+	# those two use, and additionally disabled while the buff is already
+	# active (re-casting would waste AP/MP for no further effect).
+	var has_temporary_guard: bool = (
+		selected_unit != null and selected_unit.perks.has(GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID)
+	)
+	temporary_guard_button.visible = has_temporary_guard
+	if has_temporary_guard:
+		temporary_guard_button.disabled = (
+			not can_act
+			or selected_unit.action_points_remaining < BattleControllerScript.SPELL_ACTION_POINT_COST
+			or selected_unit.mp_remaining < BattleControllerScript.SPELL_MP_COST
+			or grid.has_status(selected_unit, BattleControllerScript.TEMPORARY_GUARD_STATUS_ID)
+		)
+
 	var is_caster: bool = selected_unit != null and not selected_unit.spells.is_empty()
 	var knows_heal: bool = is_caster and selected_unit.spells.has("heal")
 	var knows_bless: bool = is_caster and selected_unit.spells.has("bless")
 	var knows_sleep: bool = is_caster and selected_unit.spells.has("sleep")
+	# Fire Bolt (Stage 5 D4, Battle Mage specialization): same "each button
+	# additionally checks its OWN spell id" rule Sleep's own Stage 5 D3 fix
+	# introduced (see this block's own doc comment on knows_sleep) -- a
+	# Battle Mage's spells == ["sleep", "fire_bolt"] shows both dedicated
+	# buttons, never a generic "cast any known spell" picker.
+	var knows_fire_bolt: bool = is_caster and selected_unit.spells.has("fire_bolt")
 	heal_button.visible = knows_heal
 	bless_button.visible = knows_bless
 	sleep_button.visible = knows_sleep
+	fire_bolt_button.visible = knows_fire_bolt
 	mp_label.visible = is_caster
 	if is_caster:
 		mp_label.text = tr("battle.mp") % [selected_unit.mp_remaining, selected_unit.mp_max]
@@ -279,6 +327,7 @@ func _update_action_bar() -> void:
 		heal_button.disabled = not can_cast
 		bless_button.disabled = not can_cast
 		sleep_button.disabled = not can_cast
+		fire_bolt_button.disabled = not can_cast
 
 
 func _play_enemy_turn() -> void:
@@ -343,6 +392,8 @@ func _on_board_changed() -> void:
 			_log_attack(grid.last_attack_result)
 		elif grid.last_attack_result.type == "spell":
 			_log_spell(grid.last_attack_result)
+		elif grid.last_attack_result.type == "perk":
+			_log_perk(grid.last_attack_result)
 
 	if grid.is_battle_won():
 		_resolve_battle(true)
@@ -722,7 +773,14 @@ func _describe_step(step: Dictionary) -> String:
 	if step.type == "spell":
 		if step.spell_id == "sleep":
 			return _describe_sleep_entry(step, "battle.status.spell_sleep_applied", "battle.status.spell_sleep_resisted")
+		if step.spell_id == "fire_bolt":
+			return _describe_fire_bolt_entry(step, "battle.status.spell_fire_bolt", "battle.status.spell_fire_bolt_resisted")
 		return _describe_spell_entry(step, "battle.status.spell_heal", "battle.status.spell_bless")
+	# Temporary Guard (Stage 5 D4, Battle Mage specialization): a perk action,
+	# not a spell -- see try_temporary_guard_selected_unit()'s own doc
+	# comment on why it carries type "perk" rather than "spell".
+	if step.type == "perk":
+		return tr("battle.status.temporary_guard_applied") % step.caster.display_name
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
 
@@ -750,6 +808,28 @@ func _describe_sleep_entry(step: Dictionary, applied_key: String, resisted_key: 
 	if step.get("resisted", false):
 		return tr(resisted_key) % [caster_name, target_name]
 	return tr(applied_key) % [caster_name, target_name]
+
+
+## Fire Bolt's own log/status line (Stage 5 D4, Battle Mage specialization):
+## distinct from _describe_sleep_entry() above -- unlike Sleep's binary
+## negate, a resisted Fire Bolt still deals (halved) damage, so both the
+## landed and resisted variants carry a damage number (see try_cast_spell()'s
+## "fire_bolt" match arm, the only place that ever sets step.damage/resisted
+## for this spell_id).
+func _describe_fire_bolt_entry(step: Dictionary, hit_key: String, resisted_key: String) -> String:
+	var caster_name: String = step.caster.display_name
+	var target_name: String = step.target.display_name
+	var line: String = (
+		tr(resisted_key) % [caster_name, target_name, step.damage] if step.get("resisted", false)
+		else tr(hit_key) % [caster_name, target_name, step.damage]
+	)
+	# Unlike Heal/Bless/Sleep, Fire Bolt can kill -- see BattleController.
+	# try_cast_spell()'s "fire_bolt" match arm, which is what actually sets
+	# step.defeated. Mirrors _describe_log_entry()'s identical "defeated" line
+	# for a plain attack.
+	if step.get("defeated", false):
+		line += " " + tr("battle.log.defeated") % target_name
+	return line
 
 
 func _describe_targeting_failure(failure: Dictionary) -> String:
@@ -866,7 +946,22 @@ func _log_spell(step: Dictionary) -> void:
 	if step.spell_id == "sleep":
 		_append_log_line(_describe_sleep_entry(step, "battle.log.spell.sleep_applied", "battle.log.spell.sleep_resisted"))
 		return
+	if step.spell_id == "fire_bolt":
+		_append_log_line(_describe_fire_bolt_entry(step, "battle.log.spell.fire_bolt", "battle.log.spell.fire_bolt_resisted"))
+		return
 	_append_log_line(_describe_spell_entry(step, "battle.log.spell.heal", "battle.log.spell.bless"))
+
+
+## Temporary Guard's own log line (Stage 5 D4, Battle Mage specialization):
+## mirrors _log_spell()'s identical dedup-and-append shape (same shared
+## _last_logged_attack_result guard -- is_same() alone already distinguishes
+## this Dictionary from any prior attack/spell/perk result regardless of
+## type), for a perk action rather than a spell cast.
+func _log_perk(step: Dictionary) -> void:
+	if is_same(_last_logged_attack_result, step):
+		return
+	_last_logged_attack_result = step
+	_append_log_line(tr("battle.log.temporary_guard_applied") % step.caster.display_name)
 
 
 ## Step 3 of docs/plans/2026-08-18-critical-hits-and-flanking: a side or rear

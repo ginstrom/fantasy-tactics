@@ -2894,6 +2894,149 @@ func test_importing_a_knight_perk_without_a_specialization_field_is_rejected() -
 	assert_eq(_capture_durable_fields(), before)
 
 
+## --- Battle Mage specialization (Stage 5 D4) --------------------------------
+## Fixes the Mage-zero-perks eligibility gap: CLASS_PERKS has NO "mage" entry
+## at all (Mage's Stage 2 locked perk set is empty by design -- see CLASS_
+## PERKS' own doc comment), so "both of the root class's two perks are
+## chosen" is vacuously TRUE the instant a Mage exists -- get_available_
+## specializations() must offer "battle_mage" immediately, with no perk-
+## selection prerequisite at all, unlike Warrior's own two-stage gating above
+## (test_get_available_specializations_is_empty_until_both_warrior_perks_are_
+## chosen()). That existing Warrior test is untouched by the fix and still
+## passes, proving Warrior's own gating loop is unaffected.
+
+func test_get_available_specializations_offers_battle_mage_to_a_fresh_mage_immediately() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	session.assign_adventurer_to_selected_party("mage_test")
+
+	assert_eq(
+		session.get_available_specializations("mage_test"), ["battle_mage"] as Array[String],
+		"A fresh, level-1 Mage has zero root perks to choose -- vacuously eligible immediately"
+	)
+	assert_true(session.is_promotion_eligible("mage_test", "battle_mage"))
+	assert_false(session.is_promotion_eligible("mage_test", "no_such_specialization"))
+
+
+## Regression coverage for the fix above: removing the old `if root_perks.
+## is_empty(): return available` short-circuit must not loosen Scout's own
+## "both root perks chosen" gate -- Scout's CLASS_PERKS entry is non-empty,
+## so the per-perk loop just below (left completely unchanged) still returns
+## early the moment either perk is unchosen.
+func test_get_available_specializations_still_gates_scout_on_a_single_unchosen_root_perk() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var scout: Dictionary = session.get_default_scout("scout_test", "Test Scout")
+	session.adventurers.append(scout)
+	session.assign_adventurer_to_selected_party("scout_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+
+	assert_eq(session.get_available_specializations("scout_test"), [] as Array[String], "Neither Scout perk chosen yet")
+	session.choose_perk("scout_test", GameSessionScript.SCOUT_QUICKDRAW_PERK_ID)
+	assert_eq(
+		session.get_available_specializations("scout_test"), [] as Array[String],
+		"Only one of Scout's two root perks chosen -- the per-perk loop must still gate, not the removed empty-check"
+	)
+
+
+## Same regression coverage for Cleric.
+func test_get_available_specializations_still_gates_cleric_on_a_single_unchosen_root_perk() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+
+	assert_eq(session.get_available_specializations("cleric_test"), [] as Array[String], "Neither Cleric perk chosen yet")
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_MEDITATION_PERK_ID)
+	assert_eq(
+		session.get_available_specializations("cleric_test"), [] as Array[String],
+		"Only one of Cleric's two root perks chosen -- the per-perk loop must still gate, not the removed empty-check"
+	)
+
+
+## The decision-contract shape task 1 of the step file asks for: Temporary
+## Guard is unavailable before promotion (both as a perk AND -- since it's a
+## GRANTED spell, not a perk-tree choice -- Fire Bolt is unavailable too),
+## both become available after a legal promotion, and promotion itself is
+## rejected a second time.
+func test_promote_adventurer_unlocks_temporary_guard_and_grants_fire_bolt_on_the_existing_mechanisms() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var mage: Dictionary = session.get_default_mage("mage_test", "Test Mage")
+	session.adventurers.append(mage)
+	session.assign_adventurer_to_selected_party("mage_test")
+
+	assert_false(session.adventurer_knows_spell("mage_test", "fire_bolt"), "Unpromoted Mage never knows Fire Bolt")
+	assert_true(session.adventurer_knows_spell("mage_test", "sleep"), "Precondition: base Mage already knows Sleep")
+	assert_false(
+		session.choose_perk("mage_test", GameSessionScript.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID),
+		"Temporary Guard is unavailable before promotion"
+	)
+
+	assert_true(session.promote_adventurer("mage_test", "battle_mage"))
+	assert_eq(session.get_adventurer_specialization("mage_test"), "battle_mage")
+	assert_true(session.adventurer_knows_spell("mage_test", "fire_bolt"), "Fire Bolt is GRANTED on promotion, not perk-tree chosen")
+	assert_true(session.adventurer_knows_spell("mage_test", "sleep"), "Promotion must not remove the root class's own spell")
+
+	assert_false(session.is_perk_choice_pending("mage_test"), "Level 1: no perk-interval slot earned yet")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 20.0)  # level 2: first perk-interval slot
+	assert_true(session.is_perk_choice_pending("mage_test"))
+	assert_eq(session.get_available_perks("mage_test"), [GameSessionScript.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID])
+	assert_true(session.choose_perk("mage_test", GameSessionScript.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID))
+	assert_false(session.is_perk_choice_pending("mage_test"), "Battle Mage's single specialization perk is now spent")
+	assert_eq(session.get_available_specializations("mage_test"), [] as Array[String], "Already promoted")
+	assert_false(session.promote_adventurer("mage_test", "battle_mage"), "Cannot promote a second time")
+
+
+func test_promote_adventurer_rejects_battle_mage_for_a_class_foreign_to_mage() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+
+	assert_eq(
+		session.get_available_specializations("warrior_001"), ["knight", "archer"] as Array[String],
+		"Battle Mage is a Mage specialization -- a fully-perked Warrior never sees it offered"
+	)
+	assert_false(session.promote_adventurer("warrior_001", "battle_mage"))
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "")
+
+
+## Snapshot round trip (Stage 5 D4's own durable-state requirement): a
+## promoted Battle Mage's specialization, its one chosen perk, and its
+## GRANTED (not perk-chosen) Fire Bolt spell all survive export/reset/import.
+func test_battle_mage_specialization_and_fire_bolt_persist_through_a_snapshot_round_trip() -> void:
+	var mage: Dictionary = GameSession.get_default_mage("mage_test", "Test Mage")
+	mage.level = 2
+	GameSession.adventurers.append(mage)
+
+	assert_true(GameSession.promote_adventurer("mage_test", "battle_mage"))
+	assert_true(GameSession.choose_perk("mage_test", GameSessionScript.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_adventurer_specialization("mage_test"), "battle_mage")
+	assert_true(GameSession.adventurer_knows_spell("mage_test", "fire_bolt"), "Fire Bolt must persist as a granted spell, not a saved perk")
+	assert_eq(
+		GameSession.get_adventurer("mage_test").progression.perks,
+		[GameSessionScript.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID]
+	)
+
+
 func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

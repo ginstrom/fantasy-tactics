@@ -50,6 +50,14 @@ const TYPE_CHAIN_BLOW := "chain_blow"
 ## attack(), the sole spawn site for either type.
 const TYPE_CALLED_SHOT := "called_shot"
 const TYPE_LOCKED_ON := "locked_on"
+## Battle Mage specialization (Stage 5 D4): Temporary Guard applying its own
+## +10 Guard buff ("GUARDED!") is its own distinct text -- same "never
+## colour-only feedback" rule as every other Stage 5 D4 type above. See
+## battle_controller.gd's try_temporary_guard_selected_unit(), the sole spawn
+## site. Fire Bolt's own damage/resisted-damage text reuses TYPE_DAMAGE/
+## TYPE_RESISTED directly (see try_cast_spell()'s "fire_bolt" match arm) --
+## it needs no new type of its own.
+const TYPE_TEMPORARY_GUARD := "temporary_guard"
 
 const COLORS := {
 	TYPE_DAMAGE: Color(0.9, 0.2, 0.2),
@@ -65,6 +73,7 @@ const COLORS := {
 	TYPE_CHAIN_BLOW: Color(0.85, 0.3, 0.9),
 	TYPE_CALLED_SHOT: Color(0.9, 0.5, 0.15),
 	TYPE_LOCKED_ON: Color(0.3, 0.75, 0.95),
+	TYPE_TEMPORARY_GUARD: Color(0.4, 0.6, 0.95),
 }
 const RISE_DISTANCE := 40.0
 const DURATION := 0.6
