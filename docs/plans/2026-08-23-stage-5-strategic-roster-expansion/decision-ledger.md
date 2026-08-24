@@ -361,3 +361,14 @@ Step 2 merged 2026-08-23 after manual `make play` signoff (commit `7a9ae58`).
 D2 (tactical depth: terrain source, visibility staleness, Dodge/Parry
 chance, opportunity-attack trigger scope) approved with the user 2026-08-23
 ahead of Step 3 — recorded above.
+
+D4 (specializations: delivery order Knight → Archer → Battle Mage →
+Paladin, promotion eligibility) approved with the user 2026-08-23 ahead of
+Step 5 — recorded above. All four branches merged 2026-08-23/24 after their
+own independent review and manual `make play` signoff: Knight (commit
+`44841db`), Archer (`7bf9b91`), Battle Mage (`4968ae0`, which also fixed a
+prerequisite gap — Mage had no root perk-tree entry, which would have made
+Battle Mage promotion permanently unreachable under the existing
+eligibility gate), Paladin (`0c52a6d`, gated additionally on a built
+Temple, granting a doubled Bless rather than a new perk). Rogue remains
+deferred per the plan; Step 5 is complete.
