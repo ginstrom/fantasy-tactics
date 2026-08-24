@@ -81,6 +81,12 @@ static func build(scenario: Dictionary, iteration_seed: int) -> Node2D:
 	# every roll above -- a deterministic scenario must never fall back to
 	# Godot's global, unseeded randf() for a new stochastic check either.
 	controller.sleep_resist_roll = func() -> float: return rng.randf()
+	# Fire Bolt's damage/resistance rolls (Battle Mage specialization, Stage 5
+	# D4): the same requirement as every roll above -- a deterministic
+	# scenario must never fall back to Godot's global, unseeded RNG for a new
+	# stochastic check either.
+	controller.fire_bolt_damage_roll = func(min_value: int, max_value: int) -> int: return rng.randi_range(min_value, max_value)
+	controller.fire_bolt_resist_roll = func() -> float: return rng.randf()
 
 	var units: Array = []
 	var player_adventurer_ids: Array[String] = []
@@ -292,7 +298,16 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	# own doc comment on that field -- -1 means "not specified"), which lets a
 	# deterministic test scenario exercise a Cleric who entered battle already
 	# short on MP without depending on any ambient GameSession state.
-	var spell_ids: Array = class_def.get("spells", [])
+	# Stage 5 D4: mirrors BattleController._ready()'s own append pattern -- a
+	# scenario unit whose explicit "specialization" field names a promoted
+	# specialization (e.g. "battle_mage") also gets that specialization's own
+	# SPECIALIZATION_SPELLS entries ("fire_bolt") appended onto the root
+	# class_def's own "spells" list, never from ambient GameSession adventurer
+	# state (see this function's own doc comment on "perks"/"specialization").
+	var spell_ids: Array = (class_def.get("spells", []) as Array).duplicate()
+	var specialization_id: String = String(spec.get("specialization", ""))
+	if not specialization_id.is_empty():
+		spell_ids.append_array(GameSession.SPECIALIZATION_SPELLS.get(specialization_id, []))
 	if not spell_ids.is_empty():
 		unit.spells = spell_ids.duplicate()
 		unit.mp_max = int(class_def.get("mp_max", 0))

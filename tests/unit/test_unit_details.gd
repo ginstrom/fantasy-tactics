@@ -474,6 +474,67 @@ func test_perks_label_shows_a_chosen_archer_perk_with_its_effect() -> void:
 	)
 
 
+## --- Battle Mage specialization promotion (Stage 5 D4) ----------------------
+## Mirrors the Knight/Archer sections above -- proves the promotion UI is a
+## genuinely general mechanism for a root class with ZERO CLASS_PERKS entries
+## (Mage), not just Warrior's two-perk gate.
+
+func test_battle_mage_promote_button_shows_immediately_with_no_perk_prerequisite() -> void:
+	GameSession.create_party()
+	var mage: Dictionary = GameSession.get_default_mage("mage_test", "Test Mage")
+	GameSession.adventurers.append(mage)
+	GameSession.assign_adventurer_to_selected_party("mage_test")
+	var screen := _open_unit_details("mage_test")
+
+	var container: VBoxContainer = screen.get_node("Body/Center/VBox/PromotionOptionsContainer")
+	assert_true(container.visible, "A fresh Mage has zero root perks to choose -- vacuously eligible immediately")
+	assert_eq(container.get_child_count(), 1)
+	var button: Button = container.get_node("PromoteButton_battle_mage")
+	assert_eq(button.text, tr("unit_details.promote_button") % tr("class.battle_mage"))
+
+	button.pressed.emit()
+
+	assert_eq(GameSession.get_adventurer_specialization("mage_test"), "battle_mage")
+	assert_false(container.visible, "Already promoted -- the button disappears on refresh")
+	assert_eq(container.get_child_count(), 0)
+
+
+func test_class_label_shows_battle_mage_specialization_once_promoted() -> void:
+	GameSession.create_party()
+	var mage: Dictionary = GameSession.get_default_mage("mage_test", "Test Mage")
+	GameSession.adventurers.append(mage)
+	GameSession.assign_adventurer_to_selected_party("mage_test")
+	GameSession.promote_adventurer("mage_test", "battle_mage")
+	var screen := _open_unit_details("mage_test")
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/ClassLabel").text,
+		tr("information.class") % (tr("unit_details.class_specialized") % [tr("class.mage"), tr("class.battle_mage")])
+	)
+
+
+## Temporary Guard's own perk (Battle Mage's only one, unlike Knight/Archer's
+## two) renders through the exact same generic Perks list every other class's
+## perks already use -- no unit_details.gd code change was needed for this.
+func test_perks_label_shows_the_chosen_temporary_guard_perk_with_its_effect() -> void:
+	GameSession.create_party()
+	var mage: Dictionary = GameSession.get_default_mage("mage_test", "Test Mage")
+	GameSession.adventurers.append(mage)
+	GameSession.assign_adventurer_to_selected_party("mage_test")
+	GameSession.promote_adventurer("mage_test", "battle_mage")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 20.0)  # level 2: first perk-interval slot
+	GameSession.choose_perk("mage_test", GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID)
+	var screen := _open_unit_details("mage_test")
+
+	assert_string_contains(
+		screen.get_node("Body/Center/VBox/PerksLabel").text,
+		"* %s (%s)" % [
+			tr("perk.battle_mage_temporary_guard.name"),
+			tr("perk.battle_mage_temporary_guard.effect") % GameSession.WARRIOR_BULWARK_GUARD,
+		]
+	)
+
+
 ## --- Durable MP row and "Heal party member" (docs/plans/2026-08-21-
 ## stage-2-party-readiness/03-persistent-mp-temple-and-details-healing.md) ---
 

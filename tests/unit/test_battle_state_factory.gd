@@ -870,6 +870,237 @@ func test_seeded_lock_on_grants_no_bonus_when_round_2_targets_a_different_kobold
 	assert_false(controller.last_attack_result.hit, "The same seed 43 roll that hits WITH Lock On's bonus (the favorable fixture) misses here without it")
 
 
+## --- Deterministic Battle Mage scenarios (Stage 5 D4 task 5) ---------------
+## Proves Fire Bolt's damage/resist-halving and Temporary Guard's Guard bonus
+## both replay byte-identically for a fixed seed, built entirely through the
+## production ScenarioContract/BattleStateFactory path. Fire Bolt reuses the
+## exact same counter enemy/seeds as Mage's own Sleep fixture above (Orc,
+## magic_resistance 50, spellcasting 20 -> the documented 30% resist chance,
+## seeds 1/13 probed the same way) -- no new monster family, per D3's own
+## "hand-authored per encounter" precedent D4 explicitly reuses.
+
+func _battle_mage_vs_resistant_orc_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "battle_mage_fire_bolt_vs_resistant_orc",
+		"player": {"units": [
+			{
+				"id": "battle_mage", "template_id": "mage", "position": {"x": 0, "y": 0},
+				"specialization": "battle_mage",
+			},
+		]},
+		"enemy": {"units": [
+			{"id": "resistant_orc", "template_id": "orc", "position": {"x": 1, "y": 0}, "modifiers": {"magic_resistance": 50}},
+		]},
+	})
+
+
+## Favorable: Fire Bolt has no accuracy roll at all (spells "always land" per
+## combat-system.md), only the resist check -- seed 1's first draw (~0.33)
+## sits above the 30% resist chance, so it lands full (unhalved) damage. The
+## SAME seed's plain attack (the Mage's own weak 15% melee, longsword_iron's
+## default 1-8 damage) misses outright, demonstrating exactly why Fire Bolt is
+## the better choice against a magic-resistant target that a melee swing
+## can't reliably even connect with.
+func test_seeded_fire_bolt_lands_full_damage_while_a_plain_attack_misses_on_seed_1() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 1)
+	autofree(plain_controller)
+	var plain_mage = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_orc = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_mage
+	assert_true(plain_controller.try_attack_selected_unit(plain_orc.grid_position))
+	assert_false(plain_controller.last_attack_result.hit, "Seed 1's roll misses the Mage's own weak 15% melee against the Orc")
+
+	var controller: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 1)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var orc = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+	assert_eq(orc.magic_resistance, 50, "Precondition: the scenario's counter enemy carries the documented magic_resistance")
+	assert_eq(mage.spellcasting, 20, "Precondition: the scenario's Mage carries the documented base spellcasting")
+
+	assert_true(controller.try_cast_spell("fire_bolt", orc.grid_position))
+
+	assert_false(controller.last_attack_result.resisted, "Seed 1's resist roll (~0.33) sits above the 30% resist chance")
+	assert_eq(controller.last_attack_result.damage, 7, "Fire Bolt always lands -- no accuracy roll at all, unlike the plain attack that just missed")
+	assert_eq(mage.mp_remaining, 2)
+
+
+## Countered: seed 13's resist roll (~0.06) sits below the 30% resist chance,
+## HALVING (not negating) Fire Bolt's damage -- but the SAME seed's plain
+## attack both lands AND deals more raw damage than the halved Fire Bolt,
+## demonstrating decision-ledger.md's own example: against a magic-resistant
+## enemy, a plain attack can outright beat a halved Fire Bolt.
+func test_seeded_fire_bolt_is_halved_while_a_plain_attack_deals_more_damage_on_seed_13() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 13)
+	autofree(plain_controller)
+	var plain_mage = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_orc = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_mage
+	assert_true(plain_controller.try_attack_selected_unit(plain_orc.grid_position))
+	assert_true(plain_controller.last_attack_result.hit, "Seed 13's roll lands the Mage's own weak melee attack (15% effective hit chance)")
+	assert_eq(plain_controller.last_attack_result.damage, 7)
+
+	var controller: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 13)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var orc = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+
+	assert_true(controller.try_cast_spell("fire_bolt", orc.grid_position))
+
+	assert_true(controller.last_attack_result.resisted, "Seed 13's resist roll (~0.06) sits below the 30% resist chance")
+	assert_eq(controller.last_attack_result.damage, 1, "2 raw damage halved by the resist roll -- strictly less than the plain attack's 7 on this same seed")
+	assert_eq(mage.mp_remaining, 2, "A resisted cast still spends its MP")
+
+
+## Regression: a same-seed factory build must reproduce identical Fire Bolt
+## outcomes -- CampaignSim's own "100% reproducible from sim_seed alone"
+## contract, extended to Stage 5 D4's Battle Mage branch.
+func test_same_seed_fire_bolt_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 13)
+	var controller_b: Node2D = BattleStateFactory.build(_battle_mage_vs_resistant_orc_scenario(), 13)
+	autofree(controller_a)
+	autofree(controller_b)
+	controller_a.selected_unit = controller_a.get_unit_at(Vector2i(0, 0))
+	controller_b.selected_unit = controller_b.get_unit_at(Vector2i(0, 0))
+
+	controller_a.try_cast_spell("fire_bolt", Vector2i(1, 0))
+	controller_b.try_cast_spell("fire_bolt", Vector2i(1, 0))
+
+	assert_eq(controller_a.last_attack_result.resisted, controller_b.last_attack_result.resisted)
+	assert_eq(controller_a.last_attack_result.damage, controller_b.last_attack_result.damage)
+	assert_eq(
+		controller_a.get_unit_at(Vector2i(0, 0)).mp_remaining, controller_b.get_unit_at(Vector2i(0, 0)).mp_remaining
+	)
+
+
+## --- Deterministic Temporary Guard scenarios (Stage 5 D4 task 5) -----------
+## Kobold's 0 base Guard/25 melee (same fixture stats Knight/Archer's own
+## sections above already established) keeps both fixtures free of any newly
+## invented monster stat.
+
+func _battle_mage_vs_kobold_scenario() -> Dictionary:
+	return _normalized({
+		"scenario_id": "battle_mage_temporary_guard_vs_kobold",
+		"player": {"units": [
+			{
+				"id": "battle_mage", "template_id": "mage", "position": {"x": 0, "y": 0},
+				"specialization": "battle_mage", "perks": [GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID],
+			},
+		]},
+		"enemy": {"units": [{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}}]},
+	})
+
+
+## A "modifiers" Guard override on the Battle Mage (mirrors Archer's own
+## _archer_vs_guarded_kobold_scenario() precedent, just on the player side
+## instead of the enemy) -- not a new monster, an authored one-off stat
+## variant for this fixture only.
+func _battle_mage_vs_kobold_scenario_with_extra_guard(extra_guard: int) -> Dictionary:
+	return _normalized({
+		"scenario_id": "battle_mage_temporary_guard_already_floored",
+		"player": {"units": [
+			{
+				"id": "battle_mage", "template_id": "mage", "position": {"x": 0, "y": 0},
+				"specialization": "battle_mage", "perks": [GameSession.BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID],
+				"modifiers": {"guard": extra_guard},
+			},
+		]},
+		"enemy": {"units": [{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}}]},
+	})
+
+
+## Favorable: seed 39's first draw (~0.09) sits inside the flip band a flat
+## +10 Guard opens against a Kobold's 25% melee -- 15% effective hit chance
+## (10 Guard from the Mage's default leather armor) without Temporary Guard,
+## 5% (the floor) with it active.
+func test_seeded_temporary_guard_flips_an_attack_from_hit_to_miss_on_seed_39() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario(), 39)
+	autofree(plain_controller)
+	var plain_mage = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_kobold
+	plain_controller.active_side = BattleControllerScript.Side.ENEMY
+	assert_true(plain_controller.try_attack_selected_unit(plain_mage.grid_position))
+	assert_true(plain_controller.last_attack_result.hit, "Without Temporary Guard, seed 39's roll (~0.09) beats the Kobold's 15% effective hit chance")
+
+	var controller: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario(), 39)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+	assert_true(controller.try_temporary_guard_selected_unit())
+
+	controller.selected_unit = kobold
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	assert_true(controller.try_attack_selected_unit(mage.grid_position))
+
+	assert_false(
+		controller.last_attack_result.hit,
+		"Temporary Guard's +10 Guard drops the Kobold to its 5% floor -- the same seed 39 roll now misses"
+	)
+
+
+## Countered: the Battle Mage's own Guard is already high enough (+40, a
+## one-off "modifiers" override) that the Kobold's to-hit chance is already
+## floored at 5% with no Temporary Guard at all -- casting it changes NOTHING
+## (both effective_hit_chance values below are identical), so the 3 AP / 1 MP
+## it costs buys zero additional defense this turn compared to just attacking
+## with that same economy, per decision-ledger.md's own example.
+func test_seeded_temporary_guard_adds_no_value_once_the_defender_is_already_floored() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario_with_extra_guard(40), 1)
+	autofree(plain_controller)
+	var plain_mage = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_kobold
+	plain_controller.active_side = BattleControllerScript.Side.ENEMY
+	assert_true(plain_controller.try_attack_selected_unit(plain_mage.grid_position))
+	assert_eq(
+		plain_controller.last_attack_result.effective_hit_chance, BattleControllerScript.MIN_HIT_CHANCE,
+		"The Mage's own +40 Guard modifier already floors the Kobold's to-hit chance with no Temporary Guard cast"
+	)
+
+	var controller: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario_with_extra_guard(40), 1)
+	autofree(controller)
+	var mage = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = mage
+	assert_true(controller.try_temporary_guard_selected_unit())
+
+	controller.selected_unit = kobold
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	assert_true(controller.try_attack_selected_unit(mage.grid_position))
+
+	assert_eq(
+		controller.last_attack_result.effective_hit_chance, BattleControllerScript.MIN_HIT_CHANCE,
+		"Temporary Guard's own +10 Guard changes nothing once the Kobold is already floored"
+	)
+	assert_eq(
+		plain_controller.last_attack_result.hit, controller.last_attack_result.hit,
+		"Same seed, same floored hit chance either way -- Temporary Guard provably added zero defensive value this turn"
+	)
+
+
+## Regression: a same-seed factory build must reproduce identical Temporary
+## Guard outcomes -- same "100% reproducible from sim_seed alone" contract.
+func test_same_seed_temporary_guard_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario(), 39)
+	var controller_b: Node2D = BattleStateFactory.build(_battle_mage_vs_kobold_scenario(), 39)
+	autofree(controller_a)
+	autofree(controller_b)
+	for controller in [controller_a, controller_b]:
+		var mage = controller.get_unit_at(Vector2i(0, 0))
+		var kobold = controller.get_unit_at(Vector2i(1, 0))
+		controller.selected_unit = mage
+		controller.try_temporary_guard_selected_unit()
+		controller.selected_unit = kobold
+		controller.active_side = BattleControllerScript.Side.ENEMY
+		controller.try_attack_selected_unit(mage.grid_position)
+
+	assert_eq(controller_a.last_attack_result.hit, controller_b.last_attack_result.hit)
+	assert_eq(controller_a.last_attack_result.effective_hit_chance, controller_b.last_attack_result.effective_hit_chance)
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)
