@@ -7,6 +7,7 @@ extends GutTest
 
 const CampaignSimScript := preload("res://scripts/tools/campaign_sim.gd")
 const CampaignSimMetricsScript := preload("res://scripts/tools/campaign_sim_metrics.gd")
+const ScenarioContractScript := preload("res://scripts/tools/battle_scenarios/scenario_contract.gd")
 
 ## The representative seed set lives on CampaignSim itself now (CampaignSim.
 ## REPRESENTATIVE_VICTORY_SEEDS) -- see that constant's own doc comment for
@@ -396,6 +397,60 @@ func test_victory_xp_is_split_across_the_pre_death_roster_not_just_survivors() -
 			+ "a regression to the old (award-after-permadeath) ordering would instead award the full %.1f to the sole survivor"
 		) % [expected_total_xp, expected_share, expected_total_xp]
 	)
+
+
+## --- Stage 5 exit-gate fix: _build_player_units() must thread a promoted
+## specialization, not just its perks --------------------------------------
+
+## Reproduces a real bug the Stage 5 exit-gate journey test surfaced: once any
+## fieldable-root adventurer (Warrior -> Knight/Archer, Cleric -> Paladin) is
+## promoted, ScenarioContract._validate_side() only accepts that
+## specialization's own perk ids (e.g. Knight's "knight_shield_bash") when
+## the scenario unit's own "specialization" field names it -- see that
+## function's own doc comment. _build_player_units() already threaded chosen
+## perks (the exact fix this same file's own header comment describes for
+## Juggernaut/Bulwark/Quickdraw/Devout) but never threaded "specialization"
+## itself, so a fielded promoted Knight's own Shield Bash/Chain Blow perks
+## would fail validate() as "unknown perk", turning _fight_objective() into a
+## hard "error" outcome the instant any fieldable root ever promotes -- not
+## reachable by campaign_sim's own automated runs (which never call
+## promote_adventurer()), but reachable by any real save/tool that hands a
+## promoted roster to CampaignSim's scene-free battle path, exactly what this
+## step's exit-gate journey does.
+func test_build_player_units_threads_a_promoted_specialization_so_its_perks_validate() -> void:
+	GameSession.create_party()
+	var knight_id := String(GameSession.adventurers[0].id)
+	GameSession.assign_adventurer_to_selected_party(knight_id)
+	for adventurer in GameSession.adventurers:
+		if String(adventurer.id) == knight_id:
+			adventurer.level = 8  # enough earned perk slots for both root perks plus one specialization perk
+	GameSession.choose_perk(knight_id, GameSession.WARRIOR_JUGGERNAUT_PERK_ID)
+	GameSession.choose_perk(knight_id, GameSession.WARRIOR_BULWARK_PERK_ID)
+	assert_true(GameSession.promote_adventurer(knight_id, "knight"), "Setup: both root perks are chosen, so promotion must succeed")
+	assert_true(GameSession.choose_perk(knight_id, GameSession.KNIGHT_SHIELD_BASH_PERK_ID), "Setup: promotion must open a Knight perk slot")
+
+	var sim := CampaignSimScript.new()
+	var units := sim._build_player_units()
+
+	var knight_spec: Dictionary = {}
+	for unit_spec in units:
+		if String(unit_spec.id) == knight_id:
+			knight_spec = unit_spec
+	assert_false(knight_spec.is_empty(), "Setup: the promoted Knight must still be fielded (its root class, warrior, stays fieldable)")
+	assert_eq(knight_spec.get("specialization", ""), "knight", "The scenario unit must name its promoted specialization")
+	assert_true(
+		(knight_spec.get("perks", []) as Array).has(GameSession.KNIGHT_SHIELD_BASH_PERK_ID),
+		"Setup: the chosen specialization perk must still be threaded"
+	)
+
+	var errors := ScenarioContractScript.validate(
+		ScenarioContractScript.normalize({
+			"scenario_id": "specialization_threading_regression",
+			"player": {"units": [knight_spec]},
+			"enemy": {"units": [{"id": "goblin_0", "template_id": "goblin"}]},
+		})
+	)
+	assert_eq(errors, [] as Array[String], "A promoted Knight's own perks must validate now that specialization is threaded")
 
 
 ## --- Review Finding 2 fix: existing-roster assignment also prefers a
