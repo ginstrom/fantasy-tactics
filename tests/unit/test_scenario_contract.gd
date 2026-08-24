@@ -447,6 +447,26 @@ func test_validate_rejects_a_specialization_with_a_mismatched_root_class() -> vo
 	)
 
 
+## Paladin (Stage 5 D4): unlike Knight above, Paladin carries NO perk ids at
+## all (SPECIALIZATION_PERKS has no "paladin" entry -- its whole ability is
+## keyed to caster identity, not a perk-tree choice). A "cleric" unit naming
+## "paladin" with no "perks" field at all must still validate cleanly -- a
+## genuine test of whether this general mechanism holds for a ZERO-perk
+## specialization, not just Knight's four-perk (two root + two specialization)
+## case above.
+func test_validate_accepts_a_paladin_specialization_with_no_perks_at_all() -> void:
+	var raw := {
+		"scenario_id": "paladin_no_perks_ok",
+		"player": {"units": [{"id": "hero", "template_id": "cleric", "position": {"x": 0, "y": 0}, "specialization": "paladin"}]},
+		"enemy": {"template_id": "goblin", "count": 1},
+	}
+
+	var scenario := ScenarioContract.normalize(raw)
+	var errors := ScenarioContract.validate(scenario)
+
+	assert_eq(errors, [], "A zero-perk specialization must validate cleanly with no perks field at all")
+
+
 func test_validate_rejects_an_unknown_player_template() -> void:
 	var raw := _minimal_raw_scenario()
 	raw.player = {"template_id": "not_a_real_template", "count": 1}

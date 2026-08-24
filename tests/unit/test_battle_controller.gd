@@ -5422,3 +5422,192 @@ func test_heal_and_bless_still_cannot_target_an_enemy_after_fire_bolts_own_targe
 	assert_false(controller.try_cast_spell("heal", enemy.grid_position))
 	assert_false(controller.try_cast_spell("bless", enemy.grid_position))
 	assert_eq(caster.mp_remaining, 3)
+
+
+## --- Paladin specialization: doubled Bless (Stage 5 D4) ---------------------
+## Paladin grants no new perk id at all -- its whole ability is the existing
+## Bless spell applying a DOUBLED bonus (20% hit chance / 1.20x damage vs. the
+## regular 10%/1.10x) whenever the CASTER is a promoted Paladin (Unit.
+## specialization == "paladin"), regardless of which ally it targets. See
+## PALADIN_BLESSED_STATUS_ID's own doc comment for why this needs its own
+## distinct status id rather than a variant field on BLESSED_STATUS_ID.
+
+## The decision-contract shape task 1 asks for: a stubbed roll that would
+## miss under a regular Cleric's Bless (+10 points) flips to a hit purely
+## because a Paladin's doubled Bless (+20 points) applied instead -- a real
+## combat-outcome change, not just a displayed stat.
+func test_paladin_bless_grants_double_the_hit_chance_and_damage_bonus_of_a_regular_bless() -> void:
+	var caster = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 10, 10, 0.5, "Mace"
+	)
+	var paladin = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	paladin.spells = ["bless"]
+	paladin.specialization = "paladin"
+	paladin.mp_max = 3
+	paladin.mp_remaining = 3
+	var target = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	target.resistance = 50
+	var controller := _make_controller(6, 6)
+	controller.units = [caster, paladin, target]
+	controller.selected_unit = paladin
+
+	assert_true(controller.try_cast_spell("bless", caster.grid_position))
+	assert_eq(paladin.action_points_remaining, 3)
+	assert_eq(paladin.mp_remaining, 2)
+	assert_true(controller.last_attack_result.doubled)
+
+	controller.selected_unit = caster
+	# 0.65 sits strictly between the regular-Bless 60% hit chance and the
+	# Paladin-doubled 70% -- only a hit here proves the +20 points actually
+	# applied, not just +10.
+	controller.hit_roll = func() -> float: return 0.65
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_min_v: int, _max_v: int) -> int: return 10
+
+	assert_true(controller.try_attack_selected_unit(target.grid_position))
+	assert_true(
+		controller.last_attack_result.hit,
+		"0.65 must hit once a Paladin's doubled Bless adds +20 points to the 50% base hit chance"
+	)
+	# raw damage 10, 50% resistance -> 5 post-resistance, +20% doubled Bless -> round(6.0) = 6.
+	assert_eq(controller.last_attack_result.damage, 6)
+
+
+## Regression: the exact same 0.65 roll must still MISS under a regular
+## Cleric's Bless (+10 points only, 60% effective hit chance) -- proving the
+## flip above is specifically due to the doubled bonus, not some other change.
+func test_a_regular_clerics_bless_does_not_flip_the_same_roll_a_paladins_doubled_bless_flips() -> void:
+	var caster = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 10, 10, 0.5, "Mace"
+	)
+	var cleric = UnitScript.new(Vector2i(1, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	cleric.spells = ["bless"]
+	cleric.mp_max = 3
+	cleric.mp_remaining = 3
+	var target = UnitScript.new(Vector2i(2, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20)
+	target.resistance = 50
+	var controller := _make_controller(6, 6)
+	controller.units = [caster, cleric, target]
+	controller.selected_unit = cleric
+
+	assert_true(controller.try_cast_spell("bless", caster.grid_position))
+	assert_false(controller.last_attack_result.doubled, "A plain (non-Paladin) Cleric never applies the doubled variant")
+
+	controller.selected_unit = caster
+	controller.hit_roll = func() -> float: return 0.65
+	controller.crit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_attack_selected_unit(target.grid_position))
+	assert_false(controller.last_attack_result.hit, "0.65 still misses the regular-Bless 60% effective hit chance")
+
+
+## Mixed-cast rejection (explicit requirement): a target already carrying the
+## REGULAR Bless cannot also receive the Paladin variant.
+func test_paladins_doubled_bless_cannot_be_applied_over_an_existing_regular_bless() -> void:
+	var controller := _make_controller(6, 6)
+	# Geometry deliberately keeps every unit off the straight line between any
+	# other two units -- try_cast_spell()'s occupied-endpoint LOS check would
+	# otherwise treat one caster as blocking the other's line to the ally.
+	var cleric = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	cleric.spells = ["bless"]
+	cleric.mp_max = 3
+	cleric.mp_remaining = 3
+	var paladin = UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	paladin.spells = ["bless"]
+	paladin.specialization = "paladin"
+	paladin.mp_max = 3
+	paladin.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(0, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [cleric, paladin, ally]
+	controller.selected_unit = cleric
+	assert_true(controller.try_cast_spell("bless", ally.grid_position))
+
+	controller.selected_unit = paladin
+	assert_false(controller.try_cast_spell("bless", ally.grid_position))
+	assert_eq(paladin.mp_remaining, 3, "A rejected mixed re-bless must not spend MP")
+
+
+## The reverse mixed-cast rejection: a target already carrying the Paladin
+## variant cannot also receive a regular Bless.
+func test_a_regular_bless_cannot_be_applied_over_an_existing_paladins_doubled_bless() -> void:
+	var controller := _make_controller(6, 6)
+	# Same non-collinear geometry as the mixed-cast test immediately above.
+	var paladin = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	paladin.spells = ["bless"]
+	paladin.specialization = "paladin"
+	paladin.mp_max = 3
+	paladin.mp_remaining = 3
+	var cleric = UnitScript.new(Vector2i(2, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	cleric.spells = ["bless"]
+	cleric.mp_max = 3
+	cleric.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(0, 2), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [paladin, cleric, ally]
+	controller.selected_unit = paladin
+	assert_true(controller.try_cast_spell("bless", ally.grid_position))
+
+	controller.selected_unit = cleric
+	assert_false(controller.try_cast_spell("bless", ally.grid_position))
+	assert_eq(cleric.mp_remaining, 3, "A rejected mixed re-bless must not spend MP")
+
+
+## A Paladin can still self-cast, exactly like a plain Cleric already could
+## (Bless's ally-only gate structurally includes the caster) -- the doubled
+## bonus is keyed to caster identity, not to WHOM the Paladin blesses.
+func test_paladin_can_self_cast_the_doubled_bless() -> void:
+	var controller := _make_controller(6, 6)
+	var paladin = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	paladin.spells = ["bless"]
+	paladin.specialization = "paladin"
+	paladin.mp_max = 3
+	paladin.mp_remaining = 3
+	controller.units = [paladin]
+	controller.selected_unit = paladin
+
+	assert_true(controller.try_cast_spell("bless", paladin.grid_position))
+
+	assert_true(controller.has_status(paladin, "paladin_blessed"))
+	assert_false(controller.has_status(paladin, "blessed"))
+
+
+## Floating text (distinguishes a Paladin's doubled Bless from a regular
+## Bless, which spawns no floating text of its own at all -- see Battlefield.
+## _describe_step()/_log_spell()'s own "doubled" branch for the matching log/
+## status-line distinction).
+func test_casting_paladins_doubled_bless_spawns_distinct_floating_text() -> void:
+	var controller := _make_controller(6, 6)
+	var paladin = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	paladin.spells = ["bless"]
+	paladin.specialization = "paladin"
+	paladin.mp_max = 3
+	paladin.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [paladin, ally]
+	controller.selected_unit = paladin
+	watch_signals(controller)
+
+	assert_true(controller.try_cast_spell("bless", ally.grid_position))
+
+	var expected_pos: Vector2 = controller._floating_text_anchor(ally)
+	assert_signal_emitted_with_parameters(
+		controller, "combat_text_spawned", [expected_pos, tr("battle.floating.bless_paladin"), "paladin_bless"]
+	)
+
+
+## Regression: a regular (non-Paladin) Bless cast must NOT spawn this
+## floating text -- see try_cast_spell()'s "bless" match arm, which only
+## calls _spawn_combat_text() when is_paladin_caster is true.
+func test_casting_a_regular_bless_spawns_no_floating_text() -> void:
+	var controller := _make_controller(6, 6)
+	var cleric = UnitScript.new(Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	cleric.spells = ["bless"]
+	cleric.mp_max = 3
+	cleric.mp_remaining = 3
+	var ally = UnitScript.new(Vector2i(2, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10)
+	controller.units = [cleric, ally]
+	controller.selected_unit = cleric
+	watch_signals(controller)
+
+	assert_true(controller.try_cast_spell("bless", ally.grid_position))
+
+	assert_signal_not_emitted(controller, "combat_text_spawned")

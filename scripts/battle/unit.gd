@@ -139,6 +139,17 @@ var counter_bonus_active_against = null
 # any player unit built before this list is hydrated -- see BattleController.
 ## _ready() and BattleStateFactory._build_player_unit()).
 var perks: Array = []
+# Paladin specialization (Stage 5 D4): the owning adventurer's own promoted
+# specialization id (e.g. "paladin"), or "" for every unrecognized/unpromoted
+# unit -- mirrors perks' own hydration exactly (BattleController._ready()/
+# BattleStateFactory._build_player_unit() both set this from GameSession.get_
+# adventurer_specialization()/a scenario's own "specialization" field). Unlike
+# perks, Paladin's own ability is keyed purely to CASTER IDENTITY, not to a
+# chosen perk id (Paladin has no SPECIALIZATION_PERKS entry at all) -- see
+# BattleController.try_cast_spell()'s "bless" match arm, which reads this
+# field directly to decide between BLESSED_STATUS_ID and PALADIN_BLESSED_
+# STATUS_ID.
+var specialization: String = ""
 # Once-per-round bookkeeping for the Chain Blow perk (Stage 5 D4): true once
 # this unit's Chain Blow has already triggered a bonus second strike this
 # Round, so a second landed melee attack the same Round cannot trigger it

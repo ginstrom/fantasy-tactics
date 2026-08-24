@@ -147,6 +147,28 @@ const SPELL_HEAL_MAX := 8
 const BLESSED_STATUS_ID := "blessed"
 const BLESS_HIT_CHANCE_BONUS := 0.10
 const BLESS_DAMAGE_MULTIPLIER := 1.10
+## Paladin's own doubled Bless variant (Stage 5 D4, decision-ledger.md's
+## "Paladin's ability" row): a DISTINCT status id from BLESSED_STATUS_ID, not
+## a variant field on the same status -- apply_status()/has_status()'s
+## whole-codebase contract is a plain boolean flag (unit.statuses[id] = true),
+## shared by every other status (Sleeping, Paralyzed, off-balance, Temporary
+## Guard), so a caster-dependent magnitude needs its own id rather than
+## breaking that generic contract. Mirrors is_incapacitated()'s own precedent
+## for "two different sources, two distinct status ids, both read at the same
+## consumption sites" (PARALYZED_STATUS_ID vs. SLEEPING_STATUS_ID). Applied
+## instead of (never alongside) BLESSED_STATUS_ID by try_cast_spell()'s
+## "bless" match arm, keyed purely to whether the CASTER (not the target) is
+## a promoted Paladin -- see Unit.specialization. Both the damage-multiplier
+## site (_resolve_attack_core()) and the hit-chance-bonus site (_compute_
+## effective_attack_chances()) check this status id alongside BLESSED_STATUS_
+## ID and pick the matching magnitude below; a doubled Bless still composes
+## on top of -- and is still re-clamped by -- every other modifier exactly
+## like a regular Bless, so it is never a strictly-dominant option (see the
+## ledger's own "still subject to whatever cap/clamp already exists on
+## effective_hit_chance" counterplay note).
+const PALADIN_BLESSED_STATUS_ID := "paladin_blessed"
+const PALADIN_BLESS_HIT_CHANCE_BONUS := 0.20
+const PALADIN_BLESS_DAMAGE_MULTIPLIER := 1.20
 const SUPER_POWER_ACTION_POINTS := 100
 const SUPER_POWER_ATTACK_DAMAGE := 100
 const SUPER_POWER_HIT_CHANCE := 1.0
@@ -388,6 +410,11 @@ func _ready() -> void:
 		# no-op for every existing class exactly as before.
 		var spell_ids: Array = (class_def.get("spells", []) as Array).duplicate()
 		var specialization_id := GameSession.get_adventurer_specialization(adventurer_id)
+		# Paladin (Stage 5 D4): hydrated unconditionally (even "" for an
+		# unpromoted/non-Paladin adventurer) so try_cast_spell()'s "bless"
+		# match arm can read caster identity directly off the battle-local
+		# unit -- see Unit.specialization's own doc comment.
+		player_unit.specialization = specialization_id
 		if not specialization_id.is_empty():
 			spell_ids.append_array(GameSession.SPECIALIZATION_SPELLS.get(specialization_id, []))
 		if not spell_ids.is_empty():
@@ -981,8 +1008,15 @@ func _resolve_attack_core(attacker, defender, effective_hit_chance: float, effec
 			var critical_resistance_reduction: int = GameConfig.get_int("combat", "critical_resistance_reduction", 20)
 			effective_resistance = maxi(0, defender.resistance - critical_resistance_reduction)
 		damage = int(maxi(1, round(raw_damage * (1.0 - effective_resistance / 100.0))))
+		# Bless / Paladin's doubled Bless (see PALADIN_BLESSED_STATUS_ID's own
+		# doc comment): mutually exclusive statuses -- try_cast_spell()'s
+		# "bless" match arm only ever applies one or the other per cast, never
+		# both -- so this is effectively if/elif, just written as two
+		# independent checks for symmetry with the hit-chance site below.
 		if has_status(attacker, BLESSED_STATUS_ID):
 			damage = int(maxi(1, round(damage * BLESS_DAMAGE_MULTIPLIER)))
+		elif has_status(attacker, PALADIN_BLESSED_STATUS_ID):
+			damage = int(maxi(1, round(damage * PALADIN_BLESS_DAMAGE_MULTIPLIER)))
 		defender.take_damage(damage)
 		# Sleep's own interruption rule (Stage 5 D3, explicit user
 		# requirement): any LANDED attack against a sleeping unit, from
@@ -1091,13 +1125,21 @@ func _compute_effective_attack_chances(attacker, defender, is_melee_attack: bool
 	var effective_hit_chance: float = clampf(
 		attacker.hit_chance - effective_defense / 100.0 - called_shot_penalty, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 	)
-	# Bless (see try_cast_spell()): +10 percentage points to the attacker's
-	# already-computed final hit chance, composed on top of every other
-	# modifier above and still re-clamped to the same cap/floor rather than
-	# bypassing them.
+	# Bless / Paladin's doubled Bless (see try_cast_spell() and PALADIN_
+	# BLESSED_STATUS_ID's own doc comment): +10 (or, for a Paladin's own cast,
+	# +20) percentage points to the attacker's already-computed final hit
+	# chance, composed on top of every other modifier above and still
+	# re-clamped to the same cap/floor rather than bypassing them -- so a
+	# doubled Bless is never a strictly-dominant option once effective_hit_
+	# chance is already near GameSession.EFFECTIVE_HIT_CHANCE_CAP. Mutually
+	# exclusive statuses, same as the damage-multiplier site above.
 	if has_status(attacker, BLESSED_STATUS_ID):
 		effective_hit_chance = clampf(
 			effective_hit_chance + BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
+		)
+	elif has_status(attacker, PALADIN_BLESSED_STATUS_ID):
+		effective_hit_chance = clampf(
+			effective_hit_chance + PALADIN_BLESS_HIT_CHANCE_BONUS, MIN_HIT_CHANCE, GameSession.EFFECTIVE_HIT_CHANCE_CAP
 		)
 	# Parry's counter-bonus (Stage 5 D2): +10% melee to-hit for the attacker
 	# ONLY against the same defender who parried them last time, only during
@@ -1859,9 +1901,13 @@ func try_use_selected_potion(potion_id: String) -> bool:
 ## 04-cleric-class-and-scout-reconnaissance.md): "heal" (restore an
 ## injectable 2-8 HP, capped at max, on a living ally that isn't already at
 ## full health) and "bless" (apply the battle-local BLESSED_STATUS_ID status
-## -- see try_attack_selected_unit() -- to a living ally not already
-## blessed) both target an ALLY. Stage 5 D3 adds "sleep" (apply the battle-
-## local SLEEPING_STATUS_ID status -- see is_incapacitated() -- to a living
+## -- see try_attack_selected_unit() -- to a living ally not already blessed
+## by either Bless variant; Stage 5 D4's Paladin specialization applies the
+## stronger PALADIN_BLESSED_STATUS_ID variant instead, keyed purely to
+## whether the CASTER is a promoted Paladin -- see _unit_is_paladin() and
+## PALADIN_BLESSED_STATUS_ID's own doc comment) both target an ALLY. Stage 5
+## D3 adds "sleep" (apply the battle-local SLEEPING_STATUS_ID status -- see
+## is_incapacitated() -- to a living
 ## ENEMY, gated by a magic-resistance roll that can fully negate the effect
 ## without refunding the cast; see the "sleep" match arm below) -- an
 ## ENEMY-only targeting branch rather than sharing Heal/Bless's ally-only one.
@@ -1936,14 +1982,37 @@ func try_cast_spell(spell_id: String, target_pos: Vector2i) -> bool:
 			)
 			return true
 		"bless":
-			if has_status(target, BLESSED_STATUS_ID):
+			# The "already blessed" guard must reject a mixed cast either way --
+			# a target already carrying the REGULAR Bless can't also receive
+			# the Paladin variant, and vice versa -- so it checks both status
+			# ids, never just BLESSED_STATUS_ID alone.
+			if has_status(target, BLESSED_STATUS_ID) or has_status(target, PALADIN_BLESSED_STATUS_ID):
 				return false
-			apply_status(target, BLESSED_STATUS_ID)
+			# Stage 5 D4 (Paladin specialization): keyed purely to CASTER
+			# identity (see _unit_is_paladin()'s own doc comment), not to the
+			# target -- a promoted Paladin's own cast always applies the
+			# doubled variant, on any ally including itself, exactly like a
+			# plain Cleric's cast always applies the regular one.
+			var is_paladin_caster: bool = _unit_is_paladin(selected_unit)
+			var bless_status_id: String = PALADIN_BLESSED_STATUS_ID if is_paladin_caster else BLESSED_STATUS_ID
+			apply_status(target, bless_status_id)
 			selected_unit.action_points_remaining -= SPELL_ACTION_POINT_COST
 			selected_unit.mp_remaining -= SPELL_MP_COST
 			last_targeting_failure = {}
-			last_attack_result = {"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target}
+			last_attack_result = {
+				"type": "spell", "spell_id": spell_id, "caster": selected_unit, "target": target,
+				"doubled": is_paladin_caster,
+			}
 			AudioManager.play_sfx("sfx_spell_bless")
+			# Distinct floating text so a player can tell the promotion
+			# mattered -- a regular Bless spawns none (see the "battle.status.
+			# spell_bless"/"battle.log.spell.bless" log/status lines instead,
+			# and Battlefield._describe_step()/_log_spell()'s own "doubled"
+			# branch for the matching log/status distinction).
+			if is_paladin_caster:
+				_spawn_combat_text(
+					_floating_text_anchor(target), tr("battle.floating.bless_paladin"), FloatingTextScript.TYPE_PALADIN_BLESS
+				)
 			return true
 		"sleep":
 			if has_status(target, SLEEPING_STATUS_ID):
@@ -2234,6 +2303,17 @@ func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
 ## here instead since these two abilities are melee actions, not spells.
 func _unit_has_perk(unit, perk_id: String) -> bool:
 	return unit != null and (unit.perks as Array).has(perk_id)
+
+
+## Stage 5 D4 (Paladin specialization): true iff `unit` is itself a promoted
+## Paladin (see Unit.specialization's own doc comment -- hydrated from
+## GameSession.get_adventurer_specialization() in _ready(), or from a
+## scenario's explicit "specialization" field in BattleStateFactory._build_
+## player_unit()). Unlike _unit_has_perk() above, Paladin owns no perk id at
+## all -- its ability is keyed purely to caster identity -- so try_cast_
+## spell()'s "bless" match arm reads this directly instead.
+func _unit_is_paladin(unit) -> bool:
+	return unit != null and unit.specialization == "paladin"
 
 
 func apply_status(unit, status_id: String) -> bool:

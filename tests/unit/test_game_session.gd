@@ -3037,6 +3037,142 @@ func test_battle_mage_specialization_and_fire_bolt_persist_through_a_snapshot_ro
 	)
 
 
+## --- Paladin specialization (Stage 5 D4) -------------------------------------
+## Paladin is the only specialization with an ADDITIONAL eligibility gate on
+## top of root-perk exhaustion (decision-ledger.md's "Promotion eligibility
+## (Paladin only)" row): the Encampment's Temple upgrade must already be
+## built (temple_level >= 1, see can_build_temple()/build_temple()). It also
+## grants NO new SPECIALIZATION_PERKS entry at all -- its whole ability is a
+## caster-identity-keyed amplification of the existing Bless spell, not a
+## perk-tree choice (see battle_controller.gd's PALADIN_BLESSED_STATUS_ID).
+
+func test_get_available_specializations_gates_paladin_on_a_built_temple_even_once_cleric_is_fully_perked() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_MEDITATION_PERK_ID)
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_DEVOUT_PERK_ID)
+
+	assert_eq(
+		session.get_available_specializations("cleric_test"), [] as Array[String],
+		"Both Cleric root perks are chosen, but no Temple has been built yet -- Paladin's own extra gate"
+	)
+	assert_false(session.is_promotion_eligible("cleric_test", "paladin"))
+
+	session.gold = session.TEMPLE_BUILD_COST
+	assert_true(session.build_temple(), "Precondition: the Temple actually builds")
+
+	assert_eq(
+		session.get_available_specializations("cleric_test"), ["paladin"] as Array[String],
+		"A built Temple is the only thing that changed -- Paladin now appears"
+	)
+	assert_true(session.is_promotion_eligible("cleric_test", "paladin"))
+
+
+## Regression: a built Temple alone is not sufficient -- Paladin must still
+## wait on root-perk exhaustion like every other specialization, the SAME
+## per-perk gating loop Knight/Archer/Battle Mage already rely on.
+func test_get_available_specializations_still_gates_paladin_on_unchosen_cleric_root_perks_even_with_a_temple_built() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.temple_level = 1
+
+	assert_eq(
+		session.get_available_specializations("cleric_test"), [] as Array[String], "Neither Cleric root perk chosen yet"
+	)
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_MEDITATION_PERK_ID)
+	assert_eq(
+		session.get_available_specializations("cleric_test"), [] as Array[String],
+		"Only one of Cleric's two root perks chosen -- still gated, Temple built or not"
+	)
+
+
+## The decision-contract shape task 1 asks for: Paladin's doubled Bless is
+## unavailable before promotion, becomes available (a GRANTED, not perk-tree-
+## chosen, capability) once both gates clear, and promotion itself is
+## rejected a second time. Unlike Knight/Archer/Battle Mage, promotion grants
+## NO new perk id at all -- get_available_perks() must report nothing extra,
+## and is_perk_choice_pending() must never claim a slot is pending with
+## nothing to spend it on.
+func test_promote_adventurer_grants_paladin_with_no_new_perk_tree_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var cleric: Dictionary = session.get_default_cleric("cleric_test", "Test Cleric")
+	session.adventurers.append(cleric)
+	session.assign_adventurer_to_selected_party("cleric_test")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_MEDITATION_PERK_ID)
+	session.choose_perk("cleric_test", GameSessionScript.CLERIC_DEVOUT_PERK_ID)
+	session.temple_level = 1
+
+	assert_eq(session.get_adventurer_specialization("cleric_test"), "")
+	assert_true(session.promote_adventurer("cleric_test", "paladin"))
+	assert_eq(session.get_adventurer_specialization("cleric_test"), "paladin")
+
+	assert_eq(
+		session.get_available_perks("cleric_test"), [] as Array[String],
+		"Paladin grants no new perk-tree entry -- SPECIALIZATION_PERKS.get(\"paladin\", []) is empty"
+	)
+	assert_false(session.is_perk_choice_pending("cleric_test"), "No specialization perk exists to ever become pending")
+	assert_eq(session.get_available_specializations("cleric_test"), [] as Array[String], "Already promoted")
+	assert_false(session.promote_adventurer("cleric_test", "paladin"), "Cannot promote a second time")
+
+
+func test_promote_adventurer_rejects_paladin_for_a_class_foreign_to_cleric() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+	session.award_party_xp(GameSessionScript.FIRST_PARTY_ID, 200.0)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_JUGGERNAUT_PERK_ID)
+	session.choose_perk("warrior_001", GameSessionScript.WARRIOR_BULWARK_PERK_ID)
+	session.temple_level = 1
+
+	assert_eq(
+		session.get_available_specializations("warrior_001"), ["knight", "archer"] as Array[String],
+		"Paladin is a Cleric specialization -- a fully-perked Warrior never sees it offered, Temple or not"
+	)
+	assert_false(session.promote_adventurer("warrior_001", "paladin"))
+	assert_eq(session.get_adventurer_specialization("warrior_001"), "")
+
+
+## Snapshot round trip (Stage 5 D4's own durable-state requirement): a
+## promoted Paladin's specialization survives export/reset/import even
+## though (unlike every other specialization) it carries no new perk id at
+## all -- a genuine test of whether CampaignSnapshot's validation is truly
+## generic for a ZERO-perk specialization, not just Battle Mage's one-perk
+## case.
+func test_paladin_specialization_persists_through_a_snapshot_round_trip() -> void:
+	var cleric: Dictionary = GameSession.get_default_cleric("cleric_test", "Test Cleric")
+	cleric.level = 6
+	cleric.progression.perks = [GameSessionScript.CLERIC_MEDITATION_PERK_ID, GameSessionScript.CLERIC_DEVOUT_PERK_ID]
+	GameSession.adventurers.append(cleric)
+	GameSession.temple_level = 1
+
+	assert_true(GameSession.promote_adventurer("cleric_test", "paladin"))
+	var snapshot := GameSession.export_campaign_snapshot()
+	GameSession.reset()
+
+	var result := GameSession.import_campaign_snapshot(snapshot)
+
+	assert_true(result.ok, result.error)
+	assert_eq(GameSession.get_adventurer_specialization("cleric_test"), "paladin")
+	assert_eq(
+		GameSession.get_adventurer("cleric_test").progression.perks,
+		[GameSessionScript.CLERIC_MEDITATION_PERK_ID, GameSessionScript.CLERIC_DEVOUT_PERK_ID]
+	)
+
+
 func test_effective_hit_chance_scales_linearly_with_raw_attack_below_the_cap() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)

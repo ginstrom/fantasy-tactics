@@ -306,6 +306,12 @@ static func _build_player_unit(spec: Dictionary, index: int):
 	# state (see this function's own doc comment on "perks"/"specialization").
 	var spell_ids: Array = (class_def.get("spells", []) as Array).duplicate()
 	var specialization_id: String = String(spec.get("specialization", ""))
+	# Paladin (Stage 5 D4): hydrated unconditionally (even "" for a scenario
+	# unit with no "specialization" field) -- mirrors BattleController._
+	# ready()'s identical assignment -- so try_cast_spell()'s "bless" match
+	# arm can read caster identity directly off the battle-local unit built
+	# through THIS production path too, not just the live-battle one.
+	unit.specialization = specialization_id
 	if not specialization_id.is_empty():
 		spell_ids.append_array(GameSession.SPECIALIZATION_SPELLS.get(specialization_id, []))
 	if not spell_ids.is_empty():

@@ -1101,6 +1101,164 @@ func test_same_seed_temporary_guard_scenario_reproduces_identical_outcomes() -> 
 	assert_eq(controller_a.last_attack_result.effective_hit_chance, controller_b.last_attack_result.effective_hit_chance)
 
 
+## --- Deterministic Paladin scenarios (Stage 5 D4 task 5) -------------------
+## Proves the doubled Bless bonus (20% hit chance / 1.20x damage vs. the
+## regular 10%/1.10x) actually changes an outcome vs. a regular Cleric's
+## Bless on the SAME seed, built entirely through the production
+## ScenarioContract/BattleStateFactory path -- unlike Knight/Archer/Battle
+## Mage, Paladin carries no "perks" field at all (it grants no perk), only a
+## "specialization" field, since its whole ability is keyed to caster
+## identity. Kobold's 0 base Guard/25 melee (the same fixture stats every
+## other Stage 5 D4 section above already established) keeps both fixtures
+## free of any newly invented monster stat; a "modifiers": {"melee": ...}
+## override on the Cleric/Paladin (mirroring Archer's own "modifiers":
+## {"guard": ...} precedent) is the only authored one-off value.
+
+func _paladin_vs_kobold_scenario(melee_bonus: int) -> Dictionary:
+	return _normalized({
+		"scenario_id": "paladin_doubled_bless_vs_kobold",
+		"player": {"units": [
+			{
+				"id": "paladin", "template_id": "cleric", "position": {"x": 0, "y": 0},
+				"specialization": "paladin", "modifiers": {"melee": melee_bonus},
+			},
+		]},
+		"enemy": {"units": [{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}}]},
+	})
+
+
+func _cleric_vs_kobold_scenario(melee_bonus: int) -> Dictionary:
+	return _normalized({
+		"scenario_id": "cleric_regular_bless_vs_kobold",
+		"player": {"units": [
+			{"id": "cleric", "template_id": "cleric", "position": {"x": 0, "y": 0}, "modifiers": {"melee": melee_bonus}},
+		]},
+		"enemy": {"units": [{"id": "kobold", "template_id": "kobold", "position": {"x": 1, "y": 0}}]},
+	})
+
+
+## Favorable: a Cleric with a +10 melee modifier (45 base -> 55) reaches a
+## 55% effective hit chance against the Kobold's 0 Guard. Seed 24's first
+## draw (~0.722) sits strictly between the regular-Bless 65% (55% + 10) and
+## the Paladin-doubled 75% (55% + 20) -- a regular Cleric's self-cast Bless
+## still misses this exact roll, but a Paladin's own self-cast Bless flips
+## it to a hit, demonstrating the stronger bonus actually changing an
+## outcome, not just a displayed stat.
+func test_seeded_paladins_doubled_bless_flips_a_miss_to_a_hit_that_a_regular_bless_would_not_on_seed_24() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_cleric_vs_kobold_scenario(10), 24)
+	autofree(plain_controller)
+	var plain_cleric = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_cleric
+	assert_true(plain_controller.try_cast_spell("bless", plain_cleric.grid_position), "A Cleric can self-cast Bless")
+	assert_false(plain_controller.last_attack_result.doubled, "Precondition: a plain Cleric never applies the doubled variant")
+	assert_true(plain_controller.try_attack_selected_unit(plain_kobold.grid_position))
+	assert_false(
+		plain_controller.last_attack_result.hit,
+		"Seed 24's roll (~0.722) misses the regular-Bless 65% effective hit chance (55% melee + 10)"
+	)
+
+	var controller: Node2D = BattleStateFactory.build(_paladin_vs_kobold_scenario(10), 24)
+	autofree(controller)
+	var paladin = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = paladin
+	assert_true(controller.try_cast_spell("bless", paladin.grid_position))
+	assert_true(controller.last_attack_result.doubled, "A promoted Paladin's own cast always applies the doubled variant")
+
+	assert_true(controller.try_attack_selected_unit(kobold.grid_position))
+	assert_true(
+		controller.last_attack_result.hit,
+		"Seed 24's SAME roll (~0.722) now hits once the Paladin-doubled 75% effective hit chance (55% + 20) applies"
+	)
+
+
+## Countered: the ledger's own counterplay point -- "every Stage 5 D4 ability
+## reuses an already-shipped magnitude rather than adding a strictly-
+## dominant option" -- demonstrated here via the existing effective_hit_
+## chance cap. A Cleric/Paladin with a +45 melee modifier (45 base -> 90)
+## already sits at a 90% effective hit chance against the Kobold's 0 Guard;
+## BOTH the regular Bless (90% + 10% = 100%) and the Paladin-doubled Bless
+## (90% + 20% = 110%) clamp to the SAME GameSession.EFFECTIVE_HIT_CHANCE_CAP
+## (95%) -- the doubled bonus adds literally zero marginal accuracy here, so
+## it is never a universal win, exactly as the ledger's counterplay note
+## requires.
+func test_seeded_paladins_doubled_bless_adds_no_value_once_the_hit_chance_cap_already_binds_on_seed_1() -> void:
+	var plain_controller: Node2D = BattleStateFactory.build(_cleric_vs_kobold_scenario(45), 1)
+	autofree(plain_controller)
+	var plain_cleric = plain_controller.get_unit_at(Vector2i(0, 0))
+	var plain_kobold = plain_controller.get_unit_at(Vector2i(1, 0))
+	plain_controller.selected_unit = plain_cleric
+	assert_true(plain_controller.try_cast_spell("bless", plain_cleric.grid_position))
+	assert_true(plain_controller.try_attack_selected_unit(plain_kobold.grid_position))
+	assert_eq(
+		plain_controller.last_attack_result.effective_hit_chance, GameSession.EFFECTIVE_HIT_CHANCE_CAP,
+		"90% melee + the regular Bless's own +10 already exceeds the cap"
+	)
+
+	var controller: Node2D = BattleStateFactory.build(_paladin_vs_kobold_scenario(45), 1)
+	autofree(controller)
+	var paladin = controller.get_unit_at(Vector2i(0, 0))
+	var kobold = controller.get_unit_at(Vector2i(1, 0))
+	controller.selected_unit = paladin
+	assert_true(controller.try_cast_spell("bless", paladin.grid_position))
+	assert_true(controller.try_attack_selected_unit(kobold.grid_position))
+
+	assert_eq(
+		controller.last_attack_result.effective_hit_chance, GameSession.EFFECTIVE_HIT_CHANCE_CAP,
+		"90% melee + the Paladin-doubled Bless's own +20 clamps to the exact same cap"
+	)
+	assert_eq(
+		plain_controller.last_attack_result.hit, controller.last_attack_result.hit,
+		"Same seed, same capped hit chance either way -- the doubled bonus provably added zero value this turn"
+	)
+
+
+## Regression: a same-seed factory build must reproduce identical outcomes
+## for Paladin's doubled Bless -- CampaignSim's own "100% reproducible from
+## sim_seed alone" contract, extended to Stage 5 D4's Paladin branch.
+func test_same_seed_paladin_scenario_reproduces_identical_outcomes() -> void:
+	var controller_a: Node2D = BattleStateFactory.build(_paladin_vs_kobold_scenario(10), 24)
+	var controller_b: Node2D = BattleStateFactory.build(_paladin_vs_kobold_scenario(10), 24)
+	autofree(controller_a)
+	autofree(controller_b)
+	for controller in [controller_a, controller_b]:
+		var paladin = controller.get_unit_at(Vector2i(0, 0))
+		var kobold = controller.get_unit_at(Vector2i(1, 0))
+		controller.selected_unit = paladin
+		controller.try_cast_spell("bless", paladin.grid_position)
+		controller.try_attack_selected_unit(kobold.grid_position)
+
+	assert_eq(controller_a.last_attack_result.hit, controller_b.last_attack_result.hit)
+	assert_eq(controller_a.last_attack_result.damage, controller_b.last_attack_result.damage)
+	assert_eq(controller_a.last_attack_result.effective_hit_chance, controller_b.last_attack_result.effective_hit_chance)
+
+
+## Scenario-built hydration (mirrors test_build_leaves_a_non_spell_class_at_
+## zero_mp_and_empty_spells() below for perks/spells): a scenario unit whose
+## "specialization" field names "paladin" hydrates unit.specialization
+## through THIS production path too, not just the live-battle route.
+func test_build_hydrates_unit_specialization_from_the_scenarios_own_field() -> void:
+	var controller: Node2D = BattleStateFactory.build(_paladin_vs_kobold_scenario(10), 24)
+	autofree(controller)
+
+	var paladin = controller.get_unit_at(Vector2i(0, 0))
+
+	assert_eq(paladin.specialization, "paladin")
+
+
+## Regression: a scenario unit with no "specialization" field at all
+## hydrates to "" -- the same harmless default Unit.specialization's own doc
+## comment documents, unaffected by this slice for every non-Paladin unit.
+func test_build_leaves_a_specialization_less_unit_at_an_empty_string() -> void:
+	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
+	autofree(controller)
+
+	var hero = controller.get_unit_at(Vector2i(0, 0))
+
+	assert_eq(hero.specialization, "")
+
+
 func test_build_leaves_a_non_spell_class_at_zero_mp_and_empty_spells() -> void:
 	var controller: Node2D = BattleStateFactory.build(_one_v_one_scenario(), 1)
 	autofree(controller)

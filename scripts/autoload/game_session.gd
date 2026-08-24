@@ -922,6 +922,20 @@ const ARCHER_CALLED_SHOT_PERK_ID := "archer_called_shot"
 ## on this) rather than by exhausting a root tree the way Knight/Archer's
 ## Warrior root does.
 const BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID := "battle_mage_temporary_guard"
+## Paladin (Stage 5 D4): the Cleric specialization -- deliberately owns NO
+## perk id of its own at all (unlike every other specialization above), per
+## the ledger's explicit "not a new perk-tree entry" instruction. Its whole
+## ability is a granted, caster-identity-keyed amplification of the existing
+## Bless spell (double hit-chance/damage bonus) -- see battle_controller.gd's
+## PALADIN_BLESSED_STATUS_ID/PALADIN_BLESS_HIT_CHANCE_BONUS/PALADIN_BLESS_
+## DAMAGE_MULTIPLIER and its try_cast_spell() "bless" match arm. Accordingly
+## "paladin" is absent from SPECIALIZATION_PERKS below (SPECIALIZATION_PERKS.
+## get("paladin", []) correctly returns [] by default) and from SPECIALIZATION_
+## SPELLS (Bless is already a root Cleric spell -- nothing new is GRANTED,
+## only amplified). Promotion eligibility additionally requires a built
+## Temple (GameSession.temple_level >= 1, see get_available_specializations()'s
+## own doc comment) on top of the same perk-exhaustion rule every other
+## specialization uses -- the only specialization with an extra gate.
 ## Class id -> ordered Array of that class's own ROOT perk ids (Stage 2's
 ## locked set). The order here is purely presentational (get_available_
 ## perks() returns eligible ids in this order); selection has no
@@ -980,10 +994,14 @@ const SPECIALIZATION_SPELLS: Dictionary = {
 ## roadmap table -- Archer is a Warrior specialization, not Scout, despite
 ## its ranged theme), so this dict is keyed by specialization id (1:1), not
 ## the other way around, letting more than one specialization share a root.
+## "paladin" keys to "cleric" (its own "Cleric->Paladin" ledger row) -- see
+## get_available_specializations()'s own doc comment for Paladin's additional
+## built-Temple gate, applied on top of this dict's plain root-class check.
 const SPECIALIZATION_ROOT_CLASS: Dictionary = {
 	"knight": "warrior",
 	"archer": "warrior",
 	"battle_mage": "mage",
+	"paladin": "cleric",
 }
 ## Perk id -> {class, name_key, effect_key}. UI localizes a perk's display
 ## name and effect description through this catalog (get_perk_definition(),
@@ -4345,9 +4363,12 @@ func choose_perk(adventurer_id: String, perk_id: String) -> bool:
 ## (b) that root class's own CLASS_PERKS are ALL already chosen (the
 ## promotion-eligibility gate), and (c) the adventurer has not already
 ## promoted (adventurer.specialization is still empty -- promotion happens
-## at most once). Returns [] for an unknown adventurer. Paladin's later slice
-## adds its own additional built-Temple gate on top of this same check, per
-## the ledger; Knight/Archer have no additional gate.
+## at most once). Returns [] for an unknown adventurer. Paladin ("cleric"
+## root -- see SPECIALIZATION_ROOT_CLASS) additionally requires temple_level
+## >= 1 (a built Temple, see can_build_temple()/build_temple()) before it is
+## ever appended below -- a plain `if`, not a generic per-specialization
+## predicate framework, since Paladin is the only specialization the ledger
+## gives an extra gate to; Knight/Archer/Battle Mage have no additional gate.
 ##
 ## Deliberately does NOT early-return for a class whose CLASS_PERKS entry is
 ## empty or absent (Mage today -- see CLASS_PERKS' own doc comment: Mage has
@@ -4372,8 +4393,11 @@ func get_available_specializations(adventurer_id: String) -> Array[String]:
 		if not chosen.has(perk_id):
 			return available
 	for specialization_id in SPECIALIZATION_ROOT_CLASS:
-		if SPECIALIZATION_ROOT_CLASS[specialization_id] == class_id:
-			available.append(specialization_id)
+		if SPECIALIZATION_ROOT_CLASS[specialization_id] != class_id:
+			continue
+		if specialization_id == "paladin" and temple_level < 1:
+			continue
+		available.append(specialization_id)
 	return available
 
 
