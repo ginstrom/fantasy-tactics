@@ -4,7 +4,7 @@
 
 **Depends on:** Step 2 locally merged; G2 approved.
 
-**Milestone:** One real authored encounter is editable as validated JSON and drives the World Map, production Battlefield, scenario construction, and CampaignSim without a duplicate code-authored definition.
+**Milestone:** One real authored encounter and its battlefield configuration (including spawns and cover tiles) are editable as validated JSON, driving the World Map, production Battlefield, scenario construction, and CampaignSim from a single source of truth.
 
 ## Files
 
@@ -15,20 +15,69 @@
 
 ## Red/green tasks
 
-1. Write failing catalog tests for valid loading and for duplicate ids, missing template references, malformed coordinates, invalid formation/terrain/reward shapes, unknown objective prerequisites, and an encounter file not listed by the catalog manifest.
-2. Run `godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gselect=test_content_catalog.gd -gexit` and record red failures before adding a loader.
-3. Implement a pure `ContentCatalog` loader/normalizer. JSON uses stable ids and `{ "x": n, "y": n }` coordinates; it returns immutable deep copies/normalized dictionaries and structured diagnostics. Do not embed `Vector2i`, scene paths, executable callbacks, or balance literals in JSON.
-4. Define the first bounded schema: encounter identity/display keys, world position, objective metadata/prerequisite, enemy template ids and counts, explicit battle board/cover/spawns, and approved reward references. Keep class/enemy/item templates in catalog registries or existing typed registries behind catalog lookups; do not create a second stat system.
-5. Migrate exactly one approved authored encounter from `GameSession.EXPEDITIONS` and `BattleController._cover_tiles_for_encounter()` into JSON. Delete its production fallback/match entry only after the live World Map, `BattleController`, and objective route load it from the catalog.
-6. Make CampaignSim derive its production encounter scenario from the normalized record. Keep `config/campaign_scenarios.json` as explicit test data, but have ScenarioContract validation ask the catalog for known template ids instead of maintaining a separate hand-written list.
-7. Add a content-lint test that loads every catalog file and asserts every objective/encounter/template/reward reference resolves. Add a fixed-seed production-vs-scenario parity test for the migrated encounter.
-8. Run focused tests green and the common final checks.
+1. **Write failing catalog tests:**
+   - Test loading valid catalog manifest and encounter JSON files.
+   - Test rejection of duplicate IDs, missing file paths, non-integer or out-of-bounds `{ "x": n, "y": n }` coordinates (e.g. outside 7×7 grid), duplicate spawn points, overlapping cover and spawn tiles, unknown enemy template IDs, and circular objective prerequisites.
+2. **Run catalog tests red:**
+   - `godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gselect=test_content_catalog.gd -gexit`
+3. **Implement `ContentCatalog` Loader and Normalizer (`scripts/content/content_catalog.gd`):**
+   - Pure, stateless loader exposing immutable dictionaries and structured validation errors.
+   - JSON format specifications:
+     - `config/content/catalog.json`:
+       ```json
+       {
+         "version": 1,
+         "encounters": [
+           "res://config/content/encounters/obj_tier1_1_goblin_outpost.json"
+         ]
+       }
+       ```
+     - `config/content/encounters/<id>.json`:
+       ```json
+       {
+         "id": "obj_tier1_1_goblin_outpost",
+         "name_key": "encounter.goblin_outpost.name",
+         "tier": 1,
+         "category": "authored_objective",
+         "world_position": { "x": 3, "y": 4 },
+         "grid_size": { "width": 7, "height": 7 },
+         "player_spawns": [{ "x": 0, "y": 3 }, { "x": 0, "y": 2 }, { "x": 0, "y": 4 }],
+         "enemy_spawns": [{ "x": 6, "y": 3 }, { "x": 6, "y": 2 }, { "x": 6, "y": 4 }],
+         "cover_tiles": [{ "x": 3, "y": 2 }, { "x": 3, "y": 4 }],
+         "enemy_composition": [
+           { "template_id": "goblin", "count": 1 },
+           { "kobold": "kobold", "count": 2 }
+         ],
+         "clear_xp": 15,
+         "reward_bonus_multiplier": 1,
+         "prerequisite_objective_id": ""
+       }
+       ```
+4. **Migrate Encounter and Cover Definitions:**
+   - Migrate the first approved encounter from `GameSession.EXPEDITIONS` and `BattleController._cover_tiles_for_encounter()` into JSON.
+   - Remove hardcoded cover tile matching functions in `battle_controller.gd`; have `BattleController` read `cover_tiles`, `player_spawns`, and `enemy_spawns` directly from the encounter definition supplied by `ContentCatalog`.
+5. **Unify Runtime and Tool Consumers:**
+   - `WorldMap`: Place active encounter nodes on the map based on `ContentCatalog.get_encounter_definition(id)`.
+   - `BattleController`: Initialize board dimensions, cover, and unit placement from the catalog definition.
+   - `ScenarioContract` / `BattleStateFactory`: Validate enemy templates and encounter structures against `ContentCatalog`.
+   - `CampaignSim`: Derive simulated battles from the normalized catalog definition.
+6. **Add Content Linting & Parity Tests:**
+   - Add automated test validating that every catalog reference resolves, every string key exists in `translations/en.tres`, and all coordinates fit within board bounds.
+   - Add deterministic scenario parity test asserting that a battle constructed via `ContentCatalog` matches the exact state of the previously hardcoded setup under identical seeds.
+7. **Run Focused Tests Green & Common Final Checks:**
+   - `make campaign-sim`
+   - `make check`
+   - `godot --headless --path . --editor --quit`
+   - `git diff --check`
 
 ## Manual check
 
-Edit only a harmless display key or Cover coordinate in the approved JSON encounter, run `make play`, and confirm the World Map/Battlefield reflects it. Restore the approved content before signoff. Confirm a malformed JSON reference stops at a readable startup/test diagnostic rather than creating a partial encounter.
+In `make play`:
+1. Edit a non-critical field (e.g. cover tile coordinate or display name key) in the migrated encounter JSON.
+2. Launch the game and confirm the World Map and Battlefield immediately reflect the JSON change without recompilation.
+3. Revert the file back to approved content.
+4. Intentionally introduce an invalid coordinate in the JSON file and verify that the game logs a clear startup diagnostic error rather than crashing or creating broken battle state.
 
 ## Commit and local merge
 
-After review and user signoff, commit the catalog, migrated encounter, loader, tests, and only required runtime consumers as `refactor(content): load authored encounter catalog`, merge locally to `main`, and delete the branch.
-
+After review and user signoff, commit the catalog loader, JSON encounter, migrated consumers, and tests as `refactor(content): load authored encounter catalog`, merge locally to `main`, and delete the branch.

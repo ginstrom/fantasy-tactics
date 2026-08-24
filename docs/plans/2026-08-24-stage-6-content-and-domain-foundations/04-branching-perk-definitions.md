@@ -4,31 +4,76 @@
 
 **Depends on:** Step 3 locally merged; G3 approved; G1 approved if Rogue is included.
 
-**Milestone:** A real class can present a prerequisite-gated branch and resolve its approved typed effect through shared rules, with no flat-list assumption or new per-perk controller mode.
+**Milestone:** A real class presents a prerequisite-gated choice branch, resolves its typed effects through a bounded `PerkEffectResolver`, and eliminates hardcoded flat perk arrays without introducing bespoke controller flags.
 
 ## Files
 
-- Create: `scripts/progression/perk_catalog.gd` and `scripts/battle/perk_effect_resolver.gd` if the approved boundary cannot live as a small pure module under existing files.
+- Create: `scripts/progression/perk_catalog.gd` and `scripts/battle/perk_effect_resolver.gd`.
 - Modify: `scripts/autoload/game_session.gd`, `scripts/battle/unit.gd`, `scripts/battle/battle_controller.gd`, `scripts/tools/battle_scenarios/scenario_contract.gd`, `scripts/tools/battle_scenarios/battle_state_factory.gd`, `scripts/ui/level_up.gd`, `scripts/ui/unit_details.gd`, `scenes/ui/level_up.tscn`, `scenes/ui/unit_details.tscn`, and `translations/en.tres`.
-- Modify: `scripts/save/campaign_snapshot.gd` only for the current fresh-format perk record.
-- Test: `tests/unit/test_game_session.gd`, `test_level_up.gd`, `test_unit_details.gd`, `test_battle_controller.gd`, `test_battle_state_factory.gd`, `test_scenario_contract.gd`, plus a new `test_perk_catalog.gd` and fixed-seed scenario fixture.
+- Modify: `scripts/save/campaign_snapshot.gd` for versioned perk tree normalization.
+- Test: create `tests/unit/test_perk_catalog.gd`, `tests/unit/test_perk_effect_resolver.gd`; modify `test_game_session.gd`, `test_level_up.gd`, `test_unit_details.gd`, `test_battle_controller.gd`, `test_battle_state_factory.gd`, and `test_scenario_contract.gd`.
 
 ## Red/green tasks
 
-1. Write failing pure-catalog tests for: unavailable child before parent; legal child after parent; mutually exclusive sibling rejection; duplicate/rank rejection; unknown effect/action rejection; and deterministic serialization of the chosen nodes.
-2. Run only those tests red. Do not change existing perk behavior before the test proves the flat catalog cannot represent the approved branch.
-3. Define `PerkDefinition` with stable id, owner eligibility, prerequisite ids, excludes, rank/cost policy, name/effect translation keys, and one bounded effect/action descriptor. Initial descriptors must cover only already-shipped behavior needed by the approved first branch (for example stat modifier, granted spell, or parameterized attack modifier); new descriptors need a separate decision row.
-4. Replace `CLASS_PERKS`/`SPECIALIZATION_PERKS` array selection and global `PERK_TREE_SIZE` cap with catalog queries for earned slots and eligible nodes. Preserve every existing shipped perk id and result through regression tests; UI receives an ordered eligible node list, never evaluates prerequisites itself.
-5. Route active effect/action execution through `PerkEffectResolver` and a generic capability/action query. Remove the first approved bespoke `ActionMode`/boolean feature-flag path only when shared resolver tests prove identical AP, targeting, status, and log behavior.
-6. Add one approved branching choice to a real class. If Rogue is approved, implement only its approved decision/counter/encounter contract; otherwise use the approved non-Rogue branch and leave Rogue explicitly deferred.
-7. Add snapshot current-format validation, a fixed-seed `ScenarioContract` fixture for each descriptor used, and an end-to-end UI test showing locked, eligible, and excluded nodes accessibly.
-8. Run focused tests green and the common final checks.
+1. **Write failing unit tests for `PerkCatalog` DAG logic:**
+   - Test that a child perk cannot be chosen if its prerequisites are unfulfilled.
+   - Test that choosing one branch node permanently excludes its mutually exclusive siblings.
+   - Test rejection of circular prerequisites, invalid class IDs, duplicate rank assignments, and unrecognized effect descriptors.
+   - Test deterministic serialization and deserialization of chosen perk graphs.
+2. **Run `test_perk_catalog.gd` red:**
+   - `godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gselect=test_perk_catalog.gd -gexit`
+3. **Implement `PerkCatalog` (`scripts/progression/perk_catalog.gd`):**
+   - Define structured `PerkDefinition`:
+     ```gdscript
+     {
+         "id": "warrior_juggernaut",
+         "class_id": "warrior",
+         "tier": 1,
+         "prerequisite_ids": [] as Array[String],
+         "mutually_exclusive_with": ["warrior_bulwark"] as Array[String],
+         "rank_cap": 1,
+         "name_key": "perk.warrior_juggernaut.name",
+         "description_key": "perk.warrior_juggernaut.description",
+         "effect_descriptor": {
+             "type": "stat_modifier",
+             "stat": "max_health",
+             "percent_bonus": 15
+         }
+     }
+     ```
+   - Provide query functions:
+     - `get_available_perks(adventurer: Dictionary) -> Array[Dictionary]` (evaluates prerequisites, tier, and exclusion sets)
+     - `can_choose_perk(adventurer: Dictionary, perk_id: String) -> bool`
+     - `apply_perk(adventurer: Dictionary, perk_id: String) -> Dictionary`
+4. **Implement `PerkEffectResolver` (`scripts/battle/perk_effect_resolver.gd`):**
+   - Provide pure rule evaluation for combat and strategic calculations:
+     - `compute_stat_modifier(base_stat: int, perks: Array[String], stat_name: String) -> int`
+     - `get_granted_actions(perks: Array[String]) -> Array[Dictionary]`
+     - `resolve_action_modifier(base_action: Dictionary, perks: Array[String]) -> Dictionary`
+   - Refactor `GameSession.compute_effective_max_health()`, `get_effective_defense()`, and `get_effective_move_range()` to call through `PerkEffectResolver`.
+   - Remove ad-hoc perk boolean branches from `BattleController` and `Unit`.
+5. **Update Progression UI Callers:**
+   - `level_up.gd`: Fetch eligible perks from `PerkCatalog.get_available_perks()`. Render choice cards indicating prerequisite fulfillment and mutually exclusive branch commitments.
+   - `unit_details.gd`: Render the class perk tree with clear visual state for locked, available, active, and excluded nodes.
+6. **Migrate Existing Class Perks & Add First Branching Choice:**
+   - Migrate shipped perks for Warrior, Scout, Cleric, Mage, and Specializations into `PerkCatalog`.
+   - Add one approved branching decision node (e.g. offensive vs. defensive branch) to a core class.
+7. **Update `CampaignSnapshot` Validation:**
+   - Validate that saved perk lists satisfy prerequisite DAG integrity without containing mutually exclusive pairs.
+8. **Run Focused Tests Green & Common Final Checks:**
+   - `make campaign-sim`
+   - `make check`
+   - `godot --headless --path . --editor --quit`
+   - `git diff --check`
 
 ## Manual check
 
-In `make play`, level an eligible adventurer to the branch point. Confirm the child is locked before its prerequisite, selecting one sibling clearly excludes the other, and the selected node produces its stated combat/strategic result and counter without debug output.
+In `make play`:
+1. Level up an adventurer to a branch tier.
+2. Open Level Up modal and confirm child nodes are locked until prerequisites are acquired.
+3. Choose one branching perk; confirm its sibling node is visually marked excluded and disabled.
+4. Verify in tactical combat that the chosen perk's effect applies accurately without debug output or errors.
 
 ## Commit and local merge
 
-After review and user signoff, commit the perk catalog/resolver, approved branch, UI, snapshots, and tests as `refactor(progression): support branching perk definitions`, merge locally to `main`, and delete the branch.
-
+After review and user signoff, commit the perk catalog, effect resolver, UI updates, and tests as `refactor(progression): support branching perk definitions`, merge locally to `main`, and delete the branch.

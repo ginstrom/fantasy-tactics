@@ -4,30 +4,61 @@
 
 **Depends on:** Steps 2–4 locally merged and manually signed off.
 
-**Milestone:** The extracted boundaries are observable, the integrated fresh-campaign route is deterministic, and no UI/battle/tool path reaches retired global reward or code-authored encounter seams.
+**Milestone:** `GameSession` is consolidated as a lean facade over extracted domain services, the complete fresh-campaign loop runs deterministically with multi-party carry and JSON content, and all legacy global loot and hardcoded encounter seams are eliminated.
 
 ## Files
 
-- Create as needed: `scripts/campaign/party_inventory_service.gd`, `scripts/campaign/encounter_service.gd`, `scripts/progression/progression_service.gd`.
-- Modify: `scripts/autoload/game_session.gd`, `scripts/save/campaign_snapshot.gd`, direct callers in `scripts/ui/`, `scripts/world/`, `scripts/battle/`, and `scripts/tools/` only to use the new facade APIs.
+- Create: `scripts/campaign/party_service.gd`, `scripts/campaign/encounter_service.gd`, `scripts/progression/progression_service.gd`.
+- Modify: `scripts/autoload/game_session.gd`, `scripts/save/campaign_snapshot.gd`, and callers in `scripts/ui/`, `scripts/world/`, `scripts/battle/`, and `scripts/tools/` to use facade APIs.
 - Test: create `tests/unit/test_stage_6_foundations.gd`; modify focused catalog, snapshot, campaign, World Map, battle, and scenario-runner tests.
-- Modify: this plan's `index.md` and `decision-ledger.md` solely to record final evidence and remaining deferred content.
+- Modify: this plan's `index.md` and `decision-ledger.md` to record final evidence and deferred content.
 
 ## Red/green tasks
 
-1. Write a failing architecture/journey test through public APIs: start a fresh campaign; create two parties; resolve independent carried loot; load the migrated JSON authored encounter; choose the approved branching perk; construct the corresponding fixed-seed battle; settle both parties; export/import a current-format snapshot; and verify objective ownership and campaign bank totals.
-2. Run it focused and record the first remaining direct-global or duplicate-content failure.
-3. Extract only the pure domain currently responsible for that failure—catalog, party inventory, progression, or encounters—behind a `GameSession` facade method. Do not move scene routing into a service or let a service touch the scene tree.
-4. Add regression tests proving `GameSession` no longer exposes/uses retired global `pending_*`/`battle_*` storage, and that production content consumers no longer read migrated encounter data from `EXPEDITIONS` or `_cover_tiles_for_encounter()`.
-5. Run the full content lint, deterministic same-seed scenario replay, and a CampaignSim run. Record whether CampaignSim is still representative only; do not claim it proves manual comprehension.
-6. Run all common final checks. Request read-only review of the final diff against this plan before manual playtesting.
-7. Update the ledger with approved/deferred Stage 5 carry-forward decisions, catalog schema version, removed legacy seams, exact verification output, and unresolved future work.
+1. **Write failing end-to-end Stage 6 journey test (`tests/unit/test_stage_6_foundations.gd`):**
+   - Start a fresh campaign.
+   - Deploy two parties (`party_001`, `party_002`) to distinct locations.
+   - Travel Party 1 to the JSON-authored encounter, initialize battle via `BattleContext` with catalog-defined spawns and cover.
+   - Resolve victory, confirm loot enters `party_001.carry` while `party_002.carry` remains empty.
+   - Level up an adventurer, select a branching perk from `PerkCatalog`, assert sibling exclusion, and verify combat effect via `PerkEffectResolver`.
+   - Route Party 1 home and deposit carry to Encampment bank; verify Party 2 is still deployed with independent state.
+   - Export and import a transactional `CampaignSnapshot` and assert zero state corruption.
+2. **Run the journey test red:**
+   - `godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gselect=test_stage_6_foundations.gd -gexit`
+3. **Extract Pure Domain Services from `GameSession`:**
+   - `PartyService` (`scripts/campaign/party_service.gd`):
+     - Party creation, capacity limits, member assignment, deployment, movement consumption, in-field carry equipping, and carry deposit/forfeiture.
+   - `EncounterService` (`scripts/campaign/encounter_service.gd`):
+     - Active encounter instance management, vacancy countdowns, threat ratings, objective tracking, and catalog resolution.
+   - `ProgressionService` (`scripts/progression/progression_service.gd`):
+     - XP distribution, level-up thresholds, stat formulas, perk queries, and qualification checks.
+4. **Refactor `GameSession` as a Lightweight Facade:**
+   - Keep durable state dictionaries in `GameSession`.
+   - Forward business logic calls to domain service singletons/helpers.
+   - Remove redundant internal helpers and legacy constants.
+5. **Verify Elimination of Legacy Seams:**
+   - Confirm zero references to `pending_reward`, `pending_gear`, `pending_mana_crystals`, `battle_reward`, `battle_gear`, `battle_mana_crystals`.
+   - Confirm migrated encounters no longer have fallbacks in `EXPEDITIONS` or `BattleController._cover_tiles_for_encounter()`.
+6. **Run Full Verification Suite:**
+   - Content lint test over all catalog files.
+   - Fixed-seed scenario replay test.
+   - `make campaign-sim`
+   - `make check`
+   - `godot --headless --path . --editor --quit`
+   - `git diff --check`
+7. **Update Decision Ledger:**
+   - Record schema version, removed legacy seams, exact test output, and deferred Stage 7 items.
 
 ## Manual check
 
-After resetting to a fresh save, use `make play` to: form two parties; earn and independently return loot; travel to the JSON-authored encounter; make the first branching perk choice; observe the action/counter; save/load the current format; and complete/return to the authored campaign route. Confirm errors for a malformed content file are readable and no unrelated party state changes.
+In `make play`:
+1. Start a fresh game.
+2. Form two separate parties and deploy both.
+3. Complete an encounter with Party 1 and return to bank its carry.
+4. Level up a party member and choose an exclusive branching perk.
+5. Travel Party 2 to a different encounter and verify independent battle resolution.
+6. Save the game, reload, and verify that all party inventories, world positions, objectives, and Encampment bank totals restore accurately.
 
 ## Commit and local merge
 
-After user signoff, commit only final extraction/tests/evidence as `test(architecture): prove Stage 6 foundations`, merge locally to `main`, and delete the branch. Do not push or open a PR.
-
+After user signoff, commit the domain service extractions, facade consolidation, and exit tests as `test(architecture): prove Stage 6 foundations`, merge locally to `main`, and delete the branch.
