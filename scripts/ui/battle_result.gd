@@ -2,23 +2,26 @@ extends Control
 
 ## Reusable Battle Outcome modal dialog (Information Design §2).
 ## Shows outcome, kills, total and each XP, queued loot, and any level ups.
-## Each leveled adventurer provides a View action that opens their level-up modal;
+## Each leveled adventurer provides a View action that opens their level-up card in CardNavigator;
 ## closing it returns to this Battle Outcome modal.
 
 signal dismissed
 
+const LevelUpScene := preload("res://scenes/ui/level_up.tscn")
+
 @onready var dim_rect: ColorRect = $Dim
 @onready var title_label: Label = $Center/Panel/Margin/VBox/Title
-@onready var kills_label: Label = $Center/Panel/Margin/VBox/KillsLabel
-@onready var xp_label: Label = $Center/Panel/Margin/VBox/XpLabel
-@onready var level_up_section: VBoxContainer = $Center/Panel/Margin/VBox/LevelUpSection
-@onready var level_up_list: VBoxContainer = $Center/Panel/Margin/VBox/LevelUpSection/LevelUpList
-@onready var gold_label: Label = $Center/Panel/Margin/VBox/GoldLabel
-@onready var loot_table: Control = $Center/Panel/Margin/VBox/LootTable
-@onready var ok_button: Button = $Center/Panel/Margin/VBox/ButtonContainer/OkButton
-@onready var level_up: Control = $LevelUp
+@onready var kills_label: Label = %KillsLabel
+@onready var xp_label: Label = %XpLabel
+@onready var level_up_section: VBoxContainer = %LevelUpSection
+@onready var level_up_list: VBoxContainer = %LevelUpList
+@onready var gold_label: Label = %GoldLabel
+@onready var loot_table: Control = %LootTable
+@onready var ok_button: Button = %OkButton
+@onready var card_navigator: CardNavigator = %CardNavigator
 
 var summary: Dictionary = {}
+var level_up: LevelUp
 
 
 func _ready() -> void:
@@ -26,17 +29,26 @@ func _ready() -> void:
 	dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	loot_table.configure(false, false)
 	ok_button.pressed.connect(_on_ok_pressed)
+
+	level_up = LevelUpScene.instantiate()
+	level_up.visible = false
+	card_navigator.set_card_content(level_up)
+	card_navigator.set_title("level_up.title")
+	card_navigator.card_changed.connect(_on_card_changed)
+	card_navigator.closed.connect(_on_card_navigator_closed)
 	level_up.resolved.connect(_on_level_up_resolved)
+
 	if not GameManager.battle_result_summary.is_empty() and summary.is_empty():
 		show_summary(GameManager.battle_result_summary)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible or level_up.visible:
+	if not visible or card_navigator.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		_on_ok_pressed()
+		if _can_dismiss():
+			_on_ok_pressed()
 
 
 func show_summary(summary_data: Dictionary) -> void:
@@ -47,11 +59,20 @@ func show_summary(summary_data: Dictionary) -> void:
 
 func open() -> void:
 	visible = true
-	ok_button.grab_focus()
+	if is_instance_valid(ok_button) and ok_button.is_inside_tree() and ok_button.visible and not ok_button.disabled:
+		ok_button.grab_focus()
 
 
 func close() -> void:
 	visible = false
+
+
+func _can_dismiss() -> bool:
+	var leveled_up_ids: Array = summary.get("leveled_up_ids", [])
+	for adventurer_id in leveled_up_ids:
+		if GameSession.is_perk_choice_pending(str(adventurer_id)):
+			return false
+	return true
 
 
 func _refresh() -> void:
@@ -67,6 +88,15 @@ func _refresh() -> void:
 		summary.get("loot_gear_counts", {}), summary.get("loot_mana_crystal_counts", {})
 	))
 	_refresh_level_ups()
+	ok_button.disabled = not _can_dismiss()
+
+	if card_navigator.visible:
+		var cur_id: Variant = card_navigator.get_current_id()
+		var leveled_up_ids: Array = summary.get("leveled_up_ids", [])
+		if cur_id == null or not leveled_up_ids.has(str(cur_id)):
+			card_navigator.close()
+		else:
+			_show_level_up_for(str(cur_id))
 
 
 func _refresh_level_ups() -> void:
@@ -92,20 +122,56 @@ func _refresh_level_ups() -> void:
 		var view_button := Button.new()
 		view_button.name = "ViewButton_%s" % adventurer_id
 		view_button.text = tr("battle_result.view")
-		view_button.pressed.connect(_on_view_pressed.bind(adventurer_id))
+		view_button.pressed.connect(_on_view_pressed.bind(str(adventurer_id)))
 		row.add_child(view_button)
 
 		level_up_list.add_child(row)
 
 
-func _on_view_pressed(adventurer_id: String) -> void:
+func _get_level_up_view_button(adventurer_id: String) -> Control:
+	var row: Control = level_up_list.get_node_or_null("Row_%s" % adventurer_id)
+	if row != null:
+		return row.get_node_or_null("ViewButton_%s" % adventurer_id)
+	return null
+
+
+func _show_level_up_for(adventurer_id: String) -> void:
 	var health_before: int = int(summary.get("health_before_by_id", {}).get(adventurer_id, 0))
 	level_up.show_for_adventurer(adventurer_id, health_before)
 
 
-func _on_level_up_resolved() -> void:
+func _on_view_pressed(adventurer_id: String) -> void:
+	var leveled_up_ids: Array = summary.get("leveled_up_ids", [])
+	if leveled_up_ids.is_empty() or not leveled_up_ids.has(adventurer_id):
+		return
+	var return_target: Control = _get_level_up_view_button(adventurer_id)
+	card_navigator.open(leveled_up_ids, adventurer_id, return_target)
+	_show_level_up_for(adventurer_id)
+
+
+func _on_card_changed(id: Variant) -> void:
+	var adventurer_id := str(id)
+	var leveled_up_ids: Array = summary.get("leveled_up_ids", [])
+	if not leveled_up_ids.has(adventurer_id):
+		card_navigator.close()
+		return
+	_show_level_up_for(adventurer_id)
+
+
+func _on_level_up_resolved(_unit_id: String = "") -> void:
+	card_navigator.close()
+	_refresh()
+	if is_instance_valid(ok_button) and ok_button.is_inside_tree() and ok_button.visible and not ok_button.disabled:
+		ok_button.grab_focus()
+
+
+func _on_card_navigator_closed(last_id: Variant) -> void:
 	level_up.hide()
-	ok_button.grab_focus()
+	if last_id != null and str(last_id) != "":
+		var target_btn: Control = _get_level_up_view_button(str(last_id))
+		if is_instance_valid(target_btn) and target_btn.is_inside_tree() and target_btn.visible and not target_btn.disabled:
+			target_btn.grab_focus()
+	_refresh()
 
 
 func _format_kills(kills_by_type: Dictionary) -> String:
@@ -118,6 +184,8 @@ func _format_kills(kills_by_type: Dictionary) -> String:
 
 
 func _on_ok_pressed() -> void:
+	if not _can_dismiss():
+		return
 	close()
 	dismissed.emit()
 	GameManager.battle_result_summary = {}

@@ -1,5 +1,7 @@
 extends Control
 
+const JournalEntryCardScene := preload("res://scenes/ui/journal_entry_card.tscn")
+
 @onready var camp_nav: CampNav = $Body/CampNav
 @onready var title: Label = $Body/Center/VBox/Title
 @onready var log_button: Button = $Body/Center/VBox/SectionSelector/LogButton
@@ -13,31 +15,37 @@ extends Control
 @onready var quests_empty_label: Label = $Body/Center/VBox/Sections/QuestsSection/QuestsEmptyLabel
 @onready var quest_list: VBoxContainer = $Body/Center/VBox/Sections/QuestsSection/QuestList
 @onready var back_button: Button = $Body/Center/VBox/BackButton
-@onready var detail_panel: PanelContainer = %DetailPanel
-@onready var detail_title: Label = %DetailTitle
-@onready var detail_body: Label = %DetailBody
-@onready var detail_close_button: Button = %DetailCloseButton
+@onready var card_navigator: CardNavigator = %CardNavigator
 
 var active_section: String = GameSession.JOURNAL_SECTION_LOG
+var journal_entry_card: JournalEntryCard
 
 
 func _ready() -> void:
 	if not GameSession.journal_updated.is_connected(_on_journal_updated):
 		GameSession.journal_updated.connect(_on_journal_updated)
+
+	journal_entry_card = JournalEntryCardScene.instantiate()
+	card_navigator.set_card_content(journal_entry_card)
+	card_navigator.set_title("journal_card.title")
+	card_navigator.card_changed.connect(_on_card_changed)
+	card_navigator.closed.connect(_on_card_navigator_closed)
+
 	GameSession.mark_all_journal_entries_read()
 	refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if card_navigator.visible:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if detail_panel.visible:
-			close_detail()
-		else:
-			GameManager.open_game_menu()
+		GameManager.open_game_menu()
 
 
 func select_section(section: String) -> void:
+	if card_navigator.visible:
+		card_navigator.close()
 	active_section = section if GameSession.JOURNAL_SECTIONS.has(section) else GameSession.JOURNAL_SECTION_LOG
 	refresh()
 
@@ -55,6 +63,20 @@ func refresh() -> void:
 
 	_refresh_log()
 	_refresh_quests()
+
+	if card_navigator.visible:
+		var cur_id: Variant = card_navigator.get_current_id()
+		if cur_id == null or not _is_entry_in_active_section(str(cur_id)):
+			card_navigator.close()
+		else:
+			journal_entry_card.set_entry_id(str(cur_id))
+
+
+func _is_entry_in_active_section(entry_id: String) -> bool:
+	var entry := GameSession.get_journal_entry(entry_id)
+	if entry.is_empty():
+		return false
+	return entry.get("section", GameSession.JOURNAL_SECTION_LOG) == active_section
 
 
 func _refresh_log() -> void:
@@ -145,26 +167,45 @@ func _build_entry_row(entry: Dictionary) -> Control:
 	return row
 
 
+func _get_entry_view_button(entry_id: String) -> Control:
+	var list_container: Control = log_list if active_section == GameSession.JOURNAL_SECTION_LOG else quest_list
+	var row: Control = list_container.get_node_or_null("Entry_%s" % entry_id)
+	if row != null:
+		return row.get_node_or_null("ViewButton")
+	return null
+
+
 func view_entry(entry_id: String) -> void:
-	GameSession.mark_journal_entry_read(entry_id)
-	var entry := GameSession.get_journal_entry(entry_id)
-	if entry.is_empty():
+	if not _is_entry_in_active_section(entry_id):
+		return
+	var entries := GameSession.get_journal_entries(active_section)
+	var id_list: Array = []
+	for e in entries:
+		id_list.append(str(e.id))
+	if id_list.is_empty() or not id_list.has(entry_id):
 		return
 
-	detail_title.text = tr(entry.get("title_key", ""))
-	var detail_dict: Dictionary = entry.get("detail", {})
-	if detail_dict.is_empty():
-		detail_body.text = tr(entry.get("title_key", ""))
-	else:
-		var lines: Array[String] = []
-		for key in detail_dict.keys():
-			lines.append("%s: %s" % [str(key).capitalize(), str(detail_dict[key])])
-		detail_body.text = "\n".join(lines)
-	detail_panel.visible = true
+	var return_target: Control = _get_entry_view_button(entry_id)
+	GameSession.mark_journal_entry_read(entry_id)
+	card_navigator.open(id_list, entry_id, return_target)
+	journal_entry_card.set_entry_id(entry_id)
 
 
-func close_detail() -> void:
-	detail_panel.visible = false
+func _on_card_changed(id: Variant) -> void:
+	var entry_id := str(id)
+	if not _is_entry_in_active_section(entry_id):
+		card_navigator.close()
+		return
+	GameSession.mark_journal_entry_read(entry_id)
+	journal_entry_card.set_entry_id(entry_id)
+
+
+func _on_card_navigator_closed(last_id: Variant) -> void:
+	if last_id != null and str(last_id) != "":
+		var target_btn: Control = _get_entry_view_button(str(last_id))
+		if is_instance_valid(target_btn) and target_btn.is_inside_tree() and target_btn.visible and not target_btn.disabled:
+			target_btn.grab_focus()
+	refresh()
 
 
 func _on_journal_updated() -> void:
@@ -177,10 +218,6 @@ func _on_log_button_pressed() -> void:
 
 func _on_quests_button_pressed() -> void:
 	select_section(GameSession.JOURNAL_SECTION_QUESTS)
-
-
-func _on_detail_close_pressed() -> void:
-	close_detail()
 
 
 func _on_back_pressed() -> void:

@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/journal.gd" id="1_journal"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="2_camp_nav"]
+[ext_resource type="PackedScene" path="res://scenes/ui/card_navigator.tscn" id="3_card_nav"]
 
 [node name="Journal" type="Control"]
 layout_mode = 3
@@ -129,51 +130,10 @@ theme_override_constants/separation = 8
 layout_mode = 2
 text = "ui.back"
 
-[node name="DetailPanel" type="PanelContainer" parent="."]
+[node name="CardNavigator" parent="." instance=ExtResource("3_card_nav")]
 unique_name_in_owner = true
-visible = false
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -120.0
-offset_right = 200.0
-offset_bottom = 120.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="Margin" type="MarginContainer" parent="DetailPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
-
-[node name="Content" type="VBoxContainer" parent="DetailPanel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="DetailTitle" type="Label" parent="DetailPanel/Margin/Content"]
-unique_name_in_owner = true
-layout_mode = 2
-horizontal_alignment = 1
-
-[node name="DetailBody" type="Label" parent="DetailPanel/Margin/Content"]
-unique_name_in_owner = true
-layout_mode = 2
-autowrap_mode = 2
-horizontal_alignment = 1
-
-[node name="DetailCloseButton" type="Button" parent="DetailPanel/Margin/Content"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 4
-text = "journal.detail.close"
 
 [connection signal="pressed" from="Body/Center/VBox/SectionSelector/LogButton" to="." method="_on_log_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/SectionSelector/QuestsButton" to="." method="_on_quests_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
-[connection signal="pressed" from="DetailPanel/Margin/Content/DetailCloseButton" to="." method="_on_detail_close_pressed"]

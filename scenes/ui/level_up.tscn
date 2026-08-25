@@ -2,89 +2,46 @@
 
 [ext_resource type="Script" path="res://scripts/ui/level_up.gd" id="1_level_up"]
 
-[node name="LevelUp" type="Control"]
-visible = false
-layout_mode = 3
+[node name="LevelUp" type="VBoxContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 0
+theme_override_constants/separation = 8
 script = ExtResource("1_level_up")
 
-[node name="Dim" type="ColorRect" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 0
-color = Color(0, 0, 0, 0.6)
-
-[node name="Center" type="CenterContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="Panel" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(480, 240)
-layout_mode = 2
-mouse_filter = 0
-
-[node name="Margin" type="MarginContainer" parent="Center/Panel"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 24
-
-[node name="Content" type="VBoxContainer" parent="Center/Panel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Title" type="Label" parent="Center/Panel/Margin/Content"]
-layout_mode = 2
-text = "level_up.title"
-horizontal_alignment = 1
-
-[node name="NameLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="NameLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="XPLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="XPLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="LevelLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="LevelLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="HealthGainLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="HealthGainLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="SkillGainsLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="SkillGainsLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="PerkLabel" type="Label" parent="Center/Panel/Margin/Content"]
+[node name="PerkLabel" type="Label" parent="."]
 unique_name_in_owner = true
-layout_mode = 2
 visible = false
+layout_mode = 2
 
-[node name="PerkOptionsContainer" type="VBoxContainer" parent="Center/Panel/Margin/Content"]
+[node name="PerkOptionsContainer" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ContinueButton" type="Button" parent="Center/Panel/Margin/Content"]
+[node name="ContinueButton" type="Button" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
 text = "level_up.continue"

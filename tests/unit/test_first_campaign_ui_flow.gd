@@ -546,6 +546,15 @@ func test_defeating_the_final_boss_routes_exactly_once_to_the_real_campaign_vict
 	assert_eq(live_battlefield.name, "Battlefield")
 	assert_true(live_battlefield.battle_result.visible)
 	assert_true(live_battlefield.battle_result.level_up_section.visible)
+	var view_warrior: Button = live_battlefield.battle_result.level_up_list.get_node("Row_warrior_001/ViewButton_warrior_001")
+	view_warrior.emit_signal("pressed")
+	while GameSession.is_perk_choice_pending("warrior_001"):
+		var available: Array[String] = GameSession.get_available_perks("warrior_001")
+		if available.is_empty():
+			break
+		var perk_opt: Button = live_battlefield.battle_result.level_up.perk_options_container.get_node("PerkOption_%s" % available[0])
+		perk_opt.emit_signal("pressed")
+	live_battlefield.battle_result.card_navigator.close()
 	live_battlefield.battle_result.ok_button.emit_signal("pressed")
 
 	var victory_settle_frames := 0

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/ui/battle_result.gd" id="1_battle_result"]
 [ext_resource type="PackedScene" path="res://scenes/ui/loot_table.tscn" id="2_loot_table"]
-[ext_resource type="PackedScene" path="res://scenes/ui/level_up.tscn" id="3_level_up"]
+[ext_resource type="PackedScene" path="res://scenes/ui/card_navigator.tscn" id="3_card_nav"]
 
 [node name="BattleResult" type="Control"]
 layout_mode = 3
@@ -95,6 +95,6 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "battle_result.ok"
 
-[node name="LevelUp" parent="." instance=ExtResource("3_level_up")]
+[node name="CardNavigator" parent="." instance=ExtResource("3_card_nav")]
 unique_name_in_owner = true
-visible = false
+layout_mode = 1

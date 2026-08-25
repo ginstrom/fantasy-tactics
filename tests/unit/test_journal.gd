@@ -104,41 +104,110 @@ func test_opening_journal_on_log_acknowledges_all_journal_entries() -> void:
 	assert_false(screen.get_node("Body/CampNav/VBox/JournalButton/JournalBadge").visible)
 
 
-func test_view_opens_one_log_item_detail_after_opening_acknowledges_all_entries() -> void:
+func test_view_opens_card_navigator_with_chronological_snapshot_and_marks_entry_read() -> void:
 	var id_1: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {"encounter_id": "goblin_camp"}, "log")
 	var id_2: String = GameSession.append_journal_entry("battle", "journal.battle.title", {"outcome": "victory"}, "log")
+	var id_3: String = GameSession.append_journal_entry("level_up", "journal.level_up.title", {"adventurer_id": "knight_001"}, "log")
 
 	var screen := _make_journal()
 	screen.select_section("log")
 
-	var log_badge: Label = screen.get_node("Body/Center/VBox/SectionSelector/LogButton/Badge")
-	var row_1: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_1)
-	var row_2: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_2)
-
-	assert_false(log_badge.visible)
-	assert_false(row_1.get_node("Badge").visible)
-	assert_false(row_2.get_node("Badge").visible)
-
-	screen.view_entry(id_1)
-
-	assert_true(GameSession.get_journal_entry(id_1).read)
-	assert_true(GameSession.get_journal_entry(id_2).read)
-
-	var refreshed_row_1: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_1)
-	var refreshed_row_2: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_2)
-
-	assert_false(refreshed_row_1.get_node("Badge").visible)
-	assert_false(refreshed_row_2.get_node("Badge").visible)
-	assert_false(log_badge.visible)
-
-	var detail_panel: Control = screen.get_node("DetailPanel")
-	assert_true(detail_panel.visible)
-
-	screen.close_detail()
-	assert_false(detail_panel.visible)
-
 	screen.view_entry(id_2)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_not_null(navigator)
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), id_2)
+	assert_eq(navigator.get_ids(), [id_1, id_2, id_3])
+	assert_eq(navigator.count_label.text, "2 of 3")
+
+	var card: JournalEntryCard = navigator.content_container.get_child(0)
+	assert_not_null(card)
+	assert_eq(card.title_label.text, tr("journal.battle.title"))
+	assert_true(card.status_label.text.contains(tr("journal_card.status_read")))
+
 	assert_true(GameSession.get_journal_entry(id_2).read)
+
+
+func test_wrapped_navigation_in_journal_log() -> void:
+	var id_1: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {"encounter_id": "goblin_camp"}, "log")
+	var id_2: String = GameSession.append_journal_entry("battle", "journal.battle.title", {"outcome": "victory"}, "log")
+	var id_3: String = GameSession.append_journal_entry("level_up", "journal.level_up.title", {"adventurer_id": "knight_001"}, "log")
+
+	var screen := _make_journal()
+	screen.select_section("log")
+	screen.view_entry(id_3)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_eq(navigator.get_current_id(), id_3)
+	assert_eq(navigator.count_label.text, "3 of 3")
+
+	navigator.next()
+	assert_eq(navigator.get_current_id(), id_1, "Next from last entry wraps to first entry")
+	assert_eq(navigator.count_label.text, "1 of 3")
+	var card: JournalEntryCard = navigator.content_container.get_child(0)
+	assert_eq(card.title_label.text, tr("journal.discovery.title"))
+	assert_true(GameSession.get_journal_entry(id_1).read)
+
+	navigator.previous()
+	assert_eq(navigator.get_current_id(), id_3, "Previous from first entry wraps to last entry")
+	assert_eq(navigator.count_label.text, "3 of 3")
+
+
+func test_quests_section_has_independent_chronological_snapshot() -> void:
+	var log_id_1: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {}, "log")
+	var quest_id_1: String = GameSession.append_journal_entry("quest", "journal.quest.title", {"quest_id": "q1"}, "quests")
+	var quest_id_2: String = GameSession.append_journal_entry("quest", "journal.quest.title", {"quest_id": "q2"}, "quests")
+
+	var screen := _make_journal()
+	screen.select_section("quests")
+	screen.view_entry(quest_id_1)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_ids(), [quest_id_1, quest_id_2], "Quests snapshot must only contain quest entries")
+	assert_eq(navigator.get_current_id(), quest_id_1)
+	assert_eq(navigator.count_label.text, "1 of 2")
+
+
+func test_close_and_escape_return_to_active_section_and_restore_focus() -> void:
+	var quest_id_1: String = GameSession.append_journal_entry("quest", "journal.quest.title", {"quest_id": "q1"}, "quests")
+	var quest_id_2: String = GameSession.append_journal_entry("quest", "journal.quest.title", {"quest_id": "q2"}, "quests")
+
+	var screen := _make_journal()
+	screen.select_section("quests")
+	screen.view_entry(quest_id_1)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	assert_eq(navigator.get_current_id(), quest_id_2)
+
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+	navigator._unhandled_input(escape_event)
+
+	assert_false(navigator.visible, "Escape on navigator must close it")
+	assert_eq(screen.get_active_section(), "quests", "Active section must be preserved")
+	var quest_list: Control = screen.get_node("Body/Center/VBox/Sections/QuestsSection/QuestList")
+	var row_2: Control = quest_list.get_node("Entry_%s" % quest_id_2)
+	assert_not_null(row_2)
+	assert_false(GameManager.is_game_menu_open())
+
+
+func test_stale_or_deleted_entry_safely_closes_navigator() -> void:
+	var log_id: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {}, "log")
+	var screen := _make_journal()
+	screen.select_section("log")
+	screen.view_entry(log_id)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	GameSession.journal_entries.clear()
+	screen.refresh()
+
+	assert_false(navigator.visible, "Navigator should close if current entry no longer exists")
 
 
 func test_back_button_routes_via_game_manager() -> void:
@@ -160,25 +229,7 @@ func test_section_buttons_switch_active_section() -> void:
 	assert_true(screen.get_node("Body/Center/VBox/Sections/LogSection").visible)
 
 
-func test_escape_closes_detail_panel_if_open() -> void:
-	var id: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {}, "log")
-	var screen := _make_journal()
-
-	screen.view_entry(id)
-	assert_true(screen.get_node("DetailPanel").visible)
-
-	var escape_event := InputEventAction.new()
-	escape_event.action = "ui_cancel"
-	escape_event.pressed = true
-
-	screen._unhandled_input(escape_event)
-
-	assert_true(screen.get_viewport().is_input_handled())
-	assert_false(screen.get_node("DetailPanel").visible)
-	assert_false(GameManager.is_game_menu_open())
-
-
-func test_escape_opens_game_menu_if_detail_panel_closed() -> void:
+func test_escape_opens_game_menu_when_card_navigator_closed() -> void:
 	var screen := _make_journal()
 
 	var escape_event := InputEventAction.new()

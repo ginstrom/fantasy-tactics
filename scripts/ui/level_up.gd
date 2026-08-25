@@ -1,29 +1,29 @@
-extends Control
+class_name LevelUp
+extends VBoxContainer
 
-## An owner-neutral modal level-up overlay for exactly one adventurer (Information Design §2).
-## Presents full-screen dim backdrop, centered panel, Escape/Continue dismissal, and perk
-## selection. Owns no campaign data: every mutation goes through GameSession.
+## Card body / modal level-up for exactly one adventurer (Information Design §2).
+## Presents adventurer name, XP, level, health gain, skill gains, and perk selection.
+## Owns no campaign data: every mutation goes through GameSession.
 
-signal resolved
+signal resolved(unit_id: String)
 
-@onready var dim_rect: ColorRect = $Dim
-@onready var name_label: Label = $Center/Panel/Margin/Content/NameLabel
-@onready var xp_label: Label = $Center/Panel/Margin/Content/XPLabel
-@onready var level_label: Label = $Center/Panel/Margin/Content/LevelLabel
-@onready var health_gain_label: Label = $Center/Panel/Margin/Content/HealthGainLabel
-@onready var skill_gains_label: Label = $Center/Panel/Margin/Content/SkillGainsLabel
-@onready var perk_label: Label = $Center/Panel/Margin/Content/PerkLabel
-@onready var perk_options_container: VBoxContainer = $Center/Panel/Margin/Content/PerkOptionsContainer
-@onready var continue_button: Button = $Center/Panel/Margin/Content/ContinueButton
+@onready var name_label: Label = %NameLabel
+@onready var xp_label: Label = %XPLabel
+@onready var level_label: Label = %LevelLabel
+@onready var health_gain_label: Label = %HealthGainLabel
+@onready var skill_gains_label: Label = %SkillGainsLabel
+@onready var perk_label: Label = %PerkLabel
+@onready var perk_options_container: VBoxContainer = %PerkOptionsContainer
+@onready var continue_button: Button = %ContinueButton
 
 var adventurer_id: String = ""
 var _health_before: int = 0
 
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
-	continue_button.pressed.connect(_on_continue_pressed)
+	if is_instance_valid(continue_button):
+		continue_button.pressed.connect(_on_continue_pressed)
+	refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -45,18 +45,21 @@ func show_for_adventurer(id: String, health_before: int = 0) -> void:
 
 
 func _grab_initial_focus() -> void:
+	if not is_inside_tree() or not is_instance_valid(perk_options_container):
+		return
 	for child in perk_options_container.get_children():
 		if child is Button and not child.disabled:
 			child.grab_focus()
 			return
-	if continue_button.is_inside_tree() and continue_button.visible and not continue_button.disabled:
+	if is_instance_valid(continue_button) and continue_button.is_inside_tree() and continue_button.visible and not continue_button.disabled:
 		continue_button.grab_focus()
-
 
 
 ## Re-reads GameSession fresh rather than caching anything locally, so every
 ## button handler below can simply mutate GameSession and call this again.
 func refresh() -> void:
+	if not is_inside_tree() or not is_instance_valid(name_label):
+		return
 	var adventurer := GameSession.get_adventurer(adventurer_id)
 	if adventurer.is_empty():
 		return
@@ -92,27 +95,6 @@ func refresh() -> void:
 	continue_button.disabled = pending
 
 
-## Rebuilds the perk-choice buttons from scratch every refresh -- remove_
-## child() (not just queue_free()) before re-populating, same as unit_
-## details.gd's _populate_inventory_list(), so a synchronous re-refresh
-## (pressing an option button calls refresh() with no frame in between)
-## never counts a stale button still parented here. One button per
-## GameSession.get_available_perks() entry -- dynamic, data-driven option
-## controls rather than a class-name switch or a hard-coded second button --
-## so a Warrior, Scout, or Cleric (one, two, or eventually more perks) all
-## render correctly from this same code path. Renders nothing while no
-## choice is pending, including once both of a class's perks are already
-## chosen (get_available_perks() then returns [] and is_perk_choice_pending()
-## is already permanently false -- no empty-tree state needed).
-##
-## Stage 6 Step 4 (task 5, G3): ALSO renders a disabled row for any perk in
-## the adventurer's own tree GameSession.get_perk_tree_status() reports as
-## "locked" (prerequisites not yet met, e.g. Knight's Shield Bash/Chain Blow
-## before Discipline is chosen) -- prerequisite fulfillment is visible up
-## front rather than the child perk silently not existing yet. Every existing
-## non-branching class's own perks are never "locked" (empty prerequisite_ids
-## -- see PerkCatalogScript's own doc comment), so this is a pure no-op
-## addition for them.
 func _refresh_perk_options(pending: bool) -> void:
 	for child in perk_options_container.get_children():
 		perk_options_container.remove_child(child)
@@ -135,11 +117,6 @@ func _refresh_perk_options(pending: bool) -> void:
 		perk_options_container.add_child(button)
 
 
-## Shared button-building for both a real choosable option and a disabled
-## locked row above -- identical text/name shape either way, so a locked
-## perk reads exactly like the real thing it will become once its
-## prerequisite is chosen, distinguished by its "(Locked)" suffix and
-## .disabled.
 func _perk_option_button(perk_id: String) -> Button:
 	var button := Button.new()
 	button.name = "PerkOption_%s" % perk_id
@@ -160,4 +137,4 @@ func _on_continue_pressed() -> void:
 	if GameSession.is_perk_choice_pending(adventurer_id):
 		return
 	hide()
-	resolved.emit()
+	resolved.emit(adventurer_id)
