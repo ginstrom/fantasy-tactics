@@ -1620,6 +1620,37 @@ func test_assign_adventurer_to_selected_party_still_works_as_a_thin_wrapper() ->
 	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
 
 
+func test_remove_adventurer_from_party_targets_the_named_party_not_the_selected_one() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.parties.append(
+		_party("second_party", ["warrior_001"] as Array[String], GameSessionScript.STARTING_SETTLEMENT_ID, false)
+	)
+
+	assert_true(session.remove_adventurer_from_party("second_party", "warrior_001"))
+
+	assert_eq(session.get_party("second_party").member_ids, [] as Array[String])
+	assert_eq(
+		session.get_selected_party().member_ids,
+		[] as Array[String],
+		"Only the named party should lose the member"
+	)
+
+
+func test_remove_adventurer_from_party_rejects_unknown_deployed_and_non_member_targets() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.assign_adventurer_to_selected_party("warrior_001")
+
+	assert_false(session.remove_adventurer_from_party("no_such_party", "warrior_001"))
+	assert_false(session.remove_adventurer_from_party(GameSessionScript.FIRST_PARTY_ID, "warrior_002"))
+	assert_true(session.deploy_party(GameSessionScript.FIRST_PARTY_ID))
+	assert_false(session.remove_adventurer_from_party(GameSessionScript.FIRST_PARTY_ID, "warrior_001"))
+	assert_eq(session.get_selected_party().member_ids, ["warrior_001"])
+
+
 ## --- Generated instance ids (_new_instance_id) ---
 
 func test_new_instance_id_returns_non_empty_ids_that_stay_unique_across_a_large_batch() -> void:
