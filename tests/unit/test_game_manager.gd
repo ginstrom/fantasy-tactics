@@ -1299,11 +1299,13 @@ func test_go_to_victory_screen_changes_scene_successfully() -> void:
 ## battle-result summary -- detected by diffing GameSession.is_campaign_
 ## completed around GameSession.complete_current_encounter() (see that
 ## method's own doc comment), not by hardcoding the boss's encounter id.
-func test_defeating_final_boss_routes_to_the_victory_screen() -> void:
+func test_defeating_final_boss_shows_battle_result_before_victory_screen() -> void:
 	var source := FileAccess.get_file_as_string("res://scripts/battle/battlefield.gd")
 
-	assert_string_contains(source, "GameManager.go_to_victory_screen()")
 	assert_string_contains(source, "just_won_campaign")
+	assert_string_contains(source, "_show_campaign_victory_after_result")
+	assert_string_contains(source, "battle_result.show_summary(summary)")
+	assert_string_contains(source, "func _on_battle_result_dismissed()")
 
 
 ## Regression for the Step 5 review's Finding 1: the ordinary go_to_world_
@@ -1695,4 +1697,3 @@ func test_go_to_parties_with_create_immediately_flag_sets_and_consumes_flag() ->
 	assert_true(GameManager.create_party_on_open)
 	assert_true(GameManager.consume_create_party_on_open())
 	assert_false(GameManager.create_party_on_open)
-

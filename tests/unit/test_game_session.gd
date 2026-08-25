@@ -6828,6 +6828,21 @@ func test_record_campaign_guide_progress_on_the_first_stage_writes_nothing() -> 
 	assert_eq(GameSession.tutorial_progress, {})
 
 
+func test_publish_active_campaign_guidance_appends_one_durable_log_entry_without_duplicates() -> void:
+	GameSession.reset()
+
+	GameSession.publish_active_campaign_guidance()
+	GameSession.publish_active_campaign_guidance()
+
+	var entries := GameSession.get_journal_entries(GameSession.JOURNAL_SECTION_LOG)
+	assert_eq(entries.size(), 1)
+	assert_eq(entries[0].kind, "campaign_guidance")
+	assert_eq(entries[0].title_key, "journal.guidance.title")
+	assert_eq(entries[0].detail.guide_id, GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
+	assert_eq(entries[0].detail.message, tr("campaign_guide.form_party.message"))
+	assert_false(GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false))
+
+
 ## A second expedition naturally un-deploys the party again (see
 ## return_deployed_party_to_settlement()), which would otherwise make a
 ## naive live-state check wrongly resurface "deploy your party" even though

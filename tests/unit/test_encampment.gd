@@ -19,6 +19,17 @@ func test_encampment_contains_the_camp_nav() -> void:
 	add_child_autofree(screen)
 
 	assert_not_null(screen.get_node("Body/CampNav"))
+	assert_null(screen.get_node_or_null("CampaignGuide"), "Campaign guidance belongs in the Journal, never as a floating Encampment panel")
+
+
+func test_entering_encampment_publishes_current_campaign_guidance_to_the_journal() -> void:
+	var screen: Control = EncampmentScene.instantiate()
+	add_child_autofree(screen)
+
+	var entries := GameSession.get_journal_entries(GameSession.JOURNAL_SECTION_LOG)
+	assert_eq(entries.size(), 1)
+	assert_eq(entries[0].kind, "campaign_guidance")
+	assert_eq(entries[0].detail.guide_id, GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
 
 
 ## Task 3: Music State Transitions (docs/plans/2026-08-18-core-loop-and-
