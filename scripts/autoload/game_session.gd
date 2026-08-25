@@ -4304,6 +4304,20 @@ func mark_journal_entry_read(entry_id: String) -> bool:
 	return false
 
 
+## Acknowledges every Journal entry in one durable operation. Opening the Log
+## is the player's acknowledgement boundary, so one signal is emitted only
+## when at least one unread record changed state.
+func mark_all_journal_entries_read() -> bool:
+	var changed := false
+	for entry in journal_entries:
+		if not bool(entry.get("read", false)):
+			entry["read"] = true
+			changed = true
+	if changed:
+		journal_updated.emit()
+	return changed
+
+
 
 
 ## Exports every durable field this session owns as a versioned, deep-copy-
@@ -4799,6 +4813,29 @@ func _campaign_guide_has_affordable_improvement() -> bool:
 ## independent of whether its trigger condition is still true.
 func record_campaign_guide_dismissal(guide_id: String) -> void:
 	tutorial_progress[guide_id] = true
+
+
+## Publishes the currently relevant campaign guide as one durable Journal
+## record. The Journal itself is the sole campaign-guidance presentation; a
+## matching guide_id is never appended twice, including after save/load.
+func publish_active_campaign_guidance() -> void:
+	var guide_id := get_campaign_guide_state()
+	if guide_id == "":
+		return
+	for entry in journal_entries:
+		if entry.get("kind", "") == "campaign_guidance" and entry.get("detail", {}).get("guide_id", "") == guide_id:
+			return
+	append_journal_entry(
+		"campaign_guidance",
+		"journal.guidance.title",
+		{
+			"guide_id": guide_id,
+			"message": tr("campaign_guide.%s.message" % guide_id),
+			"target": tr("campaign_guide.%s.target" % guide_id),
+		},
+		JOURNAL_SECTION_LOG
+	)
+	record_campaign_guide_progress(guide_id)
 
 
 ## Explicit write called by the guide banner (scripts/ui/campaign_guide.gd's

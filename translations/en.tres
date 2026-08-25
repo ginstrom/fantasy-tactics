@@ -612,5 +612,6 @@ messages = {
 "journal.battle.defeat.title": "Battle Defeat",
 "journal.battle.retreat.title": "Battle Retreat",
 "journal.loot.title": "Loot Received",
-"journal.level_up.title": "Level Up"
+"journal.level_up.title": "Level Up",
+"journal.guidance.title": "Campaign Guidance"
 }

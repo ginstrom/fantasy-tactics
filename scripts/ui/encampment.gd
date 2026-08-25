@@ -45,7 +45,6 @@ const SHOP_TIER_COLORS := {
 @onready var parties_label: Label = $Body/Center/VBox/PartiesLabel
 @onready var units_label: Label = $Body/Center/VBox/UnitsLabel
 @onready var information_panel: PanelContainer = %InformationPanel
-@onready var campaign_guide: PanelContainer = %CampaignGuide
 @onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 @onready var first_party_dialog: PanelContainer = $FirstPartyDialog
 @onready var first_party_title: Label = $FirstPartyDialog/Content/Title
@@ -83,11 +82,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
+	GameSession.publish_active_campaign_guidance()
 	population_label.text = tr("encampment.population") % GameSession.adventurers.size()
 	parties_label.text = tr("encampment.parties_count") % GameSession.get_encamped_parties().size()
 	units_label.text = tr("encampment.units_count") % _count_encamped_units()
 	information_panel.refresh()
-	campaign_guide.refresh()
 	campaign_objective_banner.refresh()
 	first_party_dialog.visible = GameSession.parties.is_empty() and not first_party_dialog_dismissed
 	_refresh_building_cards()

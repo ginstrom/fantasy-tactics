@@ -73,6 +73,7 @@ var _total_xp_awarded: float = 0.0
 # GameSession.award_party_xp() only reports members who crossed a
 # threshold *during that call*), so this must not just concatenate.
 var _leveled_up_ids: Array[String] = []
+var _show_campaign_victory_after_result := false
 # Identity guard so a repeated board_changed event for the same attack (see
 # _on_board_changed()) can't append the same log line twice. Compared with
 # is_same() rather than == because try_attack_selected_unit() always
@@ -592,6 +593,7 @@ func _finish_victory() -> void:
 	var party := GameSession.get_party(GameSession.selected_party_id)
 	var reward: Dictionary = GameSession.get_active_battle_context().get("reward", {})
 	GameSession.resolve_battle_victory(GameSession.get_active_battle_context().get("battle_id", ""))
+	_show_campaign_victory_after_result = just_won_campaign
 	var summary := {
 		"kills_by_type": _kills_by_type,
 		"total_xp": _total_xp_awarded,
@@ -603,14 +605,15 @@ func _finish_victory() -> void:
 		"loot_gear_counts": (reward.get("gear", {}) as Dictionary).duplicate(),
 	}
 	GameManager.battle_result_summary = summary
-	if just_won_campaign:
-		GameManager.go_to_victory_screen()
-		return
 	battle_result.show_summary(summary)
 	_update_input_lock()
 
 
 func _on_battle_result_dismissed() -> void:
+	if _show_campaign_victory_after_result:
+		_show_campaign_victory_after_result = false
+		GameManager.go_to_victory_screen()
+		return
 	GameManager.go_to_world_map()
 
 

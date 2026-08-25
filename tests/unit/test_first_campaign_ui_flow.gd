@@ -430,45 +430,19 @@ func test_real_buttons_inside_the_now_ignored_top_row_still_receive_clicks() -> 
 	)
 
 
-## Mirrors the World Map Dismiss-button regression test above, but for the
-## other surface CampaignGuide is instanced on. Unlike World Map,
-## Encampment.tscn instances CampaignGuide as the LAST child of the
-## Encampment root (after Body), so it is the frontmost sibling for
-## hit-testing there -- the opposite ordering from the World Map bug -- and
-## this proves that ordering really does keep the Dismiss button reachable.
-func test_campaign_guide_dismiss_button_is_reachable_by_a_real_click_on_encampment() -> void:
+## Campaign guidance is now a durable Journal entry, not a floating
+## Encampment notification. Entering Encampment publishes it once and leaves
+## no out-of-hierarchy guide panel in the scene tree.
+func test_encampment_publishes_campaign_guidance_to_the_journal() -> void:
 	_unload_any_stale_real_scene()
 	var encampment: Control = EncampmentScene.instantiate()
 	add_child_autofree(encampment)
-	# The Dismiss button's on-screen position depends on CampaignGuide's own
-	# internal VBoxContainer sort, which Godot defers to the end of the
-	# frame -- let it actually run (empirically, two frames) before trusting
-	# get_global_rect().
-	await get_tree().process_frame
-	await get_tree().process_frame
 
-	var guide: Control = encampment.get_node("%CampaignGuide")
-	assert_eq(
-		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_FORM_PARTY,
-		"a fresh campaign with no parties yet should be showing the form-party guide"
-	)
-	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
-
-	var dismiss_button: Button = guide.get_node("%DismissButton")
-	var dismiss_pixel_center: Vector2 = dismiss_button.get_global_rect().get_center()
-
-	# The awaits above give another test elsewhere in this suite a chance to
-	# interleave (Godot coroutines don't fully serialize two awaiting tests)
-	# and re-plant a stale current_scene -- clear it again, right before
-	# this click, not just once at the top of the test.
-	_unload_any_stale_real_scene()
-	_push_click(encampment.get_viewport(), dismiss_pixel_center)
-
-	assert_true(
-		GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_FORM_PARTY, false),
-		"a real click on the Dismiss button's own on-screen position must record the dismissal"
-	)
-	assert_false(guide.visible, "the guide must hide itself once its message has been dismissed")
+	assert_null(encampment.get_node_or_null("CampaignGuide"))
+	var entries := GameSession.get_journal_entries(GameSession.JOURNAL_SECTION_LOG)
+	assert_eq(entries.size(), 1)
+	assert_eq(entries[0].kind, "campaign_guidance")
+	assert_eq(entries[0].detail.guide_id, GameSession.CAMPAIGN_GUIDE_FORM_PARTY)
 
 
 ## Step 3 (docs/plans/2026-08-22-stage-3-campaign-assembly/03-final-victory-
@@ -563,19 +537,24 @@ func test_defeating_the_final_boss_routes_exactly_once_to_the_real_campaign_vict
 	assert_true(GameSession.is_campaign_completed, "Defeating the Ogre must flip campaign completion")
 	assert_true(GameSession.is_free_play_active)
 
-	# Battlefield._finish_victory() must route the final boss's own victory
-	# straight to the Campaign Victory screen -- unlike every earlier node,
-	# never by way of BattleResult (see that function's just_won_campaign
-	# branch) -- so settle only for VictoryScreen, the same real get_tree().
-	# change_scene_to_file() chain the other real-transition tests in this
-	# file already exercise.
+	# The final boss retains its Battle Outcome until the player has seen its
+	# level-up rows. Dismissing that real modal is the only route onward to the
+	# Campaign Victory screen.
+	# The test drives its explicitly-instantiated Battlefield while the real
+	# GameManager transition keeps a separate current-scene instance alive.
+	var live_battlefield: Node2D = battlefield
+	assert_eq(live_battlefield.name, "Battlefield")
+	assert_true(live_battlefield.battle_result.visible)
+	assert_true(live_battlefield.battle_result.level_up_section.visible)
+	live_battlefield.battle_result.ok_button.emit_signal("pressed")
+
 	var victory_settle_frames := 0
 	while (get_tree().current_scene == null or get_tree().current_scene.name != "VictoryScreen") and victory_settle_frames < 10:
 		await get_tree().process_frame
 		victory_settle_frames += 1
 	assert_eq(
 		get_tree().current_scene.name, "VictoryScreen",
-		"Defeating the final boss must route directly to the real Campaign Victory screen"
+		"Dismissing the final battle outcome must route to the real Campaign Victory screen"
 	)
 
 	var victory_screen: Control = get_tree().current_scene

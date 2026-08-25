@@ -24,6 +24,7 @@ var active_section: String = GameSession.JOURNAL_SECTION_LOG
 func _ready() -> void:
 	if not GameSession.journal_updated.is_connected(_on_journal_updated):
 		GameSession.journal_updated.connect(_on_journal_updated)
+	GameSession.mark_all_journal_entries_read()
 	refresh()
 
 

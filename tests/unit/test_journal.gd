@@ -37,7 +37,7 @@ func test_quests_section_shows_explicit_accepted_quest_empty_state_when_no_accep
 	assert_eq(quest_list.get_child_count(), 0)
 
 
-func test_log_section_displays_chronological_entries() -> void:
+func test_log_section_displays_chronological_entries_without_unread_badges_after_opening() -> void:
 	var id_1: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {"encounter_id": "goblin_camp"}, "log")
 	var id_2: String = GameSession.append_journal_entry("battle", "journal.battle.title", {"outcome": "victory"}, "log")
 	var id_3: String = GameSession.append_journal_entry("level_up", "journal.level_up.title", {"adventurer_id": "knight_001"}, "log")
@@ -60,9 +60,9 @@ func test_log_section_displays_chronological_entries() -> void:
 	assert_eq(row_2.get_index(), 1)
 	assert_eq(row_3.get_index(), 2)
 
-	assert_true(row_1.get_node("Badge").visible)
-	assert_true(row_2.get_node("Badge").visible)
-	assert_true(row_3.get_node("Badge").visible)
+	assert_false(row_1.get_node("Badge").visible)
+	assert_false(row_2.get_node("Badge").visible)
+	assert_false(row_3.get_node("Badge").visible)
 
 
 func test_log_and_quests_badges_reflect_their_own_unread_items() -> void:
@@ -91,7 +91,20 @@ func test_log_and_quests_badges_reflect_their_own_unread_items() -> void:
 	assert_false(quests_badge.visible)
 
 
-func test_view_clears_one_log_item_only() -> void:
+func test_opening_journal_on_log_acknowledges_all_journal_entries() -> void:
+	var log_id: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {}, "log")
+	var quest_id: String = GameSession.append_journal_entry("quest", "journal.quest.title", {}, "quests")
+
+	var screen := _make_journal()
+
+	assert_true(GameSession.get_journal_entry(log_id).read)
+	assert_true(GameSession.get_journal_entry(quest_id).read)
+	assert_false(screen.get_node("Body/Center/VBox/SectionSelector/LogButton/Badge").visible)
+	assert_false(screen.get_node("Body/Center/VBox/SectionSelector/QuestsButton/Badge").visible)
+	assert_false(screen.get_node("Body/CampNav/VBox/JournalButton/JournalBadge").visible)
+
+
+func test_view_opens_one_log_item_detail_after_opening_acknowledges_all_entries() -> void:
 	var id_1: String = GameSession.append_journal_entry("discovery", "journal.discovery.title", {"encounter_id": "goblin_camp"}, "log")
 	var id_2: String = GameSession.append_journal_entry("battle", "journal.battle.title", {"outcome": "victory"}, "log")
 
@@ -102,21 +115,21 @@ func test_view_clears_one_log_item_only() -> void:
 	var row_1: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_1)
 	var row_2: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_2)
 
-	assert_true(log_badge.visible)
-	assert_true(row_1.get_node("Badge").visible)
-	assert_true(row_2.get_node("Badge").visible)
+	assert_false(log_badge.visible)
+	assert_false(row_1.get_node("Badge").visible)
+	assert_false(row_2.get_node("Badge").visible)
 
 	screen.view_entry(id_1)
 
 	assert_true(GameSession.get_journal_entry(id_1).read)
-	assert_false(GameSession.get_journal_entry(id_2).read)
+	assert_true(GameSession.get_journal_entry(id_2).read)
 
 	var refreshed_row_1: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_1)
 	var refreshed_row_2: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_2)
 
 	assert_false(refreshed_row_1.get_node("Badge").visible)
-	assert_true(refreshed_row_2.get_node("Badge").visible)
-	assert_true(log_badge.visible)
+	assert_false(refreshed_row_2.get_node("Badge").visible)
+	assert_false(log_badge.visible)
 
 	var detail_panel: Control = screen.get_node("DetailPanel")
 	assert_true(detail_panel.visible)
@@ -125,11 +138,7 @@ func test_view_clears_one_log_item_only() -> void:
 	assert_false(detail_panel.visible)
 
 	screen.view_entry(id_2)
-
 	assert_true(GameSession.get_journal_entry(id_2).read)
-	var final_row_2: Control = screen.get_node("Body/Center/VBox/Sections/LogSection/LogList/Entry_%s" % id_2)
-	assert_false(final_row_2.get_node("Badge").visible)
-	assert_false(log_badge.visible)
 
 
 func test_back_button_routes_via_game_manager() -> void:
