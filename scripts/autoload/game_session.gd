@@ -17,6 +17,25 @@ const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd"
 const PerkCatalogScript := preload("res://scripts/progression/perk_catalog.gd")
 const PerkEffectResolverScript := preload("res://scripts/battle/perk_effect_resolver.gd")
 
+## Stage 6 Step 5 (docs/plans/2026-08-24-stage-6-content-and-domain-
+## foundations/05-domain-extraction-and-stage-6-exit.md): GameSession is
+## consolidated as a lean facade over these three extracted domain services.
+## Every service holds NO state of its own -- each operates directly on this
+## file's own durable dictionaries (parties, adventurers, active_encounters,
+## _battle_context, etc.) via the `_gs` reference it is constructed with, so
+## there is exactly one copy of every field, never a second one that could
+## desync. Every function moved into a service keeps a one-line forwarding
+## method here under its original name, so every pre-existing internal
+## self-call and every external `GameSession.foo(...)` call site (UI, World
+## Map, battle, tools, tests) keeps working completely unchanged -- only what
+## runs behind each name moved.
+const PartyServiceScript := preload("res://scripts/campaign/party_service.gd")
+const EncounterServiceScript := preload("res://scripts/campaign/encounter_service.gd")
+const ProgressionServiceScript := preload("res://scripts/progression/progression_service.gd")
+var party_service: PartyServiceScript
+var encounter_service: EncounterServiceScript
+var progression_service: ProgressionServiceScript
+
 ## Emitted whenever campaign_objective_id, completed_objectives,
 ## unlocked_authored_encounters, is_campaign_completed, or
 ## is_free_play_active changes (see complete_campaign_objective() and
@@ -1697,6 +1716,9 @@ var tutorial_progress: Dictionary = {}
 
 
 func _init() -> void:
+	party_service = PartyServiceScript.new(self)
+	encounter_service = EncounterServiceScript.new(self)
+	progression_service = ProgressionServiceScript.new(self)
 	reset()
 
 
@@ -1860,92 +1882,32 @@ func reset() -> void:
 	tutorial_progress = {}
 
 
-## Maximum number of parties a campaign may have at once (Stage 5 D5,
-## decision-ledger.md): 1 below Guild Hall level GUILD_HALL_MAX_LEVEL (today's
-## behavior, unchanged), 2 once it reaches that top tier. Reuses the existing
-## top-tier gate rather than a new threshold -- this function's own prior
-## doc comment already named the Guild Hall level 2 -> 3 upgrade as the
-## intended trigger for this raise.
 func get_max_party_count() -> int:
-	return 2 if guild_hall_level >= GUILD_HALL_MAX_LEVEL else 1
+	return party_service.get_max_party_count()
 
 
-## Mints the next sequential party id ("party_001", "party_002", ...) --
-## FIRST_PARTY_ID names exactly the first of these, kept as its own constant
-## since it is referenced by id throughout the codebase and test suite.
 func _new_party_id() -> String:
-	return "party_%03d" % (parties.size() + 1)
+	return party_service._new_party_id()
 
 
-## The canonical empty PartyCarry/BattleContext-reward shape (decision-ledger.md's
-## PartyCarry contract): a fresh party's own carry, a resolved battle context's
-## reward once it has been moved/discarded, and every intermediate reset in
-## between all share this exact shape, so it is minted from one place rather
-## than four separately-typed dictionary literals drifting apart over time.
 func _empty_carry() -> Dictionary:
-	return {
-		"gold": 0,
-		"gear": {} as Dictionary,
-		"mana_crystals": {} as Dictionary,
-		"item_instance_ids": [] as Array[String],
-	}
+	return party_service._empty_carry()
 
 
 func create_party(party_name: String = "Party 1") -> bool:
-	if parties.size() >= get_max_party_count():
-		return false
-
-	var party_id := _new_party_id()
-	parties.append({
-		"id": party_id,
-		"member_ids": [] as Array[String],
-		"location_id": STARTING_SETTLEMENT_ID,
-		"world_position": STARTING_SETTLEMENT_WORLD_POSITION,
-		"deployed": false,
-		"travel_route": [] as Array[Vector2i],
-		"movement_spent": false,
-		"name": party_name,
-		# TBD: party-level progression data. Placeholder only.
-		"progression": {},
-		# TBD: free-form party metadata. Placeholder only.
-		"metadata": {},
-		# PartyCarry (Stage 6 Step 2, decision-ledger.md): everything this
-		# party has picked up in the field but not yet banked at the
-		# Encampment (see get_party_carry()/deposit_party_carry()/
-		# forfeit_party_carry()) -- replaces the old campaign-wide
-		# pending_reward/pending_mana_crystals/pending_gear globals, which
-		# pooled every deployed party's unbanked loot together instead of
-		# keeping each party's own carry independent.
-		"carry": _empty_carry(),
-	})
-	selected_party_id = party_id
-	return true
+	return party_service.create_party(party_name)
 
 
-## Switches which party the World Map (and every other "selected party"
-## reader -- see the no-arg overloads of has_deployed_party()/
-## get_deployed_party_position()/etc. below) treats as "the" party, without
-## deploying, moving, or otherwise mutating anything. False (no change) for
-## an unknown party id.
 func select_party(party_id: String) -> bool:
-	if _get_party_index(party_id) == -1:
-		return false
-	selected_party_id = party_id
-	return true
+	return party_service.select_party(party_id)
 
 
 func get_selected_party() -> Dictionary:
-	var party_index := _get_selected_party_index()
-	if party_index == -1:
-		return {}
-	return parties[party_index]
+	return party_service.get_selected_party()
 
 
 func get_party(party_id: String) -> Dictionary:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return {}
-	return parties[party_index].duplicate(true)
+	return party_service.get_party(party_id)
 
 
 func get_adventurer(adventurer_id: String) -> Dictionary:
@@ -1956,49 +1918,19 @@ func get_adventurer(adventurer_id: String) -> Dictionary:
 
 
 func get_deployable_encamped_parties() -> Array[Dictionary]:
-	var deployable: Array[Dictionary] = []
-	for party in parties:
-		if _is_party_eligible_for_deployment(party):
-			deployable.append(party.duplicate(true))
-	return deployable
+	return party_service.get_deployable_encamped_parties()
 
 
-## Every encamped party (settlement, not deployed), regardless of whether it
-## has room or an available member — unlike get_deployable_encamped_parties(),
-## a full-but-encamped party is still a valid unit-assignment target. Shares
-## the encamped half of that same "ready" concept via _is_party_encamped so
-## the two queries cannot silently drift apart.
 func get_encamped_parties() -> Array[Dictionary]:
-	var encamped: Array[Dictionary] = []
-	for party in parties:
-		if _is_party_encamped(party):
-			encamped.append(party.duplicate(true))
-	return encamped
+	return party_service.get_encamped_parties()
 
 
-## Every currently deployed party (out in the field), regardless of
-## eligibility for anything else -- the multi-party counterpart to
-## get_encamped_parties() (Stage 5 D5): used by the World Map to render every
-## deployed party's own marker/route, not only the selected one, and by the
-## Send Party modal to list every party a new destination could be sent to.
 func get_deployed_parties() -> Array[Dictionary]:
-	var deployed: Array[Dictionary] = []
-	for party in parties:
-		if bool(party.get("deployed", false)):
-			deployed.append(party.duplicate(true))
-	return deployed
+	return party_service.get_deployed_parties()
 
 
 func deploy_party(party_id: String) -> bool:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1 or not _is_party_eligible_for_deployment(parties[party_index]):
-		return false
-
-	selected_party_id = party_id
-	parties[party_index].deployed = true
-	parties[party_index].location_id = STARTING_SETTLEMENT_ID
-	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
-	return true
+	return party_service.deploy_party(party_id)
 
 
 func get_available_adventurers() -> Array[Dictionary]:
@@ -2019,32 +1951,15 @@ func has_recruitment_candidate(candidate_id: String) -> bool:
 
 
 func is_party_deployable(party_id: String) -> bool:
-	var party := get_party(party_id)
-	return not party.is_empty() and _is_party_eligible_for_deployment(party)
+	return party_service.is_party_deployable(party_id)
 
 
-## Rejects a target party that is not encamped (deployed, or outside the
-## starting settlement) in addition to the existing unknown-party/unknown-
-## adventurer/already-assigned checks — a party that is out in the field has
-## nowhere to receive a new member. Also rejects if the party is at its size cap.
 func assign_adventurer_to_party(party_id: String, adventurer_id: String) -> bool:
-	var party_index := _get_party_index(party_id)
-	if (
-		party_index == -1
-		or not _is_party_encamped(parties[party_index])
-		or not _has_adventurer(adventurer_id)
-		or _is_adventurer_assigned(adventurer_id)
-		or parties[party_index].member_ids.size() >= get_max_party_size()
-	):
-		return false
-
-	var member_ids: Array = parties[party_index].member_ids
-	member_ids.append(adventurer_id)
-	return true
+	return party_service.assign_adventurer_to_party(party_id, adventurer_id)
 
 
 func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
-	return assign_adventurer_to_party(selected_party_id, adventurer_id)
+	return party_service.assign_adventurer_to_selected_party(adventurer_id)
 
 
 ## Debug-only convenience for populating the roster (see the debug menu).
@@ -2178,111 +2093,47 @@ func purchase_recruit_for_party(candidate_id: String, party_id: String) -> bool:
 
 
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
-	var party_index := _get_selected_party_index()
-	if party_index == -1:
-		return false
-
-	var member_ids: Array = parties[party_index].member_ids
-	var member_index := member_ids.find(adventurer_id)
-	if member_index == -1:
-		return false
-
-	member_ids.remove_at(member_index)
-	return true
+	return party_service.remove_adventurer_from_selected_party(adventurer_id)
 
 
-## Shares its eligibility rule with deploy_party()/get_deployable_encamped_parties()
-## (see _is_party_eligible_for_deployment) so there is exactly one definition
-## of "ready to depart" rather than two that can silently drift apart.
 func can_depart_selected_party() -> bool:
-	var party := get_selected_party()
-	return not party.is_empty() and _is_party_eligible_for_deployment(party)
+	return party_service.can_depart_selected_party()
 
 
 func depart_selected_party() -> bool:
-	if not can_depart_selected_party():
-		return false
-
-	var party_index := _get_selected_party_index()
-	parties[party_index].deployed = true
-	parties[party_index].location_id = STARTING_SETTLEMENT_ID
-	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
-	return true
+	return party_service.depart_selected_party()
 
 
-## Resolves an explicit-or-defaulted party id: every travel/position/route
-## function below takes an optional party_id, defaulting to "" which resolves
-## to selected_party_id -- the audited replacement for this file's former
-## single-selected-party-only assumption (Stage 5 D5, decision-ledger.md).
-## This keeps every pre-existing no-arg call site (world_map.gd,
-## campaign_guide's triggers, etc.) working unchanged against "the" (selected)
-## party, while multi-party-aware callers (end_world_turn() below, the World
-## Map's Send Party flow) pass an explicit id for a party that may not be
-## selected at all.
 func _resolve_party_id(party_id: String) -> String:
-	return party_id if party_id != "" else selected_party_id
+	return party_service._resolve_party_id(party_id)
 
 
 func has_deployed_party(party_id: String = "") -> bool:
-	var party := get_party(_resolve_party_id(party_id))
-	return not party.is_empty() and party.deployed
+	return party_service.has_deployed_party(party_id)
 
 
 func get_deployed_party_position(party_id: String = "") -> Vector2i:
-	if not has_deployed_party(party_id):
-		return STARTING_SETTLEMENT_WORLD_POSITION
-	return get_party(_resolve_party_id(party_id)).world_position
+	return party_service.get_deployed_party_position(party_id)
 
 
 func set_deployed_party_position(position: Vector2i, party_id: String = "") -> bool:
-	if not has_deployed_party(party_id):
-		return false
-
-	parties[_get_party_index(_resolve_party_id(party_id))].world_position = position
-	return true
+	return party_service.set_deployed_party_position(position, party_id)
 
 
 func get_deployed_party_route(party_id: String = "") -> Array[Vector2i]:
-	if not has_deployed_party(party_id):
-		return []
-	return get_party(_resolve_party_id(party_id)).travel_route
+	return party_service.get_deployed_party_route(party_id)
 
 
 func set_deployed_party_route(route: Array[Vector2i], party_id: String = "") -> bool:
-	if not has_deployed_party(party_id) or route.is_empty():
-		return false
-
-	var resolved_id := _resolve_party_id(party_id)
-	var previous: Vector2i = get_party(resolved_id).world_position
-	for step in route:
-		if _grid_distance(previous, step) != 1:
-			return false
-		previous = step
-
-	parties[_get_party_index(resolved_id)].travel_route = route
-	return true
+	return party_service.set_deployed_party_route(route, party_id)
 
 
 func clear_deployed_party_route(party_id: String = "") -> void:
-	if not has_deployed_party(party_id):
-		return
-	parties[_get_party_index(_resolve_party_id(party_id))].travel_route = [] as Array[Vector2i]
+	party_service.clear_deployed_party_route(party_id)
 
 
 func take_next_route_step(party_id: String = "") -> bool:
-	if not has_deployed_party(party_id):
-		return false
-
-	var party_index := _get_party_index(_resolve_party_id(party_id))
-	var party: Dictionary = parties[party_index]
-	if party.movement_spent or party.travel_route.is_empty():
-		return false
-
-	var route: Array = party.travel_route
-	party.world_position = route[0]
-	route.remove_at(0)
-	party.movement_spent = true
-	return true
+	return party_service.take_next_route_step(party_id)
 
 
 ## Advances one World Map Turn for every deployed party at once, not only the
@@ -2335,27 +2186,15 @@ func _shop_income_per_turn() -> int:
 
 
 func return_deployed_party_to_settlement(party_id: String = "") -> bool:
-	if not has_deployed_party(party_id):
-		return false
-
-	var party_index := _get_party_index(_resolve_party_id(party_id))
-	parties[party_index].deployed = false
-	parties[party_index].location_id = STARTING_SETTLEMENT_ID
-	parties[party_index].world_position = STARTING_SETTLEMENT_WORLD_POSITION
-	parties[party_index].travel_route = [] as Array[Vector2i]
-	parties[party_index].movement_spent = false
-	return true
+	return party_service.return_deployed_party_to_settlement(party_id)
 
 
 func _get_selected_party_index() -> int:
-	return _get_party_index(selected_party_id)
+	return party_service._get_selected_party_index()
 
 
 func _get_party_index(party_id: String) -> int:
-	for party_index in parties.size():
-		if parties[party_index].id == party_id:
-			return party_index
-	return -1
+	return party_service._get_party_index(party_id)
 
 
 func _get_adventurer_index(adventurer_id: String) -> int:
@@ -2377,21 +2216,15 @@ func _get_recruitment_candidate_index(candidate_id: String) -> int:
 
 
 func _party_has_available_member(party: Dictionary) -> bool:
-	for adventurer in adventurers:
-		if adventurer.id in party.member_ids and adventurer.availability_status == "available":
-			return true
-	return false
+	return party_service._party_has_available_member(party)
 
 
 func _is_party_eligible_for_deployment(party: Dictionary) -> bool:
-	return _is_party_encamped(party) and _party_has_available_member(party)
+	return party_service._is_party_eligible_for_deployment(party)
 
 
-## The shared "encamped" half of both deployment eligibility and unit
-## assignment: in the starting settlement and not out in the field. Neither
-## caller should duplicate this boolean expression on its own.
 func _is_party_encamped(party: Dictionary) -> bool:
-	return party.location_id == STARTING_SETTLEMENT_ID and not party.deployed
+	return party_service._is_party_encamped(party)
 
 
 func _is_adventurer_assigned(adventurer_id: String) -> bool:
@@ -2406,282 +2239,67 @@ func _grid_distance(a: Vector2i, b: Vector2i) -> int:
 
 
 func _resolve_enemy_composition(difficulty: int) -> Dictionary:
-	var options: Array = STAR_ENEMY_COMPOSITIONS.get(difficulty, STAR_ENEMY_COMPOSITIONS[1])
-	var option: Dictionary = options[0]
-	if options.size() > 1:
-		option = options[enemy_composition_roll.call(options.size())]
-	var enemy: Dictionary = option.enemy.duplicate(true)
-	enemy["count"] = enemy_count_roll.call(option.count_min, option.count_max)
-	return enemy
+	return encounter_service._resolve_enemy_composition(difficulty)
 
 
-## True for exactly the twelve authored campaign-ladder node ids -- the
-## CAMPAIGN_OBJECTIVES keys, which double as their own EXPEDITIONS key and
-## encounter id (see CAMPAIGN_OBJECTIVES' own doc comment). False for every
-## sandbox template id (goblin_camp/orc_outpost/ruined_fortress) and every
-## active-encounter instance id derived from one of them.
 func is_authored_encounter(encounter_id: String) -> bool:
-	return CAMPAIGN_OBJECTIVES.has(encounter_id)
+	return encounter_service.is_authored_encounter(encounter_id)
 
 
-## Gates enter_encounter(): a sandbox id is always enterable (matching prior
-## behavior), but an authored id must be both currently unlocked and not
-## already cleared -- authored objectives never respawn or reopen (see
-## docs/designs/campaign-loop.md's "Objectives, gates, and encounter
-## threat" contract).
 func can_enter_encounter(encounter_id: String) -> bool:
-	if not is_authored_encounter(encounter_id):
-		return true
-	return unlocked_authored_encounters.has(encounter_id) and not completed_encounters.has(encounter_id)
+	return encounter_service.can_enter_encounter(encounter_id)
 
 
-## True when party_id may enter/continue the single active battle: no battle
-## is currently claimed, the current battle context has already resolved
-## (status is no longer "active"), or party_id itself already owns the live
-## claim (re-entering its own claim is always legal, e.g. a debug re-launch
-## mid-battle). False for any other party while a different one holds an
-## active claim -- see create_battle_context()/get_active_battle_context().
 func can_party_enter_battle(party_id: String) -> bool:
-	var context := get_active_battle_context()
-	return context.is_empty() or context.status != "active" or context.owner_party_id == party_id
+	return encounter_service.can_party_enter_battle(party_id)
 
 
-## Claims the single active battle for party_id and mints a fresh BattleContext
-## record (decision-ledger.md's PartyCarry/BattleContext target contract) --
-## the canonical claim/attribution record for the battle about to start,
-## replacing the old dedicated active_battle_party_id field. Returns an empty
-## Dictionary (no state change) if a different party already holds an active
-## claim -- GameManager.enter_battle() must check this before ever changing
-## scene to Battlefield, and world_map.gd's arrival panel disables Enter
-## accordingly (Stage 5 D5's approved battle-party tie-break: "whichever
-## party's Enter the player clicks first claims the active battle; the other
-## party's Enter stays visible but disabled until that battle resolves").
-## Otherwise returns a duplicate of the newly-created context. battle_id is
-## minted from the same entropy source encounter/recruitment instance ids
-## use (see _new_instance_id()) -- opaque and unique, never reused.
 func create_battle_context(party_id: String, encounter_id: String, seed: int = 0) -> Dictionary:
-	if not can_party_enter_battle(party_id):
-		return {}
-	_battle_context = {
-		"battle_id": _new_instance_id(),
-		"owner_party_id": party_id,
-		"encounter_id": encounter_id,
-		"reward": _empty_carry(),
-		"status": "active",
-		"seed": seed,
-	}
-	return _battle_context.duplicate(true)
+	return encounter_service.create_battle_context(party_id, encounter_id, seed)
 
 
-## The current battle's own context record -- whatever its status, not only
-## while a battle is still "active" (see can_party_enter_battle()/
-## resolve_battle_victory()/resolve_battle_retreat()/resolve_battle_defeat(),
-## which need to read the owning party back out of an already-resolved
-## context). Empty only when no battle has ever been created this session
-## (or since the last reset()).
 func get_active_battle_context() -> Dictionary:
-	return _battle_context.duplicate(true)
+	return encounter_service.get_active_battle_context()
 
 
 func enter_encounter(encounter_id: String) -> void:
-	if not can_enter_encounter(encounter_id):
-		return
-	selected_encounter = encounter_id
-	var instance_index := _get_active_encounter_index(encounter_id)
-	# An authored node's active-encounter instance (see the debug menu's
-	# "Jump to Pre-Boss Encounter" scenario) carries its own fixed formation
-	# -- it must never be overwritten by the sandbox star-tier reroll below,
-	# which only applies to a goblin_camp/orc_outpost/ruined_fortress-derived
-	# instance.
-	if instance_index != -1 and not is_authored_encounter(encounter_id):
-		active_encounters[instance_index].enemy = _resolve_enemy_composition(
-			active_encounters[instance_index].difficulty
-		)
+	encounter_service.enter_encounter(encounter_id)
 
 
-## Marks the current selection complete (once — a re-completion of an
-## already-completed id is a no-op) and, only when it names a still-live
-## active instance, removes that instance and opens an encounter vacancy.
-## Ids that name a template directly rather than a live instance (e.g. the
-## debug menu's raw battlefield shortcuts) still record history and queue
-## their reward, but never touch active_encounters/encounter_vacancies since
-## there was no real instance to clear. On first completion, a flat gold
-## bonus is queued: randi_range(0, 5) * difficulty, scaled by the
-## expedition's star difficulty.
 func complete_current_encounter() -> void:
-	if selected_encounter == "":
-		return
-	_ensure_active_battle_context()
-	var expedition := get_expedition(selected_encounter)
-	if not completed_encounters.has(selected_encounter):
-		completed_encounters.append(selected_encounter)
-		# Mixed-formation authored nodes (see EXPEDITIONS' "enemies" field)
-		# roll loot once per group, each with its own count merged in, rather
-		# than the legacy single "enemy" + "count" template's one call.
-		if expedition.has("enemies"):
-			for group in expedition.enemies:
-				var enemy_with_count: Dictionary = group.get("enemy", {}).duplicate(true)
-				enemy_with_count["count"] = int(group.get("count", 1))
-				_roll_and_queue_loot(enemy_with_count)
-		else:
-			_roll_and_queue_loot(expedition.get("enemy", {}))
-		_battle_context.reward.gold += loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
-		_settle_encounter_intelligence(selected_encounter)
-		_clear_active_encounter(selected_encounter)
-		# An authored node's own encounter_id is exactly its CAMPAIGN_
-		# OBJECTIVES key (see that catalog's own doc comment) -- clearing it
-		# also completes the matching campaign objective, unlocking the next
-		# node (or, for the final boss, recording campaign victory -- see
-		# complete_campaign_objective()/set_campaign_victory()).
-		if is_authored_encounter(selected_encounter):
-			complete_campaign_objective(selected_encounter)
-	selected_encounter = ""
+	encounter_service.complete_current_encounter()
 
 
-## Guarantees _battle_context is a fresh, "active" record before
-## complete_current_encounter() rolls loot into it. GameManager.enter_battle()
-## always calls create_battle_context() explicitly (so the real UI flow's
-## battle-party tie-break gate runs first) -- but a great many lower-level
-## callers (tests, debug scenarios, CampaignSim) call enter_encounter()/
-## complete_current_encounter() directly without ever going through that
-## gate, exactly as they could call the pre-Stage-6 enter_encounter() without
-## ever touching claim_battle_for_party() either. Auto-vivifying here
-## preserves that same bypass instead of forcing every such caller to mint
-## its own context: a context left over from an already-resolved battle (or
-## none at all) is replaced with a fresh one owned by whichever party is
-## currently selected (possibly "" when no party exists yet, e.g. a bare
-## GameSession unit test) -- see create_battle_context(), which this
-## deliberately does not reuse, since that gate would otherwise reject
-## re-completing an encounter for the same still-"active" context.
 func _ensure_active_battle_context() -> void:
-	if _battle_context.get("status", "") == "active":
-		return
-	_battle_context = {
-		"battle_id": _new_instance_id(),
-		"owner_party_id": selected_party_id,
-		"encounter_id": selected_encounter,
-		"reward": _empty_carry(),
-		"status": "active",
-		"seed": 0,
-	}
+	encounter_service._ensure_active_battle_context()
 
 
-## Rolls loot once per kill in the resolved enemy composition (a battle can
-# only complete once every fielded enemy is dead, so "once per kill" and
-# "kill_count times at completion" are equivalent). A loot_id with no
-# ENEMY_LOOT_TABLES row (should not happen for a real expedition's enemy)
-# queues nothing rather than erroring. Accumulates into the active battle
-# context's own reward (see _ensure_active_battle_context()) rather than a
-# dedicated battle_reward/battle_gear/battle_mana_crystals global.
 func _roll_and_queue_loot(enemy: Dictionary) -> void:
-	var loot_id: String = enemy.get("loot_id", "")
-	if not ENEMY_LOOT_TABLES.has(loot_id):
-		return
-	var table: Dictionary = ENEMY_LOOT_TABLES[loot_id]
-	var kill_count: int = enemy.get("count", 1)
-	var reward: Dictionary = _battle_context.reward
-	for _kill in kill_count:
-		reward.gold += loot_gold_roll.call(table.gold_min, table.gold_max) * table.gold_multiplier
-		var crystal_tier: int = table.mana_crystal_tier
-		reward.mana_crystals[crystal_tier] = reward.mana_crystals.get(crystal_tier, 0) + 1
-		if loot_gear_roll.call() < GEAR_DROP_CHANCE:
-			reward.gear[table.gear_item_id] = reward.gear.get(table.gear_item_id, 0) + 1
+	encounter_service._roll_and_queue_loot(enemy)
 
 
 func abandon_current_encounter() -> void:
-	selected_encounter = ""
+	encounter_service.abandon_current_encounter()
 
 
-## Pre-battle Withdraw (docs/plans/2026-08-21-stage-1-campaign-spine/
-## 01-pre-battle-withdraw.md): a nonlethal alternative to entering
-## encounter_id, available only before Battlefield is ever reached. Returns
-## an empty array (no mutation at all) unless the deployed party is standing
-## on encounter_id, encounter_id is currently enterable, and no battle is
-## already selected. Otherwise rolls once per living deployed member via
-## roll.call(): a result below 0.90 leaves health untouched; 0.90 or above
-## subtracts ceili(max_health * 0.10), clamped to a minimum of 1 HP by
-## set_adventurer_health()'s own clamp, so Withdraw can never kill. Clears no
-## campaign/objective/reward state and leaves encounter_id itself untouched
-## (still enterable afterward); only records a route home so the party must
-## still walk it back one World Map Turn at a time, exactly like a
-## player-planned route -- unlike return_deployed_party_to_settlement()'s
-## instant teleport, which this deliberately does not call. Returns one
-## {id, previous_health, new_health} Dictionary per rolled member for UI
-## feedback.
 func withdraw_from_encounter(encounter_id: String, roll: Callable) -> Array[Dictionary]:
-	if not has_deployed_party() or selected_encounter != "":
-		return []
-	if not can_enter_encounter(encounter_id):
-		return []
-	var expedition := get_expedition(encounter_id)
-	if not expedition.has("position") or expedition.position != get_deployed_party_position():
-		return []
-
-	var results: Array[Dictionary] = []
-	for member_id in get_selected_party().member_ids:
-		var previous_health := get_current_health(member_id)
-		var new_health := previous_health
-		if roll.call() >= 0.90:
-			var max_health := get_effective_max_health(member_id)
-			set_adventurer_health(member_id, previous_health - ceili(max_health * 0.10))
-			new_health = get_current_health(member_id)
-		results.append({"id": member_id, "previous_health": previous_health, "new_health": new_health})
-
-	set_deployed_party_route(_build_route_to_settlement())
-	return results
+	return encounter_service.withdraw_from_encounter(encounter_id, roll)
 
 
-## Manhattan-step route builder mirroring world_map.gd's build_route(): pure
-## grid-agnostic path construction (see WORLD_GRID_WIDTH/HEIGHT above) is
-## duplicated here rather than reused because GameSession owns no Grid
-## instance -- only World Map's own script holds one, for on-screen bounds
-## validation this call site never needs (both endpoints are always
-## in-bounds authored/settlement positions).
 func _build_route_to_settlement() -> Array[Vector2i]:
-	var route: Array[Vector2i] = []
-	var current := get_deployed_party_position()
-	var destination := STARTING_SETTLEMENT_WORLD_POSITION
-	while current.x != destination.x:
-		current.x += 1 if destination.x > current.x else -1
-		route.append(current)
-	while current.y != destination.y:
-		current.y += 1 if destination.y > current.y else -1
-		route.append(current)
-	return route
+	return encounter_service._build_route_to_settlement()
 
 
-## A duplicate of the current node's CAMPAIGN_OBJECTIVES entry, or {} once
-## the campaign is complete (campaign_objective_id is "" from that point on
-## -- see complete_campaign_objective()).
 func get_current_campaign_objective() -> Dictionary:
-	return CAMPAIGN_OBJECTIVES.get(campaign_objective_id, {}).duplicate(true)
+	return encounter_service.get_current_campaign_objective()
 
 
 func is_objective_completed(id: String) -> bool:
-	return completed_objectives.has(id)
+	return encounter_service.is_objective_completed(id)
 
 
-## Marks id complete, unlocks its successor objective/encounter, and
-## advances campaign_objective_id to it. A no-op for an unknown id or one
-## already in completed_objectives, so a repeated call can never double-
-## append or re-unlock. Completing the final node (an empty
-## next_objective_id) instead atomically records campaign victory via
-## set_campaign_victory() rather than advancing to a next id that doesn't
-## exist.
 func complete_campaign_objective(id: String) -> void:
-	if not CAMPAIGN_OBJECTIVES.has(id) or is_objective_completed(id):
-		return
-	completed_objectives.append(id)
-	var next_id: String = CAMPAIGN_OBJECTIVES[id].get("next_objective_id", "")
-	if next_id.is_empty():
-		campaign_objective_id = ""
-		set_campaign_victory()
-		return
-	if not unlocked_authored_encounters.has(next_id):
-		unlocked_authored_encounters.append(next_id)
-	_ensure_authored_intel_record(next_id)
-	campaign_objective_id = next_id
-	campaign_progress_changed.emit()
+	encounter_service.complete_campaign_objective(id)
 
 
 ## Atomically flags final-boss victory and unlocks free play. Idempotent
@@ -2726,135 +2344,36 @@ func _merge_counts(source: Dictionary, dest: Dictionary) -> void:
 		dest[key] = dest.get(key, 0) + source[key]
 
 
-## party_id's own carry (decision-ledger.md's PartyCarry contract): everything
-## it has picked up in the field but not yet banked at the Encampment. An
-## unknown party_id returns an empty carry rather than erroring, matching
-## get_party()'s own "unknown id" convention.
 func get_party_carry(party_id: String) -> Dictionary:
-	var party := get_party(party_id)
-	if party.is_empty():
-		return _empty_carry()
-	return (party.get("carry", _empty_carry()) as Dictionary).duplicate(true)
+	return party_service.get_party_carry(party_id)
 
 
-## Merges party_id's own carry into the Encampment's shared bank (gold,
-## banked_gear, mana_crystals, banked_item_instance_ids) and clears that
-## party's carry back to empty. A no-op (returns an empty carry, no state
-## change) for an unknown party_id. Returns a duplicate of the carry that was
-## just deposited, for callers that want to report what was banked.
 func deposit_party_carry(party_id: String) -> Dictionary:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return _empty_carry()
-	var carry: Dictionary = parties[party_index].get("carry", _empty_carry())
-	var deposited: Dictionary = carry.duplicate(true)
-	gold += int(carry.get("gold", 0))
-	for item_id in carry.get("gear", {}):
-		var count: int = int(carry.gear[item_id])
-		if count > 0:
-			banked_gear[item_id] = banked_gear.get(item_id, 0) + count
-	for raw_instance_id in carry.get("item_instance_ids", []):
-		var instance_id := str(raw_instance_id)
-		if not banked_item_instance_ids.has(instance_id):
-			banked_item_instance_ids.append(instance_id)
-	_merge_counts(carry.get("mana_crystals", {}), mana_crystals)
-	parties[party_index]["carry"] = _empty_carry()
-	return deposited
+	return party_service.deposit_party_carry(party_id)
 
 
-## Party-wipe forfeiture (docs/designs/campaign-loop.md's loss rule, narrowed
-## to per-party scope by Stage 6 Step 2's PartyCarry split): party_id's own
-## carry -- ordinary gear counts, mana crystals, unique item instances
-## recovered from a fallen party member (see transfer_dead_unit_gear_to_
-## party_carry()), and this run's own unbanked gold alike -- is lost
-## outright, without touching any other party's carry or anything already
-## banked at the Encampment (gold/banked_gear/mana_crystals/
-## banked_item_instance_ids, completed campaign objectives, and building
-## levels are all preserved). A forfeited item instance's own owned_item_
-## instances record is erased too -- it was never banked, so nothing else
-## still references it once this forfeits it. A no-op for an unknown
-## party_id.
 func forfeit_party_carry(party_id: String) -> void:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return
-	var carry: Dictionary = parties[party_index].get("carry", _empty_carry())
-	for raw_instance_id in carry.get("item_instance_ids", []):
-		owned_item_instances.erase(str(raw_instance_id))
-	parties[party_index]["carry"] = _empty_carry()
+	party_service.forfeit_party_carry(party_id)
 
 
-## True whenever the current battle context's reward still holds anything
-## resolve_battle_victory()/resolve_battle_retreat()/resolve_battle_defeat()
-## has not yet resolved -- i.e. the window between complete_current_
-## encounter() clearing selected_encounter and the player leaving the Battle
-## Result screen for the World Map. See GameManager.can_save_current_
-## campaign(), which ANDs this in alongside the "no active encounter" guard
-## so a save can never freeze loot in this transient, not-yet-settled state.
 func has_unsettled_battle_loot() -> bool:
-	return _battle_context.get("status", "") == "active"
+	return encounter_service.has_unsettled_battle_loot()
 
 
-## Moves the active battle context's own reward into its owning party's
-## carry (see resolve_battle_defeat()/resolve_battle_retreat() for the other
-## two ways a battle context resolves) and marks it "victory". Returns false
-## (no state change) unless battle_id names the current, still-"active"
-## battle context -- covering both an unknown/stale battle_id and the
-## harmless no-op GameManager.go_to_world_map() must stay when it is reached
-## from anywhere other than straight out of a battle.
 func resolve_battle_victory(battle_id: String) -> bool:
-	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
-		return false
-	var party_index := _get_party_index(_battle_context.owner_party_id)
-	if party_index != -1:
-		var carry: Dictionary = parties[party_index].carry
-		var reward: Dictionary = _battle_context.reward
-		carry.gold += int(reward.get("gold", 0))
-		_merge_counts(reward.get("gear", {}), carry.gear)
-		_merge_counts(reward.get("mana_crystals", {}), carry.mana_crystals)
-		for raw_instance_id in reward.get("item_instance_ids", []):
-			var instance_id := str(raw_instance_id)
-			if not carry.item_instance_ids.has(instance_id):
-				carry.item_instance_ids.append(instance_id)
-	_battle_context.status = "victory"
-	return true
+	return encounter_service.resolve_battle_victory(battle_id)
 
 
-## Discards the active battle context's own not-yet-banked reward outright --
-## the Retreat outcome (docs/designs/campaign-loop.md: Battle Retreat
-## "discards all unbanked/pending rewards") -- and marks it "retreat". See
-## BattleController.try_retreat(), the only caller, which calls this instead
-## of ever letting a Retreat's loot reach the owning party's own carry.
-## Returns false (no state change) unless battle_id names the current,
-## still-"active" battle context.
 func resolve_battle_retreat(battle_id: String) -> bool:
-	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
-		return false
-	_battle_context.reward = _empty_carry()
-	_battle_context.status = "retreat"
-	return true
+	return encounter_service.resolve_battle_retreat(battle_id)
 
 
-## A full party wipe: discards the active battle context's own not-yet-banked
-## reward and forfeits the owning party's own already-carried loot alike
-## (see forfeit_party_carry()), then marks the context "defeat". Returns
-## false (no state change) unless battle_id names the current, still-"active"
-## battle context.
 func resolve_battle_defeat(battle_id: String) -> bool:
-	if _battle_context.get("battle_id", "") != battle_id or _battle_context.get("status", "") != "active":
-		return false
-	forfeit_party_carry(_battle_context.owner_party_id)
-	_battle_context.reward = _empty_carry()
-	_battle_context.status = "defeat"
-	return true
+	return encounter_service.resolve_battle_defeat(battle_id)
 
 
 func get_max_party_size() -> int:
-	if guild_hall_level >= 3:
-		return GUILD_HALL_LEVEL_3_PARTY_CAP
-	if guild_hall_level >= 2:
-		return GUILD_HALL_LEVEL_2_PARTY_CAP
-	return GUILD_HALL_LEVEL_1_PARTY_CAP
+	return party_service.get_max_party_size()
 
 
 ## Maximum roster size (see purchase_recruit()/purchase_recruit_for_party()):
@@ -3203,52 +2722,15 @@ func buy_healing_potion() -> bool:
 
 
 func is_encounter_complete(encounter_id: String) -> bool:
-	return completed_encounters.has(encounter_id)
+	return encounter_service.is_encounter_complete(encounter_id)
 
 
-## Resolves either a live active-encounter-instance id or a raw template id
-## from EXPEDITIONS (checked in that order), returning a safe copy either
-## way. The instance branch is what keeps World Map's normal flow working;
-## the template branch is what keeps direct template-id callers (the debug
-## menu's raw battlefield shortcuts, and get_expedition(GOBLIN_CAMP_ID/
-## ORC_OUTPOST_ID) callers generally) working unchanged.
 func get_expedition(encounter_id: String) -> Dictionary:
-	var instance_index := _get_active_encounter_index(encounter_id)
-	if instance_index != -1:
-		return active_encounters[instance_index].duplicate(true)
-	if not EXPEDITIONS.has(encounter_id):
-		return {}
-	return _overlay_content_catalog_definition(encounter_id, EXPEDITIONS[encounter_id].duplicate(true))
+	return encounter_service.get_expedition(encounter_id)
 
 
-## Overlays a ContentCatalog encounter definition's authored fields onto a
-## legacy EXPEDITIONS entry, for whichever encounter id has migrated into
-## config/content/ (Stage 6 Step 3). ContentCatalog now owns `position`
-## (from its own `world_position`), `clear_xp`, `difficulty` (from its own
-## `tier`), `name_key`, and `enemies` (rebuilt from its own
-## `enemy_composition`, in the exact `{"enemy": <*_ENEMY_STATS>, "count": n}`
-## group shape EXPEDITIONS' own "obj_*" entries already use -- see
-## _build_enemy_specs() in battle_controller.gd and _build_enemy_units() in
-## campaign_sim.gd, both of which keep working unchanged against this
-## overlay) -- so a hand-edited encounter JSON is reflected everywhere
-## get_expedition() is read from (World Map placement, threat stars,
-## scouting intel, reward XP) with no changes at any of those call sites.
-## Every other still-legacy EXPEDITIONS entry (no catalog file for its id)
-## is returned completely unchanged, exactly as before this step existed.
 func _overlay_content_catalog_definition(encounter_id: String, expedition: Dictionary) -> Dictionary:
-	var definition: Dictionary = ContentCatalogScript.get_encounter_definition(encounter_id)
-	if definition.is_empty():
-		return expedition
-	expedition["position"] = definition.world_position
-	expedition["clear_xp"] = definition.clear_xp
-	expedition["difficulty"] = definition.tier
-	expedition["name_key"] = definition.name_key
-	var enemies: Array = []
-	for group in (definition.enemy_composition as Array):
-		var stats: Dictionary = ContentCatalogScript.resolve_enemy_template(String(group.template_id))
-		enemies.append({"enemy": stats, "count": int(group.count)})
-	expedition["enemies"] = enemies
-	return expedition
+	return encounter_service._overlay_content_catalog_definition(encounter_id, expedition)
 
 
 ## Every THREAT_TURN_INTERVAL world turns elapsed adds one star on top of an
@@ -3264,24 +2746,11 @@ var THREAT_TURN_INTERVAL: int = 15
 
 
 func get_threat_stars(encounter_id: String) -> int:
-	var expedition := get_expedition(encounter_id)
-	var base_difficulty: int = int(expedition.get("difficulty", 1))
-	return clampi(base_difficulty + int(world_turn / THREAT_TURN_INTERVAL), 1, 5)
+	return encounter_service.get_threat_stars(encounter_id)
 
 
-## World Map/information-panel "turns until next threat star" counter (Stage
-## 5 D5's approved time-escalation value): how many more World Map Turns
-## until get_threat_stars(encounter_id) would rise by one more star, mirroring
-## that function's own THREAT_TURN_INTERVAL math exactly rather than
-## re-deriving a separate formula. Returns -1 once the encounter's stars are
-## already clamped at 5 -- there is no further escalation left to count down
-## to, so the UI must not claim one is coming (see get_threat_stars()'s own
-## clampi upper bound).
 func get_turns_until_next_threat_star(encounter_id: String) -> int:
-	if get_threat_stars(encounter_id) >= 5:
-		return -1
-	var next_interval_turn := (int(world_turn / THREAT_TURN_INTERVAL) + 1) * THREAT_TURN_INTERVAL
-	return next_interval_turn - world_turn
+	return encounter_service.get_turns_until_next_threat_star(encounter_id)
 
 
 ## Scout strategic reconnaissance (docs/plans/2026-08-18-core-loop-and-
@@ -3514,16 +2983,8 @@ func _quest_tier_cap_for_guild_hall(level: int) -> int:
 	return QUEST_TIER_CAP_LEVEL_1
 
 
-## Expected gold value of clearing an encounter of the given star tier,
-## derived from the exact base-gold formula complete_current_encounter()
-## itself rolls (loot_gold_roll(18, 22) * difficulty -- the per-kill
-## ENEMY_LOOT_TABLES rolls are excluded since their expected value varies by
-## enemy composition, not tier alone) rather than a newly authored table
-## (D1, decision-ledger.md). This is the same formula CampaignSim's own
-## gold_earned telemetry (campaign_sim_metrics.gd) sums across representative
-## seeds.
 func get_encounter_expected_gold_value(tier: int) -> int:
-	return int(round(20.0 * tier))
+	return encounter_service.get_encounter_expected_gold_value(tier)
 
 
 ## Registers a brand-new live encounter instance's intelligence record
@@ -4009,24 +3470,8 @@ func _equip_item_instance_from(source_ids: Array, adventurer_id: String, instanc
 	return true
 
 
-## Requires item_id to currently be in party_id's own carry (see
-## get_party_carry()/deposit_party_carry()) -- everything that party has
-## picked up but not yet carried home and banked. Used by the victory
-## summary and World Map Party Details' Equip actions, both scoped to a
-## single party, as opposed to Stores' Equip, which always draws from the
-## (encamped) bank via equip_item_from_bank() above. Handles both a
-## fungible stackable item id (carry.gear) and a unique owned-item instance
-## id recovered from a slain party member (carry.item_instance_ids, see
-## transfer_dead_unit_gear_to_party_carry()) -- an unknown party_id fails
-## safely (mutates nothing) rather than erroring.
 func equip_item_from_party_carry(party_id: String, adventurer_id: String, item_id: String) -> bool:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return false
-	var carry: Dictionary = parties[party_index].carry
-	if owned_item_instances.has(item_id):
-		return _equip_item_instance_from(carry.item_instance_ids, adventurer_id, item_id)
-	return _equip_item_from(carry.gear, adventurer_id, item_id)
+	return party_service.equip_item_from_party_carry(party_id, adventurer_id, item_id)
 
 
 ## Shared by equip_item_from_bank()/equip_item_from_party_carry(): makes
@@ -4177,203 +3622,63 @@ func unequip_to_bank(adventurer_id: String, slot: String, item_id: String) -> bo
 
 
 func get_active_encounters() -> Array[Dictionary]:
-	var instances: Array[Dictionary] = []
-	for instance in active_encounters:
-		instances.append(instance.duplicate(true))
-	return instances
+	return encounter_service.get_active_encounters()
 
 
 func _make_encounter_instance(instance_id: String, template_id: String, position: Vector2i) -> Dictionary:
-	var instance: Dictionary = EXPEDITIONS[template_id].duplicate(true)
-	instance["id"] = instance_id
-	instance["template_id"] = template_id
-	instance["position"] = position
-	return instance
+	return encounter_service._make_encounter_instance(instance_id, template_id, position)
 
 
 func _get_active_encounter_index(instance_id: String) -> int:
-	for index in active_encounters.size():
-		if active_encounters[index].id == instance_id:
-			return index
-	return -1
+	return encounter_service._get_active_encounter_index(instance_id)
 
 
-## No-ops for an id that does not name a live active instance (e.g. a raw
-## template id entered via the debug menu) — see complete_current_encounter().
 func _clear_active_encounter(instance_id: String) -> void:
-	var index := _get_active_encounter_index(instance_id)
-	if index == -1:
-		return
-	active_encounters.remove_at(index)
-	_start_encounter_vacancy()
+	encounter_service._clear_active_encounter(instance_id)
 
 
-## Resolves a single bounded delay for a newly opened vacancy via
-## vacancy_delay_roll, called once per vacancy (never rerolled while
-## ticking -- see _advance_encounter_vacancies()/_advance_recruitment_vacancies()).
-## The lower bound is clamped to 1 so a jitter magnitude at or above the base
-## can never produce a non-positive or zero-turn wait.
 func _resolve_vacancy_delay(base_turns: int, jitter_turns: int) -> int:
-	var minimum := maxi(1, base_turns - jitter_turns)
-	var maximum := base_turns + jitter_turns
-	return vacancy_delay_roll.call(minimum, maximum)
+	return encounter_service._resolve_vacancy_delay(base_turns, jitter_turns)
 
 
-## Distinguishes "no new cooldown starts if already at capacity" (this guard,
-## evaluated once at vacancy-open time) from "a clock exists but is capped
-## from firing" (the symmetric guard inside _advance_encounter_vacancies).
 func _start_encounter_vacancy() -> void:
-	if active_encounters.size() >= ENCOUNTER_INSTANCE_CAP:
-		return
-	var turns_remaining := _resolve_vacancy_delay(ENCOUNTER_VACANCY_TURNS, ENCOUNTER_VACANCY_JITTER_TURNS)
-	encounter_vacancies.append({"turns_remaining": turns_remaining})
+	encounter_service._start_encounter_vacancy()
 
 
-## Ticks every pending encounter vacancy clock down by one World Map turn. A
-## clock that reaches zero fires exactly once: if the cap still has room it
-## spawns a new instance; either way the clock is then discarded — a vacancy
-## blocked by a full cap does not reschedule itself or catch up later.
 func _advance_encounter_vacancies() -> void:
-	var still_pending: Array[Dictionary] = []
-	for vacancy in encounter_vacancies:
-		vacancy.turns_remaining -= 1
-		if vacancy.turns_remaining > 0:
-			still_pending.append(vacancy)
-			continue
-		if active_encounters.size() < ENCOUNTER_INSTANCE_CAP:
-			active_encounters.append(_spawn_next_encounter_instance())
-	encounter_vacancies = still_pending
+	encounter_service._advance_encounter_vacancies()
 
 
 func _spawn_next_encounter_instance() -> Dictionary:
-	var template_id := _choose_encounter_template()
-	var position := _choose_encounter_position(template_id)
-	if not _used_encounter_template_ids.has(template_id):
-		_used_encounter_template_ids.append(template_id)
-	var instance := _make_encounter_instance(_mint_encounter_instance_id(), template_id, position)
-	_register_encounter_intel_and_quest(instance)
-	return instance
+	return encounter_service._spawn_next_encounter_instance()
 
 
-## Weighted-random by star tier, favoring higher tiers as the player's
-## power (adventurer count plus Guild Hall level -- see _player_power())
-## grows. Only a template with no currently-active instance is eligible,
-## so a refill never activates a second live instance of an
-## already-active template. Deliberately replaces the old "show every
-## template once before reuse" guarantee: at a fresh campaign's first
-## refill the Ruined Fortress would otherwise be the only unseen
-## template and would always be forced in regardless of power, defeating
-## the point of weighting it down for a weak party.
 func _player_power() -> int:
-	return adventurers.size() + guild_hall_level
+	return encounter_service._player_power()
 
 
 func _star_tier_weight(tier: int, power: int) -> int:
-	var clamped_tier: int = clampi(tier, 1, 3)
-	return maxi(STAR_WEIGHT_MIN, STAR_WEIGHT_BASE[clamped_tier] + STAR_WEIGHT_PER_POWER[clamped_tier] * power)
+	return encounter_service._star_tier_weight(tier, power)
 
 
 func _choose_encounter_template() -> String:
-	var candidates: Array[String] = []
-	for template_id in ENCOUNTER_TEMPLATE_ORDER:
-		if not _is_encounter_template_active(template_id):
-			candidates.append(template_id)
-	if candidates.is_empty():
-		return ENCOUNTER_TEMPLATE_ORDER[0]
-
-	var power := _player_power()
-	var weights: Array[int] = []
-	var total_weight := 0
-	for template_id in candidates:
-		var weight := _star_tier_weight(EXPEDITIONS[template_id].difficulty, power)
-		weights.append(weight)
-		total_weight += weight
-
-	var roll: int = star_weight_roll.call(total_weight)
-	var cumulative := 0
-	for index in candidates.size():
-		cumulative += weights[index]
-		if roll < cumulative:
-			return candidates[index]
-	return candidates[-1]
+	return encounter_service._choose_encounter_template()
 
 
 func _is_encounter_template_active(template_id: String) -> bool:
-	for instance in active_encounters:
-		if instance.template_id == template_id:
-			return true
-	return false
+	return encounter_service._is_encounter_template_active(template_id)
 
 
-## Prefers the template's own documented position; only scans for another
-## in-bounds, unoccupied, non-settlement tile if that position is already
-## occupied by another active instance, OR if template_id has ever been
-## spawned before (tracked by _used_encounter_template_ids). The second
-## condition matters for a *reused* template: its documented tile is only
-## ever occupied by its own instances, so once its earlier instance has been
-## cleared (and thus removed from active_encounters), the plain occupancy
-## check alone would hand a refill back the exact tile a site was just
-## cleared from — visually indistinguishable from "reopening" it, which
-## design.md's approved rules explicitly forbid. Reusing
-## _used_encounter_template_ids (rather than tracking completed instances'
-## positions separately) is sufficient because each template's documented
-## position is unique to it.
-##
-## The scan itself walks the grid far-corner-first (descending y, then
-## descending x) rather than row-major from the settlement corner. The Goblin
-## Camp and Orc Outpost's own documented tiles — (4, 4) and (4, 0) — already
-## sit in that far region, so scanning outward from there keeps fallback
-## refills requiring meaningful travel instead of landing 1-2 tiles from
-## STARTING_SETTLEMENT_WORLD_POSITION, now at the map's center, which a
-## settlement-first scan would otherwise hand out on literally every refill
-## (both of those two sites are marked previously-spawned from turn one, per
-## reset()). The Ruined Fortress's own documented position, (0, 4), is a
-## different corner this far-corner-first reasoning does not cover — but it
-## does not need to:
-## the Ruined Fortress is never a starting site, so it is NOT marked
-## previously-spawned at reset() time, and its own first-ever spawn (always a
-## refill) takes the "documented position, not yet occupied, not yet used"
-## fast path near the top of this function rather than reaching this scan at
-## all. This scan applies to the Ruined Fortress exactly as described above
-## once it has been used once (i.e. on its second and later refills). The
-## scan also explicitly skips the current template's own documented_position:
-## left in, the far-corner-first order would otherwise re-select that exact
-## tile whenever it happens to be free (most notably Goblin Camp's, which
-## *is* the far corner scanned first), reopening the same "respawns on the
-## tile it was just cleared from" problem the template_previously_spawned
-## guard above exists to prevent.
 func _choose_encounter_position(template_id: String) -> Vector2i:
-	var documented_position: Vector2i = EXPEDITIONS[template_id].position
-	var template_previously_spawned := _used_encounter_template_ids.has(template_id)
-	if not _is_position_occupied(documented_position) and not template_previously_spawned:
-		return documented_position
-	for y in range(WORLD_GRID_HEIGHT - 1, -1, -1):
-		for x in range(WORLD_GRID_WIDTH - 1, -1, -1):
-			var candidate := Vector2i(x, y)
-			if candidate == documented_position:
-				continue
-			if candidate != STARTING_SETTLEMENT_WORLD_POSITION and not _is_position_occupied(candidate):
-				return candidate
-	return documented_position
+	return encounter_service._choose_encounter_position(template_id)
 
 
 func _is_position_occupied(position: Vector2i) -> bool:
-	for instance in active_encounters:
-		if instance.position == position:
-			return true
-	return false
+	return encounter_service._is_position_occupied(position)
 
 
-## Mints an "encounter_NNN" id that collides with neither a currently-active
-## instance nor a historically-completed one (completed_encounters), so a
-## cleared site's old id is never reused by an unrelated later spawn.
 func _mint_encounter_instance_id() -> String:
-	var instance_number := 1
-	var instance_id := "encounter_%03d" % instance_number
-	while _get_active_encounter_index(instance_id) != -1 or completed_encounters.has(instance_id):
-		instance_number += 1
-		instance_id = "encounter_%03d" % instance_number
-	return instance_id
+	return encounter_service._mint_encounter_instance_id()
 
 
 ## Mirrors _start_encounter_vacancy()/_advance_encounter_vacancies() for the
@@ -4449,481 +3754,110 @@ func _make_recruitment_offer(template: Dictionary) -> Dictionary:
 	return _seed_adventurer_baseline_stats(offer)
 
 
-## Divides amount evenly across party_id's members and adds each member's
-## share to their stored (float) xp, applying as many level-ups as the new
-## total crosses (see get_level_xp_threshold()). Silently ignores an unknown
-## or memberless party. Returns the ids of members who gained at least one
-## level from this award.
 func award_party_xp(party_id: String, amount: float) -> Array[String]:
-	var leveled_up: Array[String] = []
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return leveled_up
-
-	var member_ids: Array = parties[party_index].member_ids
-	if member_ids.is_empty():
-		return leveled_up
-
-	var share := amount / member_ids.size()
-	for member_id in member_ids:
-		if _award_adventurer_xp(member_id, share):
-			leveled_up.append(member_id)
-	return leveled_up
+	return progression_service.award_party_xp(party_id, amount)
 
 
 func _award_adventurer_xp(adventurer_id: String, amount: float) -> bool:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-
-	var adventurer: Dictionary = adventurers[adventurer_index]
-	adventurer.progression.xp += amount
-
-	var leveled_up := false
-	while adventurer.progression.xp >= get_level_xp_threshold(adventurer.level + 1):
-		var old_max_health: int = adventurer.stats.max_health
-		adventurer.level += 1
-		var class_id: String = adventurer.get("class", "warrior")
-		var class_def: Dictionary = CLASS_DEFINITIONS.get(class_id, CLASS_DEFINITIONS.warrior)
-		var vitality: int = int(adventurer.stats.get("vitality", class_def.base_stats.get("vitality", 10)))
-		adventurer.stats.max_health = vitality * adventurer.level
-		var health_delta: int = adventurer.stats.max_health - old_max_health
-		var current_hp: int = int(adventurer.get("health", old_max_health))
-		adventurer["health"] = clampi(current_hp + health_delta, 1, adventurer.stats.max_health)
-		var skills: Dictionary = class_def.get("skills", {})
-		for skill_name in skills:
-			var skill_info: Dictionary = skills[skill_name]
-			var min_gain: int = int(skill_info.get("min_gain", 1))
-			var max_gain: int = int(skill_info.get("max_gain", 2))
-			var gain: int = skill_gain_roll.call(min_gain, max_gain)
-			var current_val: int = int(adventurer.stats.get(skill_name, 0))
-			adventurer.stats[skill_name] = current_val + gain
-		leveled_up = true
-	return leveled_up
+	return progression_service._award_adventurer_xp(adventurer_id, amount)
 
 
-## The single source of truth for cumulative XP thresholds: level 1 costs 0,
-## level 2 costs 20, level 3 costs 50, level 4 costs 90 — each level costing
-## 10 XP more than the previous step. Equivalent to 5*level*(level+1) - 10.
 func get_level_xp_threshold(level: int) -> float:
-	return float(5 * level * (level + 1) - 10)
+	return progression_service.get_level_xp_threshold(level)
 
 
-## True once an adventurer has earned a class-owned perk slot (see
-## _pending_perk_slot_count()) it has not yet resolved. Capped at
-## PERK_TREE_SIZE slots total, so once both of a class's perks are chosen
-## this returns false permanently -- no adventurer ever runs out of perks to
-## offer without also running out of pending slots (see docs/designs/
-## class-system.md's "Stage 2 locked perk set"). choose_perk() is the only
-## way to resolve a pending choice.
 func is_perk_choice_pending(adventurer_id: String) -> bool:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	return _pending_perk_slot_count(adventurers[adventurer_index]) > 0
+	return progression_service.is_perk_choice_pending(adventurer_id)
 
 
-## earned_slots is level-derived, capped at PERK_TREE_SIZE -- and also at the
-## adventurer's own class's actual perk count (CLASS_PERKS.get(class_id, [])
-## .size()), so a class with fewer than PERK_TREE_SIZE defined perks (Mage
-## has zero today -- Stage 2's locked perk set only covers Warrior/Scout/
-## Cleric, see class-system.md's "Class perk inventory (Future unless its
-## primitive is shipped)") never reports a slot pending with nothing to
-## choose from. Every existing class already defines exactly PERK_TREE_SIZE
-## perks, so this second cap is a no-op for them (min(2, 2) == 2) -- it only
-## ever binds for a class with fewer. Slots already spent count only class-
-## owned perks (CLASS_PERKS' own ids) -- a legacy BONUS_MOVE_PERK_ID entry
-## (retired from new choices, never migrated away; see choose_perk()'s doc
-## comment) never consumes a class-owned slot, so an old save holding it
-## still earns both of its class's real perks. A promoted adventurer
-## (adventurer.specialization set, Stage 5 D4) adds its specialization's own
-## perk count on top -- e.g. a promoted Knight's perk_cap is 4 (2 Warrior +
-## 2 Knight), so levels beyond the root tree's own threshold keep opening
-## slots for Shield Bash/Chain Blow exactly like the root tree did.
 func _perk_catalog_perk_cap(adventurer: Dictionary) -> int:
-	var class_id: String = str(adventurer.get("class", ""))
-	var cap: int = mini(PERK_TREE_SIZE, (CLASS_PERKS.get(class_id, []) as Array).size())
-	var specialization_id := str(adventurer.get("specialization", ""))
-	if not specialization_id.is_empty():
-		cap += mini(PERK_TREE_SIZE, (SPECIALIZATION_PERKS.get(specialization_id, []) as Array).size())
-	return cap
+	return progression_service._perk_catalog_perk_cap(adventurer)
 
 
 func _pending_perk_slot_count(adventurer: Dictionary) -> int:
-	var perk_cap: int = _perk_catalog_perk_cap(adventurer)
-	var earned_slots: int = mini(adventurer.level / PERK_LEVEL_INTERVAL, perk_cap)
-	var spent_slots := 0
-	for perk_id in adventurer.progression.perks:
-		if perk_id != BONUS_MOVE_PERK_ID:
-			spent_slots += 1
-	return earned_slots - spent_slots
+	return progression_service._pending_perk_slot_count(adventurer)
 
 
-## Returns the still-choosable perk ids for adventurer_id -- its class's
-## CLASS_PERKS entries, PLUS (once promoted, Stage 5 D4) its specialization's
-## own SPECIALIZATION_PERKS entries, that are not already in progression.
-## perks, in catalog order (root perks first, then specialization perks).
-## Returns [] for an unknown adventurer or a class with no perk catalog.
-## BONUS_MOVE_PERK_ID never appears here; it is retired from new choices
-## (see choose_perk()). An unpromoted adventurer never sees a specialization
-## perk offered -- this is the sole gate that keeps Shield Bash/Chain Blow
-## unavailable before promotion (see get_available_specializations()/
-## promote_adventurer()).
-## Stage 6 Step 4: delegates to PerkCatalog.get_available_perks(), which
-## additionally enforces prerequisite/mutual-exclusion legality (only
-## Knight's Shield Bash/Chain Blow carry a real DAG relationship -- see
-## PerkCatalogScript's own doc comment). Behaviorally identical to the old
-## flat CLASS_PERKS/SPECIALIZATION_PERKS lookup for every other class, since
-## their perks all have empty prerequisite_ids/mutually_exclusive_with.
 func get_available_perks(adventurer_id: String) -> Array[String]:
-	var adventurer := get_adventurer(adventurer_id)
-	var available: Array[String] = []
-	if adventurer.is_empty():
-		return available
-	for definition in PerkCatalogScript.get_available_perks(adventurer):
-		available.append(String(definition.id))
-	return available
+	return progression_service.get_available_perks(adventurer_id)
 
 
-## Stage 6 Step 4 (task 5): the full per-perk DAG state (see PerkCatalog.
-## get_perk_status()'s own doc comment) across adventurer_id's ENTIRE class +
-## (once promoted) specialization scope -- not just the still-choosable ids
-## get_available_perks() returns. level_up.gd's choice-card rendering uses
-## this to show a not-yet-reachable perk (e.g. Shield Bash before Discipline
-## is chosen) as a locked, disabled row instead of silently omitting it;
-## unit_details.gd's perk-tree rendering uses it to annotate a permanently
-## foreclosed branch (e.g. Chain Blow once Shield Bash is chosen) as
-## excluded rather than just vanishing. Returns [] for an unknown adventurer.
-## Every non-branching class's own perks all resolve to "owned" or
-## "available" here -- "locked"/"excluded" only ever appear for a class with
-## a real prerequisite/mutual-exclusion relationship (Knight today).
 func get_perk_tree_status(adventurer_id: String) -> Array[Dictionary]:
-	var adventurer := get_adventurer(adventurer_id)
-	var result: Array[Dictionary] = []
-	if adventurer.is_empty():
-		return result
-	var class_id := str(adventurer.get("class", ""))
-	var scope_ids: Array[String] = PerkCatalogScript.get_scope_ids(class_id)
-	var specialization_id := str(adventurer.get("specialization", ""))
-	if not specialization_id.is_empty():
-		scope_ids.append_array(PerkCatalogScript.get_scope_ids(specialization_id))
-	for perk_id in scope_ids:
-		result.append({"id": perk_id, "state": PerkCatalogScript.get_perk_status(adventurer, perk_id)})
-	return result
+	return progression_service.get_perk_tree_status(adventurer_id)
 
 
-## A safe copy of PERK_DEFINITIONS' own entry for perk_id, or {} for an
-## unknown id.
 func get_perk_definition(perk_id: String) -> Dictionary:
-	return PerkCatalogScript.get_definition(perk_id)
+	return progression_service.get_perk_definition(perk_id)
 
 
-## Localized display name for perk_id -- BONUS_MOVE_PERK_ID (not in
-## PERK_DEFINITIONS; see its own doc comment) resolves through its own
-## dedicated key, any other unrecognized id falls back to its raw id.
 func get_perk_display_name(perk_id: String) -> String:
-	if perk_id == BONUS_MOVE_PERK_ID:
-		return tr("perk.bonus_move.name")
-	var definition := get_perk_definition(perk_id)
-	if definition.is_empty():
-		return perk_id.capitalize()
-	return tr(str(definition.name_key))
+	return progression_service.get_perk_display_name(perk_id)
 
 
-## Localized, numerically-filled effect description for perk_id (e.g.
-## "+15% Max HP") -- the single place that formats a perk's effect_key
-## against this file's own config-driven balance var, so level_up.gd's
-## option buttons and unit_details.gd's owned-perk lines render identical
-## text from the same source instead of each inventing their own copy.
 func get_perk_effect_description(perk_id: String) -> String:
-	match perk_id:
-		WARRIOR_JUGGERNAUT_PERK_ID:
-			return tr("perk.warrior_juggernaut.effect") % WARRIOR_JUGGERNAUT_HP_PERCENT
-		WARRIOR_BULWARK_PERK_ID:
-			return tr("perk.warrior_bulwark.effect") % WARRIOR_BULWARK_GUARD
-		SCOUT_QUICKDRAW_PERK_ID:
-			return tr("perk.scout_quickdraw.effect") % SCOUT_QUICKDRAW_ACTION_POINTS
-		SCOUT_KEEN_EYES_PERK_ID:
-			return tr("perk.scout_keen_eyes.effect") % SCOUT_KEEN_EYES_INTEL_RANGE_BONUS
-		CLERIC_MEDITATION_PERK_ID:
-			return tr("perk.cleric_meditation.effect") % CLERIC_MEDITATION_SPELL_RANGE_BONUS
-		CLERIC_DEVOUT_PERK_ID:
-			return tr("perk.cleric_devout.effect") % CLERIC_DEVOUT_HP_PERCENT
-		KNIGHT_DISCIPLINE_PERK_ID:
-			return tr("perk.knight_discipline.effect")
-		KNIGHT_SHIELD_BASH_PERK_ID:
-			# Reuses the exact same off-balance magnitude Dodge/Parry already
-			# apply (GameConfig's combat.off_balance_guard_penalty) -- see
-			# BattleController.try_shield_bash_selected_unit()'s own doc
-			# comment. No new balance value invented for this description.
-			return tr("perk.knight_shield_bash.effect") % OFF_BALANCE_GUARD_PENALTY
-		KNIGHT_CHAIN_BLOW_PERK_ID:
-			return tr("perk.knight_chain_blow.effect")
-		ARCHER_LOCK_ON_PERK_ID:
-			return tr("perk.archer_lock_on.effect") % int(round(ARCHER_LOCK_ON_HIT_CHANCE_BONUS * 100))
-		ARCHER_CALLED_SHOT_PERK_ID:
-			return tr("perk.archer_called_shot.effect") % int(round(ARCHER_CALLED_SHOT_TO_HIT_PENALTY * 100))
-		BATTLE_MAGE_TEMPORARY_GUARD_PERK_ID:
-			# Reuses Bulwark's exact +10 Guard magnitude (decision-ledger.md's
-			# "Temporary Guard effect" row) -- no new balance value invented for
-			# this description, same reuse pattern as Shield Bash's off-balance
-			# magnitude just above.
-			return tr("perk.battle_mage_temporary_guard.effect") % WARRIOR_BULWARK_GUARD
-		BONUS_MOVE_PERK_ID:
-			return tr("perk.bonus_move.effect")
-		_:
-			return ""
+	return progression_service.get_perk_effect_description(perk_id)
 
 
-## Accepts only an id in adventurer_id's own class's CLASS_PERKS, OR (once
-## promoted, Stage 5 D4) its own specialization's SPECIALIZATION_PERKS
-## (rejecting an unknown id, another class's/specialization's perk, and --
-## since BONUS_MOVE_PERK_ID is in neither list -- BONUS_MOVE_PERK_ID itself:
-## it is retired from new choices, though any adventurer who already holds
-## it from before this slice keeps its effect unchanged, see get_effective_
-## action_points()). Only while is_perk_choice_pending() is true for
-## adventurer_id, and only once per adventurer (a perk already in
-## progression.perks cannot be re-chosen). Every check runs before any
-## mutation, so a rejected call leaves progression.perks untouched.
-##
-## Stage 6 Step 4: PerkCatalog.can_choose_perk() now owns eligibility/
-## already-chosen/prerequisite/mutual-exclusion legality (the DAG concern);
-## this function keeps owning the level-derived slot-economy concern
-## (_pending_perk_slot_count()) on top -- e.g. Knight's Shield Bash and Chain
-## Blow are permanently mutually exclusive once either is chosen (see
-## PerkCatalogScript's own doc comment), so choosing one here can never be
-## followed by a true return for the other, regardless of remaining slots.
 func choose_perk(adventurer_id: String, perk_id: String) -> bool:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-
-	var adventurer: Dictionary = adventurers[adventurer_index]
-	if not PerkCatalogScript.can_choose_perk(adventurer, perk_id):
-		return false
-	if _pending_perk_slot_count(adventurer) <= 0:
-		return false
-
-	adventurer.progression.perks.append(perk_id)
-	return true
+	return progression_service.choose_perk(adventurer_id, perk_id)
 
 
 ## --- Specializations (Stage 5 D4) -------------------------------------------
 
-## Returns the specialization ids adventurer_id may promote into right now:
-## general mechanism (per the D4 ledger row, reused by Archer/Battle Mage/
-## Paladin in later slices) -- a specialization is offered once (a) it is
-## keyed to the adventurer's own current class in SPECIALIZATION_ROOT_CLASS,
-## (b) that root class's own CLASS_PERKS are ALL already chosen (the
-## promotion-eligibility gate), and (c) the adventurer has not already
-## promoted (adventurer.specialization is still empty -- promotion happens
-## at most once). Returns [] for an unknown adventurer. Paladin ("cleric"
-## root -- see SPECIALIZATION_ROOT_CLASS) additionally requires temple_level
-## >= 1 (a built Temple, see can_build_temple()/build_temple()) before it is
-## ever appended below -- a plain `if`, not a generic per-specialization
-## predicate framework, since Paladin is the only specialization the ledger
-## gives an extra gate to; Knight/Archer/Battle Mage have no additional gate.
-##
-## Deliberately does NOT early-return for a class whose CLASS_PERKS entry is
-## empty or absent (Mage today -- see CLASS_PERKS' own doc comment: Mage has
-## no Stage 2 locked perk tree at all). "Both of the root class's two perks
-## are chosen" is vacuously TRUE when there are zero such perks -- the for
-## loop below simply never executes for an empty root_perks, falling straight
-## through to the specialization loop, so Battle Mage becomes available to a
-## fresh, non-promoted Mage immediately. Warrior/Scout/Cleric are completely
-## unaffected: their CLASS_PERKS entries are non-empty, so the for loop below
-## still gates them on actually choosing both perks, exactly as before.
 func get_available_specializations(adventurer_id: String) -> Array[String]:
-	var available: Array[String] = []
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return available
-	if not str(adventurer.get("specialization", "")).is_empty():
-		return available
-	var class_id := str(adventurer.get("class", ""))
-	var root_perks: Array = CLASS_PERKS.get(class_id, [])
-	var chosen: Array = adventurer.progression.get("perks", [])
-	for perk_id in root_perks:
-		if not chosen.has(perk_id):
-			return available
-	for specialization_id in SPECIALIZATION_ROOT_CLASS:
-		if SPECIALIZATION_ROOT_CLASS[specialization_id] != class_id:
-			continue
-		if specialization_id == "paladin" and temple_level < 1:
-			continue
-		available.append(specialization_id)
-	return available
+	return progression_service.get_available_specializations(adventurer_id)
 
 
-## True iff specialization_id is one of adventurer_id's currently legal
-## promotion choices (see get_available_specializations()).
 func is_promotion_eligible(adventurer_id: String, specialization_id: String) -> bool:
-	return get_available_specializations(adventurer_id).has(specialization_id)
+	return progression_service.is_promotion_eligible(adventurer_id, specialization_id)
 
 
-## Promotes adventurer_id into specialization_id, unlocking that
-## specialization's own SPECIALIZATION_PERKS on the existing perk-tree
-## mechanism (see _pending_perk_slot_count()/get_available_perks()/choose_
-## perk() above). Rejects an ineligible adventurer/specialization pair (see
-## is_promotion_eligible()) atomically -- adventurer.specialization is only
-## ever written on a true return. adventurer.class and every existing
-## CLASS_DEFINITIONS/CLASS_PERKS entry are left completely unchanged --
-## promotion is purely additive state, matching the ledger's migration-
-## safety requirement (an old save with no specialization field imports as
-## "not promoted", see CampaignSnapshot's roster normalization).
 func promote_adventurer(adventurer_id: String, specialization_id: String) -> bool:
-	if not is_promotion_eligible(adventurer_id, specialization_id):
-		return false
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	adventurers[adventurer_index]["specialization"] = specialization_id
-	return true
+	return progression_service.promote_adventurer(adventurer_id, specialization_id)
 
 
-## Empty string for an unpromoted (or unknown) adventurer -- see promote_
-## adventurer(). A thin, explicit reader so UI/tests never inline the raw
-## "specialization" dict-key access.
 func get_adventurer_specialization(adventurer_id: String) -> String:
-	return str(get_adventurer(adventurer_id).get("specialization", ""))
+	return progression_service.get_adventurer_specialization(adventurer_id)
 
 
-## Centralized effective-hit-chance formula: min(raw skill / 100.0, 0.95).
-## Skill used depends on weapon category: "bow" -> missile, others -> melee.
-## Returns 0.0 for an unknown adventurer. Delegates to get_effective_melee()/
-## get_effective_missile() (Step 5's shared tactical profile fields -- see
-## docs/designs/class-system.md's "Shared tactical attributes" section) so
-## this and a battle unit's own explicit Unit.melee/Unit.missile fields can
-## never drift apart -- both read the exact same adventurer.stats value.
 func get_effective_hit_chance(adventurer_id: String) -> float:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0.0
-	var weapon_id := str(adventurer.equipment.weapon)
-	var weapon: Dictionary = get_item_definition(weapon_id)
-	var category := str(weapon.get("category", ""))
-	var raw_stat: float = float(
-		get_effective_missile(adventurer_id) if category == "bow" else get_effective_melee(adventurer_id)
-	)
-	return minf(raw_stat / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
+	return progression_service.get_effective_hit_chance(adventurer_id)
 
 
-## Raw melee accuracy skill (percentage points, pre-guard-subtraction, pre-
-## weapon-category selection -- see get_effective_hit_chance()). Returns 0
-## for an unknown adventurer.
 func get_effective_melee(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	return int(adventurer.stats.get("melee", adventurer.stats.get("attack", 60)))
+	return progression_service.get_effective_melee(adventurer_id)
 
 
-## Raw missile accuracy skill -- see get_effective_melee()'s own doc comment.
 func get_effective_missile(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	return int(adventurer.stats.get("missile", adventurer.stats.get("attack", 60)))
+	return progression_service.get_effective_missile(adventurer_id)
 
 
-## Raw spellcasting skill (Cleric today -- see CLASS_DEFINITIONS.cleric.
-## base_stats.spellcasting). 0 for any class whose base_stats carries no
-## "spellcasting" key, exactly like every other reader of this stat (see the
-## Cleric class_def's own doc comment). Returns 0 for an unknown adventurer.
 func get_effective_spellcasting(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	return int(adventurer.stats.get("spellcasting", 0))
+	return progression_service.get_effective_spellcasting(adventurer_id)
 
 
-## No adventurer stat or armor field grants magic resistance yet, so every
-## class's effective value is 0 -- mirrors every monster's locked
-## "magic_resistance: 0" (docs/designs/monster-manual.md's "Initial roster"
-## section). A real getter (not an inlined 0 at each call site) so a future
-## magic-resistance source only ever needs to change this one place.
 func get_effective_magic_resistance(_adventurer_id: String) -> int:
-	return 0
+	return progression_service.get_effective_magic_resistance(_adventurer_id)
 
 
-## Normalizes a monster template's attack accuracy into the shared melee/
-## missile-vs-guard hit-chance formula (docs/designs/class-system.md's
-## "Combat resolution" section): `stats` either authors the explicit
-## "melee"/"missile" profile fields directly (Step 5's locked "Initial
-## roster" -- GOBLIN_ENEMY_STATS/ORC_ENEMY_STATS/KOBOLD_ENEMY_STATS/
-## HOBGOBLIN_ENEMY_STATS) or a flat legacy "hit_chance" (every other, still-
-## legacy enemy template, e.g. GOBLIN_ARCHER_ENEMY_STATS). Both paths must
-## keep producing bit-identical numbers to before Step 5's migration -- see
-## that step's own baseline-fixture regression coverage. The single call site
-## for this normalization is intentional (see the design's "single adapter"
-## note) -- both BattleController._ready() (live battle) and
-## BattleStateFactory._build_enemy_unit() (scenario battle) call this instead
-## of re-deriving the formula.
 func get_enemy_profile_hit_chance(stats: Dictionary) -> float:
-	if stats.has("melee") or stats.has("missile"):
-		var is_ranged: bool = int(stats.get("attack_max_range", 1)) > 1
-		var raw: float = float(stats.get("missile", 0)) if is_ranged else float(stats.get("melee", 0))
-		return minf(raw / ATTACK_TO_HIT_CHANCE_DIVISOR, EFFECTIVE_HIT_CHANCE_CAP)
-	return float(stats.get("hit_chance", 0.0))
+	return progression_service.get_enemy_profile_hit_chance(stats)
 
 
-## A monster template's Guard: the explicit-profile "guard" key for a
-## migrated template, or the legacy "defense" key otherwise -- both mean the
-## same percentage-point hit-chance subtraction (see unit.gd's defense/guard
-## doc comment). See get_enemy_profile_hit_chance()'s own doc comment for the
-## single-adapter rationale.
 func get_enemy_profile_guard(stats: Dictionary) -> int:
-	return int(stats.get("guard", stats.get("defense", 0)))
+	return progression_service.get_enemy_profile_guard(stats)
 
 
-## The shared melee/missile pair for a monster template's raw accuracy -- the
-## mirror image of get_enemy_profile_hit_chance()'s hit_chance normalization,
-## and the value unit.gd's Unit.melee/Unit.missile fields hydrate from for
-## BOTH a migrated and a legacy template (see BattleController._ready()/
-## BattleStateFactory._build_enemy_unit(), the same two call sites get_enemy_
-## profile_hit_chance() documents), so the "melee/missile are the same raw
-## accuracy stat hit_chance is derived from" invariant (unit.gd's own doc
-## comment) holds for every enemy, not just the four migrated monsters.
-##
-## A migrated template's explicit melee/missile keys win outright. A legacy
-## template (flat hit_chance only) derives an equivalent value from
-## hit_chance * 100 for BOTH melee and missile -- the same convention a
-## player Unit already uses: a Warrior's `missile` field is populated to its
-## raw missile skill even though it's equipped with a sword, not a bow (see
-## BattleController._ready()'s player_unit.missile assignment). This is
-## read-only/display normalization: it never changes hit_chance itself,
-## which always comes from get_enemy_profile_hit_chance() directly, not from
-## these two functions.
-##
-## Also the seed a scenario's "melee"/"missile" modifier adjusts for a
-## legacy template (see BattleStateFactory._build_enemy_unit()) -- so
-## {"melee": 5} against a template whose real accuracy is hit_chance 0.4
-## resolves to melee 45 (40 + 5), not 5 (0 + 5).
 func get_enemy_profile_melee(stats: Dictionary) -> int:
-	if stats.has("melee") or stats.has("missile"):
-		return int(stats.get("melee", 0))
-	return int(round(float(stats.get("hit_chance", 0.0)) * ATTACK_TO_HIT_CHANCE_DIVISOR))
+	return progression_service.get_enemy_profile_melee(stats)
 
 
-## See get_enemy_profile_melee()'s own doc comment.
 func get_enemy_profile_missile(stats: Dictionary) -> int:
-	if stats.has("melee") or stats.has("missile"):
-		return int(stats.get("missile", 0))
-	return int(round(float(stats.get("hit_chance", 0.0)) * ATTACK_TO_HIT_CHANCE_DIVISOR))
+	return progression_service.get_enemy_profile_missile(stats)
 
 
-## Centralized effective max health: the adventurer's stored max_health
-## (which leveling already keeps current) plus the Juggernaut/Devout perk's
-## percentage bonus, rounded to the nearest whole point. Both perks are
-## class-gated to opposite classes (Warrior/Cleric) so at most one ever
-## applies in practice, but both are checked independently rather than
-## assuming that exclusivity. Returns 0 for an unknown adventurer.
 func get_effective_max_health(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_max_health(int(adventurer.stats.max_health), perks)
+	return progression_service.get_effective_max_health(adventurer_id)
 
 
 ## Pure Juggernaut/Devout percent-bonus math, factored out of get_effective_
@@ -4946,81 +3880,24 @@ static func compute_effective_max_health(base_max_health: int, perks: Array) -> 
 	return PerkEffectResolverScript.compute_stat_modifier(base_max_health, perks, "max_health")
 
 
-## Returns current persistent health for adventurer_id (clamped in [1, max_health]),
-## or 0 for an unknown adventurer.
 func get_current_health(adventurer_id: String) -> int:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return 0
-	var adventurer: Dictionary = adventurers[adventurer_index]
-	var max_hp := get_effective_max_health(adventurer_id)
-	return clampi(int(adventurer.get("health", max_hp)), 1, max_hp)
+	return progression_service.get_current_health(adventurer_id)
 
 
-## Sets persistent health for adventurer_id, clamped to [1, max_health].
-## Returns false for an unknown adventurer.
 func set_adventurer_health(adventurer_id: String, amount: int) -> bool:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	var max_hp := get_effective_max_health(adventurer_id)
-	adventurers[adventurer_index]["health"] = clampi(amount, 1, max_hp)
-	return true
+	return progression_service.set_adventurer_health(adventurer_id, amount)
 
 
-## Durable MP (docs/designs/campaign-loop.md's "Cleric current MP is durable
-## adventurer state" paragraph): a class's mp_max is a config-driven balance
-## value (CLERIC_MP_MAX/MAGE_MP_MAX, loaded from config/game_config.json's
-## cleric.mp_max/mage.mp_max -- see _load_balance_config()), not a perk-
-## derived effective stat -- no Step 1 perk grants a bonus to it, unlike
-## get_effective_max_health()'s Juggernaut/Devout percent bonus. Returns 0
-## for an unknown adventurer or a class with no "mp_max" entry at all
-## (Warrior/Scout), so a caller never needs its own class check first. Stage
-## 5 D3 added Mage as a second spellcasting class -- this branches on the
-## adventurer's own class id to pick the matching config-driven var, exactly
-## as this function's own doc comment always said a second spellcasting
-## class would need (never a value shared with Cleric's).
 func get_effective_max_mp(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var class_id: String = str(adventurer.get("class", ""))
-	var class_def: Dictionary = CLASS_DEFINITIONS.get(class_id, {})
-	if not class_def.has("mp_max"):
-		return 0
-	if class_id == "mage":
-		return MAGE_MP_MAX
-	return CLERIC_MP_MAX
+	return progression_service.get_effective_max_mp(adventurer_id)
 
 
-## Returns current persistent MP for adventurer_id (clamped in [0, max_mp]),
-## or 0 for an unknown adventurer or one whose class carries no MP resource.
-## Unlike get_current_health(), 0 is a legitimate resting value (an out-of-MP
-## Cleric is not dead), so this clamps to a floor of 0, not 1.
 func get_current_mp(adventurer_id: String) -> int:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return 0
-	var max_mp := get_effective_max_mp(adventurer_id)
-	if max_mp <= 0:
-		return 0
-	var adventurer: Dictionary = adventurers[adventurer_index]
-	return clampi(int(adventurer.get("mp_current", max_mp)), 0, max_mp)
+	return progression_service.get_current_mp(adventurer_id)
 
 
-## Sets persistent MP for adventurer_id, clamped to [0, max_mp]. Returns false
-## (a no-op) for an unknown adventurer or one whose class carries no MP
-## resource -- mirrors set_adventurer_health()'s unknown-id no-op, extended to
-## "no MP resource at all" so a caller never needs its own class check first.
 func set_adventurer_mp(adventurer_id: String, amount: int) -> bool:
-	var adventurer_index := _get_adventurer_index(adventurer_id)
-	if adventurer_index == -1:
-		return false
-	var max_mp := get_effective_max_mp(adventurer_id)
-	if max_mp <= 0:
-		return false
-	adventurers[adventurer_index]["mp_current"] = clampi(amount, 0, max_mp)
-	return true
+	return progression_service.set_adventurer_mp(adventurer_id, amount)
 
 
 ## Unit permadeath transaction (docs/plans/2026-08-18-core-loop-and-
@@ -5061,31 +3938,8 @@ func resolve_battle_deaths(health_by_id: Dictionary) -> Array[String]:
 	return dead_ids
 
 
-## Moves every item a slain adventurer carried -- weapons, armor, and
-## potions, active or spare alike, since a unit's *_inventory array already
-## lists everything it carries including its currently-active item -- into
-## party_id's own carry: an ordinary stackable item id into carry.gear (one
-## count per id) and a unique owned-item instance id into carry.
-## item_instance_ids instead, preserving its one-of-a-kind modifier record
-## rather than folding it into a fungible count. A no-op for an unknown
-## party_id (should not happen for a real in-battle death -- see
-## resolve_battle_deaths(), the only caller, which resolves party_id from
-## the dying adventurer's own membership before this erases it).
 func transfer_dead_unit_gear_to_party_carry(party_id: String, unit_id: String) -> void:
-	var party_index := _get_party_index(party_id)
-	if party_index == -1:
-		return
-	var adventurer := get_adventurer(unit_id)
-	var equipment: Dictionary = adventurer.get("equipment", {})
-	var carry: Dictionary = parties[party_index].carry
-	for slot in ["weapon", "armor", "potion"]:
-		for item_id in equipment.get("%s_inventory" % slot, []):
-			var id := str(item_id)
-			if owned_item_instances.has(id):
-				if not carry.item_instance_ids.has(id):
-					carry.item_instance_ids.append(id)
-			else:
-				carry.gear[id] = carry.gear.get(id, 0) + 1
+	party_service.transfer_dead_unit_gear_to_party_carry(party_id, unit_id)
 
 
 ## Batch write-back used by the battlefield after victory or defeat.
@@ -5262,18 +4116,8 @@ func get_legal_heal_targets(caster_id: String) -> Array[String]:
 	return targets
 
 
-## Centralized effective battle AP: every unit starts with the battle
-## baseline, plus one flexible AP per legacy Bonus Move holder (retired from
-## new choices but never migrated away, see choose_perk()) and Scout
-## Quickdraw's own configured bonus -- both can coexist on a Scout who
-## picked up Bonus Move before this slice and later chose Quickdraw too.
-## Returns 0 for an unknown adventurer.
 func get_effective_action_points(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_action_points(6, perks)
+	return progression_service.get_effective_action_points(adventurer_id)
 
 
 ## Pure Bonus Move/Quickdraw AP-bonus math, factored out of get_effective_
@@ -5294,70 +4138,28 @@ static func compute_effective_action_points(base_action_points: int, perks: Arra
 	return PerkEffectResolverScript.compute_stat_modifier(base_action_points, perks, "action_points")
 
 
-## Returns (damage_min, damage_max) from the adventurer's equipped weapon, or
-## Vector2i.ZERO for an unknown adventurer or an equipped weapon id that has
-## fallen out of WEAPONS (should not happen outside of hand-edited state).
 func get_effective_weapon_damage_range(adventurer_id: String) -> Vector2i:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return Vector2i.ZERO
-	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
-	if weapon.is_empty():
-		return Vector2i.ZERO
-	return Vector2i(weapon.damage_min, weapon.damage_max)
+	return progression_service.get_effective_weapon_damage_range(adventurer_id)
 
 
-## Ranged weapon data is optional while the catalog contains only melee
-## weapons. Missing or invalid records remain safely adjacent-only.
 func get_effective_weapon_attack_range(adventurer_id: String) -> Vector2i:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return Vector2i.ONE
-	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
-	if weapon.is_empty():
-		return Vector2i.ONE
-	var min_range: int = maxi(int(weapon.get("min_range", 1)), 1)
-	var max_range: int = maxi(int(weapon.get("max_range", 1)), min_range)
-	return Vector2i(min_range, max_range)
+	return progression_service.get_effective_weapon_attack_range(adventurer_id)
 
 
 func get_effective_weapon_raw_damage_bonus(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var weapon_id := str(adventurer.equipment.weapon)
-	if not owned_item_instances.has(weapon_id):
-		return 0
-	return 1 if owned_item_instances[weapon_id].get("treatment_id", "") == SHARPENED_TREATMENT_ID else 0
+	return progression_service.get_effective_weapon_raw_damage_bonus(adventurer_id)
 
 
 func get_effective_weapon_name(adventurer_id: String) -> String:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return ""
-	var weapon: Dictionary = get_item_definition(adventurer.equipment.weapon)
-	return "" if weapon.is_empty() else tr(weapon.name_key)
+	return progression_service.get_effective_weapon_name(adventurer_id)
 
 
 func get_effective_armor_name(adventurer_id: String) -> String:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return ""
-	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
-	return "" if armor.is_empty() else tr(armor.name_key)
+	return progression_service.get_effective_armor_name(adventurer_id)
 
 
-## Armor defense plus the adventurer's own guard stat, plus Bulwark's flat
-## configured Guard bonus once a Warrior has chosen it.
 func get_effective_defense(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
-	var armor_def: int = 0 if armor.is_empty() else int(armor.defense)
-	var guard_stat: int = int(adventurer.stats.get("guard", 0))
-	var perks: Array = adventurer.progression.get("perks", [])
-	return compute_effective_defense(armor_def + guard_stat, perks)
+	return progression_service.get_effective_defense(adventurer_id)
 
 
 ## Pure Bulwark Guard-bonus math, factored out of get_effective_defense() so
@@ -5375,44 +4177,20 @@ static func compute_effective_defense(base_defense: int, perks: Array) -> int:
 	return PerkEffectResolverScript.compute_stat_modifier(base_defense, perks, "defense")
 
 
-## Scout strategic reconnaissance detection range (see get_party_scouting_
-## intel()): BASE_SCOUT_INTEL_RANGE, plus Keen Eyes' configured bonus once a
-## Scout has chosen it. Returns the base range for an unknown adventurer --
-## callers only ever consult this for a party member already confirmed to be
-## a Scout.
 func get_effective_scout_intel_range(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return BASE_SCOUT_INTEL_RANGE
-	var perks: Array = adventurer.progression.get("perks", [])
-	return PerkEffectResolverScript.compute_stat_modifier(BASE_SCOUT_INTEL_RANGE, perks, "scout_intel_range")
+	return progression_service.get_effective_scout_intel_range(adventurer_id)
 
 
-## Cleric Heal/Bless spell range (see BattleController.try_cast_spell(),
-## which consults this per-caster instead of a flat constant):
-## BASE_CLERIC_SPELL_RANGE, plus Meditation's configured bonus once a Cleric
-## has chosen it. Returns the base range for an unknown adventurer.
 func get_effective_spell_range(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return BASE_CLERIC_SPELL_RANGE
-	var perks: Array = adventurer.progression.get("perks", [])
-	return PerkEffectResolverScript.compute_stat_modifier(BASE_CLERIC_SPELL_RANGE, perks, "spell_range")
+	return progression_service.get_effective_spell_range(adventurer_id)
 
 
 func get_effective_might(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	return int(adventurer.stats.get("might", 0))
+	return progression_service.get_effective_might(adventurer_id)
 
 
 func get_effective_resistance(adventurer_id: String) -> int:
-	var adventurer := get_adventurer(adventurer_id)
-	if adventurer.is_empty():
-		return 0
-	var armor: Dictionary = get_item_definition(adventurer.equipment.armor)
-	return 0 if armor.is_empty() else int(armor.resistance)
+	return progression_service.get_effective_resistance(adventurer_id)
 
 
 ## Exports every durable field this session owns as a versioned, deep-copy-

@@ -6529,6 +6529,18 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		# (GameManager.can_save_current_campaign()), so it can never be
 		# "active" at a point a save could actually happen.
 		"_battle_context": true,
+		# Stage 6 Step 5 (docs/plans/2026-08-24-stage-6-content-and-domain-
+		# foundations/05-domain-extraction-and-stage-6-exit.md): these three
+		# hold no state of their own -- each is a stateless domain-logic
+		# service object (RefCounted) constructed once in GameSession._init()
+		# that reads and writes GameSession's OWN durable dictionaries
+		# (parties, adventurers, active_encounters, _battle_context, ...)
+		# through its own `_gs` back-reference. There is nothing here for a
+		# snapshot to carry -- the fields they operate on are already each
+		# checked in their own right by this same test.
+		"party_service": true,
+		"encounter_service": true,
+		"progression_service": true,
 	}
 
 

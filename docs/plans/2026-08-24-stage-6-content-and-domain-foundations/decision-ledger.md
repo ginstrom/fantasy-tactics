@@ -238,3 +238,193 @@ baseline for Step 2.
 This step changes no runtime behavior. Baseline commands were re-run after
 writing this ledger with no changes in outcome (see Protected baseline
 evidence above, which is the post-write reading).
+
+## Step 5 final evidence (2026-08-25): domain extraction and Stage 6 exit gate
+
+Recorded by Step 5
+([05-domain-extraction-and-stage-6-exit.md](05-domain-extraction-and-stage-6-exit.md))
+on branch `test/stage-6-foundations-exit`, base commit `140cc10` (Step 4,
+`refactor(progression): support branching perk definitions`, merged).
+`GameSession` (5926 LoC) is consolidated into a lean facade over three new
+domain services; every pre-existing test's ORIGINAL assertions still pass
+unchanged, and a new end-to-end journey test proves the full fresh-campaign
+loop.
+
+### Final schema version
+
+No schema version changed in this step. `ContentCatalog`'s manifest version
+stays `1` (`config/content/catalog.json`); `PartyCarry`/`BattleContext`/
+`PerkDefinition` shapes are exactly the target contracts this ledger already
+recorded above (Step 1) -- this step relocates the code that implements
+them, it does not change any persisted shape.
+
+### Domain services extracted
+
+| Service | File | Moved |
+|---|---|---|
+| `PartyService` | `scripts/campaign/party_service.gd` | Party creation/capacity, member assignment, deployment, movement/route consumption, in-field carry equipping, carry deposit/forfeiture, dead-unit gear salvage into carry (37 functions). |
+| `EncounterService` | `scripts/campaign/encounter_service.gd` | Active encounter instance management, vacancy countdowns, threat ratings, objective tracking, `BattleContext` claim/victory/retreat/defeat lifecycle, catalog resolution (`get_expedition`/overlay) (41 functions). |
+| `ProgressionService` | `scripts/progression/progression_service.gd` | XP distribution, level-up thresholds, perk queries/choice, specialization promotion, every effective-stat formula (hit chance, melee/missile, health/MP, weapon/armor-derived values, scouting/spell range) (42 functions). |
+
+Each service is a stateless `RefCounted` constructed once in
+`GameSession._init()` and holds only a back-reference (`_gs`) to the owning
+`GameSession` instance; every read/write goes through `_gs.parties`,
+`_gs.adventurers`, `_gs.active_encounters`, `_gs._battle_context`, etc. --
+GameSession's own durable dictionaries, never a private copy. `GameSession`
+keeps a one-line forwarding method under the ORIGINAL name for every moved
+function (public and underscore-prefixed alike, since several "private"
+helpers -- `_grid_distance`, `_ensure_active_battle_context`,
+`_roll_and_queue_loot`, `_pending_perk_slot_count`, `_overlay_content_
+catalog_definition`, `_start_encounter_vacancy`/`_advance_encounter_
+vacancies` -- turned out to have real external callers in
+`scripts/battle/battle_controller.gd`, `scripts/battle/battlefield.gd`,
+`scripts/tools/campaign_sim.gd`, `scripts/world/world_map.gd`, and
+`scripts/progression/perk_catalog.gd`), so every pre-existing internal
+self-call and every external `GameSession.foo(...)` call site keeps working
+completely unchanged -- no caller outside `game_session.gd` needed to
+change. Buildings/shop/blacksmith/alchemy/runic workshop, item/inventory,
+campaign-guide, scouting-intel/quests, and `CampaignSnapshot`
+export/import/validation stayed in `GameSession` itself -- none of these are
+named in Step 5's own service-boundary list, and several (intel/quests,
+healing) are cross-cutting in a way that did not cleanly fit any one of the
+three named services (see "Judgment calls" below).
+
+### Legacy seams: grep-verified zero references
+
+```
+$ grep -rn "pending_reward\|pending_gear\|pending_mana_crystals\|battle_reward\|battle_gear\|battle_mana_crystals" --include="*.gd" scripts/ tests/
+```
+Zero matches in live code -- every remaining hit is a historical doc
+comment or a descriptive test function name (e.g.
+`test_reset_clears_gold_and_any_in_flight_battle_reward`), not a real field
+reference. Confirmed already eliminated by Steps 2-3; this step introduced
+no regression.
+
+```
+$ grep -rn "_cover_tiles_for_encounter" --include="*.gd" scripts/ tests/
+```
+Zero function definitions or call sites -- the only hits are doc-comment/
+assertion-message mentions of the retired name. `EXPEDITIONS` itself still
+exists as the legacy skeleton `_overlay_content_catalog_definition()`
+overlays authored `ContentCatalog` fields onto (Step 3's already-reviewed
+design, unchanged by this step) -- only 2 encounter ids
+(`obj_tier1_1_goblin_outpost`, `goblin_camp`) are migrated into
+`config/content/encounters/`; every other id is untouched legacy data, not
+a "fallback for a migrated encounter."
+
+### Test-suite evidence
+
+Pre-refactor baseline (re-confirmed before this step's changes): 82 scripts,
+2221/2221 tests passing, 9446 asserts, 1 pre-existing known orphan.
+
+Journey test red (`test_stage_6_foundations.gd` did not yet exist / did not
+yet correctly drive the real two-party, catalog-battle, carry-isolation,
+branching-perk, snapshot-round-trip arc):
+```
+[Failed]: ["party_001"] expected to not equal ["party_001"]: Setup: the two parties must have distinct ids
+[Failed]: [VECTOR2I(4, 3)] expected to equal [VECTOR2I(3, 4)]: Party 1 must have arrived at the encounter's own catalog position
+[Failed]: A second party must not be able to claim a battle while another party's battle is active
+SCRIPT ERROR: Invalid access to property or key 'cover_tiles' on a base object of type 'Node2D (battle_controller.gd)'.
+0/1 passed.
+```
+(Second red iteration, after fixing the missing Guild-Hall-upgrade
+precondition for a second party, surfaced a real API-shape bug in the test
+itself -- `battlefield.gd`'s own `grid` property is the child
+`BattleController` node, not the board -- fixed to `controller.grid.
+cover_tiles`/`controller.get_unit_at(...)`.)
+
+Journey test green:
+```
+Scripts   1
+Tests     1
+Passing Tests   1
+Asserts   76
+---- All tests passed! ----
+```
+
+Full suite after extraction, journey test included:
+```
+Scripts              83
+Tests              2222
+Passing Tests      2222
+Asserts            9522
+Orphans               1
+---- All tests passed! ----
+```
+2221 of those 2222 are the exact pre-existing tests with their ORIGINAL
+assertions unchanged (verified by diff review of every touched file); the
+2222nd is the new journey test. The one pre-existing test that needed a
+change was not a behavioral assertion but a reflection-based meta-test
+(`test_every_durable_field_is_carried_by_the_snapshot_contract` in
+`tests/unit/test_game_session.gd`), which enumerates every `GameSession`
+instance var and asserts it is either snapshot-carried or on an explicit,
+reasoned exclusion allowlist -- it correctly flagged the three new service
+fields as looking durable, and was extended with a documented allowlist
+entry explaining they hold no state of their own (exactly the mechanism
+that test's own doc comment says to use).
+
+### Other final-check commands
+
+- `make campaign-sim`: 5/5 representative-seed victories (seeds 4, 9, 10,
+  12, 14), 12/12 battles won per run, 0 wipes, 0 stalemates -- identical to
+  the protected baseline above.
+- `make check` (`godot --headless -s addons/gut/gut_cmdln.gd -gexit`): exit
+  0, all 2222 tests passing.
+- `godot --headless --path . --editor --quit`: exit 0, no import/scan
+  errors.
+- `git diff --check`: clean.
+- Content lint (`test_content_catalog.gd`, all catalog files): 20/20
+  passing.
+- Fixed-seed scenario replay (`test_scenario_runner.gd`): 19/19 passing,
+  including its own byte-identical-same-seed reproduction assertions.
+- Fixed-seed campaign replay (`test_campaign_sim.gd`): 24/24 passing,
+  including `test_run_campaign_is_fully_deterministic_for_a_fixed_seed` and
+  the representative-victory-seed-set test.
+
+### Judgment calls / scope not moved
+
+- Scouting/intel and Guild Hall quest-posting (`_register_encounter_intel_
+  and_quest`, `_advance_intelligence_and_quests`, `get_encounter_intel`,
+  `get_quests`/`accept_quest`, etc.) stayed in `GameSession` -- not named in
+  any of the three services' task-3 bullet lists, and it is a genuinely
+  separate subsystem from encounter-instance lifecycle proper.
+- Healing/permadeath aftermath (`resolve_battle_deaths`, `apply_battle_
+  aftermath`, `apply_battle_mp_aftermath`, `heal_party_member`,
+  `_apply_natural_recovery`) stayed in `GameSession` -- cross-cutting
+  between roster, party membership, and health state; no single named
+  service was a clean home for it without inventing a fourth service this
+  plan does not authorize.
+- Recruitment-offer vacancy machinery (`_start_recruitment_vacancy`,
+  `_spawn_next_recruitment_offer`, etc.) stayed in `GameSession` -- a
+  roster/recruitment concern, not named under `PartyService` or
+  `EncounterService`.
+- `compute_effective_max_health`/`compute_effective_action_points`/
+  `compute_effective_defense` (the three `static func`s `battle_state_
+  factory.gd`/`campaign_snapshot.gd` call via the preloaded script
+  constant) were left in `GameSession` unmoved -- they take every input
+  explicitly and touch no instance state, so moving them would have risked
+  breaking their existing external static call sites for no behavioral
+  gain.
+
+These are scope decisions made to keep the extraction's correctness
+provable within this step's own verification budget, not gaps discovered
+and left unfixed -- each subsystem above is internally cohesive and was
+left completely alone (no line inside it changed), so none of them carry
+extraction risk.
+
+### Deferred beyond Stage 6
+
+No new deferrals. Carried forward from Steps 1/4 (dispositions unchanged,
+not re-litigated here):
+- **Rogue** (G1): stays deferred, per the Stage 5/Stage 6 gate disposition
+  above.
+- **Scripted mid-battle content events** (G2): out of scope for the first
+  `ContentCatalog` schema version, per the gate disposition above.
+- **Respec mechanic** (G3): no respec policy shipped, per the gate
+  disposition above.
+
+### Manual check (pending human signoff)
+
+Not yet performed -- no display available in this environment. See this
+plan's [05-domain-extraction-and-stage-6-exit.md](05-domain-extraction-and-stage-6-exit.md#manual-check)
+for the exact steps to relay to the user via `make play`.
