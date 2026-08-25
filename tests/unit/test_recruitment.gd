@@ -214,7 +214,7 @@ func test_pressing_recruit_purchases_a_mage_offer_and_routes_to_roster() -> void
 	assert_eq(GameSession.get_current_mp(offer.id), 3)
 
 
-func test_double_clicking_candidate_row_purchases_candidate_and_routes_to_roster() -> void:
+func test_activating_a_candidate_row_opens_card_navigator() -> void:
 	GameSession.gold = 10
 	var first_candidate := GameSession.get_recruitment_candidates()[0]
 	var screen: Control = RecruitmentScene.instantiate()
@@ -223,10 +223,106 @@ func test_double_clicking_candidate_row_purchases_candidate_and_routes_to_roster
 
 	table.emit_signal("row_activated", first_candidate.id)
 
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), first_candidate.id)
+
+
+func test_recruitment_card_navigator_cycles_and_wraps() -> void:
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var candidates := GameSession.get_recruitment_candidates()
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+	table.emit_signal("row_activated", candidates[0].id)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	assert_eq(navigator.get_current_id(), candidates[0].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), candidates[1].id)
+
+	# Wrap forward past the end
+	for i in candidates.size() - 1:
+		next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), candidates[0].id, "Must wrap forward to first candidate")
+
+	# Wrap backward from first
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), candidates.back().id, "Must wrap backward to last candidate")
+
+
+func test_pressing_recruit_on_candidate_card_purchases_and_routes_to_roster() -> void:
+	GameSession.gold = 10
+	var first_candidate := GameSession.get_recruitment_candidates()[0]
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+	table.emit_signal("row_activated", first_candidate.id)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var card: RecruitmentCard = screen.get_node("CardNavigator").content_container.get_child(0)
+	var recruit_button: Button = card.get_node("%RecruitButton")
+
+	recruit_button.emit_signal("pressed")
+
 	assert_eq(GameSession.gold, 0)
 	assert_eq(GameSession.get_recruitment_candidates().size(), 3)
 	assert_eq(GameSession.adventurers.size(), 5)
 	assert_eq(GameSession.adventurers[4].id, first_candidate.id)
+
+
+func test_targeted_recruitment_from_card_assigns_candidate_and_returns_to_party_details() -> void:
+	GameSession.create_party()
+	GameSession.gold = 10
+	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
+	GameManager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+	table.emit_signal("row_activated", first_candidate_id)
+
+	var card: RecruitmentCard = screen.get_node("CardNavigator").content_container.get_child(0)
+	card.get_node("%RecruitButton").emit_signal("pressed")
+
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
+func test_recruitment_closing_card_navigator_restores_selection() -> void:
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var candidates := GameSession.get_recruitment_candidates()
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+	table.emit_signal("row_activated", candidates[0].id)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	var second_id: String = candidates[1].id
+	assert_eq(navigator.get_current_id(), second_id)
+
+	navigator.close()
+	assert_false(navigator.visible)
+	assert_eq(screen.selected_candidate_id, second_id)
+	assert_eq(table.get_selected_row_ids(), [second_id])
+
+
+func test_recruitment_candidate_purchased_elsewhere_while_card_open_closes_safely() -> void:
+	var screen: Control = RecruitmentScene.instantiate()
+	add_child_autofree(screen)
+	var candidates := GameSession.get_recruitment_candidates()
+	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
+	table.emit_signal("row_activated", candidates[0].id)
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	GameSession.gold = 10
+	GameSession.purchase_recruit(candidates[0].id)
+	screen.refresh()
+
+	assert_false(navigator.visible)
 
 
 func test_targeted_recruitment_assigns_candidate_and_returns_to_party_details() -> void:
@@ -242,20 +338,6 @@ func test_targeted_recruitment_assigns_candidate_and_returns_to_party_details() 
 	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
 	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID, "Targeted recruitment must route back to party details")
 
-
-func test_targeted_recruitment_double_click_returns_to_party_details() -> void:
-	GameSession.create_party()
-	GameSession.gold = 10
-	var first_candidate_id: String = GameSession.get_recruitment_candidates()[0].id
-	GameManager.recruitment_target_party_id = GameSession.FIRST_PARTY_ID
-	var screen: Control = RecruitmentScene.instantiate()
-	add_child_autofree(screen)
-	var table: TableView = screen.get_node("Body/Center/VBox/RecruitmentTable")
-
-	table.emit_signal("row_activated", first_candidate_id)
-
-	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [first_candidate_id])
-	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
 
 
 

@@ -158,10 +158,12 @@ func test_loot_table_has_neither_a_sell_nor_an_equip_action() -> void:
 	tree.emit_signal("item_selected")
 	screen.loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	var detail_panel: Control = screen.loot_table.get_node("LootDetailPanel")
-	assert_true(detail_panel.visible)
-	assert_false(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
-	assert_false(detail_panel.get_node("Content/ButtonRow/SellButton").visible)
+	var navigator: CardNavigator = screen.loot_table.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_false(card.get_node("%EquipButton").visible)
+	assert_false(card.get_node("%SellButton").visible)
+
 
 
 func test_ok_button_emits_dismissed_signal_and_clears_summary() -> void:

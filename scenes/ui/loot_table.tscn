@@ -3,7 +3,8 @@
 [ext_resource type="Script" path="res://scripts/ui/loot_table.gd" id="1_loot_table"]
 [ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="2_table_view"]
 [ext_resource type="PackedScene" path="res://scenes/ui/sell_quantity_dialog.tscn" id="3_sell_quantity_dialog"]
-[ext_resource type="PackedScene" path="res://scenes/ui/loot_detail_panel.tscn" id="4_loot_detail_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/card_navigator.tscn" id="4_card_nav"]
+
 
 [node name="LootTable" type="Control"]
 layout_mode = 3
@@ -46,12 +47,13 @@ text = "loot_table.view"
 [node name="SellButton" type="Button" parent="Content/DirectActionBar"]
 layout_mode = 2
 disabled = true
-text = "loot_detail_panel.sell"
+text = "item_details.sell"
 
 [node name="EquipButton" type="Button" parent="Content/DirectActionBar"]
 layout_mode = 2
 disabled = true
-text = "loot_detail_panel.equip"
+text = "item_details.equip"
+
 
 [node name="EmptyLabel" type="Label" parent="."]
 layout_mode = 1
@@ -67,5 +69,5 @@ horizontal_alignment = 1
 [node name="SellQuantityDialog" parent="." instance=ExtResource("3_sell_quantity_dialog")]
 layout_mode = 1
 
-[node name="LootDetailPanel" parent="." instance=ExtResource("4_loot_detail_panel")]
+[node name="CardNavigator" parent="." instance=ExtResource("4_card_nav")]
 layout_mode = 1

@@ -120,7 +120,7 @@ func test_refreshing_away_the_selected_row_disables_every_direct_action() -> voi
 	assert_true(_direct_action_button(screen, "EquipButton").disabled)
 
 
-func test_selecting_a_row_and_clicking_view_opens_the_detail_panel() -> void:
+func test_selecting_a_row_and_clicking_view_opens_the_card_navigator() -> void:
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
@@ -128,9 +128,10 @@ func test_selecting_a_row_and_clicking_view_opens_the_detail_panel() -> void:
 
 	_direct_action_button(screen, "ViewButton").emit_signal("pressed")
 
-	var detail_panel: Control = screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel")
-	assert_true(detail_panel.visible)
-	assert_eq(detail_panel.get_node("Content/NameLabel").text, "Iron Shortsword")
+	var navigator: CardNavigator = screen.get_node("Body/Center/VBox/LootTable/CardNavigator")
+	assert_true(navigator.visible)
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_eq(card.get_node("%NameLabel").text, "Iron Shortsword")
 
 
 func test_direct_equip_emits_the_selected_item_id() -> void:
@@ -146,7 +147,7 @@ func test_direct_equip_emits_the_selected_item_id() -> void:
 	assert_signal_emitted_with_parameters(loot_table, "equip_requested", ["shortsword_iron"])
 
 
-func test_detail_panel_hides_direct_actions_for_mana_crystal_rows() -> void:
+func test_card_hides_direct_actions_for_mana_crystal_rows() -> void:
 	GameSession.mana_crystals = {1: 2}
 	var screen: Control = StoresScene.instantiate()
 	add_child_autofree(screen)
@@ -154,9 +155,10 @@ func test_detail_panel_hides_direct_actions_for_mana_crystal_rows() -> void:
 
 	_direct_action_button(screen, "ViewButton").emit_signal("pressed")
 
-	assert_false(
-		screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel/Content/ButtonRow/EquipButton").visible
-	)
+	var navigator: CardNavigator = screen.get_node("Body/Center/VBox/LootTable/CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_false(card.get_node("%EquipButton").visible)
+
 
 
 func test_direct_sell_of_one_item_updates_gold_shop_cash_and_stores_rows() -> void:

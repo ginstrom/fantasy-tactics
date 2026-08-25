@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/recruitment.gd" id="1_recruitment"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
 [ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="3_table_view"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="4_camp_nav"]
+[ext_resource type="PackedScene" path="res://scenes/ui/card_navigator.tscn" id="5_card_nav"]
 
 [node name="Recruitment" type="Control"]
 layout_mode = 3
@@ -70,6 +71,9 @@ theme_override_constants/margin_bottom = 16
 [node name="InformationPanel" parent="Body/InformationMargin" instance=ExtResource("2_information_panel")]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="CardNavigator" parent="." instance=ExtResource("5_card_nav")]
+layout_mode = 1
 
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/ViewRosterButton" to="." method="_on_view_roster_pressed"]

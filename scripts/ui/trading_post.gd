@@ -9,6 +9,7 @@ extends Control
 ## the Tier-3 healing potion purchase (see stores.gd).
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
+const ItemDetailCardScene := preload("res://scenes/ui/item_detail_card.tscn")
 
 @onready var income_label: Label = $Body/Center/VBox/IncomeLabel
 @onready var upgrade_button: Button = $Body/Center/VBox/UpgradeButton
@@ -16,19 +17,33 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 @onready var buy_table: TableView = $Body/Center/VBox/BuyTable
 @onready var selected_item_label: Label = $Body/Center/VBox/SelectedItemLabel
 @onready var buy_button: Button = $Body/Center/VBox/BuyButton
+@onready var card_navigator: CardNavigator = $CardNavigator
 
 const SHOP_MAX_LEVEL := 3
 
 var selected_item_id: String = ""
+var item_detail_card: ItemDetailCard
 
 
 func _ready() -> void:
 	buy_table.row_selected.connect(_on_row_selected)
+	buy_table.row_activated.connect(_on_row_activated)
 	buy_table.set_columns(_build_columns())
+
+	item_detail_card = ItemDetailCardScene.instantiate()
+	card_navigator.set_card_content(item_detail_card)
+	card_navigator.set_title("shop.item_details")
+	item_detail_card.configure(true, false, false)
+	card_navigator.card_changed.connect(_on_card_changed)
+	card_navigator.closed.connect(_on_card_navigator_closed)
+	item_detail_card.buy_requested.connect(_on_card_buy_requested)
+
 	refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if card_navigator.visible:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		GameManager.open_game_menu()
@@ -47,6 +62,13 @@ func refresh() -> void:
 	)
 	upgrade_button.text = tr("shop.upgrade") % [GameSession.shop_level + 1, upgrade_cost]
 	max_level_label.visible = at_max_level
+
+	if card_navigator.visible:
+		var cur_id: Variant = card_navigator.get_current_id()
+		if cur_id == null or not GameSession.get_shop_catalogue_item_ids().has(str(cur_id)):
+			card_navigator.close()
+		else:
+			_refresh_card(str(cur_id))
 
 
 func _build_columns() -> Array[TableColumn]:
@@ -86,6 +108,44 @@ func _refresh_selection() -> void:
 func _on_row_selected(row_id: Variant) -> void:
 	selected_item_id = str(row_id)
 	_refresh_selection()
+
+
+func _on_row_activated(row_id: Variant) -> void:
+	_open_card_navigator(str(row_id))
+
+
+func _open_card_navigator(initial_id: String) -> void:
+	var id_list := buy_table.get_displayed_row_ids()
+	if id_list.is_empty():
+		return
+	var return_target: Control = buy_button if buy_button.visible else null
+	card_navigator.open(id_list, initial_id, return_target)
+	_refresh_card(str(card_navigator.get_current_id()))
+
+
+func _on_card_changed(id: Variant) -> void:
+	_refresh_card(str(id))
+
+
+func _refresh_card(id: String) -> void:
+	item_detail_card.set_item(id, {})
+
+
+func _on_card_navigator_closed(last_id: Variant) -> void:
+	if last_id != null and str(last_id) != "":
+		selected_item_id = str(last_id)
+		buy_table.select_row(selected_item_id)
+		_refresh_selection()
+
+
+func _on_card_buy_requested(item_id: String) -> void:
+	if not GameSession.get_shop_catalogue_item_ids().has(item_id):
+		refresh()
+		return
+	GameSession.buy_item(item_id)
+	refresh()
+	if card_navigator.visible:
+		_refresh_card(item_id)
 
 
 func _on_buy_button_pressed() -> void:

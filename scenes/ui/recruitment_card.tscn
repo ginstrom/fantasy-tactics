@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/recruitment_card.gd" id="1_recruitment_card"]
+
+[node name="RecruitmentCard" type="VBoxContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_recruitment_card")
+
+[node name="NameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="ClassLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LevelLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CostLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="StatsLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="MpLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="EquipmentLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RecruitButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "information.recruit"
+
+[node name="NotFoundLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "recruitment_card.not_found"
+horizontal_alignment = 1

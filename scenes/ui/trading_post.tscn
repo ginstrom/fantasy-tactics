@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/trading_post.gd" id="1_trading_post"]
 [ext_resource type="Script" path="res://scripts/ui/table_view.gd" id="2_table_view"]
 [ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="3_camp_nav"]
+[ext_resource type="PackedScene" path="res://scenes/ui/card_navigator.tscn" id="4_card_nav"]
+
 
 [node name="TradingPost" type="Control"]
 layout_mode = 3
@@ -71,6 +73,9 @@ text = "shop.buy"
 [node name="BackButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
 text = "ui.back"
+
+[node name="CardNavigator" parent="." instance=ExtResource("4_card_nav")]
+layout_mode = 1
 
 [connection signal="pressed" from="Body/Center/VBox/UpgradeButton" to="." method="_on_upgrade_button_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BuyButton" to="." method="_on_buy_button_pressed"]

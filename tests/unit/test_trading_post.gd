@@ -164,6 +164,80 @@ func test_pressing_buy_purchases_the_selected_item_and_refreshes() -> void:
 	assert_eq(GameSession.banked_gear.get("dagger_iron", 0), 1)
 
 
+func test_activating_a_shop_row_opens_card_navigator() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var buy_table: TableView = screen.get_node("Body/Center/VBox/BuyTable")
+	var item_ids := GameSession.get_shop_catalogue_item_ids()
+
+	buy_table.emit_signal("row_activated", item_ids[0])
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), item_ids[0])
+
+
+func test_shop_card_navigator_cycles_and_wraps_in_catalogue_order() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var item_ids := GameSession.get_shop_catalogue_item_ids()
+	var buy_table: TableView = screen.get_node("Body/Center/VBox/BuyTable")
+	buy_table.emit_signal("row_activated", item_ids[0])
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	assert_eq(navigator.get_current_id(), item_ids[0])
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), item_ids[1])
+
+	# Wrap forward past end
+	for i in item_ids.size() - 1:
+		next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), item_ids[0], "Must wrap forward in catalogue order")
+
+	# Wrap backward from first
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), item_ids.back(), "Must wrap backward in catalogue order")
+
+
+func test_buying_from_shop_card_navigator_deducts_gold_and_refreshes_active_card() -> void:
+	GameSession.gold = 50
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var buy_table: TableView = screen.get_node("Body/Center/VBox/BuyTable")
+	buy_table.emit_signal("row_activated", "dagger_iron")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	var buy_btn: Button = card.get_node("%BuyButton")
+
+	assert_false(buy_btn.disabled)
+	buy_btn.emit_signal("pressed")
+
+	assert_eq(GameSession.banked_gear.get("dagger_iron", 0), 1)
+	assert_eq(GameSession.gold, 40)
+	assert_true(navigator.visible, "Card stays open after purchase because item remains in catalog")
+
+
+func test_closing_shop_card_navigator_restores_selection() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var item_ids := GameSession.get_shop_catalogue_item_ids()
+	var buy_table: TableView = screen.get_node("Body/Center/VBox/BuyTable")
+	buy_table.emit_signal("row_activated", item_ids[0])
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	var second_id: String = item_ids[1]
+
+	navigator.close()
+	assert_false(navigator.visible)
+	assert_eq(screen.selected_item_id, second_id)
+	assert_eq(buy_table.get_selected_row_ids(), [second_id])
+
+
 func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	var screen: Control = TradingPostScene.instantiate()
 	add_child_autofree(screen)

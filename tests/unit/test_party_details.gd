@@ -209,10 +209,12 @@ func test_deployed_loot_table_has_an_equip_action_but_no_sell_action() -> void:
 	tree.emit_signal("item_selected")
 	screen.get_node("Body/Center/VBox/LootTable/Content/ViewButton").emit_signal("pressed")
 
-	var detail_panel: Control = screen.get_node("Body/Center/VBox/LootTable/LootDetailPanel")
-	assert_true(detail_panel.visible)
-	assert_true(detail_panel.get_node("Content/ButtonRow/EquipButton").visible)
-	assert_false(detail_panel.get_node("Content/ButtonRow/SellButton").visible)
+	var navigator: CardNavigator = screen.get_node("Body/Center/VBox/LootTable/CardNavigator")
+	assert_true(navigator.visible)
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_true(card.get_node("%EquipButton").visible)
+	assert_false(card.get_node("%SellButton").visible)
+
 
 
 func test_equip_routes_via_game_manager_scoped_to_this_party() -> void:

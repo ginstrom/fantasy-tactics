@@ -1,0 +1,75 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/item_detail_card.gd" id="1_item_detail_card"]
+
+[node name="ItemDetailCard" type="VBoxContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_item_detail_card")
+
+[node name="NameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="TypeLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CategoryLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="StatsLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="QuantityLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="PriceLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DescriptionLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ActionsContainer" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="BuyButton" type="Button" parent="ActionsContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "item_details.buy"
+
+[node name="SellButton" type="Button" parent="ActionsContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "item_details.sell"
+
+[node name="EquipButton" type="Button" parent="ActionsContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "item_details.equip"
+
+[node name="NotFoundLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "item_details.not_found"
+horizontal_alignment = 1

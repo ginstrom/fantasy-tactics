@@ -50,19 +50,21 @@ func test_view_button_starts_disabled_and_enables_once_a_row_is_selected() -> vo
 	assert_false(view_button.disabled)
 
 
-func test_view_button_opens_the_detail_panel_for_the_selected_row() -> void:
+func test_view_button_opens_the_card_navigator_for_the_selected_row() -> void:
 	var loot_table := _open(true, true)
 	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1}, {}))
 	_select_first_row(loot_table)
 
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	var detail_panel: Control = loot_table.get_node("LootDetailPanel")
-	assert_true(detail_panel.visible)
-	assert_eq(detail_panel.get_node("Content/NameLabel").text, "Iron Shortsword")
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), "shortsword_iron")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_eq(card.get_node("%NameLabel").text, "Iron Shortsword")
 
 
-func test_double_clicking_a_row_opens_the_detail_panel_without_needing_view() -> void:
+func test_double_clicking_a_row_opens_the_card_navigator_without_needing_view() -> void:
 	var loot_table := _open(true, true)
 	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1}, {}))
 	var tree: Tree = loot_table.get_node("Content/Table/Tree")
@@ -71,42 +73,72 @@ func test_double_clicking_a_row_opens_the_detail_panel_without_needing_view() ->
 
 	tree.emit_signal("item_activated")
 
-	assert_true(loot_table.get_node("LootDetailPanel").visible)
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), "shortsword_iron")
 
 
-func test_detail_panel_equip_button_hidden_on_mana_crystal_rows() -> void:
+func test_loot_table_card_navigator_cycles_and_wraps_in_displayed_order() -> void:
+	var loot_table := _open(true, true)
+	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1, "dagger_iron": 1}, {}))
+	_select_first_row(loot_table)
+	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	var ids := navigator.get_ids()
+	assert_eq(ids.size(), 2)
+	assert_eq(navigator.get_current_id(), ids[0])
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), ids[1])
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), ids[0], "Must wrap forward")
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), ids[1], "Must wrap backward")
+
+
+func test_card_equip_button_hidden_on_mana_crystal_rows() -> void:
 	var loot_table := _open(false, true)
 	loot_table.set_rows(GameSession.build_loot_rows({}, {1: 2}))
 	_select_first_row(loot_table)
 
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	assert_false(loot_table.get_node("LootDetailPanel/Content/ButtonRow/EquipButton").visible)
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_false(card.get_node("%EquipButton").visible)
 
 
-func test_equip_requested_from_the_detail_panel_bubbles_up_with_the_item_id() -> void:
+func test_equip_requested_from_the_card_bubbles_up_with_the_item_id() -> void:
 	var loot_table := _open(false, true)
 	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1}, {}))
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 	watch_signals(loot_table)
 
-	loot_table.get_node("LootDetailPanel/Content/ButtonRow/EquipButton").emit_signal("pressed")
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	card.get_node("%EquipButton").emit_signal("pressed")
 
 	assert_signal_emitted_with_parameters(loot_table, "equip_requested", ["shortsword_iron"])
+	assert_false(navigator.visible, "Equip must close navigator")
 
 
-func test_sell_button_is_present_via_the_shop_detail_panel() -> void:
+func test_sell_button_is_present_via_the_card() -> void:
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var loot_table := _open(true, false)
 	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	assert_true(loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").visible)
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_true(card.get_node("%SellButton").visible)
 
 
-func test_selling_a_single_unit_row_from_the_detail_panel_sells_it_immediately_without_a_dialog() -> void:
+func test_selling_a_single_unit_row_from_the_card_sells_it_immediately_without_a_dialog() -> void:
 	GameSession.has_trading_post = true
 	GameSession.banked_gear = {"shortsword_iron": 1}
 	var loot_table := _open(true, false)
@@ -114,14 +146,16 @@ func test_selling_a_single_unit_row_from_the_detail_panel_sells_it_immediately_w
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	card.get_node("%SellButton").emit_signal("pressed")
 
 	assert_eq(GameSession.banked_gear.shortsword_iron, 0)
 	assert_eq(GameSession.gold, 10)
 	assert_false(loot_table.get_node("SellQuantityDialog").visible)
 
 
-func test_selling_a_multi_unit_row_from_the_detail_panel_opens_the_quantity_dialog_without_selling() -> void:
+func test_selling_a_multi_unit_row_from_the_card_opens_the_quantity_dialog_without_selling() -> void:
 	GameSession.has_trading_post = true
 	GameSession.banked_gear = {"shortsword_iron": 3}
 	var loot_table := _open(true, false)
@@ -129,7 +163,9 @@ func test_selling_a_multi_unit_row_from_the_detail_panel_opens_the_quantity_dial
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
 
-	loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	card.get_node("%SellButton").emit_signal("pressed")
 
 	assert_eq(GameSession.banked_gear.shortsword_iron, 3, "Nothing sold until the dialog is confirmed")
 	assert_true(loot_table.get_node("SellQuantityDialog").visible)
@@ -142,7 +178,10 @@ func test_confirming_the_quantity_dialog_sells_that_many_and_emits_sold() -> voi
 	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
-	loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	card.get_node("%SellButton").emit_signal("pressed")
 	watch_signals(loot_table)
 
 	loot_table.get_node("SellQuantityDialog").confirmed.emit("shortsword_iron", 2)
@@ -159,7 +198,10 @@ func test_multi_sale_quantity_is_capped_by_shop_cash() -> void:
 	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
-	loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	card.get_node("%SellButton").emit_signal("pressed")
 	assert_eq(loot_table.get_node("SellQuantityDialog")._max_quantity, 1)
 
 
@@ -182,7 +224,10 @@ func test_underfunded_sale_is_disabled_and_does_not_emit_sold() -> void:
 	loot_table.set_rows(GameSession.build_loot_rows(GameSession.banked_gear, {}))
 	_select_first_row(loot_table)
 	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
-	assert_true(loot_table.get_node("LootDetailPanel/Content/ButtonRow/SellButton").disabled)
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	var card: ItemDetailCard = navigator.content_container.get_child(0)
+	assert_true(card.get_node("%SellButton").disabled)
 	watch_signals(loot_table)
 	loot_table._handle_sell("shortsword_iron")
 	assert_eq(GameSession.banked_gear.shortsword_iron, 1)
