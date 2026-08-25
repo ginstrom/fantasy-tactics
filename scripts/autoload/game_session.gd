@@ -3059,7 +3059,7 @@ func _register_encounter_intel_and_quest(instance: Dictionary) -> void:
 ## record that already exists (should not happen in practice, since each
 ## authored id unlocks exactly once) is left alone rather than reset to
 ## undiscovered.
-func _ensure_authored_intel_record(encounter_id: String) -> void:
+func _ensure_authored_intel_record(encounter_id: String, emit_journal: bool = true) -> void:
 	if encounter_intel.has(encounter_id):
 		return
 	encounter_intel[encounter_id] = {
@@ -3067,6 +3067,23 @@ func _ensure_authored_intel_record(encounter_id: String) -> void:
 		"known_tier": INTEL_TIER_NONE,
 		"quest_id": "",
 	}
+	if emit_journal:
+		_record_encounter_discovery(encounter_id)
+
+
+func _record_encounter_discovery(encounter_id: String) -> void:
+	var expedition := get_expedition(encounter_id)
+	var detail := {
+		"encounter_id": encounter_id,
+	}
+	if expedition.has("name_key"):
+		detail["name"] = tr(str(expedition.name_key))
+	append_journal_entry(
+		"discovery",
+		"journal.discovery.title",
+		detail,
+		JOURNAL_SECTION_LOG
+	)
 
 
 ## Backward-compatible migration safety net for import_campaign_snapshot():
@@ -3086,7 +3103,7 @@ func _backfill_missing_intel_records() -> void:
 		if not encounter_intel.has(instance.id):
 			encounter_intel[instance.id] = {"discovered": false, "known_tier": INTEL_TIER_NONE, "quest_id": ""}
 	for encounter_id in unlocked_authored_encounters:
-		_ensure_authored_intel_record(encounter_id)
+		_ensure_authored_intel_record(encounter_id, false)
 
 
 ## Runs once per World Map Turn (see end_world_turn()): for every currently
@@ -3102,6 +3119,7 @@ func _advance_intelligence_and_quests() -> void:
 		if not bool(record.discovered):
 			if _resolve_detection(expedition.position):
 				record.discovered = true
+				_record_encounter_discovery(encounter_id)
 		elif int(record.known_tier) < INTEL_TIER_MONSTER_COUNTS:
 			_resolve_intel_tier(expedition.position, record)
 		encounter_intel[encounter_id] = record
@@ -3235,9 +3253,12 @@ func accept_quest(quest_id: String) -> bool:
 	var encounter_id: String = str(quest.encounter_id)
 	if encounter_intel.has(encounter_id):
 		var record: Dictionary = encounter_intel[encounter_id]
+		var was_discovered: bool = bool(record.get("discovered", false))
 		record.discovered = true
 		record.known_tier = maxi(int(record.known_tier), INTEL_TIER_MAIN_MONSTER)
 		encounter_intel[encounter_id] = record
+		if not was_discovered:
+			_record_encounter_discovery(encounter_id)
 	return true
 
 

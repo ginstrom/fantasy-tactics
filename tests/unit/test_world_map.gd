@@ -125,7 +125,7 @@ func test_a_real_click_event_selects_the_party_even_when_the_tracked_cursor_posi
 	add_child_autofree(world_map)
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center: Vector2 = world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -172,7 +172,7 @@ func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline()
 	await get_tree().process_frame
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center: Vector2 = world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -216,7 +216,7 @@ func test_a_party_cell_click_still_selects_the_party_now_that_tiles_and_the_mark
 	add_child_autofree(world_map)
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center: Vector2 = world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -1453,7 +1453,7 @@ func test_goblin_camp_label_position_is_unchanged_by_the_hint_bar_clamp() -> voi
 
 	assert_not_null(label, "Goblin Camp's expedition label should be drawn")
 	assert_eq(
-		label.global_position,
+		label.position,
 		Vector2(goblin_record.position) * WorldMapScript.TILE_SIZE
 			+ Vector2(WorldMapScript.TILE_SIZE * 0.1, -WorldMapScript.TILE_SIZE * 0.6)
 	)
@@ -1634,8 +1634,8 @@ func _find_expedition_label_by_position(world_map: Node2D, position: Vector2i) -
 	for marker in world_map.get_node("Board/Markers").get_children():
 		if marker is Label:
 			if (
-				abs(marker.global_position.x - expected_x) < 1.0
-				and abs(marker.global_position.y - expected_y) < 1.0
+				abs(marker.position.x - expected_x) < 1.0
+				and abs(marker.position.y - expected_y) < 1.0
 			):
 				return marker
 	return null
@@ -2512,3 +2512,15 @@ func test_world_map_panels_have_non_intersecting_rects_and_no_legacy_overlapping
 		info_rect.intersects(hint_rect),
 		"InformationPanel rect %s must not intersect Hint rect %s" % [info_rect, hint_rect]
 	)
+
+
+func test_world_map_turn_end_and_refresh_cannot_create_duplicate_journal_entries() -> void:
+	GameSession.reset()
+	var entries_before: int = GameSession.get_journal_entries("log").size()
+
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._draw_markers()
+	world_map._draw_routes()
+
+	assert_eq(GameSession.get_journal_entries("log").size(), entries_before, "Opening / redrawing WorldMap must not append journal entries")

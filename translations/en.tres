@@ -605,5 +605,12 @@ messages = {
 "journal.log.empty": "No journal entries yet.",
 "journal.view": "View",
 "journal.detail.title": "Entry Detail",
-"journal.detail.close": "Close"
+"journal.detail.close": "Close",
+"journal.discovery.title": "Encounter Discovered",
+"journal.battle.title": "Battle Outcome",
+"journal.battle.victory.title": "Battle Victory",
+"journal.battle.defeat.title": "Battle Defeat",
+"journal.battle.retreat.title": "Battle Retreat",
+"journal.loot.title": "Loot Received",
+"journal.level_up.title": "Level Up"
 }

@@ -121,6 +121,23 @@ func complete_current_encounter() -> void:
 		else:
 			_roll_and_queue_loot(expedition.get("enemy", {}))
 		_gs._battle_context.reward.gold += _gs.loot_gold_roll.call(18, 22) * int(expedition.get("difficulty", 1))
+		var reward_copy: Dictionary = _gs._battle_context.reward.duplicate(true)
+		var loot_detail := {
+			"encounter_id": _gs.selected_encounter,
+			"gold": int(reward_copy.get("gold", 0)),
+		}
+		var gear: Dictionary = reward_copy.get("gear", {})
+		if not gear.is_empty():
+			loot_detail["gear"] = gear
+		var crystals: Dictionary = reward_copy.get("mana_crystals", {})
+		if not crystals.is_empty():
+			loot_detail["mana_crystals"] = crystals
+		_gs.append_journal_entry(
+			"loot",
+			"journal.loot.title",
+			loot_detail,
+			_gs.JOURNAL_SECTION_LOG
+		)
 		_gs._settle_encounter_intelligence(_gs.selected_encounter)
 		_clear_active_encounter(_gs.selected_encounter)
 		# An authored node's own encounter_id is exactly its CAMPAIGN_
@@ -269,6 +286,16 @@ func resolve_battle_victory(battle_id: String) -> bool:
 			if not carry.item_instance_ids.has(instance_id):
 				carry.item_instance_ids.append(instance_id)
 	_gs._battle_context.status = "victory"
+	var victory_encounter_id: String = str(_gs._battle_context.get("encounter_id", ""))
+	_gs.append_journal_entry(
+		"battle",
+		"journal.battle.victory.title",
+		{
+			"outcome": "victory",
+			"encounter_id": victory_encounter_id,
+		},
+		_gs.JOURNAL_SECTION_LOG
+	)
 	return true
 
 
@@ -278,8 +305,18 @@ func resolve_battle_victory(battle_id: String) -> bool:
 func resolve_battle_retreat(battle_id: String) -> bool:
 	if _gs._battle_context.get("battle_id", "") != battle_id or _gs._battle_context.get("status", "") != "active":
 		return false
+	var retreat_encounter_id: String = str(_gs._battle_context.get("encounter_id", ""))
 	_gs._battle_context.reward = _gs._empty_carry()
 	_gs._battle_context.status = "retreat"
+	_gs.append_journal_entry(
+		"battle",
+		"journal.battle.retreat.title",
+		{
+			"outcome": "retreat",
+			"encounter_id": retreat_encounter_id,
+		},
+		_gs.JOURNAL_SECTION_LOG
+	)
 	return true
 
 
@@ -290,9 +327,19 @@ func resolve_battle_retreat(battle_id: String) -> bool:
 func resolve_battle_defeat(battle_id: String) -> bool:
 	if _gs._battle_context.get("battle_id", "") != battle_id or _gs._battle_context.get("status", "") != "active":
 		return false
+	var defeat_encounter_id: String = str(_gs._battle_context.get("encounter_id", ""))
 	_gs.forfeit_party_carry(_gs._battle_context.owner_party_id)
 	_gs._battle_context.reward = _gs._empty_carry()
 	_gs._battle_context.status = "defeat"
+	_gs.append_journal_entry(
+		"battle",
+		"journal.battle.defeat.title",
+		{
+			"outcome": "defeat",
+			"encounter_id": defeat_encounter_id,
+		},
+		_gs.JOURNAL_SECTION_LOG
+	)
 	return true
 
 

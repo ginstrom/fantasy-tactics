@@ -8206,3 +8206,211 @@ func test_mark_journal_entry_read_is_idempotent_and_affects_only_target_entry() 
 	# Nonexistent entry
 	assert_false(session.mark_journal_entry_read("nonexistent_id"))
 	assert_eq(session.get_journal_entry("nonexistent_id"), {})
+
+
+func test_intel_detection_roll_discovering_encounter_emits_one_discovery_journal_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.active_encounters.clear()
+	session.active_encounters.append({
+		"id": "sandbox_enc_001",
+		"position": Vector2i(3, 3),
+		"enemy": {"name_key": "enemies.goblin", "stats": {"max_health": 3}},
+		"clear_xp": 10,
+		"difficulty": 1,
+	})
+	session.encounter_intel.clear()
+	session.encounter_intel["sandbox_enc_001"] = {
+		"discovered": false,
+		"known_tier": GameSessionScript.INTEL_TIER_NONE,
+		"quest_id": "",
+	}
+	session.watchtower_level = 1
+	session.detection_roll = func() -> float: return 0.0
+	var entries_before: int = session.get_journal_entries("log").size()
+
+	session.end_world_turn()
+
+	var intel: Dictionary = session.get_encounter_intel("sandbox_enc_001")
+	assert_true(bool(intel.discovered))
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_after.size(), entries_before + 1)
+	var last_entry: Dictionary = entries_after[entries_after.size() - 1]
+	assert_eq(last_entry.kind, "discovery")
+	assert_eq(last_entry.title_key, "journal.discovery.title")
+	assert_eq(last_entry.detail.get("encounter_id", ""), "sandbox_enc_001")
+
+	# Subsequent turn does not emit duplicate discovery entry
+	session.end_world_turn()
+	assert_eq(session.get_journal_entries("log").size(), entries_before + 1)
+
+
+func test_accept_quest_discovering_encounter_emits_one_discovery_journal_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	session.active_encounters.append({
+		"id": "quest_enc_001",
+		"position": Vector2i(6, 6),
+		"enemy": {"name_key": "enemies.goblin", "stats": {"max_health": 3}},
+		"clear_xp": 10,
+		"difficulty": 1,
+	})
+	session.encounter_intel["quest_enc_001"] = {
+		"discovered": false,
+		"known_tier": GameSessionScript.INTEL_TIER_NONE,
+		"quest_id": "q_test_1",
+	}
+	session.quests["q_test_1"] = {
+		"id": "q_test_1",
+		"encounter_id": "quest_enc_001",
+		"tier": 1,
+		"status": GameSessionScript.QUEST_STATUS_POSTED,
+		"posted_turn": 1,
+		"accepted_turn": -1,
+		"expires_turn": -1,
+		"reward_gold": 50,
+	}
+	var entries_before: int = session.get_journal_entries("log").size()
+
+	assert_true(session.accept_quest("q_test_1"))
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_after.size(), entries_before + 1)
+	var last_entry: Dictionary = entries_after[entries_after.size() - 1]
+	assert_eq(last_entry.kind, "discovery")
+	assert_eq(last_entry.title_key, "journal.discovery.title")
+	assert_eq(last_entry.detail.get("encounter_id", ""), "quest_enc_001")
+
+
+func test_completing_objective_unlocking_next_node_emits_discovery_journal_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var entries_before: int = session.get_journal_entries("log").size()
+	session.complete_campaign_objective("obj_tier1_1_goblin_outpost")
+
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_true(entries_after.size() > entries_before)
+	var disc_entries := entries_after.filter(func(e: Dictionary) -> bool: return e.kind == "discovery" and e.detail.get("encounter_id", "") == "obj_tier1_2_kobold_warren")
+	assert_eq(disc_entries.size(), 1)
+	assert_eq(disc_entries[0].title_key, "journal.discovery.title")
+
+
+func test_resolve_battle_victory_emits_one_battle_journal_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.create_battle_context(party_id, GameSessionScript.GOBLIN_CAMP_ID)
+	var battle_id: String = session.get_active_battle_context().battle_id
+
+	var entries_before: int = session.get_journal_entries("log").size()
+	assert_true(session.resolve_battle_victory(battle_id))
+
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_after.size(), entries_before + 1)
+	var entry: Dictionary = entries_after[entries_after.size() - 1]
+	assert_eq(entry.kind, "battle")
+	assert_eq(entry.title_key, "journal.battle.victory.title")
+	assert_eq(entry.detail.get("outcome", ""), "victory")
+	assert_eq(entry.detail.get("encounter_id", ""), GameSessionScript.GOBLIN_CAMP_ID)
+
+	# Second call is a no-op and does not emit duplicate journal entry
+	assert_false(session.resolve_battle_victory(battle_id))
+	assert_eq(session.get_journal_entries("log").size(), entries_before + 1)
+
+
+func test_resolve_battle_defeat_and_retreat_emit_battle_journal_entries() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
+
+	# Test retreat
+	session.create_battle_context(party_id, GameSessionScript.GOBLIN_CAMP_ID)
+	var battle_id_1: String = session.get_active_battle_context().battle_id
+	var entries_before: int = session.get_journal_entries("log").size()
+	assert_true(session.resolve_battle_retreat(battle_id_1))
+	var entries_retreat: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_retreat.size(), entries_before + 1)
+	var retreat_entry: Dictionary = entries_retreat[entries_retreat.size() - 1]
+	assert_eq(retreat_entry.kind, "battle")
+	assert_eq(retreat_entry.title_key, "journal.battle.retreat.title")
+	assert_eq(retreat_entry.detail.get("outcome", ""), "retreat")
+
+	# Test defeat
+	session.create_battle_context(party_id, GameSessionScript.ORC_OUTPOST_ID)
+	var battle_id_2: String = session.get_active_battle_context().battle_id
+	assert_true(session.resolve_battle_defeat(battle_id_2))
+	var entries_defeat: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_defeat.size(), entries_retreat.size() + 1)
+	var defeat_entry: Dictionary = entries_defeat[entries_defeat.size() - 1]
+	assert_eq(defeat_entry.kind, "battle")
+	assert_eq(defeat_entry.title_key, "journal.battle.defeat.title")
+	assert_eq(defeat_entry.detail.get("outcome", ""), "defeat")
+
+
+func test_complete_current_encounter_emits_one_loot_journal_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	session.enter_encounter(GameSessionScript.GOBLIN_CAMP_ID)
+
+	var entries_before: int = session.get_journal_entries("log").size()
+	session.complete_current_encounter()
+
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	var loot_entries := entries_after.filter(func(e: Dictionary) -> bool: return e.kind == "loot")
+	assert_eq(loot_entries.size(), 1)
+	assert_eq(loot_entries[0].title_key, "journal.loot.title")
+	assert_true(loot_entries[0].detail.has("gold"))
+	assert_gt(int(loot_entries[0].detail.get("gold", 0)), 0)
+
+
+func test_award_party_xp_leveling_up_emits_one_level_up_journal_entry_per_leveled_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.adventurers.append(session.get_default_warrior("warrior_001", "Warrior 1"))
+	session.adventurers.append(session.get_default_scout("scout_001", "Scout 1"))
+	session.assign_adventurer_to_party(party_id, "warrior_001")
+	session.assign_adventurer_to_party(party_id, "scout_001")
+
+	var entries_before: int = session.get_journal_entries("log").size()
+	# 40 XP total / 2 members = 20 XP each -> both level up to Level 2
+	var leveled: Array[String] = session.award_party_xp(party_id, 40.0)
+	assert_eq(leveled.size(), 2)
+
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_after.size(), entries_before + 2)
+	var level_entries := entries_after.filter(func(e: Dictionary) -> bool: return e.kind == "level_up")
+	assert_eq(level_entries.size(), 2)
+	assert_eq(level_entries[0].title_key, "journal.level_up.title")
+	assert_eq(level_entries[1].title_key, "journal.level_up.title")
+	assert_eq(level_entries[0].detail.get("adventurer_id", ""), "warrior_001")
+	assert_eq(level_entries[1].detail.get("adventurer_id", ""), "scout_001")
+
+
+func test_multi_level_xp_gain_emits_exactly_one_level_up_entry_for_the_adventurer() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+	var party_id: String = session.selected_party_id
+	session.adventurers.append(session.get_default_warrior("warrior_001", "Warrior 1"))
+	session.assign_adventurer_to_party(party_id, "warrior_001")
+
+	var entries_before: int = session.get_journal_entries("log").size()
+	# 100 XP takes level 1 adventurer to level 4 (Level 2 = 20, Level 3 = 50, Level 4 = 90)
+	var leveled: Array[String] = session.award_party_xp(party_id, 100.0)
+	assert_eq(leveled.size(), 1)
+	assert_eq(session.adventurers[0].level, 4)
+
+	var entries_after: Array[Dictionary] = session.get_journal_entries("log")
+	assert_eq(entries_after.size(), entries_before + 1, "Crossing multiple levels in one award emits exactly 1 level-up journal entry")
+	var entry: Dictionary = entries_after[entries_after.size() - 1]
+	assert_eq(entry.kind, "level_up")
+	assert_eq(entry.title_key, "journal.level_up.title")
+	assert_eq(entry.detail.get("adventurer_id", ""), "warrior_001")
+	assert_eq(entry.detail.get("level", 0), 4)

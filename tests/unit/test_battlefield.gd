@@ -2628,3 +2628,40 @@ func test_a_full_wipe_from_retreats_own_risk_roll_routes_home_and_forfeits_gold_
 	assert_eq(GameSession.gold, 40, "The shared Encampment bank must never be touched by a wipe")
 	assert_eq(GameSession.get_party_carry(party_id).gold, 0, "The wiped party's own carried gold is forfeited")
 
+
+func test_multi_level_battle_victory_emits_one_battle_record_one_loot_record_and_one_level_up_record_per_leveled_member() -> void:
+	GameSession.reset()
+	GameSession.create_party("Alpha")
+	var party_id: String = GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.adventurers.append(GameSession.get_default_scout("scout_001", "Scout 1"))
+	GameSession.assign_adventurer_to_party(party_id, "scout_001")
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.GOBLIN_CAMP_ID)
+
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	# Award party XP such that both level up
+	battlefield._total_xp_awarded = 0.0
+	battlefield._award_party_xp(40.0)
+
+	# Finish victory: queues loot and resolves battle victory
+	battlefield._finish_victory()
+
+	var entries: Array[Dictionary] = GameSession.get_journal_entries("log")
+	var battle_entries := entries.filter(func(e: Dictionary) -> bool: return e.kind == "battle")
+	var loot_entries := entries.filter(func(e: Dictionary) -> bool: return e.kind == "loot")
+	var level_entries := entries.filter(func(e: Dictionary) -> bool: return e.kind == "level_up")
+
+	assert_eq(battle_entries.size(), 1, "Exactly one battle outcome record")
+	assert_eq(loot_entries.size(), 1, "Exactly one loot record")
+	assert_eq(level_entries.size(), 2, "Exactly one level-up record per leveled adventurer")
+	var leveled_ids: Array = level_entries.map(func(e: Dictionary) -> String: return str(e.detail.get("adventurer_id", "")))
+	assert_true(leveled_ids.has("warrior_001"))
+	assert_true(leveled_ids.has("scout_001"))
+
+	# Re-invoking or refreshing UI does not duplicate entries
+	battlefield.battle_result._refresh()
+	assert_eq(GameSession.get_journal_entries("log").size(), entries.size(), "UI refresh must not append journal entries")
+

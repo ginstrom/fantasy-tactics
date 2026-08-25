@@ -185,8 +185,6 @@ func test_fresh_campaign_completes_the_full_game_loop_and_banks_the_reward() -> 
 	# math, and caps its wait so a stuck battle fails instead of hanging.
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
-		if battlefield.level_up.visible:
-			battlefield.level_up.continue_button.emit_signal("pressed")
 		await get_tree().process_frame
 		settle_frames += 1
 
@@ -266,8 +264,6 @@ func test_the_real_post_victory_scene_change_produces_a_selectable_world_map() -
 
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
-		if battlefield.level_up.visible:
-			battlefield.level_up.continue_button.emit_signal("pressed")
 		await get_tree().process_frame
 		settle_frames += 1
 	assert_eq(GameSession.selected_encounter, "", "Victory should have resolved before the frame budget ran out")
@@ -340,8 +336,6 @@ func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_part
 
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
-		if battlefield.level_up.visible:
-			battlefield.level_up.continue_button.emit_signal("pressed")
 		await get_tree().process_frame
 		settle_frames += 1
 	assert_eq(GameSession.selected_encounter, "", "Victory should have resolved before the frame budget ran out")
@@ -563,13 +557,6 @@ func test_defeating_the_final_boss_routes_exactly_once_to_the_real_campaign_vict
 	# not just press Continue.
 	var settle_frames := 0
 	while GameSession.selected_encounter != "" and settle_frames < 30:
-		if battlefield.level_up.visible:
-			if GameSession.is_perk_choice_pending(battlefield.level_up.adventurer_id):
-				var perk_options: VBoxContainer = battlefield.level_up.perk_options_container
-				if perk_options.get_child_count() > 0:
-					perk_options.get_child(0).emit_signal("pressed")
-			else:
-				battlefield.level_up.continue_button.emit_signal("pressed")
 		await get_tree().process_frame
 		settle_frames += 1
 	assert_eq(GameSession.selected_encounter, "", "The final battle must resolve before the frame budget ran out")

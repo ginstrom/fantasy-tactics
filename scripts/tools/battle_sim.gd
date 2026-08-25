@@ -106,12 +106,12 @@ func _play_one_battle(encounter_id: String) -> Dictionary:
 ## a frame, so that timer could never fire and every win would be misreported
 ## as a stalemate.
 func _resolve_round(battlefield: Node) -> void:
-	_resolve_level_up(battlefield.level_up)
+	_dismiss_battle_outcome(battlefield)
 	battlefield._on_end_turn_pressed()
 
 	var frames := 0
 	while frames < MAX_SETTLE_FRAMES:
-		_resolve_level_up(battlefield.level_up)
+		_dismiss_battle_outcome(battlefield)
 		if GameSession.selected_encounter == "":
 			return
 		if not battlefield._battle_resolved and battlefield.grid.active_side == BattleControllerScript.Side.PLAYER:
@@ -120,21 +120,20 @@ func _resolve_round(battlefield: Node) -> void:
 		frames += 1
 
 
-## Drives the level-up modal exactly the way a human would click through
-## it: choose the first still-available class-owned perk if one is pending
-## (the same GameSession.get_available_perks() level_up.gd's own dynamic
-## option buttons render from -- see its _refresh_perk_options()), then
-## Continue. Repeats for every queued level-up.
-func _resolve_level_up(level_up: Control) -> void:
-	while level_up.visible:
-		if GameSession.is_perk_choice_pending(level_up.adventurer_id):
-			var available: Array[String] = GameSession.get_available_perks(level_up.adventurer_id)
-			if not available.is_empty():
-				GameSession.choose_perk(level_up.adventurer_id, available[0])
-		# _on_continue_pressed() refuses to close while a perk choice is still
-		# pending, which would spin here forever; bail out instead of hanging
-		# if choose_perk() above could not resolve it.
-		if GameSession.is_perk_choice_pending(level_up.adventurer_id):
-			push_error("[battle_sim] unresolvable perk choice for %s" % level_up.adventurer_id)
-			return
+## Drives the battle result outcome modal and resolves any level-ups
+## with pending perk choices before dismissing the outcome.
+func _dismiss_battle_outcome(battlefield: Node) -> void:
+	var battle_result: Control = battlefield.get_node_or_null("%BattleResult")
+	if battle_result == null or not battle_result.visible:
+		return
+	for adventurer_id in battle_result.summary.get("leveled_up_ids", []):
+		while GameSession.is_perk_choice_pending(adventurer_id):
+			var available: Array[String] = GameSession.get_available_perks(adventurer_id)
+			if available.is_empty():
+				push_error("[battle_sim] unresolvable perk choice for %s" % adventurer_id)
+				break
+			GameSession.choose_perk(adventurer_id, available[0])
+	var level_up: Control = battle_result.get_node_or_null("LevelUp")
+	if level_up != null and level_up.visible:
 		level_up._on_continue_pressed()
+	battle_result._on_ok_pressed()

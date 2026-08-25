@@ -69,6 +69,18 @@ func _award_adventurer_xp(adventurer_id: String, amount: float) -> bool:
 			var current_val: int = int(adventurer.stats.get(skill_name, 0))
 			adventurer.stats[skill_name] = current_val + gain
 		leveled_up = true
+	if leveled_up:
+		_gs.append_journal_entry(
+			"level_up",
+			"journal.level_up.title",
+			{
+				"adventurer_id": adventurer_id,
+				"name": str(adventurer.get("name", "")),
+				"level": int(adventurer.get("level", 1)),
+				"class": str(adventurer.get("class", "")),
+			},
+			_gs.JOURNAL_SECTION_LOG
+		)
 	return leveled_up
 
 
