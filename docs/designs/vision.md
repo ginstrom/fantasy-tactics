@@ -1,5 +1,20 @@
 # Game Vision
 
+## Master Design Blueprint
+
+This document is the master design vision for Fantasy Tactics. It defines the core pillars, high-level architecture, and design intent across all game systems. Detailed subsystem mechanics and implementation contracts are defined in their respective canonical design documents:
+
+* **Campaign & Progression Loop**: [Borderlands Campaign Loop](campaign-loop.md)
+* **Combat System**: [Combat System](combat-system.md)
+* **Movement & Action Points**: [Movement and Action Points](movement-and-action-points.md)
+* **Classes & Growth**: [Classes](class-system.md)
+* **Equipment & Crafting**: [Equipment Handbook](equipment-handbook.md) and [Weapon and Armor Inventory](weapon-armor-inventory.md)
+* **Monster Manual & Threat**: [Monster Manual](monster-manual.md)
+* **World Map & Intelligence**: [World Map and Encounters](world-map-and-encounters.md) and [Intelligence System](intelligence.md)
+* **UI & Battle Layout**: [Battle Screen](battle-screen.md) and [UI Layout Design Guidelines](UI-Layout-Design-Guidelines.md)
+
+---
+
 ## About
 
 A deep tactical/strategic turn-based RPG in a fantasy setting. The first
@@ -11,12 +26,12 @@ defeat, and recovery contract.
 
 The player controls units organized into parties. Battles provide strategic benefits (stronger units, loot) while strategic decisions affect game play (buildings, bonuses, units, equipment).
 
-The game features a deep unit development aspect. Units start out relatively weak, but gradually gain enough power for a party of 5-6 heroes to take on entire monster armies.
+The game features a deep unit development aspect. Units start out relatively weak, but gradually gain enough power for a party of 3 to 5 heroes (expanding to larger rosters and multi-party deployments in future campaigns) to take on entire monster armies.
 The progression should feel hard-earned such that losing a unit is painful. 
 
 Strategic choices have real impact on game play, as do tactical decisions on the progress of the game.
 
-The game has an economic system based around trade and loot. As the player develops their encampment, they can craft high-level items to equip their units and sell for profit. In addition traders bring in passive income.
+The game has an economic system based around trade and loot. As the player develops their encampment, they can craft high-level items to equip their units and sell for profit. In addition, Shop operations and traders bring in passive income.
 
 ## Story
 
@@ -26,21 +41,19 @@ As the story unfolds, we find that dungeons are being generated through some mag
 
 ## Gameplay
 
-Turn based. Very deep both strategically and tactically, with many possible decions, but the gameplay loop itself is quite fast. The game ruthlessly eliminates any UI annoyances that get in the way of the action. For example, dialogs and modal choices are kept to the absolute minimum, and can usually be bypassed altogether. One example is battle themselves can be auto-resolved, or during a battle the control can be passed to the AI.
+Turn based. Very deep both strategically and tactically, with many possible decisions, but the gameplay loop itself is quite fast. The game ruthlessly eliminates any UI annoyances that get in the way of the action. For example, dialogs and modal choices are kept to the absolute minimum, and can usually be bypassed altogether. One example is battles themselves can be auto-resolved, or during a battle the control can be passed to the AI.
 
 ## RPG elements
 
-Class system combined with primary attributes (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck`) rolled at creation (1-10 within class-specific ranges) to determine initial combat stats (e.g. base `melee`/`missile` hit % = `agility * 10 * class_multiplier %`), alongside a standardized combat attribute profile (`max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `action_points`), skills, and perks.
+Class system combined with primary attributes (`Strength`, `Agility`, `Vitality`, `Intelligence`, `Piety`, `Luck`) rolled at creation (1–10 within class-specific ranges) to determine initial combat stats, alongside a standardized combat attribute profile (`max_health`, `might`, `melee`, `missile`, `guard`, `spellcasting`, `magic_resistance`, `resistance`, `action_points`), skills, and perks. See [Classes](class-system.md) for class attribute ranges, derived skills, and level-up progressions.
 
 ## Tactical D&D style battles
 
 Turn-based tactical combat in a fantasy setting. Think mix between XCOM and D&D.
 Character development is heavily inspired by XCOM/Xenonauts and Fallout 1/2. In short:
 * XP to level up
-* On level up, class-appropriate skills advance automatically (random roll within tier ranges). A unit only
-  advances skills its class uses—for example, only Scouts develop Scouting.
-* Every 3 levels, character can choose a perk (including a chance to increase
-  an attribute score)
+* On level up, class-appropriate skills advance automatically (random roll within tier ranges). A unit only advances skills its class uses—for example, only Scouts develop Scouting.
+* Every 2 levels, an adventurer chooses a perk from their class's perk tree (`progression.perk_level_interval`).
 
 The other way to improve character power is through gear, which can be found through adventuring or crafted as town buildings level up.
 
@@ -84,7 +97,7 @@ As the town develops, units become available for recruitment. The numbers and ty
 
 Each unit class has a role which can be further developed through perks.
 
-Warriors are all-around damanage dealers, who can specialize into ranged damage delears or front-line damage dealers/absorbers.
+Warriors are all-around damage dealers, who can specialize into ranged damage dealers (Archer) or front-line damage dealers/absorbers (Knight).
 
 Clerics are a support class who can specialize into healers/buff dealers or front-liners with powerful personal buffs that make them very tough (paladins). Paladins are unique in that they require a high Temple tier level in order to be available for recruitment or level-up path.
 
@@ -99,8 +112,14 @@ but the Ranger is the scouting specialist.
 ## Town management
 
 The player starts out with a bare Encampment. As they accumulate gold, they can
-improve the Guild Hall, Temple, Blacksmith/Workshops, and Shop/Stores. Each
-upgrade has a visible cost, completion rule, prerequisite, and concrete unlock.
+improve the Encampment's structures. Each upgrade has a visible cost, completion
+rule, prerequisite, and concrete unlock:
+* **Guild Hall**: Roster capacity, active party deployment slots, and optional quest leads.
+* **Temple**: Cleric recruitment and accelerated Encampment HP recovery.
+* **Blacksmith & Workshops**: Normal weapon/armor crafting, physical sharpening (Blacksmith), potions and stat tonics (Alchemy Workshop), and socketing magical runes (Runic Workshop).
+* **Shop & Stores**: Buying/selling gear and loot, and providing passive income per World Map Turn.
+* **Watchtowers**: Expanding Encampment base detection range on the World Map.
+
 Items and gold from dungeon diving fund that growth, while Shop income and
 recruitment/recovery progression ensure a setback cannot permanently end a
 campaign. The exact building and economy contract is in the
