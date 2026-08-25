@@ -52,6 +52,16 @@ signal campaign_progress_changed
 ## directly, but it exists as the single unambiguous "the campaign was
 ## just won" event for any other listener/test.
 signal campaign_victory
+## Emitted whenever a journal entry is appended or its read status changes,
+## so navigation badges and views can refresh reactively.
+signal journal_updated
+
+const JOURNAL_SECTION_LOG := "log"
+const JOURNAL_SECTION_QUESTS := "quests"
+const JOURNAL_SECTIONS: Array[String] = [
+	JOURNAL_SECTION_LOG,
+	JOURNAL_SECTION_QUESTS,
+]
 
 const STARTING_SETTLEMENT_ID := "starting_settlement"
 const STARTING_SETTLEMENT_WORLD_POSITION := Vector2i(3, 3)
@@ -59,6 +69,7 @@ const STARTING_GOLD := 200
 const GOBLIN_CAMP_ID := "goblin_camp"
 const ORC_OUTPOST_ID := "orc_outpost"
 const RUINED_FORTRESS_ID := "ruined_fortress"
+
 
 # First-campaign guide message ids (see get_campaign_guide_state() near the
 # bottom of this file and docs/plans/2026-08-10-initial-campaign-and-
@@ -1448,7 +1459,13 @@ var adventurers: Array[Dictionary] = []
 var recruitment_candidates: Array[Dictionary] = []
 # One pending clock per open recruitment vacancy: {"turns_remaining": int}.
 var recruitment_vacancies: Array[Dictionary] = []
+## Durable journal entries (Stage 7 Information Design). Chronologically ordered list
+## of event/quest records. Each entry has:
+## { "id": String, "sequence": int, "section": "log"|"quests", "kind": String, "title_key": String, "detail": Dictionary, "read": bool }
+var journal_entries: Array[Dictionary] = []
+var _journal_sequence: int = 0
 var parties: Array[Dictionary] = []
+
 var selected_party_id: String = ""
 var selected_encounter: String = ""
 ## Battle-party tie-break (Stage 5 D5; Stage 6 Step 2, decision-ledger.md's
@@ -1880,6 +1897,8 @@ func reset() -> void:
 	shop_gold = SHOP_LEVEL_ONE_GOLD_CAP
 	player_name = DEFAULT_PLAYER_NAME
 	tutorial_progress = {}
+	journal_entries = []
+	_journal_sequence = 0
 
 
 func get_max_party_count() -> int:
@@ -4197,6 +4216,75 @@ func get_effective_resistance(adventurer_id: String) -> int:
 	return progression_service.get_effective_resistance(adventurer_id)
 
 
+## Appends a new journal entry to the durable journal log or quests section.
+## Generates a stable unique id and assigns the next sequence number.
+func append_journal_entry(
+	kind: String,
+	title_key: String,
+	detail: Dictionary = {},
+	section: String = JOURNAL_SECTION_LOG
+) -> String:
+	var entry_section: String = section if JOURNAL_SECTIONS.has(section) else JOURNAL_SECTION_LOG
+	_journal_sequence += 1
+	var entry_id: String = _new_instance_id()
+	var entry: Dictionary = {
+		"id": entry_id,
+		"sequence": _journal_sequence,
+		"section": entry_section,
+		"kind": kind,
+		"title_key": title_key,
+		"detail": detail.duplicate(true),
+		"read": false,
+	}
+	journal_entries.append(entry)
+	journal_updated.emit()
+	return entry_id
+
+
+## Returns a list of deep-duplicated journal entries in deterministic chronological order.
+## If section is non-empty, filters entries to that section only.
+func get_journal_entries(section: String = "") -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for entry in journal_entries:
+		if section.is_empty() or entry.get("section", "") == section:
+			result.append(entry.duplicate(true))
+	return result
+
+
+## Returns a single journal entry by id, or an empty Dictionary if not found.
+func get_journal_entry(entry_id: String) -> Dictionary:
+	for entry in journal_entries:
+		if entry.get("id", "") == entry_id:
+			return entry.duplicate(true)
+	return {}
+
+
+## Returns true if there are any unread entries in the journal.
+## If section is non-empty, checks only entries in that section.
+func has_unread_journal_entries(section: String = "") -> bool:
+	for entry in journal_entries:
+		if not section.is_empty() and entry.get("section", "") != section:
+			continue
+		if not bool(entry.get("read", false)):
+			return true
+	return false
+
+
+## Marks a journal entry as read by its id.
+## Idempotent: returns true if the entry exists (whether previously unread or already read).
+## Returns false if the entry is not found. Emits journal_updated only if read state changed.
+func mark_journal_entry_read(entry_id: String) -> bool:
+	for entry in journal_entries:
+		if entry.get("id", "") == entry_id:
+			if not bool(entry.get("read", false)):
+				entry["read"] = true
+				journal_updated.emit()
+			return true
+	return false
+
+
+
+
 ## Exports every durable field this session owns as a versioned, deep-copy-
 ## safe, JSON-safe Dictionary (see CampaignSnapshot). No disk I/O and no
 ## reward-banking side effects -- each party's own "carry" (part of its
@@ -4247,7 +4335,9 @@ func export_campaign_snapshot() -> Dictionary:
 	snapshot.shop_gold = shop_gold
 	snapshot.player_name = player_name
 	snapshot.tutorial_progress = tutorial_progress.duplicate(true)
+	snapshot.journal_entries = journal_entries.duplicate(true)
 	return snapshot.to_dictionary()
+
 
 
 ## All-or-nothing import: validates and normalizes data into a separate
@@ -4335,8 +4425,15 @@ func import_campaign_snapshot(data: Dictionary) -> Dictionary:
 	shop_gold = snapshot.shop_gold
 	player_name = snapshot.player_name
 	tutorial_progress = snapshot.tutorial_progress.duplicate(true)
+	journal_entries = (snapshot.get("journal_entries", []) as Array).duplicate(true)
+	_journal_sequence = 0
+	for entry in journal_entries:
+		if int(entry.get("sequence", 0)) > _journal_sequence:
+			_journal_sequence = int(entry.sequence)
 	_backfill_missing_intel_records()
+	journal_updated.emit()
 	return result
+
 
 
 ## Stage 5 D5 (decision-ledger.md, Step 6 task 1): "a party may never share an

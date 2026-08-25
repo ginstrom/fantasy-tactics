@@ -365,7 +365,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Campaign",
       "description": "A brand-new campaign at the starting settlement.",
@@ -739,7 +740,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Campaign",
       "description": "A fresh campaign viewed from the Encampment.",
@@ -1113,7 +1115,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Campaign",
       "description": "A fresh campaign opened directly to the Party Manager.",
@@ -1511,7 +1514,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Campaign",
       "description": "One staffed party at the Encampment, ready to depart.",
@@ -1907,7 +1911,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Campaign",
       "description": "An encamped party with no members yet assigned.",
@@ -2305,7 +2310,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "World",
       "description": "A staffed party deployed on the World Map, away from the settlement.",
@@ -2703,7 +2709,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Battle",
       "description": "A staffed party deployed at the Goblin Camp encounter.",
@@ -3197,7 +3204,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Battle",
       "description": "Four Warriors deployed against two Orcs at the Orc Outpost.",
@@ -3685,7 +3693,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Battle",
       "description": "Three Warriors deployed against the maximum eight Kobolds at the Ruined Fortress.",
@@ -4087,7 +4096,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 1
+        "world_turn": 1,
+        "journal_entries": []
       },
       "category": "Shop",
       "description": "A staffed party with a Shop, banked items, and enough gold to trade.",
@@ -4571,7 +4581,8 @@
           "orc_outpost"
         ],
         "version": 4,
-        "world_turn": 60
+        "world_turn": 60,
+        "journal_entries": []
       },
       "category": "Battle",
       "description": "Campaign progress advanced through Tier 3; party standing on the Pre-Boss Vanguard encounter tile. All three remaining battles (both Pre-Boss encounters and the Ogre) are pre-unlocked and placed on the World Map so the full pre-boss-to-victory flow can be played through manually.",

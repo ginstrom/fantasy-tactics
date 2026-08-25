@@ -73,6 +73,26 @@ func _full_snapshot() -> CampaignSnapshot:
 	snapshot.shop_gold = 150
 	snapshot.player_name = "Ryan"
 	snapshot.tutorial_progress = {"formed_party": true}
+	snapshot.journal_entries = [
+		{
+			"id": "entry-1",
+			"sequence": 1,
+			"section": "log",
+			"kind": "discovery",
+			"title_key": "journal.discovery.goblin_camp",
+			"detail": {"encounter_id": "goblin_camp"},
+			"read": true,
+		},
+		{
+			"id": "entry-2",
+			"sequence": 2,
+			"section": "quests",
+			"kind": "quest",
+			"title_key": "journal.quest.accepted",
+			"detail": {"quest_id": "q1"},
+			"read": false,
+		},
+	]
 	return snapshot
 
 
@@ -97,6 +117,7 @@ func test_to_dictionary_exports_current_version_with_all_campaign_progression_fi
 	assert_eq(data.unlocked_authored_encounters, ["obj_tier1_1_goblin_outpost"])
 	assert_eq(data.is_campaign_completed, false)
 	assert_eq(data.is_free_play_active, false)
+	assert_eq(data.journal_entries, [])
 
 
 func test_to_dictionary_converts_vector2i_fields_to_x_y_dictionaries() -> void:
@@ -143,6 +164,8 @@ func test_round_trip_preserves_every_durable_category() -> void:
 	assert_eq(snapshot.shop_gold, 150)
 	assert_eq(snapshot.player_name, "Ryan")
 	assert_eq(snapshot.tutorial_progress, {"formed_party": true})
+	assert_eq(snapshot.journal_entries, original.journal_entries)
+
 
 
 ## Step 2 of docs/plans/2026-08-21-stage-1-campaign-spine: pre-battle
@@ -1332,3 +1355,153 @@ func test_rejects_a_negative_mp_current() -> void:
 
 	assert_false(result.ok)
 	assert_eq(result.snapshot, {})
+
+
+func test_missing_journal_entries_normalizes_to_empty_array() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.erase("journal_entries")
+
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_true(result.ok, result.error)
+	assert_eq(result.snapshot.journal_entries, [])
+
+
+func test_rejects_non_array_journal_entries() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = "not_an_array"
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entries is not an array")
+
+
+func test_rejects_non_dictionary_journal_entry() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = ["not_a_dict"]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entries contains a non-dictionary entry")
+
+
+func test_rejects_journal_entry_with_invalid_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "", "sequence": 1, "section": "log", "kind": "discovery", "title_key": "k", "detail": {}, "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entries contains an entry with an invalid id")
+
+
+func test_rejects_journal_entries_with_duplicate_id() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "log", "kind": "discovery", "title_key": "k1", "detail": {}, "read": false},
+		{"id": "entry-1", "sequence": 2, "section": "log", "kind": "battle", "title_key": "k2", "detail": {}, "read": false},
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entries contains a duplicate id: entry-1")
+
+
+func test_rejects_journal_entry_with_invalid_sequence() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": "one", "section": "log", "kind": "discovery", "title_key": "k", "detail": {}, "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid sequence")
+
+
+func test_rejects_journal_entry_with_invalid_section() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "invalid_section", "kind": "discovery", "title_key": "k", "detail": {}, "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid section: invalid_section")
+
+
+func test_rejects_journal_entry_with_invalid_kind() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "log", "kind": "", "title_key": "k", "detail": {}, "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid kind")
+
+
+func test_rejects_journal_entry_with_invalid_title_key() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "log", "kind": "discovery", "title_key": "", "detail": {}, "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid title_key")
+
+
+func test_rejects_journal_entry_with_invalid_detail() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "log", "kind": "discovery", "title_key": "k", "detail": "not_dict", "read": false}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid detail")
+
+
+func test_rejects_journal_entry_with_invalid_read() -> void:
+	var data := _full_snapshot().to_dictionary()
+	data.journal_entries = [
+		{"id": "entry-1", "sequence": 1, "section": "log", "kind": "discovery", "title_key": "k", "detail": {}, "read": "false"}
+	]
+	var result := CampaignSnapshot.from_dictionary(data)
+	assert_false(result.ok)
+	assert_eq(result.snapshot, {})
+	assert_eq(result.error, "journal_entry entry-1 has an invalid read flag")
+
+
+func test_game_session_journal_entries_round_trip_and_rejection_isolation() -> void:
+	GameSession.reset()
+	var id_1: String = GameSession.append_journal_entry("discovery", "title.1", {"x": 1}, "log")
+	var id_2: String = GameSession.append_journal_entry("quest", "title.2", {"y": 2}, "quests")
+	GameSession.mark_journal_entry_read(id_1)
+
+	var data := GameSession.export_campaign_snapshot()
+	assert_true(data.has("journal_entries"))
+	assert_eq((data.journal_entries as Array).size(), 2)
+
+	GameSession.reset()
+	assert_eq(GameSession.journal_entries.size(), 0)
+
+	var result := GameSession.import_campaign_snapshot(data)
+	assert_true(result.ok, result.get("error", ""))
+	assert_eq(GameSession.journal_entries.size(), 2)
+	assert_eq(GameSession.journal_entries[0].id, id_1)
+	assert_true(GameSession.journal_entries[0].read)
+	assert_eq(GameSession.journal_entries[1].id, id_2)
+	assert_false(GameSession.journal_entries[1].read)
+	assert_eq(GameSession._journal_sequence, 2)
+
+	# Appending next entry continues sequence monotonically
+	var id_3: String = GameSession.append_journal_entry("loot", "title.3", {}, "log")
+	assert_eq(GameSession.get_journal_entry(id_3).sequence, 3)
+
+	# Malformed snapshot rejects atomically without changing session state
+	var malformed_data := data.duplicate(true)
+	malformed_data.journal_entries[0].read = "bad"
+	var bad_result := GameSession.import_campaign_snapshot(malformed_data)
+	assert_false(bad_result.ok)
+	assert_eq(GameSession.journal_entries.size(), 3, "Failed import did not alter GameSession state")

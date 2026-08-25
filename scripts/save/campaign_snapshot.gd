@@ -131,6 +131,8 @@ var player_name: String = ""
 # automation/04-first-campaign-guidance.md's get_campaign_guide_state()) --
 # an arbitrary id -> bool map, empty until that step starts writing to it.
 var tutorial_progress: Dictionary = {}
+## Durable journal entries (Stage 7 Information Design).
+var journal_entries: Array[Dictionary] = []
 
 
 ## Serializes this object's own fields into a plain, JSON-safe Dictionary
@@ -180,6 +182,7 @@ func to_dictionary() -> Dictionary:
 		"shop_gold": shop_gold,
 		"player_name": player_name,
 		"tutorial_progress": tutorial_progress.duplicate(true),
+		"journal_entries": journal_entries.duplicate(true),
 	}
 
 
@@ -435,6 +438,14 @@ static func from_dictionary(data: Variant) -> Dictionary:
 	if not tutorial_progress_result.ok:
 		return _invalid(tutorial_progress_result.error)
 	normalized["tutorial_progress"] = tutorial_progress_result.value
+
+	if data.has("journal_entries") and not data.journal_entries is Array:
+		return _invalid("journal_entries is not an array")
+	var journal_entries_result := _normalize_journal_entries(data.get("journal_entries", []))
+	if not journal_entries_result.ok:
+		return _invalid(journal_entries_result.error)
+	normalized["journal_entries"] = journal_entries_result.list
+
 
 	if normalized.selected_party_id != "" and not _has_id(normalized.parties, normalized.selected_party_id):
 		return _invalid("selected_party_id does not reference a known party")
@@ -1074,4 +1085,55 @@ static func _normalize_active_encounters(raw: Variant) -> Dictionary:
 		var copy: Dictionary = instance.duplicate(true)
 		copy["position"] = _to_vector2i(instance.position)
 		normalized.append(copy)
+	return _valid_list(normalized)
+
+
+## Validates and normalizes journal entries (Stage 7 Information Design).
+## Each entry must be a Dictionary with:
+## - id: non-empty String, unique across entries
+## - sequence: int
+## - section: "log" or "quests"
+## - kind: non-empty String
+## - title_key: non-empty String
+## - detail: Dictionary
+## - read: bool
+static func _normalize_journal_entries(raw: Variant) -> Dictionary:
+	if not raw is Array:
+		return _invalid_list("journal_entries is not an array")
+	var seen_ids: Dictionary = {}
+	var normalized: Array[Dictionary] = []
+	for entry in raw:
+		if not entry is Dictionary:
+			return _invalid_list("journal_entries contains a non-dictionary entry")
+		if not entry.get("id") is String or String(entry.id).is_empty():
+			return _invalid_list("journal_entries contains an entry with an invalid id")
+		var entry_id: String = String(entry.id)
+		if seen_ids.has(entry_id):
+			return _invalid_list("journal_entries contains a duplicate id: %s" % entry_id)
+		seen_ids[entry_id] = true
+		if not entry.get("sequence") is int:
+			return _invalid_list("journal_entry %s has an invalid sequence" % entry_id)
+		if not entry.get("section") is String:
+			return _invalid_list("journal_entry %s has an invalid section" % entry_id)
+		var section_str: String = String(entry.section)
+		if section_str != "log" and section_str != "quests":
+			return _invalid_list("journal_entry %s has an invalid section: %s" % [entry_id, section_str])
+		if not entry.get("kind") is String or String(entry.kind).is_empty():
+			return _invalid_list("journal_entry %s has an invalid kind" % entry_id)
+		if not entry.get("title_key") is String or String(entry.title_key).is_empty():
+			return _invalid_list("journal_entry %s has an invalid title_key" % entry_id)
+		if not entry.get("detail") is Dictionary:
+			return _invalid_list("journal_entry %s has an invalid detail" % entry_id)
+		if not entry.get("read") is bool:
+			return _invalid_list("journal_entry %s has an invalid read flag" % entry_id)
+		var norm_entry: Dictionary = {
+			"id": entry_id,
+			"sequence": int(entry.sequence),
+			"section": section_str,
+			"kind": String(entry.kind),
+			"title_key": String(entry.title_key),
+			"detail": (entry.detail as Dictionary).duplicate(true),
+			"read": bool(entry.read),
+		}
+		normalized.append(norm_entry)
 	return _valid_list(normalized)

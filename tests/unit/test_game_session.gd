@@ -6572,7 +6572,11 @@ func test_every_durable_field_is_carried_by_the_snapshot_contract() -> void:
 		"party_service": true,
 		"encounter_service": true,
 		"progression_service": true,
+		# Stage 7 Information Design: _journal_sequence is an internal counter
+		# recomputed from max sequence in journal_entries upon snapshot import.
+		"_journal_sequence": true,
 	}
+
 
 
 	var checked_field_names: Array[String] = []
@@ -8112,3 +8116,93 @@ func test_completing_one_encounters_quest_does_not_disturb_a_second_live_encount
 		GameSession.get_quest(orc_quest_id), orc_quest_before,
 		"A second, still-live encounter's own quest must be completely untouched"
 	)
+
+
+func test_append_journal_entry_returns_stable_id_and_preserves_chronological_order() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	var id_1: String = session.append_journal_entry("discovery", "journal.discovery.title", {"encounter_id": "goblin_camp"}, "log")
+	var id_2: String = session.append_journal_entry("battle", "journal.battle.title", {"outcome": "victory"}, "log")
+	var id_3: String = session.append_journal_entry("quest", "journal.quest.title", {"quest_id": "q1"}, "quests")
+
+	assert_ne(id_1, "")
+	assert_ne(id_2, "")
+	assert_ne(id_3, "")
+	assert_ne(id_1, id_2)
+	assert_ne(id_2, id_3)
+
+	var entries: Array[Dictionary] = session.get_journal_entries()
+	assert_eq(entries.size(), 3)
+	assert_eq(entries[0].id, id_1)
+	assert_eq(entries[0].sequence, 1)
+	assert_eq(entries[0].kind, "discovery")
+	assert_eq(entries[0].title_key, "journal.discovery.title")
+	assert_eq(entries[0].detail, {"encounter_id": "goblin_camp"})
+	assert_eq(entries[0].section, "log")
+	assert_false(entries[0].read)
+
+	assert_eq(entries[1].id, id_2)
+	assert_eq(entries[1].sequence, 2)
+	assert_eq(entries[1].kind, "battle")
+	assert_eq(entries[1].section, "log")
+
+	assert_eq(entries[2].id, id_3)
+	assert_eq(entries[2].sequence, 3)
+	assert_eq(entries[2].kind, "quest")
+	assert_eq(entries[2].section, "quests")
+
+
+func test_has_unread_journal_entries_tracks_aggregate_and_per_section_unread_state() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+
+	assert_false(session.has_unread_journal_entries())
+	assert_false(session.has_unread_journal_entries("log"))
+	assert_false(session.has_unread_journal_entries("quests"))
+
+	var log_id: String = session.append_journal_entry("discovery", "title.disc", {}, "log")
+	assert_true(session.has_unread_journal_entries())
+	assert_true(session.has_unread_journal_entries("log"))
+	assert_false(session.has_unread_journal_entries("quests"))
+
+	var quest_id: String = session.append_journal_entry("quest", "title.quest", {}, "quests")
+	assert_true(session.has_unread_journal_entries())
+	assert_true(session.has_unread_journal_entries("log"))
+	assert_true(session.has_unread_journal_entries("quests"))
+
+	assert_true(session.mark_journal_entry_read(log_id))
+	assert_true(session.has_unread_journal_entries(), "Journal has unread because quests still has unread")
+	assert_false(session.has_unread_journal_entries("log"))
+	assert_true(session.has_unread_journal_entries("quests"))
+
+	assert_true(session.mark_journal_entry_read(quest_id))
+	assert_false(session.has_unread_journal_entries())
+	assert_false(session.has_unread_journal_entries("log"))
+	assert_false(session.has_unread_journal_entries("quests"))
+
+
+func test_mark_journal_entry_read_is_idempotent_and_affects_only_target_entry() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	watch_signals(session)
+
+	var id_1: String = session.append_journal_entry("discovery", "title.1", {"k": 1}, "log")
+	var id_2: String = session.append_journal_entry("discovery", "title.2", {"k": 2}, "log")
+
+	assert_false(session.get_journal_entry(id_1).read)
+	assert_false(session.get_journal_entry(id_2).read)
+
+	assert_true(session.mark_journal_entry_read(id_1))
+	assert_true(session.get_journal_entry(id_1).read)
+	assert_false(session.get_journal_entry(id_2).read)
+	assert_signal_emitted(session, "journal_updated")
+
+	# Idempotent call
+	assert_true(session.mark_journal_entry_read(id_1))
+	assert_true(session.get_journal_entry(id_1).read)
+	assert_false(session.get_journal_entry(id_2).read)
+
+	# Nonexistent entry
+	assert_false(session.mark_journal_entry_read("nonexistent_id"))
+	assert_eq(session.get_journal_entry("nonexistent_id"), {})
