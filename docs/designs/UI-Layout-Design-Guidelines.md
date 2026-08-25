@@ -107,6 +107,8 @@ Application UI should remain container-driven.
 | Main UI | Screen layout | Internal panel layout |
 | Panel | Layout of its children | Screen position |
 | TableView | Table rendering and interaction | Sidebar placement |
+| LootTable | Tabular loot display and direct actions | Screen placement |
+| CardNavigator | Modal shell, ID snapshot, cycling arithmetic, focus management | Card body contents, domain state |
 | MapView | Map rendering and overlays | Window layout |
 
 ---

@@ -233,3 +233,36 @@ func test_underfunded_sale_is_disabled_and_does_not_emit_sold() -> void:
 	assert_eq(GameSession.banked_gear.shortsword_iron, 1)
 	assert_eq(GameSession.gold, 0)
 	assert_signal_not_emitted(loot_table, "sold")
+
+
+func test_closing_card_navigator_restores_selected_row_and_action_state() -> void:
+	var loot_table := _open(true, true)
+	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1, "dagger_iron": 1}, {}))
+	_select_first_row(loot_table)
+	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	navigator.next()
+	var ids: Array = navigator.get_ids()
+	var second_id: String = ids[1]
+	assert_eq(navigator.get_current_id(), second_id)
+
+	navigator.close()
+	assert_false(navigator.visible)
+	assert_eq(loot_table._selected_row_id, second_id)
+	assert_eq(loot_table.table.get_selected_row_ids(), [second_id])
+	assert_false(loot_table.view_button.disabled)
+
+
+func test_card_navigator_closes_safely_when_current_item_removed_via_set_rows() -> void:
+	var loot_table := _open(true, true)
+	loot_table.set_rows(GameSession.build_loot_rows({"shortsword_iron": 1}, {}))
+	_select_first_row(loot_table)
+	loot_table.get_node("Content/ViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = loot_table.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	loot_table.set_rows(GameSession.build_loot_rows({"dagger_iron": 1}, {}))
+
+	assert_false(navigator.visible, "CardNavigator must close if active item is no longer in rows")

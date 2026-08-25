@@ -236,3 +236,21 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_add_member_candidate_unavailable_while_card_open_closes_safely() -> void:
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("%InformationPanel")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	screen.refresh()
+
+	assert_false(navigator.visible, "CardNavigator must close if candidate becomes unavailable")

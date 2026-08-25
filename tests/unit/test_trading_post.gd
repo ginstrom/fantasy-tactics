@@ -250,3 +250,19 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_shop_card_navigator_closes_safely_if_item_removed_from_catalogue() -> void:
+	var screen: Control = TradingPostScene.instantiate()
+	add_child_autofree(screen)
+	var buy_table: TableView = screen.get_node("Body/Center/VBox/BuyTable")
+	var item_ids := GameSession.get_shop_catalogue_item_ids()
+	buy_table.emit_signal("row_activated", item_ids[0])
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	navigator._ids = ["nonexistent_item"]
+	screen.refresh()
+
+	assert_false(navigator.visible, "CardNavigator must close if active item is no longer in shop catalogue")

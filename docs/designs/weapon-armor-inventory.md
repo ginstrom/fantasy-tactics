@@ -115,11 +115,11 @@ and stats) becomes two small sections, "Weapons" and "Armor" — each a
 plain list of the adventurer's carried items in that slot, not the
 Tree-based `TableView`. (`TableView`'s per-row buttons are icon-only —
 Godot's `Tree` control has no way to show real text on a cell button, which
-is exactly the problem `LootDetailPanel` was built to work around for
-Stores' loot table. Unit Details' lists are typically 2-4 items, so a
-hand-rolled `VBoxContainer` of rows — each a `Label` plus real `Button`
-nodes — is simpler than pulling in `TableView` and hitting the same
-limitation again.)
+is why `CardNavigator` (presenting `ItemDetailCard`) and `LootTable`'s direct
+action bar are used for item inspection and actions. Unit Details' lists are
+typically 2-4 items, so a hand-rolled `VBoxContainer` of rows — each a `Label`
+plus real `Button` nodes — is simpler than pulling in `TableView` and hitting
+the same limitation again.)
 
 Each row shows the item's display name, an "(equipped)" marker on
 whichever is currently active, and — for every *non-active* row only —

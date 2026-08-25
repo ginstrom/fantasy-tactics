@@ -303,12 +303,46 @@ depends on the parent screen's own selection.
 
 `scenes/ui/card_navigator.tscn` (`scripts/ui/card_navigator.gd`) is a
 full-screen blocking modal shell for browsing ordered detail cards. It owns
-only an immutable snapshot of IDs (`open(ids, initial_id)`), index wraparound
+only an immutable snapshot of IDs (`open(ids, initial_id, return_target)`), index wraparound
 arithmetic, previous/next/close button wiring, position indicators (`%d of %d`),
 and focus management (restoring focus to the caller's target control on close).
 It contains a generic `ContentContainer` for caller-owned card bodies and
 emits `card_changed(id)` and `closed(last_id)`. It never mutates caller rows,
 holds domain state, or touches `GameSession`/`GameManager`.
+
+### Integrated Callers & Card Bodies
+
+Every player-facing list that opens detailed entries integrates with `CardNavigator`:
+
+- **Adventurer detail cards (`UnitDetailCard` / `unit_detail_card.tscn`):**
+  - `Roster` (`scenes/ui/roster.tscn` / `scripts/ui/roster.gd`) — browses all adventurers in the roster.
+  - `Add Member` (`scenes/ui/add_member.tscn` / `scripts/ui/add_member.gd`) — browses available unassigned candidates.
+  - `Party Details` (`scenes/ui/party_details.tscn` / `scripts/ui/party_details.gd`) — browses current party members.
+- **Recruitment cards (`RecruitmentCard` / `recruitment_card.tscn`):**
+  - `Recruitment` (`scenes/ui/recruitment.tscn` / `scripts/ui/recruitment.gd`) — browses candidate offers with direct recruitment.
+- **Item detail cards (`ItemDetailCard` / `item_detail_card.tscn`):**
+  - `Shop / Trading Post` (`scenes/ui/trading_post.tscn` / `scripts/ui/trading_post.gd`) — browses shop catalogue weapons with purchase actions.
+  - `Stores` (`scenes/ui/stores.tscn` / `scripts/ui/stores.gd`) — browses banked gear and mana crystals via shared `LootTable`.
+  - `Party Details` (`scenes/ui/party_details.tscn`) — browses carried loot of deployed parties via shared `LootTable`.
+  - `Battle Result` (`scenes/ui/battle_result.tscn` / `scripts/ui/battle_result.gd`) — browses battle victory loot via shared `LootTable`.
+- **Journal entry cards (`JournalEntryCard` / `journal_entry_card.tscn`):**
+  - `Journal` (`scenes/ui/journal.tscn` / `scripts/ui/journal.gd`) — browses chronological log and quest entries.
+- **Level-up outcome cards (`LevelUp` / `level_up.tscn`):**
+  - `Battle Result` (`scenes/ui/battle_result.tscn`) — browses leveled-up units and gates completion on pending perk choices.
+
+### Excluded Lists (Non-Detailed Action Lists)
+
+The following tables and selectors are action/routing lists rather than detailed-entry cards and are intentionally excluded from `CardNavigator`:
+
+- `Buildings` (`buildings.gd`): encampment facility upgrade actions.
+- `Trade` (`trade.gd`): trade route destinations and dispatch actions.
+- `Deploy Party` (`deploy_party.gd`): party selection table for field deployment.
+- `Parties` (`parties.gd`): party roster overview routing to Party Details.
+- Facility recipe/assignment dropdowns (`assign_equipment.gd`, `blacksmith.gd`, `alchemy_workshop.gd`, `runic_workshop.gd`, `temple.gd`): targeted assignment pickers.
+
+### Rule for Future Call Sites
+
+Any new player-facing list or table that opens inspectable detailed entries MUST use `CardNavigator` and an appropriate card body component rather than creating bespoke detail overlays or screens.
 
 ## Progression formulas
 

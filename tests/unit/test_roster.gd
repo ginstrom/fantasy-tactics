@@ -222,3 +222,19 @@ func test_escape_marks_input_handled_and_opens_the_game_menu_when_card_navigator
 	assert_true(screen.get_viewport().is_input_handled())
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+func test_roster_adventurer_removed_while_card_open_closes_safely() -> void:
+	var screen: Control = RosterScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	GameSession.adventurers.clear()
+	screen.refresh()
+
+	assert_false(navigator.visible, "CardNavigator must close if the currently viewed adventurer is no longer in roster")

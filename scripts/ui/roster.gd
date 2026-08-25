@@ -53,6 +53,12 @@ func refresh() -> void:
 	roster_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
 	_refresh_selection()
+	if card_navigator.visible:
+		var cur_id: Variant = card_navigator.get_current_id()
+		if cur_id == null or GameSession.get_adventurer(str(cur_id)).is_empty():
+			card_navigator.close()
+		else:
+			unit_detail_card.set_unit_id(str(cur_id))
 
 
 func _build_columns() -> Array[TableColumn]:

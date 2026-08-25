@@ -236,3 +236,22 @@ func test_escape_dismisses_the_outcome_modal() -> void:
 
 	assert_signal_emit_count(screen, "dismissed", 1, "ui_cancel must emit dismissed signal")
 	assert_false(screen.visible, "ui_cancel must close the modal")
+
+
+func test_battle_result_level_up_card_navigator_closes_safely_if_leveled_id_removed() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen = _open_battle_result({
+		"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1,
+		"leveled_up_ids": [GameSession.WARRIOR_ID],
+	})
+
+	var view_button: Button = screen.level_up_list.get_node("Row_%s/ViewButton_%s" % [GameSession.WARRIOR_ID, GameSession.WARRIOR_ID])
+	view_button.emit_signal("pressed")
+
+	assert_true(screen.card_navigator.visible)
+
+	screen.summary = {"kills_by_type": {}, "total_xp": 0.0, "party_member_count": 1, "leveled_up_ids": []}
+	screen._refresh()
+
+	assert_false(screen.card_navigator.visible, "CardNavigator must close if active unit is no longer in leveled_up_ids")
