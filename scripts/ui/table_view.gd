@@ -101,6 +101,31 @@ func get_selected_rows() -> Array[Dictionary]:
 	return selected_rows
 
 
+func get_displayed_row_ids() -> Array:
+	var ids: Array = []
+	for row in _display_rows:
+		if row.has(row_id_key):
+			ids.append(row[row_id_key])
+	return ids
+
+
+func select_row(row_id: Variant) -> bool:
+	if not is_instance_valid(_tree):
+		return false
+	var root := _tree.get_root()
+	if root == null:
+		return false
+	var item := root.get_first_child()
+	while item != null:
+		if str(item.get_metadata(0)) == str(row_id):
+			item.select(0)
+			_tree.scroll_to_item(item)
+			_on_item_selected()
+			return true
+		item = item.get_next()
+	return false
+
+
 func refresh() -> void:
 	if not is_instance_valid(_tree):
 		return

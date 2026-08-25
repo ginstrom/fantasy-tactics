@@ -1,30 +1,12 @@
 extends Control
 
 ## Shows the roster of a single party (read from GameManager.route_context_id)
-## as a TableView row per member, keyed by stable adventurer id, and mirrors
-## the selected row into the shared InformationPanel — the same selection
-## pattern Parties uses for parties (see parties.gd), applied to this party's
-## members instead. Row activation and the panel's View button both open the
-## existing Unit Details screen. Add Member is hidden entirely for a deployed
-## party, since you can't add a member to a party that's out in the field,
-## and disabled for an encamped party with no available adventurer left to
-## add.
-##
-## Loot: a deployed party's LootTable shows everything it's carrying (this
-## party's own GameSession.get_party_carry(party_id), itemized) with a
-## party-scoped [Equip] and no [Sell]. An encamped party shows no loot
-## table at all — deposit_party_carry() has already moved that party's
-## carry into GameSession.banked_gear/mana_crystals (Stores' inventory) by
-## the time it is back at the Encampment, so its own carry reads empty
-## again. GoldLabel shows this party's own carried gold
-## (GameSession.get_party_carry(party_id).gold) while deployed, not the
-## Encampment's banked GameSession.gold -- that belongs to Stores, not to
-## one party. Each party's own carry is independent (Stage 6 Step 2,
-## decision-ledger.md's PartyCarry contract) -- unlike the old campaign-wide
-## pending_reward this replaced, reading another party's page can never
-## show this party's carry or vice versa.
+## as a TableView row per member, keyed by stable adventurer id. Row activation
+## and the panel's View button open the CardNavigator presenting UnitDetailCard
+## with the current displayed party-member snapshot.
 
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
+const UnitDetailCardScene := preload("res://scenes/ui/unit_detail_card.tscn")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
 @onready var party_size_label: Label = $Body/Center/VBox/PartySizeLabel
@@ -36,9 +18,11 @@ const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 @onready var add_from_roster_button: Button = $Body/Center/VBox/AddFromRosterButton
 @onready var recruit_button: Button = $Body/Center/VBox/RecruitButton
 @onready var information_panel: PanelContainer = %InformationPanel
+@onready var card_navigator: CardNavigator = $CardNavigator
 
 var party_id: String = ""
 var selected_adventurer_id: String = ""
+var unit_detail_card: UnitDetailCard
 
 
 func _ready() -> void:
@@ -49,10 +33,24 @@ func _ready() -> void:
 	member_table.set_columns(_build_columns())
 	loot_table.configure(false, true)
 	loot_table.equip_requested.connect(_on_equip_requested)
+
+	unit_detail_card = UnitDetailCardScene.instantiate()
+	card_navigator.set_card_content(unit_detail_card)
+	card_navigator.set_title("unit_details.title")
+	card_navigator.card_changed.connect(_on_card_changed)
+	card_navigator.closed.connect(_on_card_navigator_closed)
+
+	unit_detail_card.promote_requested.connect(_on_card_promote_requested)
+	unit_detail_card.activate_item_requested.connect(_on_card_activate_item_requested)
+	unit_detail_card.unequip_item_requested.connect(_on_card_unequip_item_requested)
+	unit_detail_card.heal_requested.connect(_on_card_heal_requested)
+
 	refresh()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if card_navigator.visible:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		GameManager.open_game_menu()
@@ -72,10 +70,7 @@ func refresh() -> void:
 	var rows := _build_rows(party)
 	member_table.set_rows(rows)
 	empty_label.visible = rows.is_empty()
-	# A deployed party is out in the field; Add Member doesn't even make
-	# sense to offer, so it disappears entirely rather than merely staying
-	# disabled. An encamped party with nobody left to recruit keeps the
-	# button visible but disabled, so its presence isn't a mystery.
+
 	add_from_roster_button.visible = not deployed
 	recruit_button.visible = not deployed
 	add_from_roster_button.disabled = (
@@ -88,6 +83,12 @@ func refresh() -> void:
 	)
 	_refresh_selection()
 	_update_remove_from_party_button(party, encamped)
+
+	if card_navigator.visible:
+		var cur_id: Variant = card_navigator.get_current_id()
+		var member_ids: Array = party.get("member_ids", [])
+		if cur_id == null or not str(cur_id) in member_ids:
+			card_navigator.close()
 
 
 func _build_columns() -> Array[TableColumn]:
@@ -121,11 +122,6 @@ func _build_rows(party: Dictionary) -> Array[Dictionary]:
 	return rows
 
 
-## A selection is only valid while it names a current member of this party
-## (not merely an adventurer that still exists somewhere): the party may have
-## been reset out from under this screen, or the member may have left the
-## party. Either way this clears back to the safe, unselected empty state
-## instead of leaving the panel pointed at a stale id.
 func _refresh_selection() -> void:
 	var party := GameSession.get_party(party_id)
 	var member_ids: Array = party.get("member_ids", [])
@@ -155,11 +151,63 @@ func _on_row_selected(row_id: Variant) -> void:
 
 
 func _on_row_activated(row_id: Variant) -> void:
-	GameManager.go_to_unit_details_from_party_details(str(row_id), party_id)
+	_open_card_navigator(str(row_id))
 
 
 func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
-	GameManager.go_to_unit_details_from_party_details(adventurer_id, party_id)
+	_open_card_navigator(adventurer_id)
+
+
+func _open_card_navigator(initial_id: String) -> void:
+	var id_list := member_table.get_displayed_row_ids()
+	if id_list.is_empty():
+		return
+	unit_detail_card.show_assignment = false
+	var return_target: Control = information_panel.get_node_or_null("Content/AdventurerViewButton")
+	card_navigator.open(id_list, initial_id, return_target)
+	unit_detail_card.set_unit_id(str(card_navigator.get_current_id()))
+
+
+func _on_card_changed(id: Variant) -> void:
+	unit_detail_card.set_unit_id(str(id))
+
+
+func _on_card_navigator_closed(last_id: Variant) -> void:
+	if last_id != null and str(last_id) != "":
+		selected_adventurer_id = str(last_id)
+		member_table.select_row(selected_adventurer_id)
+		_refresh_selection()
+
+
+func _handle_card_mutation(current_id: String) -> void:
+	refresh()
+	if card_navigator.visible:
+		var party := GameSession.get_party(party_id)
+		var member_ids: Array = party.get("member_ids", [])
+		if not current_id in member_ids:
+			card_navigator.close()
+		else:
+			unit_detail_card.set_unit_id(current_id)
+
+
+func _on_card_promote_requested(target_unit_id: String, specialization_id: String) -> void:
+	GameSession.promote_adventurer(target_unit_id, specialization_id)
+	_handle_card_mutation(target_unit_id)
+
+
+func _on_card_activate_item_requested(target_unit_id: String, slot: String, item_id: String) -> void:
+	GameSession.activate_carried_item(target_unit_id, slot, item_id)
+	_handle_card_mutation(target_unit_id)
+
+
+func _on_card_unequip_item_requested(target_unit_id: String, slot: String, item_id: String) -> void:
+	GameSession.unequip_to_bank(target_unit_id, slot, item_id)
+	_handle_card_mutation(target_unit_id)
+
+
+func _on_card_heal_requested(caster_id: String, target_id: String) -> void:
+	GameSession.heal_party_member(caster_id, target_id)
+	_handle_card_mutation(caster_id)
 
 
 func _on_add_from_roster_pressed() -> void:
@@ -179,13 +227,6 @@ func _on_equip_requested(item_id: String) -> void:
 	GameManager.go_to_assign_equipment(item_id, party_id, GameManager.AssignEquipmentOrigin.PARTY_DETAILS)
 
 
-## Reachable from both Parties (an encamped party) and, since World Map's
-## View Party button was wired up, from World Map (a deployed party). Back
-## must return to whichever of those the player actually came from instead
-## of always landing on Parties — otherwise a deployed party visually
-## "teleports" back to the Encampment. route_context_id is cleared here
-## directly (rather than relying on the destination route to do it) because
-## go_to_world_map() does not clear it the way go_to_parties() does.
 func _on_back_pressed() -> void:
 	var deployed: bool = GameSession.get_party(party_id).get("deployed", false)
 	GameManager.route_context_id = ""

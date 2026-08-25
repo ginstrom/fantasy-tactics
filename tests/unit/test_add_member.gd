@@ -30,9 +30,6 @@ func test_add_member_shows_the_title_and_the_back_action() -> void:
 	assert_eq(screen.get_node("Body/Center/VBox/BackButton").text, "ui.back")
 
 
-## Activation is the only affordance that assigns a row (see
-## test_activating_a_row_assigns_...); this label is what tells the player
-## that double-click/Enter is what does it.
 func test_add_member_shows_the_activation_hint() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
@@ -66,8 +63,6 @@ func test_no_available_adventurer_shows_the_empty_state_without_errors() -> void
 	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [] as Array[String])
 
 
-## Column titles are resolved via tr() (see add_member.gd) to the real English
-## copy in translations/en.tres (Name/Class/Level — see the migration brief).
 func test_add_member_table_uses_the_documented_columns() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
@@ -99,8 +94,6 @@ func test_add_member_localizes_a_scout_class() -> void:
 	assert_eq(UiTestHelpers.tree_row_values(tree, 1), ["Warrior", "Warrior", "Warrior", "Warrior", "Scout"])
 
 
-## Selection alone must never assign — only activating a row (see
-## test_activating_a_row_assigns_...) does that.
 func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_panel() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
@@ -122,7 +115,7 @@ func test_selecting_a_row_stores_the_id_locally_and_shows_its_summary_in_the_pan
 	)
 
 
-func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> void:
+func test_the_panels_view_button_opens_card_navigator() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
 	var panel: Control = screen.get_node("%InformationPanel")
@@ -132,13 +125,57 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details() -> voi
 
 	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
 
-	assert_eq(
-		GameManager.route_context_id,
-		GameSession.WARRIOR_ID,
-		"Pressing View must ask GameManager to route to that exact unit's details"
-	)
-	assert_eq(GameManager.unit_details_origin, GameManager.UNIT_DETAILS_ORIGIN_ADD_MEMBER)
-	assert_eq(GameManager.add_member_return_party_id, GameSession.FIRST_PARTY_ID)
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+
+
+func test_add_member_card_navigator_cycles_and_wraps() -> void:
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("%InformationPanel")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[1].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[2].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[3].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID, "Must wrap to first")
+
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[3].id, "Must wrap to last")
+
+
+func test_add_member_closing_card_navigator_restores_selection() -> void:
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("%InformationPanel")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	var second_id: String = GameSession.adventurers[1].id
+	assert_eq(navigator.get_current_id(), second_id)
+
+	navigator.close()
+	assert_false(navigator.visible)
+	assert_eq(screen.selected_adventurer_id, second_id)
+	var selected_ids: Array = screen.get_node("Body/Center/VBox/AdventurerTable").get_selected_row_ids()
+	assert_eq(selected_ids, [second_id])
 
 
 func test_activating_a_row_assigns_that_exact_adventurer_to_this_party() -> void:

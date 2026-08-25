@@ -1,0 +1,116 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/unit_detail_card.gd" id="1_unit_detail_card"]
+
+[node name="UnitDetailCard" type="VBoxContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_unit_detail_card")
+
+[node name="NameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="ClassLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LevelLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SkillsLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PerksLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PromotionOptionsContainer" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="StatsLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="MpLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="EquipmentLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="WeaponsLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "unit_details.weapons"
+
+[node name="WeaponsList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ArmorLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "unit_details.armor"
+
+[node name="ArmorList" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="NotFoundLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "unit_details.not_found"
+horizontal_alignment = 1
+
+[node name="HealExplanationLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "unit_details.heal_unavailable"
+horizontal_alignment = 1
+
+[node name="HealTargetPicker" type="OptionButton" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="HealButton" type="Button" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "unit_details.heal_party_member"
+
+[node name="AssignmentExplanationLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "unit_details.no_eligible_party"
+horizontal_alignment = 1
+
+[node name="PartyPicker" type="OptionButton" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="AddToPartyButton" type="Button" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "unit_details.add_to_party"

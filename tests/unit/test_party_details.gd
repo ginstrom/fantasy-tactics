@@ -334,7 +334,7 @@ func test_selecting_a_member_row_refreshes_the_panels_adventurer_context() -> vo
 	assert_true(panel.get_node("Content/AdventurerViewButton").visible)
 
 
-func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that_exact_id() -> void:
+func test_the_panels_view_button_opens_card_navigator() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
@@ -345,14 +345,12 @@ func test_the_panels_view_button_asks_game_manager_to_open_unit_details_for_that
 
 	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
 
-	assert_eq(
-		GameManager.route_context_id,
-		GameSession.WARRIOR_ID,
-		"Pressing View must ask GameManager to route to that exact unit's details"
-	)
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
 
 
-func test_activating_a_row_asks_game_manager_to_open_unit_details_for_that_exact_id() -> void:
+func test_activating_a_row_opens_card_navigator() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
 	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
@@ -361,7 +359,70 @@ func test_activating_a_row_asks_game_manager_to_open_unit_details_for_that_exact
 
 	tree.emit_signal("item_activated")
 
-	assert_eq(GameManager.route_context_id, GameSession.WARRIOR_ID)
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+
+
+func test_party_details_card_navigator_cycles_and_wraps() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[1].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID, "Must wrap forward")
+
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[1].id, "Must wrap backward")
+
+
+func test_party_details_closing_card_navigator_restores_selection() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	var second_id: String = GameSession.adventurers[1].id
+	assert_eq(navigator.get_current_id(), second_id)
+
+	navigator.close()
+	assert_false(navigator.visible)
+	assert_eq(screen.selected_adventurer_id, second_id)
+	var selected_ids: Array = screen.get_node("Body/Center/VBox/MemberTable").get_selected_row_ids()
+	assert_eq(selected_ids, [second_id])
+
+
+func test_party_details_member_removed_while_card_open_closes_safely() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+
+	GameSession.remove_adventurer_from_party(GameSession.FIRST_PARTY_ID, GameSession.WARRIOR_ID)
+	screen.refresh()
+
+	assert_false(navigator.visible)
 
 
 func test_a_refresh_that_invalidates_the_selection_clears_it() -> void:

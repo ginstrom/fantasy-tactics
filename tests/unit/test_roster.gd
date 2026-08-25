@@ -37,9 +37,6 @@ func test_shows_the_permanent_player_and_gold_rows() -> void:
 	assert_eq(panel.get_node("Content/Gold").text, tr("information.gold") % 25)
 
 
-## Column titles are resolved via tr() (see roster.gd) to the real English
-## copy in translations/en.tres (Name/Class/Level/Status/Party — see the
-## design doc).
 func test_roster_table_uses_the_documented_columns() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
@@ -91,7 +88,7 @@ func test_selecting_a_row_stores_the_id_locally_and_refreshes_the_panel() -> voi
 	assert_true(panel.get_node("Content/AdventurerViewButton").visible)
 
 
-func test_the_panels_view_button_routes_to_unit_details_via_the_roster_origin() -> void:
+func test_the_panels_view_button_opens_card_navigator() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var panel: Control = screen.get_node("%InformationPanel")
@@ -101,15 +98,12 @@ func test_the_panels_view_button_routes_to_unit_details_via_the_roster_origin() 
 
 	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
 
-	assert_eq(
-		GameManager.route_context_id,
-		GameSession.WARRIOR_ID,
-		"Pressing View must ask GameManager to route to that exact unit's details"
-	)
-	assert_eq(GameManager.unit_details_origin, "roster")
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
 
 
-func test_activating_a_row_routes_to_unit_details_via_the_roster_origin() -> void:
+func test_activating_a_row_opens_card_navigator() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
@@ -117,8 +111,58 @@ func test_activating_a_row_routes_to_unit_details_via_the_roster_origin() -> voi
 
 	tree.emit_signal("item_activated")
 
-	assert_eq(GameManager.route_context_id, GameSession.WARRIOR_ID)
-	assert_eq(GameManager.unit_details_origin, "roster")
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	assert_true(navigator.visible)
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+
+
+func test_roster_card_navigator_cycles_in_displayed_order_and_wraps() -> void:
+	var screen: Control = RosterScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	var next_btn: Button = navigator.get_node("%NextButton")
+	var prev_btn: Button = navigator.get_node("%PrevButton")
+
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[1].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[2].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[3].id)
+	next_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID, "Must wrap forward to first entry")
+
+	prev_btn.emit_signal("pressed")
+	assert_eq(navigator.get_current_id(), GameSession.adventurers[3].id, "Must wrap backward to last entry")
+
+
+func test_roster_closing_card_navigator_restores_selection_and_table_focus() -> void:
+	var screen: Control = RosterScene.instantiate()
+	add_child_autofree(screen)
+	var tree: Tree = screen.get_node("Body/Center/VBox/RosterTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_activated")
+
+	var navigator: CardNavigator = screen.get_node("CardNavigator")
+	navigator.next()
+	navigator.next()
+	var third_id: String = GameSession.adventurers[2].id
+	assert_eq(navigator.get_current_id(), third_id)
+
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+	navigator._unhandled_input(escape_event)
+
+	assert_false(navigator.visible)
+	assert_eq(screen.selected_adventurer_id, third_id)
+	var selected_ids: Array = screen.get_node("Body/Center/VBox/RosterTable").get_selected_row_ids()
+	assert_eq(selected_ids, [third_id])
 
 
 func test_an_empty_roster_shows_the_empty_state_without_errors() -> void:
@@ -166,17 +210,7 @@ func test_back_button_returns_to_units() -> void:
 	assert_string_contains(source, "GameManager.go_to_units()")
 
 
-func test_entering_roster_clears_a_stale_route_context_id() -> void:
-	GameManager.route_context_id = "stale_id"
-	GameManager.unit_details_origin = GameManager.UNIT_DETAILS_ORIGIN_ROSTER
-
-	GameManager.go_to_roster()
-
-	assert_eq(GameManager.route_context_id, "")
-	assert_eq(GameManager.unit_details_origin, "")
-
-
-func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
+func test_escape_marks_input_handled_and_opens_the_game_menu_when_card_navigator_is_closed() -> void:
 	var screen: Control = RosterScene.instantiate()
 	add_child_autofree(screen)
 	var escape_event := InputEventAction.new()
