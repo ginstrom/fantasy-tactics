@@ -1983,7 +1983,7 @@ func test_move_and_attack_five_tiles_away_is_rejected_as_insufficient_ap() -> vo
 	assert_eq(controller.last_targeting_failure.get("reason", ""), "insufficient_ap")
 
 
-func test_ranged_unit_steps_around_a_blocked_line_of_sight_to_attack() -> void:
+func test_ranged_unit_fires_through_an_intervening_unit_without_moving() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	attacker.attack_min_range = 1
@@ -1996,11 +1996,28 @@ func test_ranged_unit_steps_around_a_blocked_line_of_sight_to_attack() -> void:
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
-	assert_true(attacked, "The unit should reposition to a tile with clear line-of-sight and attack")
-	assert_ne(attacker.grid_position, Vector2i(0, 0), "The unit must have moved off its blocked origin")
-	var new_distance: int = controller.grid.get_manhattan_distance(attacker.grid_position, defender.grid_position)
-	assert_true(new_distance >= 1 and new_distance <= 3, "The new position must be within weapon range")
+	assert_true(attacked, "An intervening unit must not block an in-range missile attack")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "The missile attacker must fire from its current tile")
 	assert_true(defender.health < 10, "The attack must have landed")
+
+
+func test_ranged_attack_beyond_its_current_range_does_not_auto_move() -> void:
+	var controller := _make_controller(6, 6)
+	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
+	attacker.attack_min_range = 1
+	attacker.attack_max_range = 3
+	var defender = UnitScript.new(Vector2i(0, 4), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 10)
+	controller.units = [attacker, defender]
+	controller.selected_unit = attacker
+	var health_before: int = defender.health
+
+	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
+
+	assert_false(attacked, "A missile attacker must not move to create a shot")
+	assert_eq(attacker.grid_position, Vector2i(0, 0))
+	assert_eq(attacker.action_points_remaining, 6)
+	assert_eq(defender.health, health_before)
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "out_of_range")
 
 
 func test_move_and_attack_out_of_range_target_is_rejected_without_movement() -> void:
@@ -2018,7 +2035,7 @@ func test_move_and_attack_out_of_range_target_is_rejected_without_movement() -> 
 	assert_eq(attacker.action_points_remaining, 6)
 
 
-func test_move_and_attack_prioritizes_insufficient_ap_over_a_closer_blocked_but_affordable_tile() -> void:
+func test_ranged_attack_out_of_range_reports_failure_without_auto_moving() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	attacker.attack_min_range = 1
@@ -2031,25 +2048,14 @@ func test_move_and_attack_prioritizes_insufficient_ap_over_a_closer_blocked_but_
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
-	# (0,2) and (0,3) are affordable in-range tiles, both LOS-blocked by the
-	# unit at (0,4). But (1,5) is also in range (distance 1, clear line to
-	# the target) -- it just costs 6 move + 3 attack = 9 AP, more than the
-	# 6 AP available. A legal-but-unaffordable tile like that one takes
-	# precedence over affordable-but-blocked ones: no amount of clever
-	# repositioning helps a unit that cannot afford to reach any legal tile.
-	assert_false(attacked, "The only fully legal (range + clear LOS) tile is unaffordable")
-	assert_eq(controller.last_targeting_failure.get("reason", ""), "insufficient_ap")
-	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
-	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
+	assert_false(attacked, "A missile attack outside current range must be rejected")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "out_of_range")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected missile attack must not move the unit")
+	assert_eq(attacker.action_points_remaining, 6, "A rejected missile attack must not spend AP")
 	assert_eq(defender.health, health_before)
 
 
-func test_move_and_attack_rejects_a_target_whose_only_in_range_tiles_are_all_los_blocked() -> void:
-	# A single-column board removes every diagonal escape route, so the only
-	# two tiles in weapon range of the target are the two directly blocked by
-	# the unit at (0,4) -- there is no legal-but-unaffordable tile anywhere
-	# else on the board to trigger insufficient_ap instead (see the
-	# precedence test above), so line_of_sight_blocked is the correct reason.
+func test_ranged_attack_ignores_intervening_units_but_remains_range_limited() -> void:
 	var controller := _make_controller(1, 6)
 	var attacker = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6)
 	attacker.attack_min_range = 2
@@ -2062,10 +2068,10 @@ func test_move_and_attack_rejects_a_target_whose_only_in_range_tiles_are_all_los
 
 	var attacked: bool = controller.try_attack_selected_unit(defender.grid_position)
 
-	assert_false(attacked, "Every in-range tile's line to the target is blocked")
-	assert_eq(controller.last_targeting_failure.get("reason", ""), "line_of_sight_blocked")
-	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected move-and-attack must not move the unit")
-	assert_eq(attacker.action_points_remaining, 6, "A rejected move-and-attack must not spend AP")
+	assert_false(attacked, "The target remains outside the missile's current range")
+	assert_eq(controller.last_targeting_failure.get("reason", ""), "out_of_range")
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A rejected missile attack must not move the unit")
+	assert_eq(attacker.action_points_remaining, 6, "A rejected missile attack must not spend AP")
 	assert_eq(defender.health, health_before)
 
 
@@ -3132,7 +3138,7 @@ func test_get_attackable_tiles_for_unit_returns_ranged_tiles_within_los() -> voi
 	assert_true(tiles.has(Vector2i(2, 0)))
 	assert_true(tiles.has(Vector2i(3, 0)))
 	assert_true(tiles.has(Vector2i(0, 1)), "Target on occupied tile is attackable")
-	assert_false(tiles.has(Vector2i(0, 2)), "Tiles behind obstacle are blocked by LoS")
+	assert_true(tiles.has(Vector2i(0, 2)), "Units do not block missile line of sight")
 	assert_false(tiles.has(Vector2i(4, 0)), "Tiles beyond max range 3 are excluded")
 
 

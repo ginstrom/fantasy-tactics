@@ -205,7 +205,7 @@ func _archer_los_probe_scenario(include_bruiser: bool) -> Dictionary:
 	})
 
 
-func test_authored_tier_two_compositions_goblin_archer_repositions_around_its_own_bruiser_for_a_clear_line_of_sight() -> void:
+func test_authored_tier_two_compositions_goblin_archer_fires_through_its_own_bruiser() -> void:
 	var clear_controller: Node2D = BattleStateFactory.build(_archer_los_probe_scenario(false), 1)
 	autofree(clear_controller)
 	var blocked_controller: Node2D = BattleStateFactory.build(_archer_los_probe_scenario(true), 1)
@@ -234,16 +234,9 @@ func test_authored_tier_two_compositions_goblin_archer_repositions_around_its_ow
 	assert_eq(clear_archer.grid_position, Vector2i(2, 0), "With no blocker, the Archer's starting tile already had a clear shot")
 	assert_eq(clear_warrior.health, clear_warrior.max_health - 2, "Two unmoved attacks must land")
 
-	# With the identical Archer/Warrior placement but the Bruiser now
-	# blocking the direct line: the SAME starting position now forces a
-	# move before any attack can land, and that move spends enough AP that
-	# only one attack (not two) fits in the remaining budget -- the causal
-	# signature of the blocker's presence, not merely a different geometry.
-	assert_true(blocked_archer_steps.size() >= 2, "A blocked Archer must move before it can attack")
-	assert_eq(blocked_archer_steps[0].type, "move", "The Bruiser's block must force a reposition first")
-	assert_ne(
-		blocked_archer.grid_position, Vector2i(2, 0),
-		"The blocked Archer must actually leave its starting tile, unlike the unblocked run above"
-	)
-	assert_eq(blocked_archer_steps[1].type, "attack")
-	assert_eq(blocked_warrior.health, blocked_warrior.max_health - 1, "Only one attack fits once AP was spent repositioning")
+	# The Bruiser occupies the direct line but does not block missile attacks,
+	# so the Archer keeps its position and spends all 6 AP on two shots.
+	for step in blocked_archer_steps:
+		assert_eq(step.type, "attack", "An allied unit must not force a missile reposition")
+	assert_eq(blocked_archer.grid_position, Vector2i(2, 0))
+	assert_eq(blocked_warrior.health, blocked_warrior.max_health - 2, "Two stationary attacks fit in the full AP budget")

@@ -81,6 +81,7 @@ var _show_campaign_victory_after_result := false
 # reference identity alone already distinguishes "already logged this" from
 # "a genuinely new attack" -- no need to compare field-by-field.
 var _last_logged_attack_result: Dictionary = {}
+var _last_logged_targeting_failure: Dictionary = {}
 # Stage 5 D2: dedup guard for Attack-of-Opportunity log lines, mirroring
 # _last_logged_attack_result's own is_same()-based pattern -- a reaction is a
 # side effect of a move (see grid.last_reaction_results), not the move's own
@@ -378,6 +379,7 @@ func _on_board_changed() -> void:
 	_update_action_bar()
 	if not grid.last_targeting_failure.is_empty():
 		status.text = _describe_targeting_failure(grid.last_targeting_failure)
+		_log_targeting_failure(grid.last_targeting_failure)
 	elif not grid.last_attack_result.is_empty():
 		status.text = _describe_step(grid.last_attack_result)
 		if grid.last_attack_result.type == "attack":
@@ -805,6 +807,13 @@ func _log_attack(step: Dictionary) -> void:
 		return
 	_last_logged_attack_result = step
 	_append_log_line(_describe_log_entry(step))
+
+
+func _log_targeting_failure(failure: Dictionary) -> void:
+	if is_same(_last_logged_targeting_failure, failure):
+		return
+	_last_logged_targeting_failure = failure
+	_append_log_line(_describe_targeting_failure(failure))
 
 
 ## Combat-log counterpart to _log_attack() -- same dedup guard (shared

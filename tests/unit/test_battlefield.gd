@@ -2164,6 +2164,22 @@ func test_targeting_failure_updates_status_message() -> void:
 	)
 
 
+func test_targeting_failure_appends_one_bottom_log_entry() -> void:
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var attacker = battlefield.grid.get_unit_at(BattleControllerScript.PLAYER_START_POSITIONS[0])
+	var enemy = battlefield.grid.get_unit_at(BattleControllerScript.ENEMY_START_POSITIONS[0])
+	battlefield.grid.selected_unit = attacker
+
+	battlefield.grid._handle_tile_click(enemy.grid_position)
+
+	assert_eq(battlefield.log_list.get_child_count(), 1)
+	if battlefield.log_list.get_child_count() > 0:
+		assert_eq(battlefield.log_list.get_child(0).text, tr("battle.feedback.out_of_range"))
+	battlefield._on_board_changed()
+	assert_eq(battlefield.log_list.get_child_count(), 1, "One targeting failure must produce one log line")
+
+
 ## --- Step 3: action modes and action bar ------------------------------
 
 
@@ -2664,4 +2680,3 @@ func test_multi_level_battle_victory_emits_one_battle_record_one_loot_record_and
 	# Re-invoking or refreshing UI does not duplicate entries
 	battlefield.battle_result._refresh()
 	assert_eq(GameSession.get_journal_entries("log").size(), entries.size(), "UI refresh must not append journal entries")
-

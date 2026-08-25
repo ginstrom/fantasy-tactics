@@ -59,7 +59,7 @@ func get_manhattan_distance(from_pos: Vector2i, to_pos: Vector2i) -> int:
 
 ## Bresenham raycasting checks only intermediate tiles: a defender standing
 ## on the destination never blocks its own attack line.
-func has_line_of_sight(start_tile: Vector2i, end_tile: Vector2i, blocking_tiles: Array[Vector2i]) -> bool:
+func has_line_of_sight(start_tile: Vector2i, end_tile: Vector2i, blocking_tiles: Array[Vector2i] = []) -> bool:
 	var x: int = start_tile.x
 	var y: int = start_tile.y
 	var end_x: int = end_tile.x
@@ -88,15 +88,16 @@ func has_line_of_sight(start_tile: Vector2i, end_tile: Vector2i, blocking_tiles:
 ## tile with unobstructed 360-degree line of sight from at least one entry in
 ## `viewer_positions`, using the exact same has_line_of_sight() primitive
 ## already used for ranged targeting/spell range -- this is a second, purely
-## additive query, never a replacement for it (has_line_of_sight() keeps
-## serving range/targeting legality exactly as before; see that function's
-## own doc comment). `blocking_tiles` follows has_line_of_sight()'s existing
+## additive query, never a replacement for it (has_line_of_sight() also
+## serves range/targeting legality when a caller supplies blockers; weapon
+## targeting intentionally supplies none). `blocking_tiles` follows
+## has_line_of_sight()'s existing
 ## contract verbatim: a tile that is itself the line's destination never
 ## blocks its own line, so every viewer's own tile and every tile actually
 ## reachable by an unobstructed line register as visible. Returns a
 ## Dictionary used as a tile set (tile -> true), matching get_tile_distances()'
 ## own lookup-friendly shape rather than an Array callers would have to scan.
-func get_visible_tiles(viewer_positions: Array[Vector2i], blocking_tiles: Array[Vector2i]) -> Dictionary:
+func get_visible_tiles(viewer_positions: Array[Vector2i], blocking_tiles: Array[Vector2i] = []) -> Dictionary:
 	var visible := {}
 	for viewer in viewer_positions:
 		if not is_in_bounds(viewer):
