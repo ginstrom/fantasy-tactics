@@ -147,6 +147,7 @@ func test_translation_keys_resolve_to_expected_english_copy() -> void:
 	assert_eq(tr("battle_result.leveled_up") % "Warrior, Warrior 2", "Leveled up: Warrior, Warrior 2")
 	assert_eq(tr("battle_result.gold") % 5, "Gold: 5")
 	assert_eq(tr("battle_result.ok"), "OK")
+	assert_eq(tr("battle_result.view"), "View")
 	assert_eq(tr("battle.result.victory") % "Goblin Camp", "Victory! Goblin Camp is cleared.")
 	assert_eq(tr("battle.result.defeat"), "Defeat. The party returns to the settlement.")
 	assert_eq(tr("battle.feedback.out_of_range"), "Target is out of range.")

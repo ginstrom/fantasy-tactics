@@ -170,6 +170,8 @@ messages = {
 "battle_result.leveled_up": "Leveled up: %s",
 "battle_result.gold": "Gold: %d",
 "battle_result.ok": "OK",
+"battle_result.view": "View",
+"ui.view": "View",
 "unit_details.title": "Unit Details",
 "unit_details.status": "Status: %s",
 "unit_details.skills": "Unspent skill points: %d",

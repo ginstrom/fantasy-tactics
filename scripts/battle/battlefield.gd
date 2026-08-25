@@ -36,7 +36,7 @@ const BOSS_ENCOUNTER_ID := "obj_boss_borderlands_ogre"
 @onready var recipient_option: OptionButton = %RecipientOption
 @onready var transfer_button: Button = %TransferButton
 @onready var grid: Node2D = $Grid
-@onready var level_up: Control = $HUD/LevelUp
+@onready var battle_result: Control = %BattleResult
 @onready var portrait_panel: Control = %PortraitPanel
 @onready var unit_info_panel: Control = %UnitInfoPanel
 
@@ -44,16 +44,7 @@ var enemy_turn_beat_seconds: float = ENEMY_TURN_BEAT_SECONDS
 var round_number: int = 1
 var _enemy_turn_in_progress: bool = false
 var _battle_resolved: bool = false
-# Level-up queue state (see _queue_level_up/_show_next_level_up below). A
-# leveled-up party member is queued as {"id": adventurer_id, "health_before":
-# int} so the overlay can show the health gained even though GameSession has
-# already applied it by the time the entry is queued.
-var _level_up_queue: Array[Dictionary] = []
-var _level_up_active: bool = false
-# Set when a victory's clear-XP award queues at least one level-up: defers
-# _finish_victory() (the battle-result scene transition) until every queued
-# level-up — kill-triggered or clear-triggered — has resolved.
-var _pending_victory_completion: bool = false
+var _health_before_by_id: Dictionary = {}
 # Per-instance award guards (see _award_kill_xp/_award_clear_xp): a
 # Battlefield is re-instantiated for every battle, so these cannot leak
 # across encounter attempts, but they do stop a repeated event (a duplicate
@@ -114,7 +105,7 @@ func _ready() -> void:
 	grid.unit_focus_changed.connect(_on_unit_focus_changed)
 	grid.action_mode_changed.connect(_on_action_mode_changed)
 	grid.retreat_resolved.connect(_on_retreat_resolved)
-	level_up.resolved.connect(_on_level_up_resolved)
+	battle_result.dismissed.connect(_on_battle_result_dismissed)
 	portrait_panel.grid = grid
 	unit_info_panel.grid = grid
 	_on_board_changed()
@@ -523,17 +514,12 @@ func _battle_music_track_id() -> String:
 
 
 func _apply_battle_outcome(victory: bool) -> void:
+	_battle_resolved = true
 	if victory:
 		# Clear XP only on victory, and only while selected_encounter (read by
 		# _current_expedition()) is still set — _finish_victory() clears it
 		# right after via GameSession.complete_current_encounter().
 		_award_clear_xp()
-		# _award_clear_xp() may have just queued a level-up (on top of any
-		# still-showing kill-triggered one): the summary-screen transition
-		# must wait for the whole queue to resolve first.
-		if _level_up_active:
-			_pending_victory_completion = true
-			return
 		_finish_victory()
 	else:
 		_persist_battle_aftermath()
@@ -568,16 +554,14 @@ func _award_party_xp(amount: float) -> void:
 		return
 	_total_xp_awarded += amount
 	# Captured before GameSession.award_party_xp() mutates anything, so each
-	# leveled member's health-gain can be shown later even though GameSession
-	# already applies the increase as part of this same call.
-	var health_before: Dictionary = {}
+	# leveled member's health-gain can be shown later in the outcome summary.
 	for member_id in GameSession.get_party(GameSession.selected_party_id).get("member_ids", []):
-		health_before[member_id] = GameSession.get_effective_max_health(member_id)
+		if not _health_before_by_id.has(member_id):
+			_health_before_by_id[member_id] = GameSession.get_effective_max_health(member_id)
 
 	var leveled_up: Array[String] = GameSession.award_party_xp(GameSession.selected_party_id, amount)
 	for adventurer_id in leveled_up:
 		_refresh_unit_health(adventurer_id)
-		_queue_level_up(adventurer_id, health_before.get(adventurer_id, 0))
 		if not _leveled_up_ids.has(adventurer_id):
 			_leveled_up_ids.append(adventurer_id)
 
@@ -595,69 +579,10 @@ func _refresh_unit_health(adventurer_id: String) -> void:
 		unit.health += health_gain
 
 
-## Appends to the level-up queue and starts showing it immediately if nothing
-## is currently showing. Multiple leveled party members are always shown one
-## at a time, in the stable order GameSession.award_party_xp() returned them
-## (party member order) — never all at once, never out of order.
-func _queue_level_up(adventurer_id: String, adventurer_health_before: int) -> void:
-	_level_up_queue.append({"id": adventurer_id, "health_before": adventurer_health_before})
-	if not _level_up_active:
-		_show_next_level_up()
-
-
-func _show_next_level_up() -> void:
-	if _level_up_queue.is_empty():
-		_set_level_up_in_progress(false)
-		_on_level_up_queue_drained()
-		return
-	_set_level_up_in_progress(true)
-	var entry: Dictionary = _level_up_queue.pop_front()
-	level_up.show_for_adventurer(entry.id, entry.health_before)
-
-
-func _on_level_up_resolved() -> void:
-	_show_next_level_up()
-
-
-## Only fires once the whole queue is empty (not merely once the current
-## modal closes), so a victory whose clear XP queued a level-up still waits
-## for every queued member before completing the battle.
-func _on_level_up_queue_drained() -> void:
-	if not _pending_victory_completion:
-		return
-	_pending_victory_completion = false
-	_finish_victory()
-
-
 ## Rolls this battle's loot into the active BattleContext's own reward (see
 ## GameSession.complete_current_encounter() -> _roll_and_queue_loot()),
 ## resolves that context into the owning party's own carry immediately, and
-## routes to the victory summary screen with everything this battle
-## accumulated. Stage 5 D5 (decision-ledger.md): the real victory path never
-## routes through GameManager.complete_battle() (it goes straight to
-## battle_result.gd/victory_screen.gd, which call go_to_world_map()/go_to_
-## encampment() directly), so this is the one place that resolution has to
-## happen for an actual player win -- covering both branches below it,
-## ordinary victory and campaign victory alike. Resolving here, rather than
-## deferring it to go_to_world_map()'s own resolve_battle_victory() call
-## (still made there too -- a harmless no-op once already resolved, see its
-## own doc comment), matters because resolve_battle_victory() is also what
-## frees the battle claim (a BattleContext's status, not a dedicated field,
-## is now the claim record -- Stage 6 Step 2, decision-ledger.md's G4
-## disposition): a second fielded party must be able to enter its own battle
-## the instant this one is decided, not only once the player has clicked
-## through this battle's own result/victory screen. summary below is built
-## from a plain, already-captured Dictionary of the reward, not a live read,
-## so resolving before or after building it is equivalent -- resolve_battle_
-## victory() copies the reward into carry without clearing it.
-##
-## Defeating the final boss is the one victory that does NOT land on the
-## ordinary battle-result summary: complete_current_encounter() completing
-## the boss's own authored objective flips GameSession.is_campaign_completed
-## true (see complete_campaign_objective()/set_campaign_victory()) --
-## detected here by diffing the flag around that call, rather than this
-## scene hardcoding the boss's encounter id -- and routes to the dedicated
-## Campaign Victory screen instead.
+## shows the centered Battle Outcome modal (Information Design §2).
 func _finish_victory() -> void:
 	_persist_battle_aftermath()
 	var was_campaign_completed := GameSession.is_campaign_completed
@@ -672,18 +597,21 @@ func _finish_victory() -> void:
 		"total_xp": _total_xp_awarded,
 		"party_member_count": maxi(party.get("member_ids", []).size(), 1),
 		"leveled_up_ids": _leveled_up_ids,
-		# Read straight from the active battle context's own reward -- this
-		# battle's own loot only, never merged into the party's full running
-		# totals until the player leaves this screen (see the docstring
-		# above).
+		"health_before_by_id": _health_before_by_id,
 		"loot_gold": int(reward.get("gold", 0)),
 		"loot_mana_crystal_counts": (reward.get("mana_crystals", {}) as Dictionary).duplicate(),
 		"loot_gear_counts": (reward.get("gear", {}) as Dictionary).duplicate(),
 	}
+	GameManager.battle_result_summary = summary
 	if just_won_campaign:
 		GameManager.go_to_victory_screen()
 		return
-	GameManager.go_to_battle_result(summary)
+	battle_result.show_summary(summary)
+	_update_input_lock()
+
+
+func _on_battle_result_dismissed() -> void:
+	GameManager.go_to_world_map()
 
 
 ## Permadeath resolves before the health write-back, not after: resolve_
@@ -727,16 +655,9 @@ func _set_enemy_turn_in_progress(value: bool) -> void:
 
 
 ## Board input and the End Turn button stay locked while either the enemy is
-## acting or any level-up modal is queued or showing, and unlock only once
-## both conditions clear — see _set_enemy_turn_in_progress()/
-## _set_level_up_in_progress(), the two flags this combines.
-func _set_level_up_in_progress(value: bool) -> void:
-	_level_up_active = value
-	_update_input_lock()
-
-
+## acting or the battle has resolved and the outcome modal is active.
 func _update_input_lock() -> void:
-	var locked := _enemy_turn_in_progress or _level_up_active
+	var locked := _enemy_turn_in_progress or _battle_resolved
 	end_turn_button.disabled = locked
 	retreat_button.disabled = locked
 	grid.input_locked = locked

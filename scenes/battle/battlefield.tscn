@@ -2,9 +2,9 @@
 
 [ext_resource type="Script" path="res://scripts/battle/battlefield.gd" id="1_battlefield"]
 [ext_resource type="Script" path="res://scripts/battle/battle_controller.gd" id="2_battle"]
-[ext_resource type="PackedScene" path="res://scenes/ui/level_up.tscn" id="3_level_up"]
 [ext_resource type="Script" path="res://scripts/battle/portrait_panel.gd" id="4_portrait_panel"]
 [ext_resource type="Script" path="res://scripts/battle/unit_info_panel.gd" id="5_unit_info_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/battle_result.tscn" id="6_battle_result"]
 
 [node name="Battlefield" type="Node2D"]
 script = ExtResource("1_battlefield")
@@ -382,8 +382,9 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "battle.end_turn"
 
-[node name="LevelUp" parent="HUD" instance=ExtResource("3_level_up")]
-layout_mode = 1
+[node name="BattleResult" parent="HUD" instance=ExtResource("6_battle_result")]
+unique_name_in_owner = true
+visible = false
 
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/EndTurnButton" to="." method="_on_end_turn_pressed"]
 [connection signal="pressed" from="HUD/Margin/VBox/BottomPanel/BottomContent/BottomActionsRow/ActionBar/RetreatButton" to="." method="_on_retreat_button_pressed"]

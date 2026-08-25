@@ -1,45 +1,57 @@
-extends PanelContainer
+extends Control
 
-## An immediate, modal level-up overlay for exactly one adventurer. Battlefield
-## (its owner) instances this once, queues one call to show_for_adventurer()
-## per leveled party member, and reacts to `resolved` to advance that queue
-## or resume battle/result routing — this control never routes to another
-## screen or scene by itself, and it owns no campaign data: every mutation
-## goes through GameSession's validated spend_attack_points()/choose_perk()
-## APIs.
+## An owner-neutral modal level-up overlay for exactly one adventurer (Information Design §2).
+## Presents full-screen dim backdrop, centered panel, Escape/Continue dismissal, and perk
+## selection. Owns no campaign data: every mutation goes through GameSession.
 
-## Emitted once the player has dismissed this level-up (a required perk, if
-## any, has already been chosen). The owner reacts to this to show the next
-## queued level-up, or to resume whatever was waiting on this one.
 signal resolved
 
-@onready var name_label: Label = $Content/NameLabel
-@onready var xp_label: Label = $Content/XPLabel
-@onready var level_label: Label = $Content/LevelLabel
-@onready var health_gain_label: Label = $Content/HealthGainLabel
-@onready var skill_gains_label: Label = $Content/SkillGainsLabel
-@onready var perk_label: Label = $Content/PerkLabel
-@onready var perk_options_container: VBoxContainer = $Content/PerkOptionsContainer
-@onready var continue_button: Button = $Content/ContinueButton
+@onready var dim_rect: ColorRect = $Dim
+@onready var name_label: Label = $Center/Panel/Margin/Content/NameLabel
+@onready var xp_label: Label = $Center/Panel/Margin/Content/XPLabel
+@onready var level_label: Label = $Center/Panel/Margin/Content/LevelLabel
+@onready var health_gain_label: Label = $Center/Panel/Margin/Content/HealthGainLabel
+@onready var skill_gains_label: Label = $Center/Panel/Margin/Content/SkillGainsLabel
+@onready var perk_label: Label = $Center/Panel/Margin/Content/PerkLabel
+@onready var perk_options_container: VBoxContainer = $Center/Panel/Margin/Content/PerkOptionsContainer
+@onready var continue_button: Button = $Center/Panel/Margin/Content/ContinueButton
 
 var adventurer_id: String = ""
 var _health_before: int = 0
 
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	continue_button.pressed.connect(_on_continue_pressed)
 
 
-## The owner calls this once per queued level-up. health_before is the
-## effective max health the adventurer had immediately before this level (the
-## owner must capture it before calling GameSession.award_party_xp(), since
-## that call already applies the increase) so the health-gain row can show the
-## delta even though GameSession has already mutated the stored value.
-func show_for_adventurer(id: String, health_before: int) -> void:
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		if not GameSession.is_perk_choice_pending(adventurer_id):
+			_on_continue_pressed()
+
+
+## Shows the level-up modal for the named adventurer.
+func show_for_adventurer(id: String, health_before: int = 0) -> void:
 	adventurer_id = id
 	_health_before = health_before
 	refresh()
 	show()
+	_grab_initial_focus()
+
+
+func _grab_initial_focus() -> void:
+	for child in perk_options_container.get_children():
+		if child is Button and not child.disabled:
+			child.grab_focus()
+			return
+	if continue_button.is_inside_tree() and continue_button.visible and not continue_button.disabled:
+		continue_button.grab_focus()
+
 
 
 ## Re-reads GameSession fresh rather than caching anything locally, so every
@@ -56,10 +68,10 @@ func refresh() -> void:
 	level_label.text = tr("level_up.level") % adventurer["level"]
 
 	var max_health: int = GameSession.get_effective_max_health(adventurer_id)
-	health_gain_label.text = tr("level_up.health_gain") % [max_health, max_health - _health_before]
-
 	var class_id: String = adventurer.get("class", "warrior")
 	var class_def: Dictionary = GameSession.CLASS_DEFINITIONS.get(class_id, GameSession.CLASS_DEFINITIONS.warrior)
+	var health_delta: int = max_health - _health_before if _health_before > 0 else class_def.get("health_gain_per_level", 2)
+	health_gain_label.text = tr("level_up.health_gain") % [max_health, health_delta]
 	var skills_def: Dictionary = class_def.get("skills", {})
 	var gains_text: Array[String] = []
 	for skill_name in ["melee", "missile", "guard", "might"]:

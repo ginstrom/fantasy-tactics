@@ -1937,68 +1937,58 @@ func test_a_level_up_from_kill_xp_raises_the_active_units_max_and_current_health
 	assert_eq(units.warrior.health, 20, "The active unit's current health must rise by the same amount as max health")
 
 
-## Task 3: the immediate, queued, modal level-up overlay. A queued level-up
-## locks the board and End Turn button for as long as any modal is queued or
-## showing, shows multiple leveled party members one at a time in stable
-## party order, and gates the battle-result scene transition (both the
-## kill-triggered and the clear-triggered paths) until every queued level-up
-## has resolved.
+## Information Design Step 4: A completed battle shows one centered outcome
+## modal; level-ups are listed there with a View action and never auto-queue.
 
-func test_a_level_up_from_kill_xp_shows_the_modal_and_locks_board_and_end_turn_input() -> void:
-	GameSession.reset()
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
-	GameSession.depart_selected_party()
-	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = _make_battlefield()
-	add_child_autofree(battlefield)
-	var units := _stage_a_killing_blow(battlefield)
-
-	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
-
-	assert_true(battlefield.level_up.visible, "A mid-battle level-up must show its overlay immediately")
-	assert_eq(battlefield.level_up.adventurer_id, "warrior_001")
-	assert_true(battlefield.end_turn_button.disabled)
-	assert_true(battlefield.grid.input_locked)
-
-
-func test_resolving_the_only_queued_level_up_unlocks_board_and_end_turn_input() -> void:
-	GameSession.reset()
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
-	GameSession.depart_selected_party()
-	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = _make_battlefield()
-	add_child_autofree(battlefield)
-	var units := _stage_a_killing_blow(battlefield)
-	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
-
-	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
-	# -- resolve it first, same as test_a_clear_xp_level_up_that_requires_a_
-	# perk_choice_still_gates_completion's own established pattern, or
-	# Continue stays gated and never actually closes the modal.
-	var perk_option: Button = battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	)
-	perk_option.emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
-
-	assert_false(battlefield.level_up.visible)
-	assert_false(battlefield.end_turn_button.disabled)
-	assert_false(battlefield.grid.input_locked)
-
-
-func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party_order() -> void:
+func test_victory_with_multiple_level_ups_locks_board_shows_outcome_modal_and_names_both_without_auto_level_up() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
 	GameSession.recruit_adventurer()
-	# recruit_adventurer() mints the next warrior_NNN id that collides with
-	# neither an existing adventurer nor a still-open recruitment candidate
-	# template (warrior_002/003/004 stay open after reset()), so the newly
-	# recruited id is read back rather than assumed.
+	var second_member_id: String = GameSession.adventurers[-1].id
+	GameSession.assign_adventurer_to_selected_party(second_member_id)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+
+	# 42 XP split between 2 members = 21 XP each, crossing level-2 threshold (20 XP) for both
+	battlefield._award_party_xp(42.0)
+	battlefield._apply_battle_outcome(true)
+
+	assert_true(battlefield.grid.input_locked, "Board must stay locked upon victory")
+	assert_true(battlefield.end_turn_button.disabled, "End Turn must be disabled upon victory")
+	assert_true(battlefield.battle_result.visible, "Outcome modal must appear on victory")
+	assert_false(battlefield.battle_result.level_up.visible, "Level-up modal must not appear automatically")
+	assert_eq(GameManager.battle_result_summary.leveled_up_ids, ["warrior_001", second_member_id])
+	var view_warrior: Button = battlefield.battle_result.level_up_list.get_node_or_null("Row_warrior_001/ViewButton_warrior_001")
+	var view_second: Button = battlefield.battle_result.level_up_list.get_node_or_null("Row_%s/ViewButton_%s" % [second_member_id, second_member_id])
+	assert_not_null(view_warrior, "Summary must provide View action for first leveled adventurer")
+	assert_not_null(view_second, "Summary must provide View action for second leveled adventurer")
+
+
+func test_a_level_up_from_kill_xp_records_level_up_without_mid_battle_popup() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 19.0)
+	GameSession.depart_selected_party()
+	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var units := _stage_a_killing_blow(battlefield)
+
+	battlefield.grid.try_attack_selected_unit(units.enemy.grid_position)
+
+	assert_false(battlefield.battle_result.level_up.visible, "Mid-battle level-up must not show an overlay automatically")
+	assert_eq(battlefield._leveled_up_ids, ["warrior_001"])
+
+
+func test_multiple_leveled_party_members_are_recorded_and_listed_in_outcome_summary() -> void:
+	GameSession.reset()
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party("warrior_001")
+	GameSession.recruit_adventurer()
 	var second_member_id: String = GameSession.adventurers[-1].id
 	GameSession.assign_adventurer_to_selected_party(second_member_id)
 	var battlefield: Node2D = _make_battlefield()
@@ -2006,38 +1996,11 @@ func test_multiple_leveled_party_members_are_shown_one_at_a_time_in_stable_party
 
 	battlefield._award_party_xp(42.0)
 
-	assert_true(battlefield.level_up.visible)
-	assert_eq(battlefield.level_up.adventurer_id, "warrior_001", "The first party member must be shown first")
-	assert_true(battlefield.end_turn_button.disabled, "Input must stay locked while a second level-up is still queued")
-
-	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
-	# for both party members -- resolve each in turn or Continue never
-	# actually advances the queue (see test_a_clear_xp_level_up_that_
-	# requires_a_perk_choice_still_gates_completion's own established
-	# pattern).
-	battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	).emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
-
-	assert_true(
-		battlefield.level_up.visible,
-		"The next queued member must show immediately, without an unlocked gap in between"
-	)
-	assert_eq(battlefield.level_up.adventurer_id, second_member_id)
-	assert_true(battlefield.end_turn_button.disabled)
-
-	battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	).emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
-
-	assert_false(battlefield.level_up.visible, "Input unlocks only after the last queued modal completes")
-	assert_false(battlefield.end_turn_button.disabled)
-	assert_false(battlefield.grid.input_locked)
+	assert_false(battlefield.battle_result.level_up.visible, "Level up overlay must not auto-show")
+	assert_eq(battlefield._leveled_up_ids, ["warrior_001", second_member_id])
 
 
-func test_a_level_up_from_clear_xp_must_resolve_before_the_battle_completes() -> void:
+func test_a_level_up_from_clear_xp_shows_outcome_modal_with_level_up_action() -> void:
 	GameSession.reset()
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party("warrior_001")
@@ -2049,56 +2012,11 @@ func test_a_level_up_from_clear_xp_must_resolve_before_the_battle_completes() ->
 
 	battlefield._apply_battle_outcome(true)
 
-	assert_true(
-		battlefield.level_up.visible,
-		"Clear XP crossing a level threshold must show the overlay before completing the battle"
-	)
-	assert_false(
-		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
-		"The battle-result scene transition must wait for the queued level-up to resolve"
-	)
-
-	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
-	# -- resolve it first, same as test_a_clear_xp_level_up_that_requires_a_
-	# perk_choice_still_gates_completion's own established pattern, or
-	# Continue stays gated and the battle never actually completes.
-	battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	).emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
-
-	assert_true(
-		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
-		"The battle completes once the queued level-up resolves"
-	)
-
-
-func test_a_clear_xp_level_up_that_requires_a_perk_choice_still_gates_completion() -> void:
-	GameSession.reset()
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party("warrior_001")
-	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 49.0)
-	GameSession.depart_selected_party()
-	GameSession.enter_encounter(GameSession.ORC_OUTPOST_ID)
-	var battlefield: Node2D = _make_battlefield()
-	add_child_autofree(battlefield)
-
-	battlefield._apply_battle_outcome(true)
-
-	assert_true(GameSession.is_perk_choice_pending("warrior_001"))
-	battlefield.level_up.continue_button.emit_signal("pressed")
-	assert_false(
-		GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID),
-		"A required perk choice must block completion, not just the modal's own Continue button"
-	)
-
-	var perk_option: Button = battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	)
-	perk_option.emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
-
-	assert_true(GameSession.is_encounter_complete(GameSession.ORC_OUTPOST_ID))
+	assert_true(battlefield.battle_result.visible, "Victory shows outcome modal")
+	assert_false(battlefield.battle_result.level_up.visible, "Level up modal does not auto-open")
+	assert_eq(GameManager.battle_result_summary.leveled_up_ids, ["warrior_001"])
+	var view_btn: Button = battlefield.battle_result.level_up_list.get_node_or_null("Row_warrior_001/ViewButton_warrior_001")
+	assert_not_null(view_btn, "Level up summary has a View action for the leveled unit")
 
 
 func test_clear_xp_with_no_level_up_completes_the_battle_immediately() -> void:
@@ -2106,7 +2024,7 @@ func test_clear_xp_with_no_level_up_completes_the_battle_immediately() -> void:
 
 	battlefield._apply_battle_outcome(true)
 
-	assert_false(battlefield.level_up.visible)
+	assert_false(battlefield.battle_result.level_up.visible)
 	assert_true(GameSession.is_encounter_complete(GameSession.GOBLIN_CAMP_ID))
 
 
@@ -2200,16 +2118,9 @@ func test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summa
 	add_child_autofree(battlefield)
 
 	battlefield._apply_battle_outcome(true)
-	assert_true(battlefield.level_up.visible, "sanity check: this setup crosses the level-2 threshold")
-	# Level 2 now earns its own pending perk slot (PERK_LEVEL_INTERVAL == 2)
-	# -- resolve it first or Continue stays gated and the summary is never
-	# built (see test_a_clear_xp_level_up_that_requires_a_perk_choice_still_
-	# gates_completion's own established pattern).
-	battlefield.level_up.perk_options_container.get_node(
-		"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-	).emit_signal("pressed")
-	battlefield.level_up.continue_button.emit_signal("pressed")
 
+	assert_true(battlefield.battle_result.visible)
+	assert_false(battlefield.battle_result.level_up.visible)
 	assert_eq(GameManager.battle_result_summary.leveled_up_ids, ["warrior_001"])
 
 
@@ -2228,19 +2139,6 @@ func test_multiple_kills_in_one_battle_are_tallied_by_type_not_overwritten() -> 
 	battlefield.grid.try_attack_selected_unit(second_enemy.grid_position)
 
 	battlefield._apply_battle_outcome(true)
-	# This fixture's 2 kill-XP awards (5 each) plus the Orc Outpost's 20 clear
-	# XP total 30, crossing the level-2 threshold (20) — deferring
-	# _finish_victory() until the level-up modal resolves, same as
-	# test_leveled_up_ids_accumulate_across_kill_and_clear_xp_and_reach_the_summary.
-	# Dismiss it exactly as a player would so the summary actually gets built.
-	# Level 2 also earns its own pending perk slot (PERK_LEVEL_INTERVAL ==
-	# 2) -- resolve it first or Continue stays gated (see test_a_clear_xp_
-	# level_up_that_requires_a_perk_choice_still_gates_completion).
-	if battlefield.level_up.visible:
-		battlefield.level_up.perk_options_container.get_node(
-			"PerkOption_%s" % GameSession.WARRIOR_JUGGERNAUT_PERK_ID
-		).emit_signal("pressed")
-		battlefield.level_up.continue_button.emit_signal("pressed")
 
 	assert_eq(GameManager.battle_result_summary.kills_by_type, {tr("battle.enemy.goblin"): 2})
 
