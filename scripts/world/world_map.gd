@@ -80,7 +80,6 @@ var pending_arrival_encounter_id: String = ""
 @onready var turn_label: Label = %TurnLabel
 @onready var end_turn_button: Button = %EndTurnButton
 @onready var information_panel: PanelContainer = %InformationPanel
-@onready var campaign_guide: PanelContainer = %CampaignGuide
 @onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 @onready var hint_label: Label = %Hint
 @onready var arrival_panel: PanelContainer = %ArrivalPanel
@@ -111,7 +110,6 @@ func _ready() -> void:
 	_update_turn_label()
 	_refresh_turn_controls()
 	_refresh_information_panel()
-	_refresh_campaign_guide()
 	campaign_objective_banner.refresh()
 
 
@@ -358,7 +356,6 @@ func _on_end_turn_pressed() -> void:
 	_update_highlights()
 	_update_turn_label()
 	_refresh_turn_controls()
-	_refresh_campaign_guide()
 	board_changed.emit()
 
 
@@ -409,7 +406,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_routes()
 		_update_highlights()
 		_refresh_information_panel()
-		_refresh_campaign_guide()
 		# Deliberately check ONLY the newly-selected party's own position here
 		# (_arrivable_encounter_at(), not the full _check_for_arrival()).
 		# _check_for_arrival()'s "other party" loop (see its own doc comment)
@@ -438,7 +434,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			party_selected = true
 			_update_highlights()
 			_refresh_information_panel()
-			_refresh_campaign_guide()
 			return
 
 		if not GameSession.get_deployed_party_route().is_empty():
@@ -468,7 +463,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_routes()
 			_update_highlights()
 			_refresh_information_panel()
-			_refresh_campaign_guide()
 			return
 
 		party_selected = false
@@ -476,7 +470,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_routes()
 		_update_highlights()
 		_refresh_information_panel()
-		_refresh_campaign_guide()
 		return
 
 	if not party_selected:
@@ -491,7 +484,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
-			_refresh_campaign_guide()
 			board_changed.emit()
 		return
 
@@ -502,7 +494,6 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		_draw_markers()
 		_draw_routes()
 		_update_highlights()
-		_refresh_campaign_guide()
 
 
 ## Manual playtesting found that a party who *walks* onto an available
@@ -601,7 +592,6 @@ func _on_arrival_withdraw_pressed() -> void:
 	_draw_routes()
 	_update_highlights()
 	_refresh_information_panel()
-	_refresh_campaign_guide()
 
 
 func _on_arrival_cancel_pressed() -> void:
@@ -969,12 +959,6 @@ func _on_send_party_cancel_pressed() -> void:
 func _close_send_party_modal() -> void:
 	_send_party_target_encounter_id = ""
 	send_party_modal.visible = false
-
-
-func _refresh_campaign_guide() -> void:
-	if not is_inside_tree():
-		return
-	campaign_guide.refresh()
 
 
 func _update_highlights() -> void:

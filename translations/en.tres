@@ -32,6 +32,7 @@ messages = {
 "audio.sfx": "SFX",
 "audio.mute": "Mute",
 "ui.cancel": "Cancel",
+"ui.dismiss": "Dismiss",
 "encampment.title": "Encampment",
 "encampment.population": "Population: %d",
 "encampment.parties_count": "Parties: %d",

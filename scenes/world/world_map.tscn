@@ -1,14 +1,14 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1_world_map"]
 [ext_resource type="PackedScene" path="res://scenes/ui/information_panel.tscn" id="2_information_panel"]
-[ext_resource type="PackedScene" path="res://scenes/ui/campaign_guide.tscn" id="3_campaign_guide"]
-[ext_resource type="PackedScene" path="res://scenes/ui/campaign_objective_banner.tscn" id="4_campaign_objective_banner"]
+[ext_resource type="PackedScene" path="res://scenes/ui/campaign_objective_banner.tscn" id="3_campaign_objective_banner"]
 
 [node name="WorldMap" type="Node2D"]
 script = ExtResource("1_world_map")
 
 [node name="Board" type="Node2D" parent="."]
+position = Vector2(416, 136)
 
 [node name="Tiles" type="Node2D" parent="Board"]
 
@@ -19,24 +19,6 @@ script = ExtResource("1_world_map")
 [node name="Routes" type="Node2D" parent="Board"]
 
 [node name="HUD" type="CanvasLayer" parent="."]
-
-[node name="CampaignGuide" parent="HUD" instance=ExtResource("3_campaign_guide")]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 0
-offset_left = 16.0
-offset_top = 16.0
-offset_right = 332.0
-offset_bottom = 160.0
-
-[node name="CampaignObjectiveBanner" parent="HUD" instance=ExtResource("4_campaign_objective_banner")]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 0
-offset_left = 16.0
-offset_top = 168.0
-offset_right = 332.0
-offset_bottom = 264.0
 
 [node name="Margin" type="MarginContainer" parent="HUD"]
 layout_mode = 1
@@ -59,7 +41,18 @@ theme_override_constants/separation = 8
 [node name="TopRow" type="HBoxContainer" parent="HUD/Margin/VBox"]
 layout_mode = 2
 mouse_filter = 2
-alignment = 2
+theme_override_constants/separation = 16
+
+[node name="CampaignObjectiveBanner" parent="HUD/Margin/VBox/TopRow" instance=ExtResource("3_campaign_objective_banner")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+
+[node name="TopSpacer" type="Control" parent="HUD/Margin/VBox/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
 
 [node name="TopRight" type="VBoxContainer" parent="HUD/Margin/VBox/TopRow"]
 layout_mode = 2

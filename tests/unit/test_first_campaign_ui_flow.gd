@@ -380,120 +380,22 @@ func test_a_real_click_after_the_real_post_victory_scene_change_selects_the_part
 	assert_eq(live_world_map.name, "WorldMap")
 	assert_false(live_world_map.party_selected)
 
+	var gut_layer := _hide_gut_debug_panel()
 	var party_pixel_center: Vector2 = (
-		Vector2(live_world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+		live_world_map.board.global_position + Vector2(live_world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
 	click_event.position = party_pixel_center
 	live_world_map.get_viewport().push_input(click_event, true)
+	if gut_layer != null:
+		gut_layer.visible = true
 
 	assert_true(
 		live_world_map.party_selected,
 		"a click pushed through the real pipeline on the REAL post-victory world map must select the party"
 	)
-
-
-## Covers 04-first-campaign-guidance.md's Red requirement directly: instance
-## the real World Map with its real CampaignGuide banner visible, then push
-## a real InputEventMouseButton (the same Viewport/GUI pipeline the test
-## above uses, not the private _handle_tile_click() shortcut) through a
-## board tile the banner's fixed top-left rect visually overlaps, and prove
-## the click still reaches the board and selects the party. This is the
-## regression the banner's MOUSE_FILTER_IGNORE tree exists to prevent.
-func test_campaign_guide_never_blocks_a_real_click_through_a_guided_world_map_region() -> void:
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
-	assert_true(GameSession.has_deployed_party())
-
-	# Move the party to a tile the guide's top-left banner rect (offset
-	# 16..332 x, 16..160 y -- see scenes/world/world_map.tscn) visually
-	# covers, so a click there is a genuine click-through-the-banner case.
-	var covered_position := Vector2i(1, 1)
-	GameSession.set_deployed_party_position(covered_position)
-
-	var world_map: Node2D = WorldMapScene.instantiate()
-	add_child_autofree(world_map)
-	assert_eq(world_map.party_position, covered_position)
-
-	var guide: Control = world_map.get_node("%CampaignGuide")
-	assert_eq(guide.mouse_filter, Control.MOUSE_FILTER_IGNORE, "the guide must never absorb input")
-	assert_eq(
-		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE,
-		"a freshly deployed party with no route yet should be showing the select-route guide"
-	)
-	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
-
-	var covered_pixel_center: Vector2 = Vector2(covered_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
-	assert_true(
-		guide.get_global_rect().has_point(covered_pixel_center),
-		"the covered tile must genuinely sit under the guide's rect, or this test proves nothing"
-	)
-
-	assert_false(world_map.party_selected)
-	var click_event := InputEventMouseButton.new()
-	click_event.button_index = MOUSE_BUTTON_LEFT
-	click_event.pressed = true
-	click_event.position = covered_pixel_center
-	world_map.get_viewport().push_input(click_event, true)
-
-	assert_true(
-		world_map.party_selected,
-		"a real click through the guided region must still select the party underneath the banner"
-	)
-
-
-## Manual playtesting found the Dismiss button itself unreachable on the
-## World Map: HUD/Margin (and its VBox/TopRow descendants) are LATER
-## siblings than HUD/CampaignGuide in world_map.tscn, so Godot's GUI hit
-## test checks them first -- and being containers, their default
-## mouse_filter (PASS) still claims their own full-width row for hit-testing
-## purposes, even though TopRow's visible content (EndTurnButton/
-## InformationPanel) is right-aligned far away from where the banner
-## actually sits. PASS only bubbles the event up TopRow's own ancestor
-## chain; it never lets the separate CampaignGuide sibling branch underneath
-## it take the click. This test proves the real pixel a player would click
-## -- the Dismiss button's own on-screen rect -- actually reaches it.
-func test_campaign_guide_dismiss_button_is_reachable_by_a_real_click_on_the_world_map() -> void:
-	_unload_any_stale_real_scene()
-	GameSession.create_party()
-	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
-	GameManager.deploy_party(GameSession.FIRST_PARTY_ID)
-	assert_true(GameSession.has_deployed_party())
-
-	var world_map: Node2D = WorldMapScene.instantiate()
-	add_child_autofree(world_map)
-	# The Dismiss button's on-screen position depends on CampaignGuide's own
-	# internal VBoxContainer sort, which Godot defers to the end of the
-	# frame -- let it actually run (empirically, two frames) before trusting
-	# get_global_rect().
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	var guide: Control = world_map.get_node("%CampaignGuide")
-	assert_eq(
-		GameSession.get_campaign_guide_state(), GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE,
-		"a freshly deployed party with no route yet should be showing the select-route guide"
-	)
-	assert_true(guide.visible, "the guide must actually be on screen for this to be a real regression check")
-
-	var dismiss_button: Button = guide.get_node("%DismissButton")
-	var dismiss_pixel_center: Vector2 = dismiss_button.get_global_rect().get_center()
-
-	# The awaits above give another test elsewhere in this suite a chance to
-	# interleave (Godot coroutines don't fully serialize two awaiting tests)
-	# and re-plant a stale current_scene -- clear it again, right before
-	# this click, not just once at the top of the test.
-	_unload_any_stale_real_scene()
-	_push_click(world_map.get_viewport(), dismiss_pixel_center)
-
-	assert_true(
-		GameSession.tutorial_progress.get(GameSession.CAMPAIGN_GUIDE_SELECT_ROUTE, false),
-		"a real click on the Dismiss button's own on-screen position must record the dismissal"
-	)
-	assert_false(guide.visible, "the guide must hide itself once its message has been dismissed")
 
 
 ## The fix for the Dismiss-button bug above sets mouse_filter = IGNORE on

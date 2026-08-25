@@ -25,6 +25,13 @@ func _deploy_warrior_party() -> void:
 	GameSession.depart_selected_party()
 
 
+func _hide_gut_debug_panel() -> CanvasLayer:
+	var gut_layer: CanvasLayer = get_tree().root.get_node_or_null("GutRunner/GutLayer")
+	if gut_layer != null:
+		gut_layer.visible = false
+	return gut_layer
+
+
 func _make_world_map() -> Node2D:
 	var world_map: Node2D = WorldMapScript.new()
 	world_map.grid = GridScript.new(WorldMapScript.GRID_WIDTH, WorldMapScript.GRID_HEIGHT)
@@ -118,7 +125,7 @@ func test_a_real_click_event_selects_the_party_even_when_the_tracked_cursor_posi
 	add_child_autofree(world_map)
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -165,7 +172,7 @@ func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline()
 	await get_tree().process_frame
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -184,7 +191,10 @@ func test_a_pushed_click_event_selects_the_party_through_the_real_gui_pipeline()
 	# with the fresh instance above.
 	if get_tree().current_scene != null:
 		get_tree().unload_current_scene()
+	var gut_layer := _hide_gut_debug_panel()
 	world_map.get_viewport().push_input(click_event, true)
+	if gut_layer != null:
+		gut_layer.visible = true
 
 	assert_true(
 		world_map.party_selected,
@@ -206,7 +216,7 @@ func test_a_party_cell_click_still_selects_the_party_now_that_tiles_and_the_mark
 	add_child_autofree(world_map)
 	assert_false(world_map.party_selected)
 
-	var party_pixel_center := Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	var party_pixel_center := world_map.board.global_position + Vector2(world_map.party_position) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
 	var click_event := InputEventMouseButton.new()
 	click_event.button_index = MOUSE_BUTTON_LEFT
 	click_event.pressed = true
@@ -214,7 +224,10 @@ func test_a_party_cell_click_still_selects_the_party_now_that_tiles_and_the_mark
 
 	if get_tree().current_scene != null:
 		get_tree().unload_current_scene()
+	var gut_layer := _hide_gut_debug_panel()
 	world_map.get_viewport().push_input(click_event, true)
+	if gut_layer != null:
+		gut_layer.visible = true
 
 	assert_true(
 		world_map.party_selected,
@@ -2457,4 +2470,45 @@ func test_clicking_a_party_with_no_arrival_of_its_own_does_not_bounce_selection_
 	assert_false(
 		panel.visible,
 		"Bravo has no live arrival, so no panel should reopen for anyone -- Alpha's must stay closed, not reopen"
+	)
+
+
+## Information Design Step 3 (03-panels-and-modal-shell.md):
+## World Map information has distinct top/right/bottom zones with
+## non-intersecting rects at the supported viewport (1280x720), and legacy
+## overlapping guidance (CampaignGuide) is absent from the World Map.
+func test_world_map_panels_have_non_intersecting_rects_and_no_legacy_overlapping_guidance() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	assert_null(
+		world_map.get_node_or_null("%CampaignGuide"),
+		"Legacy overlapping CampaignGuide must be absent from the World Map"
+	)
+
+	var objective_banner: Control = world_map.get_node("%CampaignObjectiveBanner")
+	var info_panel: Control = world_map.get_node("%InformationPanel")
+	var bottom_hint: Control = world_map.get_node("%Hint")
+
+	assert_not_null(objective_banner, "Top zone must contain CampaignObjectiveBanner")
+	assert_not_null(info_panel, "Right zone must contain InformationPanel")
+	assert_not_null(bottom_hint, "Bottom zone must contain Hint")
+
+	var banner_rect: Rect2 = objective_banner.get_global_rect()
+	var info_rect: Rect2 = info_panel.get_global_rect()
+	var hint_rect: Rect2 = bottom_hint.get_global_rect()
+
+	assert_false(
+		banner_rect.intersects(info_rect),
+		"CampaignObjectiveBanner rect %s must not intersect InformationPanel rect %s" % [banner_rect, info_rect]
+	)
+	assert_false(
+		banner_rect.intersects(hint_rect),
+		"CampaignObjectiveBanner rect %s must not intersect Hint rect %s" % [banner_rect, hint_rect]
+	)
+	assert_false(
+		info_rect.intersects(hint_rect),
+		"InformationPanel rect %s must not intersect Hint rect %s" % [info_rect, hint_rect]
 	)

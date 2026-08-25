@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scripts/ui/campaign_objective_banner.gd" id="1_banner"]
 
 [node name="CampaignObjectiveBanner" type="PanelContainer"]
+custom_minimum_size = Vector2(320, 0)
 layout_mode = 3
 anchors_preset = 0
 offset_right = 320.0
