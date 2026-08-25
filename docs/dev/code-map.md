@@ -73,6 +73,7 @@ scenes/                          scripts/
 │    stores, trading_post,
 │    sell_quantity_dialog,
 │    assign_equipment,
+│    card_navigator,
 │    camp_nav)
 ├── world/
 ├── local/
@@ -297,6 +298,17 @@ receives a signal from its parent screen — every wired button calls a
 (`party_selected`, `adventurer_selected`, `recruit_selected`) up to the
 parent screen instead of routing themselves, since its "View" destination
 depends on the parent screen's own selection.
+
+## Card navigation: CardNavigator is a reusable shell, not a domain view
+
+`scenes/ui/card_navigator.tscn` (`scripts/ui/card_navigator.gd`) is a
+full-screen blocking modal shell for browsing ordered detail cards. It owns
+only an immutable snapshot of IDs (`open(ids, initial_id)`), index wraparound
+arithmetic, previous/next/close button wiring, position indicators (`%d of %d`),
+and focus management (restoring focus to the caller's target control on close).
+It contains a generic `ContentContainer` for caller-owned card bodies and
+emits `card_changed(id)` and `closed(last_id)`. It never mutates caller rows,
+holds domain state, or touches `GameSession`/`GameManager`.
 
 ## Progression formulas
 

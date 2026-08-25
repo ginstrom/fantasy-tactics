@@ -613,5 +613,12 @@ messages = {
 "journal.battle.retreat.title": "Battle Retreat",
 "journal.loot.title": "Loot Received",
 "journal.level_up.title": "Level Up",
-"journal.guidance.title": "Campaign Guidance"
+"journal.guidance.title": "Campaign Guidance",
+"card_nav.previous": "Previous",
+"card_nav.next": "Next",
+"card_nav.close": "Close",
+"card_nav.count": "%d of %d",
+"ui.close": "Close",
+"ui.previous": "Previous",
+"ui.next": "Next"
 }
