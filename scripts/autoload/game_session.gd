@@ -2096,6 +2096,10 @@ func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
 	return party_service.remove_adventurer_from_selected_party(adventurer_id)
 
 
+func remove_adventurer_from_party(party_id: String, adventurer_id: String) -> bool:
+	return party_service.remove_adventurer_from_party(party_id, adventurer_id)
+
+
 func can_depart_selected_party() -> bool:
 	return party_service.can_depart_selected_party()
 

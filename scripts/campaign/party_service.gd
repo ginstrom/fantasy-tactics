@@ -161,8 +161,12 @@ func assign_adventurer_to_selected_party(adventurer_id: String) -> bool:
 
 
 func remove_adventurer_from_selected_party(adventurer_id: String) -> bool:
-	var party_index := _get_selected_party_index()
-	if party_index == -1:
+	return remove_adventurer_from_party(_gs.selected_party_id, adventurer_id)
+
+
+func remove_adventurer_from_party(party_id: String, adventurer_id: String) -> bool:
+	var party_index := _get_party_index(party_id)
+	if party_index == -1 or not _is_party_encamped(_gs.parties[party_index]):
 		return false
 
 	var member_ids: Array = _gs.parties[party_index].member_ids

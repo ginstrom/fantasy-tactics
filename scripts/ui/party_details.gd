@@ -27,10 +27,12 @@ extends Control
 const TableColumnDescriptor := preload("res://scripts/ui/table_column.gd")
 
 @onready var party_name_label: Label = $Body/Center/VBox/PartyNameLabel
+@onready var party_size_label: Label = $Body/Center/VBox/PartySizeLabel
 @onready var gold_label: Label = $Body/Center/VBox/GoldLabel
 @onready var loot_table: LootTable = $Body/Center/VBox/LootTable
 @onready var member_table: TableView = $Body/Center/VBox/MemberTable
 @onready var empty_label: Label = $Body/Center/VBox/EmptyLabel
+@onready var remove_from_party_button: Button = $Body/Center/VBox/RemoveFromPartyButton
 @onready var add_from_roster_button: Button = $Body/Center/VBox/AddFromRosterButton
 @onready var recruit_button: Button = $Body/Center/VBox/RecruitButton
 @onready var information_panel: PanelContainer = %InformationPanel
@@ -60,6 +62,8 @@ func refresh() -> void:
 	var party := GameSession.get_party(party_id)
 	party_name_label.text = "" if party.is_empty() else party.name
 	var deployed: bool = party.get("deployed", false)
+	var encamped: bool = not party.is_empty() and party.get("location_id", "") == GameSession.STARTING_SETTLEMENT_ID and not deployed
+	party_size_label.text = "%d/%d" % [party.get("member_ids", []).size(), GameSession.get_max_party_size()]
 	var carry := GameSession.get_party_carry(party_id)
 	gold_label.text = tr("party_details.gold") % int(carry.get("gold", 0))
 	loot_table.visible = deployed
@@ -83,6 +87,7 @@ func refresh() -> void:
 		or party.get("member_ids", []).size() >= GameSession.get_max_party_size()
 	)
 	_refresh_selection()
+	_update_remove_from_party_button(party, encamped)
 
 
 func _build_columns() -> Array[TableColumn]:
@@ -131,9 +136,22 @@ func _refresh_selection() -> void:
 	information_panel.refresh_adventurer(selected_adventurer_id)
 
 
+func _update_remove_from_party_button(party: Dictionary, encamped: bool) -> void:
+	var member_ids: Array = party.get("member_ids", [])
+	remove_from_party_button.visible = encamped
+	remove_from_party_button.disabled = selected_adventurer_id == "" or not selected_adventurer_id in member_ids
+
+
 func _on_row_selected(row_id: Variant) -> void:
 	selected_adventurer_id = str(row_id)
 	_refresh_selection()
+	var party := GameSession.get_party(party_id)
+	_update_remove_from_party_button(
+		party,
+		not party.is_empty()
+		and party.get("location_id", "") == GameSession.STARTING_SETTLEMENT_ID
+		and not party.get("deployed", false)
+	)
 
 
 func _on_row_activated(row_id: Variant) -> void:
@@ -146,6 +164,11 @@ func _on_information_panel_adventurer_selected(adventurer_id: String) -> void:
 
 func _on_add_from_roster_pressed() -> void:
 	GameManager.go_to_add_member(party_id)
+
+
+func _on_remove_from_party_pressed() -> void:
+	if GameSession.remove_adventurer_from_party(party_id, selected_adventurer_id):
+		refresh()
 
 
 func _on_recruit_pressed() -> void:

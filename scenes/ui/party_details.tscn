@@ -46,6 +46,10 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 
+[node name="PartySizeLabel" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+
 [node name="GoldLabel" type="Label" parent="Body/Center/VBox"]
 layout_mode = 2
 horizontal_alignment = 1
@@ -69,6 +73,10 @@ layout_mode = 2
 visible = false
 text = "party_details.no_members"
 horizontal_alignment = 1
+
+[node name="RemoveFromPartyButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "Remove from Party"
 
 [node name="AddFromRosterButton" type="Button" parent="Body/Center/VBox"]
 layout_mode = 2
@@ -94,5 +102,6 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [connection signal="pressed" from="Body/Center/VBox/AddFromRosterButton" to="." method="_on_add_from_roster_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/RemoveFromPartyButton" to="." method="_on_remove_from_party_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/RecruitButton" to="." method="_on_recruit_pressed"]
 [connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]

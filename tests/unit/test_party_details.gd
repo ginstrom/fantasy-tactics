@@ -259,6 +259,54 @@ func test_every_member_renders_as_a_row_with_name_class_and_level() -> void:
 	assert_eq(UiTestHelpers.tree_row_values(tree, 3), ["10 / 10"])
 
 
+func test_party_details_shows_current_and_maximum_member_capacity() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_eq(
+		screen.get_node("Body/Center/VBox/PartySizeLabel").text,
+		"2/%d" % GameSession.get_max_party_size()
+	)
+
+
+func test_removing_the_selected_encamped_member_returns_them_to_roster_and_clears_selection() -> void:
+	GameSession.guild_hall_level = GameSession.GUILD_HALL_MAX_LEVEL
+	GameSession.create_party()
+	var selected_party_id := GameSession.selected_party_id
+	GameSession.create_party("Viewed Party")
+	var viewed_party_id := GameSession.selected_party_id
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.assign_adventurer_to_selected_party(GameSession.adventurers[1].id)
+	assert_true(GameSession.select_party(selected_party_id))
+	var screen := _open_party_details(viewed_party_id)
+	var tree: Tree = screen.get_node("Body/Center/VBox/MemberTable/Tree")
+	var remove_button: Button = screen.get_node("Body/Center/VBox/RemoveFromPartyButton")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+
+	assert_false(remove_button.disabled)
+	remove_button.emit_signal("pressed")
+
+	assert_false(GameSession.get_party(viewed_party_id).member_ids.has(GameSession.WARRIOR_ID))
+	assert_eq(GameSession.get_party(selected_party_id).member_ids, [] as Array[String])
+	assert_false(GameSession.get_adventurer(GameSession.WARRIOR_ID).is_empty())
+	assert_true(GameSession.is_adventurer_available(GameSession.WARRIOR_ID))
+	assert_eq(UiTestHelpers.tree_row_values(tree, 0), [GameSession.get_adventurer(GameSession.adventurers[1].id).name])
+	assert_eq(screen.selected_adventurer_id, "")
+	assert_true(remove_button.disabled)
+
+
+func test_remove_from_party_is_hidden_for_a_deployed_party() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.deploy_party(GameSession.FIRST_PARTY_ID)
+	var screen := _open_party_details(GameSession.FIRST_PARTY_ID)
+
+	assert_false(screen.get_node("Body/Center/VBox/RemoveFromPartyButton").visible)
+
+
 func test_party_details_localizes_a_scout_class() -> void:
 	GameSession.adventurers.append(GameSession.get_default_scout("scout_001", "Scout"))
 	GameSession.create_party()
