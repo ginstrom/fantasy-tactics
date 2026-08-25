@@ -35,8 +35,10 @@ added.
 On the very bottom we have a row of action buttons. Move and Action are
 button-only modes; they do not introduce keyboard shortcuts, preserving WASD
 movement controls. I can select a unit (e.g. 1) and then click Move and the
-destination. I can also click Action and a target. If the target is not in
-range, I will move to within range then attack automatically.
+destination. I can also click Action and a target. A melee unit may move to
+within range then attack automatically. A missile unit never auto-moves: if
+the target is outside its current range, no action occurs and the reason is
+written to the bottom battle log. Units do not block line of sight for attacks.
 
 I should see a green range that shows how far I can move and still
 attack. The full range beyond my move-and-attack range is shown in yellow.

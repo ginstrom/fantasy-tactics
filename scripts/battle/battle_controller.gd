@@ -782,15 +782,11 @@ func get_legal_attack_targets(unit) -> Array:
 	var legal_targets: Array = []
 	if unit == null or not unit.is_alive():
 		return legal_targets
-	var blocking_tiles: Array[Vector2i] = []
-	for candidate in units:
-		if candidate != unit and candidate.is_alive():
-			blocking_tiles.append(candidate.grid_position)
 	for target in units:
 		if target.side != unit.side and target.is_alive():
 			if not _in_attack_range(unit, unit.grid_position, target.grid_position):
 				continue
-			if grid.has_line_of_sight(unit.grid_position, target.grid_position, blocking_tiles):
+			if grid.has_line_of_sight(unit.grid_position, target.grid_position):
 				legal_targets.append(target)
 	return legal_targets
 
@@ -809,19 +805,15 @@ func _in_attack_range(unit, from_pos: Vector2i, target_pos: Vector2i) -> bool:
 func get_attackable_tiles_for_unit(unit) -> Array[Vector2i]:
 	if unit == null or not unit.is_alive():
 		return []
-	var blocking_tiles: Array[Vector2i] = []
-	for candidate in units:
-		if candidate != unit and candidate.is_alive():
-			blocking_tiles.append(candidate.grid_position)
 	if unit.attack_max_range == 1:
-		return _melee_attackable_tiles(unit.grid_position, blocking_tiles)
-	return grid.get_attackable_tiles(unit.grid_position, unit.attack_min_range, unit.attack_max_range, blocking_tiles)
+		return _melee_attackable_tiles(unit.grid_position)
+	return grid.get_attackable_tiles(unit.grid_position, unit.attack_min_range, unit.attack_max_range)
 
 
 ## Eight-neighbor counterpart to Grid.get_attackable_tiles() for range-one
 ## weapons, so the attack-range highlight (_update_highlights()) always
 ## matches what get_legal_attack_targets()/_in_attack_range() actually allow.
-func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i]) -> Array[Vector2i]:
+func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i] = []) -> Array[Vector2i]:
 	var attackable: Array[Vector2i] = []
 	for delta_x in range(-1, 2):
 		for delta_y in range(-1, 2):
@@ -842,9 +834,8 @@ func _melee_attackable_tiles(from_pos: Vector2i, blocking_tiles: Array[Vector2i]
 ## it is purely what the player currently sees vs. remembers.
 
 ## Every tile with unobstructed line of sight from at least one living player
-## unit's current position, using the same occupied-tile blocking every
-## other LOS check in this file already uses (see get_legal_attack_targets()'s
-## identical blocking_tiles construction).
+## unit's current position. Battlefield visibility retains living-unit
+## blockers independently of weapon targeting, whose shots pass through units.
 func get_player_visible_tiles() -> Dictionary:
 	var viewers: Array[Vector2i] = []
 	var blocking_tiles: Array[Vector2i] = []
@@ -1369,6 +1360,13 @@ func _execute_direct_attack(target_pos: Vector2i, is_shield_bash: bool, is_calle
 
 	var move_tile = null
 	if not get_legal_attack_targets(selected_unit).has(target):
+		if selected_unit.attack_max_range > 1:
+			last_targeting_failure = {
+				"reason": "out_of_range",
+				"attacker": selected_unit,
+				"target": target,
+			}
+			return false
 		move_tile = find_best_move_and_attack_tile(selected_unit, target)
 		if move_tile == null:
 			last_targeting_failure = {
@@ -2317,11 +2315,7 @@ func _best_enemy_move(unit, target) -> Vector2i:
 func _can_attack_target_from(unit, from_pos: Vector2i, target) -> bool:
 	if not _in_attack_range(unit, from_pos, target.grid_position):
 		return false
-	var blocking_tiles: Array[Vector2i] = []
-	for candidate in units:
-		if candidate != unit and candidate.is_alive():
-			blocking_tiles.append(candidate.grid_position)
-	return grid.has_line_of_sight(from_pos, target.grid_position, blocking_tiles)
+	return grid.has_line_of_sight(from_pos, target.grid_position)
 
 
 ## Stage 5 D4 (Knight specialization): true iff `unit` (never null-checked by

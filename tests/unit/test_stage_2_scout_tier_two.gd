@@ -231,11 +231,9 @@ func test_a_longbow_reaches_a_target_a_shortbow_cannot() -> void:
 	)
 
 
-func test_an_occupied_intermediate_tile_blocks_line_of_sight_to_a_target_behind_it() -> void:
-	# Occupied-endpoint LoS (grid.gd's has_line_of_sight() doc comment): any
-	# other living unit's own tile blocks a shot passing through it, but never
-	# blocks a shot landing ON it -- a blocker standing between the scout and
-	# a priority target is itself still a legal (attackable) target.
+func test_an_occupied_intermediate_tile_does_not_block_a_target_behind_it() -> void:
+	# Weapon targeting does not count living units as line-of-sight blockers,
+	# so both the intervening unit and the priority target remain legal shots.
 	var scenario := _scenario({
 		"scenario_id": "occupied_endpoint_los",
 		"board": {"width": 6, "height": 6},
@@ -255,8 +253,8 @@ func test_an_occupied_intermediate_tile_blocks_line_of_sight_to_a_target_behind_
 
 	var legal_targets: Array = controller.get_legal_attack_targets(scout)
 
-	assert_true(legal_targets.has(blocker), "The blocker's own tile is a legal target (occupied-endpoint exception)")
-	assert_false(legal_targets.has(priority_target), "A living unit standing between the scout and the target blocks the shot")
+	assert_true(legal_targets.has(blocker), "The intervening unit remains a legal target")
+	assert_true(legal_targets.has(priority_target), "A living unit standing between the scout and target must not block the shot")
 
 
 func test_scout_pressures_a_protected_enemy_from_range_while_the_warrior_holds_the_front_line() -> void:

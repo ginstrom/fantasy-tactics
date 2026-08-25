@@ -44,6 +44,23 @@ func test_attackable_tiles_include_only_in_range_positions_with_line_of_sight() 
 	assert_false(tiles.has(Vector2i(3, 1)), "Positions farther than the maximum Manhattan range are excluded")
 
 
+func test_bow_attack_ignores_an_intervening_unit_for_line_of_sight() -> void:
+	var controller := _make_controller(4, 4)
+	var attacker := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
+	attacker.attack_max_range = 3
+	var intervening_unit := UnitScript.new(Vector2i(0, 1), Color.DARK_GRAY)
+	var enemy := UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [attacker, intervening_unit, enemy]
+	controller.selected_unit = attacker
+
+	assert_true(
+		controller.get_legal_attack_targets(attacker).has(enemy),
+		"Units between a bow and its target must not block the shot"
+	)
+	assert_true(controller.try_attack_selected_unit(enemy.grid_position))
+	assert_eq(attacker.grid_position, Vector2i(0, 0), "A clear in-range bow shot must remain stationary")
+
+
 func test_battle_controller_allows_a_bow_target_at_range_three_and_automates_a_melee_move_and_attack() -> void:
 	var controller := _make_controller(6, 6)
 	var attacker := UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE)
