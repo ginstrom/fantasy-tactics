@@ -11,6 +11,8 @@ class_name CampNav
 @onready var units_button: Button = $VBox/UnitsButton
 @onready var buildings_button: Button = $VBox/BuildingsButton
 @onready var trade_button: Button = $VBox/TradeButton
+@onready var journal_button: Button = $VBox/JournalButton
+@onready var journal_badge: Label = $VBox/JournalButton/JournalBadge
 @onready var deploy_party_button: Button = $VBox/DeployPartyButton
 @onready var world_map_button: Button = $VBox/WorldMapButton
 @onready var units_submenu_margin: MarginContainer = $VBox/UnitsSubmenuMargin
@@ -30,6 +32,8 @@ enum Category {
 
 
 func _ready() -> void:
+	if not GameSession.journal_updated.is_connected(refresh):
+		GameSession.journal_updated.connect(refresh)
 	refresh()
 
 
@@ -37,6 +41,7 @@ func refresh() -> void:
 	units_submenu_margin.visible = category == Category.UNITS
 	buildings_submenu_margin.visible = category == Category.BUILDINGS
 	trade_submenu_margin.visible = category == Category.TRADE
+	journal_badge.visible = GameSession.has_unread_journal_entries()
 	deploy_party_button.visible = not GameSession.parties.is_empty()
 	deploy_party_button.disabled = GameSession.get_deployable_encamped_parties().is_empty()
 
@@ -55,6 +60,10 @@ func _on_buildings_button_pressed() -> void:
 
 func _on_trade_button_pressed() -> void:
 	GameManager.go_to_trade()
+
+
+func _on_journal_button_pressed() -> void:
+	GameManager.go_to_journal()
 
 
 func _on_deploy_party_button_pressed() -> void:

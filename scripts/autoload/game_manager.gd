@@ -28,6 +28,7 @@ const TRADING_POST_SCENE := "res://scenes/ui/trading_post.tscn"
 const ASSIGN_EQUIPMENT_SCENE := "res://scenes/ui/assign_equipment.tscn"
 const BATTLE_RESULT_SCENE := "res://scenes/ui/battle_result.tscn"
 const VICTORY_SCREEN_SCENE := "res://scenes/ui/victory_screen.tscn"
+const JOURNAL_SCENE := "res://scenes/ui/journal.tscn"
 const UNIT_DETAILS_ORIGIN_ROSTER := "roster"
 const UNIT_DETAILS_ORIGIN_ADD_MEMBER := "add_member"
 const UNIT_DETAILS_ORIGIN_PARTY_DETAILS := "party_details"
@@ -377,6 +378,11 @@ func go_to_shop() -> Error:
 # Compatibility alias for internal callers during the route rename.
 func go_to_trading_post() -> Error:
 	return go_to_shop()
+
+
+func go_to_journal() -> Error:
+	_clear_detail_context()
+	return _change_scene(JOURNAL_SCENE)
 
 
 ## Mirrors go_to_unit_details()'s validate-then-route shape: an unknown item

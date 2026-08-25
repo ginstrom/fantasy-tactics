@@ -1,0 +1,179 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/journal.gd" id="1_journal"]
+[ext_resource type="PackedScene" path="res://scenes/ui/camp_nav.tscn" id="2_camp_nav"]
+
+[node name="Journal" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_journal")
+
+[node name="Body" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+
+[node name="CampNav" parent="Body" instance=ExtResource("2_camp_nav")]
+layout_mode = 2
+category = 0
+
+[node name="Center" type="CenterContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="Body/Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "journal.title"
+horizontal_alignment = 1
+
+[node name="SectionSelector" type="HBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="LogButton" type="Button" parent="Body/Center/VBox/SectionSelector"]
+layout_mode = 2
+text = "journal.section.log"
+
+[node name="Badge" type="Label" parent="Body/Center/VBox/SectionSelector/LogButton"]
+visible = false
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -11.5
+offset_bottom = 11.5
+grow_horizontal = 0
+grow_vertical = 2
+text = "!"
+horizontal_alignment = 2
+
+[node name="QuestsButton" type="Button" parent="Body/Center/VBox/SectionSelector"]
+layout_mode = 2
+text = "journal.section.quests"
+
+[node name="Badge" type="Label" parent="Body/Center/VBox/SectionSelector/QuestsButton"]
+visible = false
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -11.5
+offset_bottom = 11.5
+grow_horizontal = 0
+grow_vertical = 2
+text = "!"
+horizontal_alignment = 2
+
+[node name="Sections" type="VBoxContainer" parent="Body/Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LogSection" type="VBoxContainer" parent="Body/Center/VBox/Sections"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LogTitle" type="Label" parent="Body/Center/VBox/Sections/LogSection"]
+layout_mode = 2
+text = "journal.log.title"
+horizontal_alignment = 1
+
+[node name="LogEmptyLabel" type="Label" parent="Body/Center/VBox/Sections/LogSection"]
+layout_mode = 2
+text = "journal.log.empty"
+horizontal_alignment = 1
+
+[node name="LogList" type="VBoxContainer" parent="Body/Center/VBox/Sections/LogSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuestsSection" type="VBoxContainer" parent="Body/Center/VBox/Sections"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuestsTitle" type="Label" parent="Body/Center/VBox/Sections/QuestsSection"]
+layout_mode = 2
+text = "journal.quests.title"
+horizontal_alignment = 1
+
+[node name="QuestsEmptyLabel" type="Label" parent="Body/Center/VBox/Sections/QuestsSection"]
+layout_mode = 2
+text = "journal.quests.empty"
+horizontal_alignment = 1
+
+[node name="QuestList" type="VBoxContainer" parent="Body/Center/VBox/Sections/QuestsSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BackButton" type="Button" parent="Body/Center/VBox"]
+layout_mode = 2
+text = "ui.back"
+
+[node name="DetailPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -120.0
+offset_right = 200.0
+offset_bottom = 120.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="DetailPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Content" type="VBoxContainer" parent="DetailPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DetailTitle" type="Label" parent="DetailPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="DetailBody" type="Label" parent="DetailPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+
+[node name="DetailCloseButton" type="Button" parent="DetailPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "journal.detail.close"
+
+[connection signal="pressed" from="Body/Center/VBox/SectionSelector/LogButton" to="." method="_on_log_button_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/SectionSelector/QuestsButton" to="." method="_on_quests_button_pressed"]
+[connection signal="pressed" from="Body/Center/VBox/BackButton" to="." method="_on_back_pressed"]
+[connection signal="pressed" from="DetailPanel/Margin/Content/DetailCloseButton" to="." method="_on_detail_close_pressed"]

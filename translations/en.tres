@@ -39,6 +39,7 @@ messages = {
 "encampment.units": "Units",
 "encampment.buildings": "Buildings",
 "encampment.trade": "Trade",
+"encampment.journal": "Journal",
 "encampment.deploy_party": "Deploy Party",
 "encampment.first_party.title": "Create your first party.",
 "encampment.first_party.message": "You need to create a party before you can venture into the world.",
@@ -591,5 +592,15 @@ messages = {
 "victory.stat.casualties": "Casualties: %d",
 "victory.stat.gold_banked": "Gold Banked: %d",
 "victory.stat.upgrades": "Encampment Upgrades: %d",
-"victory.continue_free_play": "Continue in Free Play"
+"victory.continue_free_play": "Continue in Free Play",
+"journal.title": "Journal",
+"journal.section.quests": "Quests",
+"journal.section.log": "Log",
+"journal.quests.title": "Accepted Quests",
+"journal.quests.empty": "No accepted quests.",
+"journal.log.title": "Journal Log",
+"journal.log.empty": "No journal entries yet.",
+"journal.view": "View",
+"journal.detail.title": "Entry Detail",
+"journal.detail.close": "Close"
 }

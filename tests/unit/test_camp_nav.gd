@@ -22,15 +22,40 @@ func _make_nav() -> Control:
 	return nav
 
 
-func test_shows_all_six_destinations() -> void:
+func test_shows_all_destinations() -> void:
 	var nav := _make_nav()
 
 	assert_eq(nav.get_node("VBox/EncampmentButton").text, "encampment.title")
 	assert_eq(nav.get_node("VBox/UnitsButton").text, "encampment.units")
 	assert_eq(nav.get_node("VBox/BuildingsButton").text, "encampment.buildings")
 	assert_eq(nav.get_node("VBox/TradeButton").text, "encampment.trade")
+	assert_eq(nav.get_node("VBox/JournalButton").text, "encampment.journal")
 	assert_eq(nav.get_node("VBox/DeployPartyButton").text, "encampment.deploy_party")
 	assert_eq(nav.get_node("VBox/WorldMapButton").text, "camp_nav.world_map")
+
+
+func test_journal_button_routes_via_game_manager() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/ui/camp_nav.gd")
+	assert_string_contains(source, "GameManager.go_to_journal()")
+
+
+func test_journal_badge_reflects_aggregate_unread_state() -> void:
+	var nav := _make_nav()
+	var badge: Label = nav.get_node("VBox/JournalButton/JournalBadge")
+	assert_false(badge.visible)
+	assert_eq(badge.text, "!")
+
+	var log_id: String = GameSession.append_journal_entry("battle", "journal.battle.title", {}, "log")
+	assert_true(badge.visible)
+
+	GameSession.mark_journal_entry_read(log_id)
+	assert_false(badge.visible)
+
+	var quest_id: String = GameSession.append_journal_entry("quest", "journal.quest.title", {}, "quests")
+	assert_true(badge.visible)
+
+	GameSession.mark_journal_entry_read(quest_id)
+	assert_false(badge.visible)
 
 
 func test_trade_button_is_enabled() -> void:
