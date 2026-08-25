@@ -36,6 +36,7 @@ func _ready() -> void:
 	unit_detail_card.activate_item_requested.connect(_on_card_activate_item_requested)
 	unit_detail_card.unequip_item_requested.connect(_on_card_unequip_item_requested)
 	unit_detail_card.heal_requested.connect(_on_card_heal_requested)
+	unit_detail_card.add_to_party_requested.connect(_on_card_add_to_party_requested)
 
 	information_panel.refresh()
 	refresh()
@@ -111,7 +112,8 @@ func _open_card_navigator(initial_id: String) -> void:
 	var id_list := adventurer_table.get_displayed_row_ids()
 	if id_list.is_empty():
 		return
-	unit_detail_card.show_assignment = false
+	unit_detail_card.show_assignment = true
+	unit_detail_card.assignment_party_id = party_id
 	var return_target: Control = information_panel.get_node_or_null("Content/AdventurerViewButton")
 	card_navigator.open(id_list, initial_id, return_target)
 	unit_detail_card.set_unit_id(str(card_navigator.get_current_id()))
@@ -155,6 +157,14 @@ func _on_card_unequip_item_requested(target_unit_id: String, slot: String, item_
 func _on_card_heal_requested(caster_id: String, target_id: String) -> void:
 	GameSession.heal_party_member(caster_id, target_id)
 	_handle_card_mutation(caster_id)
+
+
+func _on_card_add_to_party_requested(target_unit_id: String, _requested_party_id: String) -> void:
+	if GameManager.assign_adventurer_to_party(party_id, target_unit_id) == OK:
+		card_navigator.close()
+		GameManager.go_to_party_details(party_id)
+		return
+	refresh()
 
 
 func _on_back_pressed() -> void:

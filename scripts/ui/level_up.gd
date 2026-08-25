@@ -26,15 +26,6 @@ func _ready() -> void:
 	refresh()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		get_viewport().set_input_as_handled()
-		if not GameSession.is_perk_choice_pending(adventurer_id):
-			_on_continue_pressed()
-
-
 ## Shows the level-up modal for the named adventurer.
 func show_for_adventurer(id: String, health_before: int = 0) -> void:
 	adventurer_id = id

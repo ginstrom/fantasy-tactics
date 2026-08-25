@@ -1,7 +1,7 @@
 # Card Navigation System — Verification Report & Caller Audit
 
-**Date:** 2026-08-25  
-**Plan:** `docs/plans/2026-08-25-card-navigation/`  
+**Date:** 2026-08-25
+**Plan:** `docs/plans/2026-08-25-card-navigation/`
 **Milestone:** Step 5 — Coverage audit, regression gate, and handoff
 
 ---

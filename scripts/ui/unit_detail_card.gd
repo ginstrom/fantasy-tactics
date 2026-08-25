@@ -14,6 +14,7 @@ signal add_to_party_requested(unit_id: String, party_id: String)
 
 var unit_id: String = ""
 var show_assignment: bool = false
+var assignment_party_id: String = ""
 var origin: String = ""
 
 @onready var name_label: Label = %NameLabel
@@ -264,6 +265,18 @@ func _refresh_assignment_section(adventurer: Dictionary) -> void:
 	if not eligible_for_assignment:
 		_hide_assignment_section()
 		return
+	if not assignment_party_id.is_empty():
+		var assignment_party := GameSession.get_party(assignment_party_id)
+		var can_assign_to_fixed_party: bool = (
+			not assignment_party.is_empty()
+			and assignment_party.member_ids.size() < GameSession.get_max_party_size()
+		)
+		party_picker.visible = false
+		party_picker.clear()
+		assignment_explanation_label.visible = not can_assign_to_fixed_party
+		add_to_party_button.visible = true
+		add_to_party_button.disabled = not can_assign_to_fixed_party
+		return
 
 	var encamped_parties: Array[Dictionary] = []
 	for party in GameSession.get_encamped_parties():
@@ -289,11 +302,13 @@ func _hide_assignment_section() -> void:
 
 
 func _on_add_to_party_pressed() -> void:
-	var selected_index := party_picker.get_selected()
-	if selected_index < 0:
-		return
-	var party_id: String = party_picker.get_item_metadata(selected_index)
-	add_to_party_requested.emit(unit_id, party_id)
+	var target_party_id := assignment_party_id
+	if target_party_id.is_empty():
+		var selected_index := party_picker.get_selected()
+		if selected_index < 0:
+			return
+		target_party_id = party_picker.get_item_metadata(selected_index)
+	add_to_party_requested.emit(unit_id, target_party_id)
 
 
 func _get_perk_display_name(perk_id: String) -> String:

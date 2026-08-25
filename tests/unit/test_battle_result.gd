@@ -93,6 +93,31 @@ func test_view_button_opens_the_selected_level_up_card_navigator() -> void:
 	assert_eq(screen.level_up.adventurer_id, GameSession.WARRIOR_ID)
 
 
+func test_escape_from_pending_level_up_card_reaches_card_navigator() -> void:
+	GameSession.create_party()
+	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)
+	GameSession.award_party_xp(GameSession.FIRST_PARTY_ID, 40.0)
+	assert_true(GameSession.is_perk_choice_pending(GameSession.WARRIOR_ID))
+	GameManager.battle_result_summary = {
+		"kills_by_type": {}, "total_xp": 40.0, "party_member_count": 1,
+		"leveled_up_ids": [GameSession.WARRIOR_ID],
+	}
+	var isolated_viewport := SubViewport.new()
+	isolated_viewport.size = Vector2i(1280, 720)
+	add_child_autofree(isolated_viewport)
+	var screen = BattleResultScene.instantiate()
+	isolated_viewport.add_child(screen)
+
+	var view_button: Button = screen.level_up_list.get_node("Row_%s/ViewButton_%s" % [GameSession.WARRIOR_ID, GameSession.WARRIOR_ID])
+	view_button.emit_signal("pressed")
+	isolated_viewport.push_input(_escape_event())
+
+	assert_false(screen.card_navigator.visible)
+	assert_true(screen.visible)
+	assert_true(GameSession.is_perk_choice_pending(GameSession.WARRIOR_ID))
+	assert_true(screen.ok_button.disabled)
+
+
 func test_multiple_leveled_units_wrap_through_card_navigator_and_perk_guards_ok_button() -> void:
 	GameSession.create_party()
 	GameSession.assign_adventurer_to_selected_party(GameSession.WARRIOR_ID)

@@ -130,6 +130,24 @@ func test_the_panels_view_button_opens_card_navigator() -> void:
 	assert_eq(navigator.get_current_id(), GameSession.WARRIOR_ID)
 
 
+func test_assigning_from_unit_card_targets_the_current_party() -> void:
+	GameSession.create_party()
+	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
+	var panel: Control = screen.get_node("%InformationPanel")
+	var tree: Tree = screen.get_node("Body/Center/VBox/AdventurerTable/Tree")
+	tree.get_root().get_first_child().select(0)
+	tree.emit_signal("item_selected")
+	panel.get_node("Content/AdventurerViewButton").emit_signal("pressed")
+
+	assert_true(screen.unit_detail_card.add_to_party_button.visible)
+	assert_false(screen.unit_detail_card.party_picker.visible, "Add Member has a fixed route-context party")
+	screen.unit_detail_card.add_to_party_button.emit_signal("pressed")
+
+	assert_eq(GameSession.get_party(GameSession.FIRST_PARTY_ID).member_ids, [GameSession.WARRIOR_ID])
+	assert_false(screen.card_navigator.visible)
+	assert_eq(GameManager.route_context_id, GameSession.FIRST_PARTY_ID)
+
+
 func test_add_member_card_navigator_cycles_and_wraps() -> void:
 	GameSession.create_party()
 	var screen := _open_add_member(GameSession.FIRST_PARTY_ID)
