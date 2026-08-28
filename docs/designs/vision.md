@@ -4,6 +4,10 @@
 
 This document is the master design vision for Fantasy Tactics. It defines the core pillars, high-level architecture, and design intent across all game systems. Detailed subsystem mechanics and implementation contracts are defined in their respective canonical design documents:
 
+Use the [design status legend](README.md#implementation-status-legend): this
+vision describes the full experience, and a feature is **to implement** unless
+its owning design document explicitly marks it implemented.
+
 * **Campaign & Progression Loop**: [Borderlands Campaign Loop](campaign-loop.md)
 * **Combat System**: [Combat System](combat-system.md)
 * **Movement & Action Points**: [Movement and Action Points](movement-and-action-points.md)
@@ -17,10 +21,12 @@ This document is the master design vision for Fantasy Tactics. It defines the co
 
 ## About
 
-A deep tactical/strategic turn-based RPG in a fantasy setting. The first
-complete experience is a compact, 60–90 minute Borderlands campaign: recruit
-and deploy a party, clear authored objectives, return with loot to improve the
-Encampment, and ultimately defeat the source of the incursions. See the
+A deep tactical/strategic turn-based RPG in a fantasy setting. Its complete
+Borderlands campaign is a compact, 60–90 minute authored arc: recruit and
+deploy a party, clear objectives, return with loot to improve the Encampment,
+and ultimately defeat the source of the incursions. Post-victory play and
+multi-party strategic expansion make that arc the start of the broader game.
+See the
 [Borderlands Campaign Loop](campaign-loop.md) for its locked progression,
 defeat, and recovery contract.
 
@@ -82,16 +88,17 @@ for the authoritative recovery rules and deferred healing balance.
 
 ## Party management
 
-The first campaign has exactly one active party. It begins with three
-deployable slots; Guild Hall upgrades raise that to four and then five. The
-initial roster may contain more adventurers than can deploy. Multi-party
-coordination is a core strategic design, but remains deferred implementation
-work beyond the first campaign.
+The Borderlands campaign begins with one active party and three deployable
+slots; Guild Hall upgrades raise that to four and then five. The initial roster
+may contain more adventurers than can deploy. Multiple independently travelling
+parties, their destinations, and coordinated scouting are core full-experience
+systems **to implement**; see [World Map and
+Encounters](world-map-and-encounters.md).
 
 A rich unit and party UI is required, inspired by XCOM/Xenonauts: recruitment,
 development/skills/equipment, party formation, and stats.
 
-As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. The Guild Hall provides the first Warrior/Scout recruitment; Temple recruitment and its later Cleric/Paladin path remain deferred campaign-slice work.
+As the town develops, units become available for recruitment. The numbers and types of units depend on the town size and various buildings. The Guild Hall provides initial Warrior/Scout recruitment; Temple recruitment and its later Cleric/Paladin path are **to implement**.
 
 ## Unit development
 
@@ -135,18 +142,18 @@ Town management needs its own rich UI, although a true town-building experience 
 
 The world should play somewhat like the XCOM world map. Encounter locations
 appear through optional Guild Hall quests or through Scout and Watchtower
-intelligence. The first campaign keeps its one-party implementation boundary;
-the core future model supports multiple independently travelling parties. See
+intelligence. Multiple independently travelling parties are part of the full
+experience and are **to implement**. See
 the [Intelligence System](intelligence.md) and [World Map and
 Encounters](world-map-and-encounters.md).
 
 On the world map, time advances in **Turns** (the unit of time governing encounter repopulation, recruit availability, crafting, etc.). In tactical combat, time advances in **Rounds**. World map turn time is frozen while a party is engaged in an encounter; players can view the map, encampment, and trade, but world turns cannot advance until the battle resolves.
 
-The first campaign uses authored, prerequisite-gated objectives rather than
-repeatable vacancies for required progress. After final victory, repeatable
-free play can refill vacancies without changing the completed campaign state.
-Threat rises at a campaign pace and is displayed as a one-to-five-star World
-Map risk signal.
+The Borderlands campaign uses authored, prerequisite-gated objectives rather
+than repeatable vacancies for required progress. After final victory,
+repeatable free play can refill vacancies without changing the completed
+campaign state. Threat rises at a campaign pace and is displayed as a
+one-to-five-star World Map risk signal.
 
 ### Fog of war
 

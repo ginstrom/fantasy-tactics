@@ -1,5 +1,9 @@
 # UI Layout Design Guidelines
 
+**Implementation status:** these are enduring UI design rules. A component or
+layout that follows them is **to implement** until its owning screen ships;
+consult the [design status legend](README.md#implementation-status-legend).
+
 ## Philosophy
 
 Build UI using **hierarchical layout containers**, not absolute positioning.

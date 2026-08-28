@@ -1,5 +1,11 @@
 # Combat System
 
+**Implementation status:** the shared combat foundation is implemented. Spells,
+cover, facing, flanking, opportunity attacks, critical hits, dodge, parry,
+and conditions are full-experience rules **to implement** unless their owning
+slice explicitly marks them implemented. See the [design status
+legend](README.md#implementation-status-legend).
+
 ## Time Units & Environment
 
 * **Combat Round:** In combat, the unit of time is **Round**. Every eligible unit acts during a Round.

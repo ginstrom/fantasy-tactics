@@ -1,5 +1,10 @@
 # Battle screen layout and fuction
 
+**Implementation status:** this is the target battle-information layout.
+Elements not present in the current Battlefield, including its full party and
+unit-detail presentation, are **to implement**. See the [design status
+legend](README.md#implementation-status-legend).
+
 ```
 +--------------------------------------------------------------------|
 |                 Goblin Encampment Battle                           |

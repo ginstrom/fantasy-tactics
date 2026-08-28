@@ -2,13 +2,18 @@
 
 ## Purpose and status
 
-This is the long-term monster roster and a balance contract for adding it in slices. It describes monsters in the same shared tactical vocabulary as adventurers, but does not make every entry live. The current initial roster is Kobold, Goblin, Orc, and Hobgoblin; future families are added only alongside an encounter, AI behaviour, rewards, and automated balance evidence.
+This is the full monster roster and a balance contract for adding it in slices.
+It describes monsters in the same shared tactical vocabulary as adventurers,
+but does not make every entry live. The initial Kobold, Goblin, Orc, and
+Hobgoblin roster is implemented; every other family is **to implement** only
+alongside an encounter, AI behaviour, rewards, and automated balance evidence.
+See the [design status legend](README.md#implementation-status-legend).
 
 The canonical monster data is eventually a template table owned by `GameSession`, copied into a runtime `Unit` at battle start. A monster has no adventurer progression, equipment inventory, or mutable template state.
 
 ## Campaign encounter contract
 
-The first completable campaign uses twelve required authored battles: three in
+The Borderlands campaign uses twelve required authored battles: three in
 each of tiers 1–3, two pre-boss battles, and a final boss. An authored
 encounter declares its objective id, exact composition, prerequisite, reward,
 intended counterplay, and loss consequence. Repeatable vacancies are

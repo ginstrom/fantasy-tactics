@@ -2,16 +2,18 @@
 
 ## Purpose and status
 
-This document is the canonical design contract for the first completable
-Borderlands campaign. It connects the tactical, party, Encampment, economy,
-and World Map systems described elsewhere in `docs/designs/`. **Contract**
-means a locked roadmap decision that a future slice must implement and test;
-it is not a claim that the behaviour is already shipped. **Deferred** means
-the roadmap deliberately leaves the feature-slice decision open.
+This document is the canonical design contract for the Borderlands campaign:
+the complete authored campaign arc, its post-victory play, and the strategic
+systems it grows into. It connects the tactical, party, Encampment, economy,
+and World Map systems described elsewhere in `docs/designs/`. Read the
+[design status legend](README.md#implementation-status-legend) before using a
+contract as evidence of shipped behaviour. **Contract** means a locked design
+requirement that is **to implement** unless this document explicitly marks it
+implemented. **Decision pending** means the rule or delivery scope is open.
 
 ## Campaign contract
 
-The first campaign is a 60–90 minute arc of twelve required authored battles:
+The Borderlands campaign is a 60–90 minute arc of twelve required authored battles:
 three tier-1 encounters, three tier-2 encounters, three tier-3 encounters, a
 two-battle pre-boss sequence, and a final boss. Its loop is:
 
@@ -21,9 +23,11 @@ Recruit and deploy -> clear the current objective -> return with loot
 -> defeat the final boss -> optional free play
 ```
 
-The campaign has exactly one active party, `party_001`. It begins with three
-deployable slots. Guild Hall upgrades raise deployment capacity to four and
-then five; they do not create additional active parties.
+The campaign begins with one active party, `party_001`, and three deployable
+slots. Guild Hall upgrades raise deployment capacity to four and then five.
+The full strategic experience supports multiple independently travelling
+parties; party dispatch and coordination are **to implement** as defined in
+[World Map and Encounters](world-map-and-encounters.md).
 
 Each authored encounter declares a stable objective id, exact enemy
 composition, prerequisite objective, reward, intended counterplay, and loss
@@ -349,14 +353,14 @@ A party wipe returns the party to the Encampment, permanently resolves deaths,
 and loses all gold and loot. It also discards unbanked/pending rewards. It must
 not erase completed campaign objectives or upgrades.
 
-## Deferred roadmap decisions
+## Decision-pending design work
 
 The following are intentionally not implementation contracts yet:
 
 - **Scout reconnaissance (D6):** discovery, scouting reveals, Watchtowers,
   and optional Guild Hall quests are defined in the [Intelligence
   System](intelligence.md). Their multi-party and time-escalation portions
-  remain deferred from the first campaign implementation.
+  are **to implement**; the exact escalation cadence remains decision pending.
 - **Cleric and Temple scope (D7):** the recovery and details-view healing
   contract above is locked, including exact MP cost, HP range, and targeting
   for the details-view heal. A targeted in-battle heal and temporary

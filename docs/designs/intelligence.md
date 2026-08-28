@@ -1,5 +1,10 @@
 # Intelligence System
 
+**Implementation status:** encounter discovery, scouting, Watchtowers, and
+Guild Hall quests are **to implement**. The formulas below are accepted design
+requirements; quest cadence and time-based escalation remain **decision
+pending**. See the [design status legend](README.md#implementation-status-legend).
+
 Intelligence makes encounter discovery and preparation a strategic activity.
 Its rules apply to live encounter instances; a new instance receives a new
 knowledge record even when it uses a familiar template. An encounter record
@@ -162,11 +167,11 @@ loot value; at higher tiers it may be an item instead of gold. Quest duration,
 the exact expected-value table, and quest posting cadence are balance data,
 owned by `GameConfig`, when this system is implemented.
 
-## Scope
+## Full-experience scope
 
-The strategic model is designed for multiple parties. The first Borderlands
-campaign continues to implement exactly one active party; multi-party
-dispatch, simultaneous scouting parties, Guild Hall tier 4, and time-based
-quest escalation remain deferred implementation work. See [World Map and
+The strategic model supports multiple parties. Multi-party dispatch,
+simultaneous scouting parties, Guild Hall tier 4, and time-based quest
+escalation are **to implement** for the full experience. The exact escalation
+cadence remains **decision pending**. See [World Map and
 Encounters](world-map-and-encounters.md) and the [Borderlands Campaign
 Loop](campaign-loop.md).

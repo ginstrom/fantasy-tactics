@@ -1,12 +1,17 @@
 # World Map and Encounters
 
+**Implementation status:** the route and encounter foundation is implemented.
+Multiple independently travelling parties, dispatch, and coordinated scouting
+below are **to implement**. See the [design status
+legend](README.md#implementation-status-legend).
+
 The World Map is an open strategic area, not a tactical movement grid. It
 retains an underlying grid only to place the Encampment and encounter
 locations. Parties can travel only between those locations. Straight-line grid
 distance, rounded up to a whole number, is the travel time in World Map Turns.
 The same turn distance is used by the [Intelligence System](intelligence.md).
 
-## Future multi-party model
+## Multi-party model — To implement
 
 Clicking an encounter location shows every detail currently known about it. If
 there are eligible parties, the right panel offers **Send Party**. Choosing it
@@ -25,9 +30,9 @@ shows its destination and remaining travel time in the right information
 panel. A selected destination replaces that party's prior destination.
 
 The strategic model supports multiple parties, including independent travel
-and scouting. The first Borderlands campaign deliberately implements one
-active party; multi-party dispatch is deferred rather than contradicted by the
-campaign scope.
+and scouting. The Borderlands campaign begins with one active party, while
+multi-party dispatch expands the same campaign and its post-victory play; it
+is **to implement**, not a separate or incompatible mode.
 
 ## Arrival and withdrawal
 

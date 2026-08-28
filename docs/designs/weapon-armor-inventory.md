@@ -1,5 +1,9 @@
 # Weapon and Armor Inventory
 
+**Implementation status:** the active weapon/armor baseline is implemented.
+Per-unit carried inventories, activation, and unequipping below are **to
+implement**. See the [design status legend](README.md#implementation-status-legend).
+
 ## Scope
 
 Both weapons and armor are per-unit inventories. A unit only ever
