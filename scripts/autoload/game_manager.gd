@@ -577,6 +577,7 @@ const _DEBUG_LAUNCH_SCENE_PATHS := {
 	"settlement": STARTING_SETTLEMENT_SCENE,
 	"encampment": ENCAMPMENT_SCENE,
 	"party_manager": PARTY_MANAGER_SCENE,
+	"parties": PARTIES_SCENE,
 	"world_map": WORLD_MAP_SCENE,
 	"battlefield": BATTLEFIELD_SCENE,
 	"stores": STORES_SCENE,

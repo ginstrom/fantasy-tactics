@@ -167,19 +167,14 @@ func test_run_debug_scenario_reports_unavailable_outside_debug_builds() -> void:
 	assert_string_contains(source, "if not OS.is_debug_build():\n\t\treturn ERR_UNAVAILABLE")
 
 
-func test_run_debug_scenario_launches_the_starting_settlement() -> void:
+func test_run_debug_scenario_launches_parties() -> void:
 	GameSession.reset()
-	assert_eq(_run("new_campaign"), OK)
+	assert_eq(_run("party_manager"), OK)
 
 
 func test_run_debug_scenario_launches_the_encampment() -> void:
 	GameSession.reset()
 	assert_eq(_run("encampment"), OK)
-
-
-func test_run_debug_scenario_launches_the_party_manager() -> void:
-	GameSession.reset()
-	assert_eq(_run("party_manager"), OK)
 
 
 func test_run_debug_scenario_launches_the_world_map() -> void:
@@ -219,7 +214,7 @@ func test_run_debug_scenario_leaves_every_fixtures_snapshot_unchanged_after_rout
 	add_child_autofree(manager)
 
 	var cases := [
-		["settlement", "new_campaign"],
+		["parties", "party_manager"],
 		["encampment", "encampment"],
 		["party_manager", "party_manager"],
 		["world_map", "world_map"],

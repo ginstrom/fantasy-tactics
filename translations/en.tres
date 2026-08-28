@@ -379,7 +379,7 @@ messages = {
 "debug.close_hint": "F9: close",
 "debug.new_campaign": "New Campaign",
 "debug.encampment": "Encampment",
-"debug.party_manager": "Party Manager",
+"debug.party_manager": "Parties",
 "debug.party_ready": "Party Ready to Depart",
 "debug.party_empty": "Party Awaiting a Member",
 "debug.world_map": "Party on World Map",

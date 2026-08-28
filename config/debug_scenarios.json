@@ -369,10 +369,10 @@
         "journal_entries": []
       },
       "category": "Campaign",
-      "description": "A brand-new campaign at the starting settlement.",
+      "description": "A brand-new campaign opened directly to Parties.",
       "id": "new_campaign",
       "launch": {
-        "scene": "settlement"
+        "scene": "parties"
       },
       "name_key": "debug.new_campaign"
     },
@@ -1119,10 +1119,10 @@
         "journal_entries": []
       },
       "category": "Campaign",
-      "description": "A fresh campaign opened directly to the Party Manager.",
+      "description": "A fresh campaign opened directly to Parties.",
       "id": "party_manager",
       "launch": {
-        "scene": "party_manager"
+        "scene": "parties"
       },
       "name_key": "debug.party_manager"
     },

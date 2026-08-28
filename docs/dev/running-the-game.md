@@ -129,7 +129,7 @@ is rejected the same way a corrupt save would be.
 | `scenarios[].id` | Stable, unique, non-empty. Referenced by `run_debug_scenario(id)` and this file's button-press tests. |
 | `scenarios[].name_key` | A `translations/en.tres` key, shown as the button's label. Add the key there too — see `test_every_shipped_scenario_name_key_resolves_to_translated_text` in `tests/unit/test_debug_scenarios.gd`. |
 | `scenarios[].category` | Plain display string (not a translation key). Scenarios sharing a category are grouped under one header, in the category's first-seen order. |
-| `scenarios[].launch.scene` | One of `settlement`, `encampment`, `party_manager`, `world_map`, `battlefield`, `stores` (`DebugScenarios.ALLOWED_LAUNCH_SCENES`). A `battlefield` launch additionally requires the fixture's own `selected_encounter` to be non-empty — the dispatcher never calls `GameSession.enter_encounter()` itself. |
+| `scenarios[].launch.scene` | One of `settlement`, `encampment`, `party_manager`, `parties`, `world_map`, `battlefield`, `stores` (`DebugScenarios.ALLOWED_LAUNCH_SCENES`). A `battlefield` launch additionally requires the fixture's own `selected_encounter` to be non-empty — the dispatcher never calls `GameSession.enter_encounter()` itself. |
 | `scenarios[].campaign_snapshot` | A complete `CampaignSnapshot` document — see below for how to produce one. |
 
 ### Generate a fixture

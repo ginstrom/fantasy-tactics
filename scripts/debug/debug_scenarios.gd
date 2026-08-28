@@ -16,7 +16,7 @@ extends RefCounted
 const DEFAULT_MANIFEST_PATH := "res://config/debug_scenarios.json"
 const SUPPORTED_MANIFEST_VERSION := 1
 const ALLOWED_LAUNCH_SCENES: Array[String] = [
-	"settlement", "encampment", "party_manager", "world_map", "battlefield", "stores",
+	"settlement", "encampment", "party_manager", "parties", "world_map", "battlefield", "stores",
 ]
 
 static var _scenarios: Array[Dictionary] = []

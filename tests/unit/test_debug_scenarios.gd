@@ -35,6 +35,8 @@ func _assert_fixture_round_trips(scenario_id: String) -> void:
 
 func test_new_campaign_fixture_round_trips_through_apply_and_export() -> void:
 	_assert_fixture_round_trips("new_campaign")
+	var scenario := DebugScenarios.get_scenario("new_campaign")
+	assert_eq(scenario.launch.scene, "parties", "New campaign scenario must launch parties directly instead of legacy settlement")
 
 
 func test_encampment_fixture_round_trips_through_apply_and_export() -> void:
@@ -43,6 +45,8 @@ func test_encampment_fixture_round_trips_through_apply_and_export() -> void:
 
 func test_party_manager_fixture_round_trips_through_apply_and_export() -> void:
 	_assert_fixture_round_trips("party_manager")
+	var scenario := DebugScenarios.get_scenario("party_manager")
+	assert_eq(scenario.launch.scene, "parties", "Party management scenario must launch parties directly instead of legacy party_manager redirect")
 
 
 func test_party_ready_fixture_round_trips_through_apply_and_export() -> void:
