@@ -67,13 +67,16 @@ the conventions already established in that file's siblings rather than
 inventing a new style. The patterns below are the non-obvious ones, learned
 while adding `tests/unit/test_first_campaign_ui_flow.gd`'s full-loop test.
 
-### Always reset `GameSession` in `before_each`
+### Always reset autoloads in `before_each`
 
-`GameSession` and `GameManager` are autoloads — singletons that persist
-state across tests in the same run. Every test file starts its `before_each`
-with `GameSession.reset()`, and clears any `GameManager` routing fields
-(`route_context_id`, `unit_details_origin`, `add_member_return_party_id`)
-it touches, so state from one test cannot leak into the next.
+`GameSession`, `GameManager`, and `AudioManager` are autoloads — singletons
+that persist state across tests in the same run. Every test file starts its
+`before_each` with `GameSession.reset()`, clears any `GameManager` routing
+fields (`route_context_id`, `unit_details_origin`, `add_member_return_party_id`)
+it touches, and calls `AudioManager.reset()` if audio playback or volume state
+is exercised, so state from one test cannot leak into the next. Tests touching
+audio settings can also override `AudioManager.settings_path` to a throwaway
+path.
 
 ### Instantiate the real `.tscn` when you need real signal wiring
 

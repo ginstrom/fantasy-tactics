@@ -16,6 +16,8 @@ This documentation is meant to be a roadmap to the code: the general layout and 
 | Run the automated test suite, or write a new test | [testing.md](testing.md) |
 | Get oriented in the codebase before making a change | [code-map.md](code-map.md) |
 | Play N headless battles and log balance/outcome data | [running-the-game.md](running-the-game.md#run-the-headless-battle-simulator) |
+| Run full headless campaigns for pacing/telemetry data | [running-the-game.md](running-the-game.md#run-full-headless-campaigns) |
+| Run reproducible, deterministic battle policy scenarios | [running-the-game.md](running-the-game.md#run-reproducible-battle-scenarios) |
 
 Each page uses the same structure: **Prerequisites**, then one **Steps /
 Verification / Troubleshooting** block per task. If a step doesn't say how to
@@ -50,18 +52,23 @@ strings against this page depends on it.
   first-playable campaign supports exactly one.
 - **Adventurer** — a unit in the player's roster (`GameSession.adventurers`),
   whether or not it's assigned to a party.
-- **Expedition** — the *template* data for an encounter site (`GameSession.EXPEDITIONS`):
-  fixed stats, position, and clear XP values. Never mutated at runtime.
+- **Expedition** — the *template* data for an encounter site (`GameSession.EXPEDITIONS`
+  and `ContentCatalog` encounter definitions): fixed stats, position, and clear XP values.
 - **Encounter** (or **encounter instance**) — a *spawned, live* copy of an
   expedition sitting on the World Map (`GameSession.active_encounters`), with
   its own id and position. Clearing one removes it permanently; a new
   instance (same or different expedition) may spawn later to refill the
   vacancy.
-- **Reward** — gold queued in `GameSession.battle_reward` on victory, moved
-  to `GameSession.pending_reward` once the player leaves the victory
-  summary for the World Map (`GameSession.merge_battle_loot_into_party`),
-  and only added to `GameSession.gold` once the party returns to the
-  Encampment (`GameSession.deposit_pending_reward`).
+- **Campaign Objective** — an authored milestone node along the 12-stage campaign
+  ladder (`GameSession.CAMPAIGN_OBJECTIVES`), unlocking the next objective and
+  encounter upon victory until reaching the Final Boss.
+- **Journal** — the durable chronological log and quest system (`GameSession.journal_entries`),
+  divided into `log` and `quests` sections, browsed via `scenes/ui/journal.tscn`.
+- **Reward** — gold, crystals, and gear queued in `GameSession._battle_context.reward` on
+  victory, transferred to party carry (`GameSession.resolve_battle_victory`), and deposited into
+  permanent storage upon returning to the Encampment (`GameSession.deposit_pending_reward`).
+- **AudioManager** — the autoload owning sound effect playback, music crossfading,
+  volume/mute preferences (`user://audio-settings.json`), and audio bus routing (`scripts/autoload/audio_manager.gd`).
 - **GameConfig** — the read-only autoload that loads the shipped balance
   configuration once and provides typed fallback-safe lookups. Never owns
   gameplay state.
@@ -69,7 +76,7 @@ strings against this page depends on it.
   thin validation wrappers. Never owns durable game state.
 - **GameSession** — the autoload owning all durable session state and game
   rules (parties, roster, encounters, progression, stores, item ownership,
-  and workshop jobs). Never touches the scene tree.
+  and workshop jobs) with domain services. Never touches the scene tree.
 
 See [code-map.md](code-map.md) for how these fit together in code.
 

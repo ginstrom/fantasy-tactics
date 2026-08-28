@@ -63,7 +63,8 @@ file's schema and how to add to it.
    | Goblin Camp Battle | Battle | Battlefield | Staffed party deployed onto the Goblin Camp encounter, fielding its fixture's 1 Goblin |
    | Orc Outpost Battle | Battle | Battlefield | Staffed party (4 Warriors) deployed onto the Orc Outpost encounter, fielding its fixture's 2 Orcs |
    | Ruined Fortress Battle | Battle | Battlefield | Staffed party (3 Warriors) deployed onto the Ruined Fortress encounter, fielding its fixture's maximum 8 Kobolds |
-   | Stocked Shop + Stores | Shop | Encampment | Staffed encamped party; Shop available; Stores pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword; 500 gold — for exercising the Trade loop (Stores/Shop/Assign Equipment) without playing through a battle first |
+   | Jump to Pre-Boss Encounter | Battle | World Map | Party standing on Pre-Boss Vanguard encounter tile; Tier 3 complete and all remaining battles (Pre-Boss encounters and Ogre Boss) pre-unlocked |
+   | Stocked Shop + Stores | Shop | Stores | Staffed encamped party; Shop available; Stores pre-stocked with 2 tier-1 mana crystals and a banked Iron Shortsword; 500 gold — for exercising the Trade loop (Stores/Shop/Assign Equipment) without playing through a battle first |
 
    A battlefield launch never rerolls its enemy composition — the fixture's
    own `active_encounters` entry is exactly what gets fielded, every time

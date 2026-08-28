@@ -6,15 +6,17 @@ a tutorial — see [running-the-game.md](running-the-game.md) and
 
 ## The autoloads have distinct responsibilities
 
-Three singletons (declared under `[autoload]` in `project.godot`) split the
+Four singletons (declared under `[autoload]` in `project.godot`) split the
 codebase's responsibilities cleanly. Every scene script is a thin view over
-one or both gameplay autoloads; `GameConfig` supplies read-only configuration.
+one or both gameplay autoloads; `GameConfig` supplies read-only configuration,
+and `AudioManager` handles all audio routing and playback.
 
 | Autoload | File | Owns | Never does |
 |---|---|---|---|
 | `GameConfig` | `scripts/autoload/game_config.gd` | Read-only, typed access to `config/game_config.json` with built-in fallback defaults | Hold gameplay state or mutate configuration at runtime |
 | `GameManager` | `scripts/autoload/game_manager.gd` | Scene navigation (`go_to_*`, `_change_scene`), short-lived UI routing context (`route_context_id`), thin `Error`-returning wrappers around `GameSession` calls | Hold durable game state |
-| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), stores/item ownership, and building/workshop jobs | Touch the scene tree |
+| `GameSession` | `scripts/autoload/game_session.gd` | All durable session state and game rules: parties, roster, encounters, world position/routing, progression (XP/levels/perks), stores/item ownership, journal, and building/workshop jobs | Touch the scene tree |
+| `AudioManager` | `scripts/autoload/audio_manager.gd` | Master/Music/SFX bus routing, sound effect playback pool, background music crossfading, and user volume/mute preference persistence (`user://audio-settings.json`) | Hold gameplay state or campaign save data |
 
 A scene's `_on_*_pressed()` handler almost always does one of two things:
 call a `GameManager.go_to_*()`/action method (which may call into
@@ -37,7 +39,7 @@ the exact list). Every other `GameSession` constant (ids, the `EXPEDITIONS`/
 `STAR_ENEMY_COMPOSITIONS`/`WEAPONS`/`ARMORS`/`ENEMY_LOOT_TABLES` content
 tables, grid dimensions) is still a plain code constant — only genuinely
 tunable difficulty/balance numbers moved. `GameConfig` is declared first in
-`project.godot`'s `[autoload]` list, before `GameManager`/`GameSession`,
+`project.godot`'s `[autoload]` list, before `GameManager`/`GameSession`/`AudioManager`,
 specifically so it's fully constructed before `GameSession._ready()` reads
 from it.
 
@@ -54,26 +56,32 @@ locks `DEFAULTS` to the shipped file key by key so the two cannot drift.
 
 ```
 scenes/                          scripts/
-├── boot/                        ├── autoload/    GameConfig, GameManager, GameSession (see above)
+├── boot/                        ├── autoload/    GameConfig, GameManager, GameSession, AudioManager
 ├── ui/                          ├── battle/      BattleController (Grid node), Battlefield,
-│   (encampment, parties,        │                GridScript, Unit, PortraitPanel,
-│    party_details, add_member,  │                UnitInfoPanel
-│    deploy_party, roster,       ├── boot/        entry point → Start Menu
-│    recruitment, units,         ├── debug/       F9 debug menu + scenario definitions
-│    unit_details, start_menu,   ├── local/       starting_settlement.gd (pre-Encampment intro screen)
+│   (encampment, units,          │                GridScript, Unit, PortraitPanel, UnitInfoPanel,
+│    buildings, trade,           │                FloatingText, PerkEffectResolver, WoundVisuals
+│    journal, deploy_party,      ├── boot/        entry point → Start Menu
+│    roster, parties,            ├── campaign/    EncounterService, PartyService (extracted domain services)
+│    recruitment, guild_hall,    ├── content/     ContentCatalog (authored JSON content loader)
+│    temple, blacksmith,         ├── debug/       F9 debug menu + scenario definitions
+│    alchemy_workshop,           ├── local/       starting_settlement.gd (pre-Encampment intro screen)
+│    runic_workshop, stores,     ├── presentation/ SpriteCatalog (texture and frame mapping)
+│    trading_post, start_menu,   ├── progression/ PerkCatalog (DAG definitions), ProgressionService
 │    game_menu, battle_result,   ├── save/        campaign_snapshot.gd, save_repository.gd
-│    campaign_guide,             ├── tools/       screenshot_tour, battle_bot.gd, battle_sim.gd,
-│    information_panel,          │                battle_scenarios/ (runner & policy tools)
-│    loot_detail_panel,          ├── ui/          one script per scenes/ui/ scene, plus shared
-│    loot_table, party_manager,  │                widgets (table_view.gd, table_column.gd) —
-│    level_up, buildings,        │                note: portrait_panel.gd lives in scripts/battle/
-│    guild_hall, blacksmith,     │                above, not here
-│    alchemy_workshop,           └── world/       world_map.gd
-│    runic_workshop, trade,
-│    stores, trading_post,
-│    sell_quantity_dialog,
+│    party_details, add_member,  ├── tools/       screenshot_tour, battle_bot.gd, battle_sim.gd,
+│    unit_details, level_up,     │                campaign_sim.gd, battle_scenarios/ (runner & policy tools)
+│    campaign_guide,             ├── ui/          one script per scenes/ui/ scene, plus shared
+│    campaign_objective_banner,  │                widgets (table_view.gd, table_column.gd,
+│    information_panel,          │                modal_dialog.gd, card_navigator.gd) —
+│    modal_dialog, loot_table,   │                note: portrait_panel.gd lives in scripts/battle/
+│    sell_quantity_dialog,       └── world/       world_map.gd
 │    assign_equipment,
 │    card_navigator,
+│    unit_detail_card,
+│    item_detail_card,
+│    recruitment_card,
+│    journal_entry_card,
+│    victory_screen,
 │    camp_nav)
 ├── world/
 ├── local/
@@ -86,6 +94,14 @@ If you're looking for how something is meant to behave, its test file is
 often more precise than its own source comments.
 
 ## Domain model (as tracked by `GameSession`)
+
+`GameSession` serves as a facade over three extracted domain services:
+`EncounterService` (`scripts/campaign/encounter_service.gd`), `PartyService`
+(`scripts/campaign/party_service.gd`), and `ProgressionService`
+(`scripts/progression/progression_service.gd`). These services own no state
+themselves; each operates directly on `GameSession`'s durable fields via a
+passed `_gs` reference. `GameSession` exposes thin forwarding methods for all
+extracted functions so all external call sites continue to work unchanged.
 
 - **`adventurers: Array[Dictionary]`** — the full roster, whether or not a
   member is assigned to a party. Each entry: `id`, `name`, `class`, and
@@ -107,17 +123,21 @@ often more precise than its own source comments.
   (currently 1; the first party is `FIRST_PARTY_ID = "party_001"`), with a
   per-party size cap from `get_max_party_size()` (Guild Hall level). Each
   entry: `id`, `member_ids`, `location_id`, `world_position: Vector2i`,
-  `deployed: bool`, `travel_route: Array[Vector2i]`, `movement_spent: bool`.
-- **`EXPEDITIONS: Dictionary`** (constant) — the three encounter *templates*
-  (`goblin_camp`, `orc_outpost`, `ruined_fortress`): fixed `position`,
-  `clear_xp`, `difficulty` (star tier), and a documented-default `enemy`.
-  (Per-monster kill XP lives on each enemy's own `*_ENEMY_STATS` const).
+  `deployed: bool`, `travel_route: Array[Vector2i]`, `movement_spent: bool`,
+  and `carry` (gold, gear, mana crystals, item instance IDs).
+- **`CAMPAIGN_OBJECTIVES: Dictionary`** — the 12-node authored campaign ladder
+  (Tiers 1-3, Pre-Boss, Final Boss). `campaign_objective_id` points to the
+  current active objective; completing an authored encounter completes the
+  matching objective, unlocks the next authored encounter in
+  `unlocked_authored_encounters`, and emits `campaign_progress_changed`.
+  Completing the final node triggers `campaign_victory` and enables free play.
+- **`EXPEDITIONS: Dictionary`** & **`ContentCatalog`** — encounter *templates*
+  (`goblin_camp`, `orc_outpost`, `ruined_fortress`, and authored campaign nodes):
+  fixed `position`, `clear_xp`, `difficulty` (star tier), and default `enemy`/`enemies`
+  compositions loaded from `config/content/encounters/` and `config/content/monsters/`.
   A live *active instance*'s `enemy` is re-resolved from
-  `STAR_ENEMY_COMPOSITIONS[difficulty]` every time it's entered (see
-  `enter_encounter()`/`_resolve_enemy_composition()`/
-  `enemy_composition_roll`) — 1 star is a fixed single goblin; 2 stars
-  randomly pick between goblins or an orc; 3 stars randomly pick among
-  kobolds, goblins, orcs, or hobgoblins.
+  `STAR_ENEMY_COMPOSITIONS[difficulty]` when entered for sandbox encounters, while
+  authored encounters maintain their authored compositions.
 - **`active_encounters: Array[Dictionary]`** — the *live instances* on the
   World Map right now, each an expedition-shaped dict plus `id` and
   `template_id`. A cleared instance is removed here (not marked complete in
@@ -135,19 +155,20 @@ often more precise than its own source comments.
   claims a fixed-pool template (overflow refills carry none), and a template
   is claimed iff any roster member or live offer carries its `template_id`
   (`_is_recruitment_template_claimed`).
-- **`gold` / `pending_reward` / `battle_reward`** — a battle win adds to
-  `battle_reward` (the current battle's own, not-yet-shared loot); it moves
-  to `pending_reward` when the player leaves the victory summary for the
-  World Map (`merge_battle_loot_into_party()`, called from
-  `GameManager.go_to_world_map()`), and from there to `gold` only once the
-  party reaches the Encampment (`deposit_pending_reward()`, called from
-  `GameManager.go_to_encampment()`).
+- **`_battle_context` & loot lifecycle** — when combat begins, `create_battle_context()`
+  creates an active battle context with an attributed party, encounter id, and empty reward carry.
+  On victory, `resolve_battle_victory()` transfers the loot into the owning party's `carry`.
+  On retreat, `resolve_battle_retreat()` discards the encounter loot. On defeat (wipe),
+  `resolve_battle_defeat()` forfeits both the battle loot and the party's carried loot.
+  Returning to the Encampment calls `deposit_pending_reward()` to deposit carried gold,
+  crystals, and gear into permanent storage (`gold`, `mana_crystals`, `banked_gear`).
+- **`journal_entries: Array[Dictionary]`** — durable log and quest history.
+  Entries have an `id`, `type` (`"loot"`, `"battle"`, `"quest"`, etc.), `title_key`,
+  `detail` dictionary, `section` (`JOURNAL_SECTION_LOG` or `JOURNAL_SECTION_QUESTS`),
+  and `is_read: bool`. Appending an entry or marking one read emits `journal_updated`.
 - **`mana_crystals` / `banked_gear`** — permanent, stackable loot storage, populated by
-  `deposit_pending_reward()` from the matching `pending_mana_crystals` /
-  `pending_gear` fields queued on encounter victory (see
-  `_roll_and_queue_loot()`). `shop_level` gates selling
-  (`sell_item()`) and buying (`buy_item()`); `WEAPONS`/`ARMORS`/
-  `ENEMY_LOOT_TABLES` are the backing content tables — see
+  `deposit_pending_reward()`. `shop_level` gates selling (`sell_item()`) and buying (`buy_item()`);
+  `WEAPONS`/`ARMORS`/`ENEMY_LOOT_TABLES` are the backing content tables — see
   [`docs/designs/weapon-armor-inventory.md`](../designs/weapon-armor-inventory.md).
 - **`owned_item_instances` / `banked_item_instance_ids`** — unique records
   for modified gear. Each instance identifies an immutable base item and its
@@ -161,6 +182,9 @@ often more precise than its own source comments.
   `runic_workshop_level` plus one rune job. `end_world_turn()` advances their
   absolute completion-turn records; scenes only render and request the
   `GameSession` operations.
+- **Save system & Snapshot contract** — `CampaignSnapshot` (`scripts/save/campaign_snapshot.gd`,
+  schema version 4) validates and serializes/deserializes durable session state.
+  `SaveRepository` (`scripts/save/save_repository.gd`) handles atomic file saving and loading.
 
 **Effective vs. base stats**: `adventurers[i].stats` holds base values.
 Always read combat/display stats through `GameSession.get_effective_*()`
@@ -281,23 +305,29 @@ in `tests/unit/test_world_map.gd`).
 
 `scenes/ui/camp_nav.tscn` (`scripts/ui/camp_nav.gd`) is instanced
 identically into every Encampment screen — Encampment, Units, Buildings,
-Guild Hall, Blacksmith, Alchemy Workshop, Runic Workshop, Trade, Stores,
-Trading Post, Deploy Party, Roster, Parties, Recruitment, Party Details,
-Unit Details, and Add Member — to give a persistent left-hand nav. It is deliberately absent
-from the World Map: that screen isn't part of the Encampment, and a party
-returns home by clicking the settlement tile instead. It renders six
-buttons, all enabled and routing through `GameManager` — Trade opens
-`scenes/ui/trade.tscn`, which lists Stores and (once purchased) Trading
-Post (see [`docs/designs/weapon-armor-inventory.md`](../designs/weapon-armor-inventory.md)).
-CampNav has no state of its own
-beyond the Deploy Party button's disabled flag (set in `refresh()` from
-`GameSession.get_deployable_encamped_parties().is_empty()`) and never
-receives a signal from its parent screen — every wired button calls a
-`GameManager.go_to_*()` directly. That's the opposite of
-`InformationPanel`'s pattern, whose buttons forward a signal
-(`party_selected`, `adventurer_selected`, `recruit_selected`) up to the
-parent screen instead of routing themselves, since its "View" destination
-depends on the parent screen's own selection.
+Guild Hall, Temple, Blacksmith, Alchemy Workshop, Runic Workshop, Trade,
+Stores, Trading Post, Deploy Party, Roster, Parties, Recruitment, Party Details,
+Unit Details, Add Member, Assign Equipment, and Journal — to give a persistent left-hand nav.
+It renders top-level buttons and category submenus:
+
+- **Encampment** — routes to `scenes/ui/encampment.tscn`.
+- **Units** — routes to `scenes/ui/units.tscn`; displays category submenu: **Roster**, **Parties**, **Recruitment**.
+- **Buildings** — routes to `scenes/ui/buildings.tscn`; displays category submenu: **Guild Hall**, **Temple**, **Blacksmith**, **Alchemy Workshop**, **Runic Workshop**.
+- **Trade** — routes to `scenes/ui/trade.tscn`; displays category submenu: **Stores**, **Shop**.
+- **Journal** — routes to `scenes/ui/journal.tscn`; displays a reactive badge when unread journal entries exist (`GameSession.has_unread_journal_entries()`), updating via `GameSession.journal_updated`.
+- **Deploy Party** — routes to `scenes/ui/deploy_party.tscn`; visible when parties exist, disabled when none are deployable in camp.
+- **World Map** — routes directly to `scenes/world/world_map.tscn` when a deployed party is in the field.
+
+CampNav has no state of its own beyond submenu visibility (set by the parent screen's exported `category`) and button enablement/badges. It routes directly through `GameManager.go_to_*()` calls without requiring signals from parent screens.
+
+## Audio system: AudioManager singleton and bus routing
+
+`AudioManager` (`scripts/autoload/audio_manager.gd`) centralizes all sound effect and music playback:
+
+- **Audio Bus Contract** — `project.godot`'s `[audio]` section points `buses/default_bus_layout` to `res://default_bus_layout.tres`, defining `Master`, `Music`, and `SFX` buses.
+- **Playback APIs** — `play_sfx(id, pitch_scale, volume_db)` plays sounds through an internal pool of `AudioStreamPlayer` nodes, supporting pitch jitter (`pitch_jitter_roll`). `play_music(track_id, crossfade_duration)` smoothly crossfades between tracks.
+- **Preferences Storage** — volume and mute preferences are stored in `user://audio-settings.json` (device preferences), surviving new games or save loads.
+- **UI Settings** — `scenes/ui/audio_settings.tscn` (`scripts/ui/audio_settings.gd`) provides interactive volume sliders and mute checkboxes embedded in the game menu.
 
 ## Card navigation: CardNavigator is a reusable shell, not a domain view
 
