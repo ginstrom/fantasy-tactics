@@ -1,8 +1,8 @@
 # Code Audit Findings & Architectural Review
 
-**Date**: 2026-08-28  
-**Scope**: Full codebase audit of Fantasy Tactics (Battle, Campaign & Session State, Persistence & Audio, UI & World Map)  
-**Objective**: Identify structural/architectural issues, potential bugs, and opportunities for idiomatic, readable, and maintainable Godot 4 code.
+**Date**: 2026-08-29
+**Scope**: Source-verified audit of Fantasy Tactics (Battle, Campaign & Session State, Persistence & Audio, UI & World Map)
+**Objective**: Separate confirmed player-facing defects from latent extensibility risks and longer-term maintainability opportunities. Severity reflects demonstrated impact, not code size alone.
 
 ---
 
@@ -10,17 +10,17 @@
 
 | Area | Grade | Strengths | Key Concerns |
 |---|:---:|---|---|
-| **Combat & Battle** | **B-** | Deterministic AI policy, rich status/perk resolution, clean separation of tile geometry in [`GridScript`](file:///home/ryan/play/fantasy-tactics/scripts/battle/grid.gd). | [`BattleController`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd) is a ~3,000-line God Object mixing rules, presentation, and AI; opportunity attack crash in log formatting; synchronous simulation vs. async playback desync. |
-| **Campaign & State** | **C+** | Strong initial service extractions ([`EncounterService`](file:///home/ryan/play/fantasy-tactics/scripts/campaign/encounter_service.gd), [`PartyService`](file:///home/ryan/play/fantasy-tactics/scripts/campaign/party_service.gd), [`ProgressionService`](file:///home/ryan/play/fantasy-tactics/scripts/progression/progression_service.gd)); robust test coverage. | [`GameSession`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_session.gd) is ~4,864 lines; ~1,700 lines of static catalog tables embedded in code; shallow service delegation with direct mutable variable access; vacancy stagnation bugs. |
-| **Persistence & Save** | **B+** | Deep-copy cloning, atomic temp-file writes in [`SaveRepository`](file:///home/ryan/play/fantasy-tactics/scripts/save/save_repository.gd), strict snapshot validation. | Global integer key conversion in [`SaveRepository`](file:///home/ryan/play/fantasy-tactics/scripts/save/save_repository.gd) corrupts string-keyed dictionaries; hardcoded compile-time MP limits break `GameConfig` overrides. |
-| **Audio & Tooling** | **A-** | Excellent headless simulation tools ([`BattleBot`](file:///home/ryan/play/fantasy-tactics/scripts/tools/battle_bot.gd), [`CampaignSim`](file:///home/ryan/play/fantasy-tactics/scripts/tools/campaign_sim.gd)); soft-failing audio loader. | Linear decibel crossfading causes perceived silence dips; non-atomic audio settings write. |
-| **UI & World Map** | **B** | Standardized [`CardNavigator`](file:///home/ryan/play/fantasy-tactics/scripts/ui/card_navigator.gd) modal browser; consistent [`CampNav`](file:///home/ryan/play/fantasy-tactics/scripts/ui/camp_nav.gd) left nav. | Unshielded dialogs permit click-through to map tiles; ~450 duplicated lines between `unit_details.gd` and `unit_detail_card.gd`; mouse motion node churn; lack of domain signals forces manual UI polling/refresh cascades. |
+| **Combat & Battle** | **B-** | Deterministic AI policy, rich status/perk resolution, clean tile geometry. | One confirmed reaction-step crash; one confirmed playback-state presentation defect; the controller remains oversized. |
+| **Campaign & State** | **C+** | Service extractions and broad automated coverage. | Guild Hall upgrades do not populate newly unlocked offer slots; `GameSession` remains a large facade over mutable state. |
+| **Persistence & Save** | **B+** | Deep-copy snapshots, atomic campaign-save writes, strict validation. | MP validation conflicts with configurable caps; global numeric-key normalization is a latent schema constraint. |
+| **Audio & Tooling** | **A-** | Excellent headless simulation tools and soft-failing audio loader. | Crossfade and settings-write concerns require measurement or product direction before prioritization. |
+| **UI & World Map** | **B** | Standardized `CardNavigator` and consistent Encampment navigation. | Confirmed modal click-through; duplicate detail presentation and refresh architecture are maintenance concerns. |
 
 ---
 
-## 2. Critical & High-Severity Bugs
+## 2. Confirmed player-facing defects
 
-### 2.1 [CRITICAL] Runtime Crash on Enemy Opportunity Attack Step in Battle Log
+### 2.1 [HIGH] Runtime crash on an enemy opportunity-attack playback step
 * **File:** [`scripts/battle/battlefield.gd:732`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battlefield.gd#L732)
 * **Description:** When an enemy unit moves during `run_enemy_turn()` and triggers a player unit's Attack of Opportunity, `_take_enemy_unit_actions()` appends `last_reaction_results` directly to `steps`. A reaction step dictionary has the structure `{"type": "reaction", "reactor": ..., "mover": ..., "damage": ...}` — it lacks a `"unit"` key.
 * **Failure Mode:** In `_describe_step()`, unhandled types fall through to:
@@ -28,7 +28,8 @@
   var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
   ```
   Evaluating `step.unit.side` crashes with `Invalid get index 'side' on base 'Nil'`.
-* **Recommendation:** Add a dedicated handler for `step.type == "reaction"` in [`_describe_step()`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battlefield.gd#L710) and guard `step.get("unit")` before accessing properties.
+* **Why HIGH, not critical:** it terminates a battle interaction but does not establish save corruption, data loss, or a startup-wide failure.
+* **Recommendation:** Add a dedicated handler for `step.type == "reaction"` in [`_describe_step()`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battlefield.gd#L710), with a focused scene-level regression that drives an enemy move which provokes a reaction.
 
 ---
 
@@ -40,7 +41,7 @@
 
 ---
 
-### 2.3 [HIGH] Global JSON Key Normalization Corrupts String-Keyed Dictionaries
+### 2.3 [MEDIUM] Global JSON key normalization is a latent schema hazard
 * **File:** [`scripts/save/save_repository.gd:184-188`](file:///home/ryan/play/fantasy-tactics/scripts/save/save_repository.gd#L184-L188), [`scripts/save/campaign_snapshot.gd:826,857,898`](file:///home/ryan/play/fantasy-tactics/scripts/save/campaign_snapshot.gd#L826)
 * **Description:** `SaveRepository._normalize_json_key()` runs globally across every Dictionary in the parsed JSON tree:
   ```gdscript
@@ -49,8 +50,8 @@
           return int(key)
       return key
   ```
-* **Failure Mode:** If any entry ID in `quests` (e.g. `"102"`), `tutorial_progress`, `encounter_intel`, or `owned_item_instances` is numeric, it is converted to an `int`. [`CampaignSnapshot.from_dictionary()`](file:///home/ryan/play/fantasy-tactics/scripts/save/campaign_snapshot.gd#L205) strictly rejects non-string keys, causing valid save files to be rejected as corrupted (`INVALID_SNAPSHOT`).
-* **Recommendation:** Remove global key conversion from `SaveRepository` and restrict `int` key coercion specifically to `mana_crystals` inside `CampaignSnapshot`.
+* **Failure Mode:** A numeric-only key in `quests`, `tutorial_progress`, `encounter_intel`, or `owned_item_instances` would become an `int`; the strict snapshot normalizers reject such keys. Current generated IDs include non-digit characters, so no current save is known to trigger this.
+* **Recommendation:** Before adding a numeric-only ID namespace, either make the conversion schema-aware (only crystal tiers become integers) or explicitly forbid numeric-only keys at every affected write boundary. Add a real JSON round-trip regression for the selected policy.
 
 ---
 
@@ -70,31 +71,31 @@
 
 ---
 
-### 2.6 [HIGH] Synchronous Turn Execution vs. Asynchronous Playback Desync in Battlefield
+### 2.6 [MEDIUM] Enemy-turn playback redraws already-mutated state
 * **File:** [`scripts/battle/battlefield.gd:329-337`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battlefield.gd#L329-L337), [`scripts/battle/battle_controller.gd:2245`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd#L2245)
 * **Description:** `grid.run_enemy_turn()` executes the entire enemy turn synchronously in memory before `_play_enemy_turn()` begins playing back step animations.
 * **Failure Mode:** During delayed playback, `_play_enemy_turn()` calls `_draw_units()` on each step, reading the mutated final state:
   1. A player unit killed on Step 4 disappears from the grid immediately on Step 1.
   2. Enemy units visually appear at their final destination tiles before their movement step plays.
-* **Recommendation:** Execute enemy actions incrementally with awaits between steps, or record visual snapshot diffs in the step records instead of redrawing live unit arrays during historical steps.
+* **Recommendation:** Record per-step visual state or execute one simulation step per playback beat. This is a presentation-correctness issue, not a rules-state desynchronization.
 
 ---
 
-### 2.7 [HIGH] State Reference Leaks via `get_selected_party()` and `adventurers`
-* **File:** [`scripts/campaign/party_service.gd:80-84`](file:///home/ryan/play/fantasy-tactics/scripts/campaign/party_service.gd#L80-L84), [`scripts/ui/assign_equipment.gd:73`](file:///home/ryan/play/fantasy-tactics/scripts/ui/assign_equipment.gd#L73)
-* **Description:** While `get_party(id)` returns `duplicate(true)`, `get_selected_party()` and `_get_party_for_adventurer()` return direct internal dictionary references.
-* **Failure Mode:** UI scripts or callers modifying the returned dictionary directly mutate internal session state without triggering validations or signal emissions.
-* **Recommendation:** Ensure all public session getters return `duplicate(true)` consistently.
+### 2.7 [MEDIUM] Public selected-party access returns a mutable reference
+* **File:** [`scripts/campaign/party_service.gd:80-90`](file:///home/ryan/play/fantasy-tactics/scripts/campaign/party_service.gd#L80-L90)
+* **Description:** `get_selected_party()` returns the stored Dictionary, whereas `get_party(id)` deep-copies it. `_get_party_for_adventurer()` is private and its direct reference is an internal implementation detail, not a public API leak.
+* **Impact:** An external caller can bypass party validation by mutating a selected-party result. The audit did not identify a production caller doing so; [`assign_equipment.gd`](file:///home/ryan/play/fantasy-tactics/scripts/ui/assign_equipment.gd#L73) instead reads the public `adventurers` array and is not evidence for this getter.
+* **Recommendation:** Decide whether `get_selected_party()` is a query or an internal mutation helper. If it is a query, return `duplicate(true)` and add a defensive-copy regression; otherwise rename/document it as an internal mutable accessor.
 
 ---
 
-## 3. Core Architectural & Structural Issues
+## 3. Architectural follow-ups — not immediate bug fixes
 
 ### 3.1 Monolithic God Objects
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    GameSession.gd (4,864 lines)             │
+│                    GameSession.gd (4,863 lines)             │
 ├──────────────────────────────┬──────────────────────────────┤
 │ Static Catalogs (~1,700 ln)  │ Unextracted Domains (~2,500) │
 │ - WEAPONS, ARMORS, POTIONS   │ - Workshop & Crafting        │
@@ -107,76 +108,103 @@
 └──────────────────────────────┴──────────────────────────────┘
 ```
 
-1. **[`GameSession.gd`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_session.gd) (4,864 lines):**
-   - **~1,735 lines of static catalogs:** Hardcoded tables that belong in standalone static catalog scripts or JSON content files.
+1. **[`GameSession.gd`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_session.gd) (4,863 lines):**
+   - **Static catalogs:** Encounters, equipment, classes, and loot still live beside durable state.
    - **~600 lines of forwarders:** Thin 1-line delegations to `PartyService`, `EncounterService`, and `ProgressionService`.
-   - **~2,500 lines of unextracted domains:** Workshop/Crafting, Inventory/Equipment, Trade/Shop, Intel/Quests, Recruitment/Roster, Journal/Guidance, and Snapshot Validation.
-   - **Shallow delegation:** Extracted services own no internal state, directly mutating untyped fields on `_gs: Node`.
+   - **Remaining domains:** Workshop/Crafting, Inventory/Equipment, Trade/Shop, Intel/Quests, Recruitment/Roster, Journal/Guidance, and snapshot orchestration remain concentrated here.
+   - **Assessment:** this is a real maintainability and expansion risk, but not proof that a large rewrite is currently safe. The extracted services deliberately share one durable-state owner; preserve that invariant while extending the existing Stage 6 catalog/domain work in small verified slices.
 
-2. **[`BattleController.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd) (2,962 lines):**
+2. **[`BattleController.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd) (2,961 lines):**
    - Merges combat rules & formulas, spell/perk execution, spatial grid representations, entity instantiation, 2D scene graph rendering (`_draw_tiles`, `_draw_units`, `_update_highlights`), floating combat text pooling, SFX dispatch, and enemy AI into a single script.
 
 ---
 
-### 3.2 Lack of Domain Signals Forcing Fragile UI Polling / Refresh Cascades
+### 3.2 Sparse domain signals create a maintenance cost
 * **File:** [`scripts/autoload/game_session.gd:44-57`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_session.gd#L44-L57), [`scripts/ui/camp_nav.gd`](file:///home/ryan/play/fantasy-tactics/scripts/ui/camp_nav.gd), [`scripts/ui/information_panel.gd`](file:///home/ryan/play/fantasy-tactics/scripts/ui/information_panel.gd)
 * **Finding:** `GameSession` only defines 3 signals (`campaign_progress_changed`, `campaign_victory`, `journal_updated`). It has no signals for `gold_changed`, `party_updated`, `roster_changed`, `inventory_changed`, or `building_upgraded`.
-* **Impact:** Persistent UI components like [`CampNav`](file:///home/ryan/play/fantasy-tactics/scripts/ui/camp_nav.gd) and [`InformationPanel`](file:///home/ryan/play/fantasy-tactics/scripts/ui/information_panel.gd) cannot reactively update; every screen must manually remember to invoke `refresh()` on children in every mutation callback.
+* **Impact:** screens use explicit refresh chains. This is a maintainability concern, not a demonstrated stale-UI bug: `journal_updated` already provides a working reactive precedent.
+* **Recommendation:** introduce a domain signal only where a concrete stale-state or repeated refresh-chain regression is demonstrated; do not add a broad signal inventory preemptively.
 
 ---
 
-### 3.3 Severe Code Duplication: `unit_details.gd` vs `unit_detail_card.gd`
+### 3.3 Substantial detail-view duplication
 * **File:** [`scripts/ui/unit_details.gd`](file:///home/ryan/play/fantasy-tactics/scripts/ui/unit_details.gd) (452 lines) & [`scripts/ui/unit_detail_card.gd`](file:///home/ryan/play/fantasy-tactics/scripts/ui/unit_detail_card.gd) (318 lines)
 * **Finding:** When [`CardNavigator`](file:///home/ryan/play/fantasy-tactics/scripts/ui/card_navigator.gd) was introduced, `unit_detail_card.gd` was created. `unit_details.gd` remains as a full-screen scene with ~450 lines of duplicate logic (stat strings, promotions, gear, healing, party assignment).
-* **Recommendation:** Refactor `unit_details.gd` to host `UnitDetailCard` inside its container or eliminate the legacy scene.
+* **Assessment:** this is a credible cleanup target, but the full-screen view and embedded card have different route/focus responsibilities. Confirm those responsibilities can be composed before replacing the former with the latter.
 
 ---
 
-## 4. Godot 4 Idioms, Performance & Memory Management
+## 4. Performance and idiom candidates — require targeted evidence
 
-### 4.1 Node Allocation and Garbage Churn on Mouse Motion
-* **Files:** [`scripts/world/world_map.gd:122-126`](file:///home/ryan/play/fantasy-tactics/scripts/world/world_map.gd#L122-L126), [`scripts/battle/battle_controller.gd:2884-2962`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd#L2884-L2962)
-* **Issue:** In both World Map route previews and Battle grid highlights, every `InputEventMouseMotion` clears the container via `queue_free()` and instantiates 10–30 new `ColorRect` and `Label` nodes per event. High-polling gaming mice generate thousands of node allocations/deallocations per second.
-* **Recommendation:** Cache the hovered tile position (`if tile_pos == _last_hovered_tile: return`) and use custom `_draw()` canvas items or static pooled highlight grids instead of dynamic Node instantiation.
+### 4.1 World Map route previews allocate nodes for every mouse-motion event
+* **File:** [`scripts/world/world_map.gd:116-125`](file:///home/ryan/play/fantasy-tactics/scripts/world/world_map.gd#L116-L125), [`scripts/world/world_map.gd:318-323`](file:///home/ryan/play/fantasy-tactics/scripts/world/world_map.gd#L318-L323)
+* **Issue:** `_update_hover_route()` always calls `_draw_routes()`, which frees and rebuilds route nodes. This happens even when the pointer remains on the same tile.
+* **Qualification:** the same claim is not established for the Battlefield: it rebuilds highlights only when the hovered **unit** changes.
+* **Recommendation:** cache the last hover tile or route before redrawing the World Map preview; profile before replacing it with a pooled/canvas implementation.
 
-### 4.2 Synchronous Disk I/O in `ContentCatalog` Getter Queries
+### 4.2 ContentCatalog reloading is intentional, not a confirmed performance defect
 * **File:** [`scripts/content/content_catalog.gd:113-163`](file:///home/ryan/play/fantasy-tactics/scripts/content/content_catalog.gd#L113-L163)
-* **Issue:** `ContentCatalog.get_encounter_definition()` re-reads `catalog.json` and all encounter JSONs from disk on every invocation via `load_catalog()`. During world turns and scouting updates, 50+ file read/parse cycles occur in a single tick.
-* **Recommendation:** Cache parsed encounter definitions in memory on startup.
+* **Finding:** `get_encounter_definition()` reloads content, but the loader explicitly chooses this to make hand-edited JSON take effect without restart. The audit found no evidence of 50+ reads in a World Map tick; current call sites are battle setup, campaign simulation, and expedition lookup boundaries.
+* **Recommendation:** retain the current behavior unless profiling shows a real hitch or the content set grows enough to invalidate the documented turn-based trade-off. A cache would need an explicit reload/invalidation contract.
 
-### 4.3 Missing `class_name` Declarations & Untyped Parameters
+### 4.3 Missing `class_name` declarations and loose types
 * **Files:** [`scripts/battle/unit.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/unit.gd), [`scripts/battle/grid.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/grid.gd), [`scripts/battle/battle_controller.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd)
 * **Issue:** Core combat classes lack `class_name` declarations, forcing other scripts to use `preload(...)` constants and declare parameters as generic `Node2D` or untyped `RefCounted`.
-* **Recommendation:** Add `class_name Unit`, `class_name BattleGrid`, `class_name BattleController`, and `class_name FloatingText`.
+* **Assessment:** reasonable incremental cleanup, but not a correctness or performance finding. Adopt only with a focused parser/editor validation because global class names alter project-wide type resolution.
 
-### 4.4 Perceptually Non-Linear Decibel Crossfading in Audio Manager
+### 4.4 Audio crossfade shape and settings persistence
 * **File:** [`scripts/autoload/audio_manager.gd:302-308`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/audio_manager.gd#L302-L308)
-* **Issue:** `_music_tween` tweens `volume_db` linearly from `-80.0 dB` to `0.0 dB`. Because decibels are logarithmic, the outgoing track drops by 90% volume in the first 25% of the fade duration, while the incoming track remains inaudible until the final 25%, creating a noticeable dip in volume mid-crossfade.
-* **Recommendation:** Tween linear volume `0.0 -> 1.0` and convert to dB via `linear_to_db()` using `tween_method()`.
+* **Finding:** the implementation does tween dB values directly, and settings are written directly rather than through the campaign save's atomic-write path. Neither concern has a reproduction, perceptual playtest, or measured failure attached.
+* **Recommendation:** record a short listening check for the crossfade and decide whether settings-file interruption recovery matters before changing either path. If adopted, test an equal-power or linear-amplitude fade and atomic settings replacement separately.
 
 ---
 
-## 5. Prioritized Action Plan & Refactoring Roadmap
+## 5. Revised execution order
 
-### Phase 1: High-Priority Bug Fixes (Immediate)
-1. **Fix Opportunity Attack Log Crash**: Add `reaction` step handling in [`battlefield.gd:_describe_step()`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battlefield.gd#L710).
-2. **Fix World Map Modal Click-Through**: Consume input and block background clicks in [`world_map.gd`](file:///home/ryan/play/fantasy-tactics/scripts/world/world_map.gd).
-3. **Fix Save Repository Key Normalization**: Scope integer conversion specifically to `mana_crystals` in [`campaign_snapshot.gd`](file:///home/ryan/play/fantasy-tactics/scripts/save/campaign_snapshot.gd).
-4. **Fix Snapshot MP Validation**: Dynamically read class MP limits from [`GameConfig`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_config.gd).
-5. **Fix Guild Hall Recruitment Vacancies**: Trigger vacancy refills up to new cap in [`game_session.gd:upgrade_guild_hall()`](file:///home/ryan/play/fantasy-tactics/scripts/autoload/game_session.gd#L2430).
-6. **Fix Mutability Leaks**: Ensure `get_selected_party()` returns `duplicate(true)`.
+### Phase 1: Confirmed defects — plan and implement serially
 
-### Phase 2: Performance & Catalog Optimization
-1. **Cache `ContentCatalog`**: Cache loaded encounter JSONs in memory to eliminate per-turn disk I/O.
-2. **Mouse Motion Throttling**: Cache hovered tile positions in [`world_map.gd`](file:///home/ryan/play/fantasy-tactics/scripts/world/world_map.gd) and [`battle_controller.gd`](file:///home/ryan/play/fantasy-tactics/scripts/battle/battle_controller.gd).
-3. **Externalize Static Catalogs**: Move static dictionary tables (`WEAPONS`, `ARMORS`, `CLASS_DEFINITIONS`, `EXPEDITIONS`, `CAMPAIGN_OBJECTIVES`) from `GameSession.gd` into dedicated static catalog scripts (mirroring [`PerkCatalog`](file:///home/ryan/play/fantasy-tactics/scripts/progression/perk_catalog.gd)).
+1. **Reaction-step crash:** add reaction-specific presentation handling and a
+   scene-level regression that exercises an enemy move provoking an
+   opportunity attack.
+2. **World Map modal input:** block background clicks, make Escape dismiss the
+   active dialog, and test both Arrival and Send Party flows through actual
+   input routing.
+3. **Recruitment-cap upgrade:** decide whether new slots appear immediately or
+   through normal vacancy timing, then test the selected behavior at both Guild
+   Hall upgrades.
+4. **Configurable MP snapshots:** make snapshot validation/migration use the
+   same MP-cap source as runtime, with a temporary non-default `GameConfig`
+   regression.
+5. **Enemy playback state:** choose snapshot-based playback or incremental
+   simulation, then verify that early beats render their own state.
 
-### Phase 3: Domain Service Extractions & Reactive Architecture
-1. **Extract Domain Services from `GameSession`**:
-   - `WorkshopService` (Blacksmith, Alchemy, Runic crafting jobs)
-   - `InventoryService` (Item instances, modifiers, equipment management)
-   - `IntelligenceService` (Scouting, Intel tiers, Quests)
-   - `RecruitmentService` (Candidate generation, vacancy timing)
-   - `TradeService` (Shop economy, buy/sell transactions)
-2. **Introduce Domain Signals**: Add `gold_changed`, `party_updated`, `roster_changed`, and `inventory_changed` to `GameSession`.
-3. **Decompose `BattleController`**: Separate pure `BattleSimulation` (domain rules/state) from `BattleView` (sprites/highlights) and `EnemyAI`.
+Each is a separate behavior change requiring red/green focused tests, the
+full suite, and a manual `make play` check where visual/input behavior is
+involved.
+
+### Phase 2: Bounded hardening after Phase 1
+
+1. Set and test a policy for numeric-only persisted dictionary keys; do not
+   change JSON normalization until that policy is chosen.
+2. Make `get_selected_party()` defensive if it remains a public query, and add
+   a mutation-isolation regression.
+3. Avoid redundant World Map route-preview redraws, with profiling before any
+   larger rendering rewrite.
+
+### Phase 3: Extend existing architecture work deliberately
+
+Continue the existing content/domain extraction direction in small slices:
+catalog ownership first, then a bounded domain service or battle presentation
+seam only when a concrete change is blocked by the current shape. Do not start
+a parallel wholesale `GameSession`/`BattleController` rewrite, add broad
+signals without a demonstrated stale-state failure, or cache `ContentCatalog`
+without an explicit live-reload replacement.
+
+## 6. Verification boundary
+
+This document records source inspection and a full automated-suite baseline,
+not reproductions of every defect. The suite passed on 2026-08-28 with 2,333
+tests and 10,025 assertions; it does not currently cover the reaction playback
+crash, modal click-through/Escape routing, expanded recruitment vacancies,
+non-default MP-cap snapshots, or per-step enemy rendering. Each Phase 1 item
+must add a reproducing test before implementation.
