@@ -1180,6 +1180,106 @@ func test_enemy_playback_keeps_a_later_kill_victim_visible_during_the_first_move
 	assert_false(battlefield._enemy_turn_in_progress, "The controlled playback must settle within the frame cap")
 
 
+func test_enemy_playback_renders_a_surviving_opportunity_reaction_after_its_move_beat() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	battlefield.enemy_turn_beat_seconds = 0.05
+	add_child_autofree(battlefield)
+	await get_tree().process_frame
+	for child in battlefield.grid.unit_container.get_children():
+		child.free()
+	for child in battlefield.grid.shadow_container.get_children():
+		child.free()
+	var reactor = UnitScript.new(
+		Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 3
+	)
+	var enemy = UnitScript.new(
+		Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 1.0
+	)
+	enemy.attack_min_range = 2
+	enemy.attack_max_range = 3
+	battlefield.grid.units = [reactor, enemy]
+	battlefield.grid.active_side = BattleControllerScript.Side.ENEMY
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
+
+	battlefield._play_enemy_turn()
+
+	assert_eq(battlefield.grid.enemy_turn_playback_frames[0].step.type, "move")
+	assert_eq(battlefield.grid.enemy_turn_playback_frames[1].step.type, "reaction")
+	assert_eq(_rendered_unit_sprites(battlefield).size(), 2, "The move beat keeps the enemy visible")
+	assert_true(
+		_rendered_unit_sprite_at(battlefield, Vector2i(2, 0)),
+		"The move beat renders the enemy at its projected destination"
+	)
+
+	await get_tree().create_timer(battlefield.enemy_turn_beat_seconds + 0.01).timeout
+	await get_tree().process_frame
+
+	var reaction_frame: Dictionary = battlefield.grid.enemy_turn_playback_frames[1]
+	var enemy_frame: Array = reaction_frame.visible_units.filter(func(unit): return unit.id == enemy.get_instance_id())
+	assert_eq(_rendered_unit_sprites(battlefield).size(), 2, "The reaction beat keeps a surviving enemy visible")
+	assert_true(
+		_rendered_unit_sprite_at(battlefield, Vector2i(2, 0)),
+		"The reaction beat preserves the enemy's projected destination"
+	)
+	assert_eq(enemy_frame.size(), 1)
+	assert_eq(enemy_frame[0].health, 2, "The reaction frame presents the resolved nonlethal damage")
+
+
+func test_enemy_playback_removes_a_lethally_reacted_enemy_only_on_its_reaction_beat() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	battlefield.enemy_turn_beat_seconds = 0.05
+	add_child_autofree(battlefield)
+	await get_tree().process_frame
+	for child in battlefield.grid.unit_container.get_children():
+		child.free()
+	for child in battlefield.grid.shadow_container.get_children():
+		child.free()
+	var reactor = UnitScript.new(
+		Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 3
+	)
+	var enemy = UnitScript.new(
+		Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 1, 1, 1, 1.0
+	)
+	enemy.attack_min_range = 2
+	enemy.attack_max_range = 3
+	battlefield.grid.units = [reactor, enemy]
+	battlefield.grid.active_side = BattleControllerScript.Side.ENEMY
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_minimum: int, _maximum: int) -> int: return 5
+
+	battlefield._play_enemy_turn()
+
+	assert_eq(battlefield.grid.enemy_turn_playback_frames[0].step.type, "move")
+	assert_eq(battlefield.grid.enemy_turn_playback_frames[1].step.type, "reaction")
+	assert_eq(_rendered_unit_sprites(battlefield).size(), 2, "The move beat renders the enemy before its reaction resolves")
+	assert_true(_rendered_unit_sprite_at(battlefield, Vector2i(2, 0)))
+
+	await get_tree().create_timer(battlefield.enemy_turn_beat_seconds + 0.01).timeout
+	await get_tree().process_frame
+
+	assert_eq(_rendered_unit_sprites(battlefield).size(), 1, "The reaction beat removes the lethally defeated enemy")
+	assert_false(
+		_rendered_unit_sprite_at(battlefield, Vector2i(2, 0)),
+		"The defeated enemy must be absent only after the reaction beat is drawn"
+	)
+
+
+func _rendered_unit_sprites(battlefield: Node2D) -> Array:
+	return battlefield.grid.unit_container.get_children().filter(
+		func(child): return child is Sprite2D and child.name.begins_with("UnitSprite")
+	)
+
+
+func _rendered_unit_sprite_at(battlefield: Node2D, grid_position: Vector2i) -> bool:
+	var expected_x: float = float(grid_position.x * BattleControllerScript.TILE_SIZE + BattleControllerScript.TILE_SIZE / 2)
+	return _rendered_unit_sprites(battlefield).any(func(sprite): return is_equal_approx(sprite.position.x, expected_x))
+
+
 func test_hud_round_label_and_action_points_label_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
