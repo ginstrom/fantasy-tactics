@@ -2432,6 +2432,8 @@ func upgrade_guild_hall() -> bool:
 		return false
 	gold -= _guild_hall_upgrade_cost()
 	guild_hall_level += 1
+	while recruitment_candidates.size() < get_recruitment_offer_cap():
+		recruitment_candidates.append(_spawn_next_recruitment_offer())
 	return true
 
 

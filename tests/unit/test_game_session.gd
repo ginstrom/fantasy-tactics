@@ -4320,24 +4320,38 @@ func test_purchase_recruit_rejects_a_roster_already_at_cap() -> void:
 func test_upgrade_guild_hall_with_fifty_gold_succeeds() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	session.gold = 50
+	var existing_offer_ids: Array[String] = []
+	for candidate in session.recruitment_candidates:
+		existing_offer_ids.append(candidate.id)
 
 	assert_true(session.upgrade_guild_hall())
 
 	assert_eq(session.guild_hall_level, 2)
 	assert_eq(session.gold, 0)
 	assert_eq(session.get_max_party_size(), 4)
+	assert_eq(session.recruitment_candidates.size(), 8)
+	var offer_ids: Dictionary = {}
+	for candidate in session.recruitment_candidates:
+		assert_false(offer_ids.has(candidate.id), "Guild Hall upgrades must not mint duplicate offer ids")
+		offer_ids[candidate.id] = true
+	for existing_offer_id in existing_offer_ids:
+		assert_true(offer_ids.has(existing_offer_id), "Existing offers must remain after a Guild Hall upgrade")
 
 
 func test_upgrade_guild_hall_with_forty_nine_gold_fails() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	session.gold = 49
+	var offer_ids_before: Array = session.recruitment_candidates.map(func(candidate: Dictionary) -> String: return candidate.id)
 
 	assert_false(session.upgrade_guild_hall())
 
 	assert_eq(session.guild_hall_level, 1)
 	assert_eq(session.gold, 49)
+	assert_eq(session.recruitment_candidates.map(func(candidate: Dictionary) -> String: return candidate.id), offer_ids_before)
 
 
 ## Level 2 -> 3 costs GUILD_HALL_LEVEL_3_UPGRADE_COST (100), a different
@@ -4345,6 +4359,7 @@ func test_upgrade_guild_hall_with_forty_nine_gold_fails() -> void:
 func test_upgrade_guild_hall_from_level_two_to_three_costs_one_hundred_gold() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	session.gold = 50
 	session.upgrade_guild_hall()
 	session.gold = 99
@@ -4352,25 +4367,38 @@ func test_upgrade_guild_hall_from_level_two_to_three_costs_one_hundred_gold() ->
 	assert_false(session.upgrade_guild_hall(), "99 gold is not enough for the level 2 -> 3 upgrade")
 
 	session.gold = 100
+	var level_two_offer_ids: Array[String] = []
+	for candidate in session.recruitment_candidates:
+		level_two_offer_ids.append(candidate.id)
 
 	assert_true(session.upgrade_guild_hall())
 	assert_eq(session.guild_hall_level, 3)
 	assert_eq(session.gold, 0)
 	assert_eq(session.get_max_party_size(), 5)
+	assert_eq(session.recruitment_candidates.size(), 10)
+	var offer_ids: Dictionary = {}
+	for candidate in session.recruitment_candidates:
+		assert_false(offer_ids.has(candidate.id), "Guild Hall upgrades must not mint duplicate offer ids")
+		offer_ids[candidate.id] = true
+	for level_two_offer_id in level_two_offer_ids:
+		assert_true(offer_ids.has(level_two_offer_id), "Existing offers must remain after a Guild Hall upgrade")
 
 
 func test_upgrade_guild_hall_at_max_level_returns_false() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
+	session.reset()
 	session.gold = 200
 	session.upgrade_guild_hall()
 	session.upgrade_guild_hall()
 	assert_eq(session.guild_hall_level, 3)
+	var offer_ids_before: Array = session.recruitment_candidates.map(func(candidate: Dictionary) -> String: return candidate.id)
 
 	assert_false(session.upgrade_guild_hall())
 
 	assert_eq(session.gold, 50, "Gold should not be deducted on a failed upgrade after two successes (50 + 100 spent)")
 	assert_eq(session.guild_hall_level, 3)
+	assert_eq(session.recruitment_candidates.map(func(candidate: Dictionary) -> String: return candidate.id), offer_ids_before)
 
 
 func test_can_upgrade_guild_hall_is_false_with_no_gold() -> void:
