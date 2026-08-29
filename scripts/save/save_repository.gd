@@ -158,20 +158,18 @@ func _load_failed(status: LoadStatus, error: String) -> Dictionary:
 ##   float) or compared (`>=` against a float threshold), and any fractional
 ##   xp value is never whole-number in the first place, so this normalizer
 ##   never touches it. Do not "fix" this into an XP-aware exclusion.
-## - JSON object keys are always strings -- a Dictionary with int keys (e.g.
-##   mana_crystals' tier -> count map) loses its key type entirely on the way
-##   through JSON.stringify()/parse(). Every Dictionary key that is a valid
-##   integer literal becomes an int key. This is safe everywhere in this save
-##   format: every other id/key string a campaign snapshot carries
-##   (adventurer/party/item/template ids, tutorial progress ids) always
-##   contains a non-digit character, so it is left untouched.
+## JSON object keys are always strings. Key typing is intentionally *not*
+## repaired here: this repository has no schema context, and converting a
+## digit-only key globally would corrupt a valid future id namespace. Each
+## documented numeric-key map is restored and validated by CampaignSnapshot
+## at its own schema boundary.
 static func _normalize_json_value(value: Variant) -> Variant:
 	if value is float and is_finite(value) and floor(value) == value:
 		return int(value)
 	if value is Dictionary:
 		var normalized_dict := {}
 		for key in (value as Dictionary).keys():
-			normalized_dict[_normalize_json_key(key)] = _normalize_json_value(value[key])
+			normalized_dict[key] = _normalize_json_value(value[key])
 		return normalized_dict
 	if value is Array:
 		var normalized_array := []
@@ -179,9 +177,3 @@ static func _normalize_json_value(value: Variant) -> Variant:
 			normalized_array.append(_normalize_json_value(item))
 		return normalized_array
 	return value
-
-
-static func _normalize_json_key(key: Variant) -> Variant:
-	if key is String and key.is_valid_int():
-		return int(key)
-	return key

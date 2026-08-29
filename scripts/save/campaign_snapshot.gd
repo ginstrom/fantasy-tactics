@@ -415,10 +415,13 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		return _invalid("player_name is not a string")
 	normalized["player_name"] = data.player_name
 
-	for dict_key in ["mana_crystals", "banked_gear"]:
-		if not data.get(dict_key) is Dictionary:
-			return _invalid("%s is not a dictionary" % dict_key)
-		normalized[dict_key] = (data[dict_key] as Dictionary).duplicate(true)
+	var mana_crystals_result := _normalize_mana_crystals(data.get("mana_crystals"), "mana_crystals")
+	if not mana_crystals_result.ok:
+		return _invalid(mana_crystals_result.error)
+	normalized["mana_crystals"] = mana_crystals_result.value
+	if not data.get("banked_gear") is Dictionary:
+		return _invalid("banked_gear is not a dictionary")
+	normalized["banked_gear"] = (data.banked_gear as Dictionary).duplicate(true)
 
 	# Tolerates an absent field (normalizing to an empty collection) rather
 	# than rejecting it outright, the same leniency has_trading_post/shop_*
@@ -463,6 +466,31 @@ static func from_dictionary(data: Variant) -> Dictionary:
 		return _invalid("selected_encounter does not reference a known encounter")
 
 	return {"ok": true, "snapshot": normalized, "error": ""}
+
+
+## Restores the schema's documented numeric-key maps in a JSON-parsed
+## snapshot without validating or otherwise changing it. DebugScenarios uses
+## this when it caches an embedded snapshot: malformed fixtures must still
+## load so apply() can report their normal import error, but valid crystal
+## tiers retain the canonical int-keyed representation used by its fixtures.
+static func normalize_json_keyed_maps(data: Dictionary) -> Dictionary:
+	var normalized: Dictionary = data.duplicate(true)
+	if data.get("mana_crystals") is Dictionary:
+		var bank_result := _normalize_mana_crystals(data.mana_crystals, "mana_crystals")
+		if bank_result.ok:
+			normalized["mana_crystals"] = bank_result.value
+	if data.get("parties") is Array:
+		for index in (normalized.parties as Array).size():
+			var party: Variant = normalized.parties[index]
+			if not party is Dictionary or not (party as Dictionary).get("carry") is Dictionary:
+				continue
+			var carry: Dictionary = (party as Dictionary).carry
+			if not carry.get("mana_crystals") is Dictionary:
+				continue
+			var carry_result := _normalize_mana_crystals(carry.mana_crystals, "party carry mana_crystals")
+			if carry_result.ok:
+				carry["mana_crystals"] = carry_result.value
+	return normalized
 
 
 static func _invalid(error: String) -> Dictionary:
@@ -1044,6 +1072,12 @@ static func _normalize_carry(raw: Variant, party_id: String) -> Dictionary:
 		return {"ok": false, "error": "party %s has an invalid carry mana_crystals" % party_id}
 	if not carry.get("item_instance_ids") is Array:
 		return {"ok": false, "error": "party %s has an invalid carry item_instance_ids" % party_id}
+	var mana_crystals_result := _normalize_mana_crystals(
+		carry.mana_crystals,
+		"party %s carry mana_crystals" % party_id
+	)
+	if not mana_crystals_result.ok:
+		return {"ok": false, "error": mana_crystals_result.error}
 	var item_instance_ids: Array[String] = []
 	for raw_id in carry.item_instance_ids:
 		if not raw_id is String:
@@ -1055,10 +1089,33 @@ static func _normalize_carry(raw: Variant, party_id: String) -> Dictionary:
 		"value": {
 			"gold": int(carry.gold),
 			"gear": (carry.gear as Dictionary).duplicate(true),
-			"mana_crystals": (carry.mana_crystals as Dictionary).duplicate(true),
+			"mana_crystals": mana_crystals_result.value,
 			"item_instance_ids": item_instance_ids,
 		},
 	}
+
+
+## JSON object keys are always strings, but crystal tiers are the one
+## documented numeric-key map in the snapshot schema. Restore their integer
+## type only here, where the meaning is known; every other dictionary keeps
+## its parsed String keys. Reject duplicate/unsupported tiers rather than
+## collapsing a hand-edited or corrupted save into a different crystal map.
+static func _normalize_mana_crystals(raw: Variant, field_name: String) -> Dictionary:
+	if not raw is Dictionary:
+		return {"ok": false, "error": "%s is not a dictionary" % field_name, "value": {}}
+	var normalized: Dictionary = {}
+	for raw_tier in (raw as Dictionary).keys():
+		var tier: int
+		if raw_tier is int:
+			tier = int(raw_tier)
+		elif raw_tier is String and String(raw_tier).is_valid_int():
+			tier = String(raw_tier).to_int()
+		else:
+			return {"ok": false, "error": "%s contains a non-integer tier" % field_name, "value": {}}
+		if normalized.has(tier):
+			return {"ok": false, "error": "%s contains a duplicate tier" % field_name, "value": {}}
+		normalized[tier] = raw[raw_tier]
+	return {"ok": true, "error": "", "value": normalized}
 
 
 ## Validates and restores each active-encounter instance's Vector2i "position"
