@@ -19,8 +19,9 @@ Workflow for each task:
 2. `git checkout -b <branch-name>`
 3. Implement with TDD (write failing tests, confirm failure, implement,
    verify with `make check`).
-4. Get manual verification from the user via `make play` when the plan
-   calls for it.
+4. Get manual verification via `make play` when the plan calls for it. If the
+   user explicitly requests it, a coding agent may perform and report that
+   check instead of the human.
 5. Commit.
 6. Merge back to `main` locally (`git checkout main && git merge
    <branch-name>`), then delete the branch. Only push to `origin` or open
