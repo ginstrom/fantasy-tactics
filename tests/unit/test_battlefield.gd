@@ -162,6 +162,45 @@ func test_describe_step_reports_an_enemy_move() -> void:
 	assert_eq(battlefield._describe_step(step), tr("battle.status.enemy_move") % tr("battle.side.enemy"))
 
 
+func test_describe_step_reports_a_real_enemy_turn_opportunity_attack_reaction() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	add_child_autofree(battlefield)
+	var reactor = UnitScript.new(
+		Vector2i(4, 4), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 10, 2, 2, 1.0, "Sword"
+	)
+	reactor.display_name = "Warrior"
+	var mover = UnitScript.new(
+		Vector2i(3, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 10, 1, 1, 1.0, "Short Bow"
+	)
+	mover.attack_min_range = 3
+	mover.attack_max_range = 3
+	mover.display_name = "Goblin 1"
+	battlefield.grid.units = [mover, reactor]
+	battlefield.grid.active_side = BattleControllerScript.Side.ENEMY
+	battlefield.grid.hit_roll = func() -> float: return 0.0
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+	battlefield.grid.damage_roll = func(_min_value: int, _max_value: int) -> int: return 2
+
+	var steps: Array = battlefield.grid.run_enemy_turn()
+	var reaction: Dictionary = {}
+	for step in steps:
+		if step.type == "reaction":
+			reaction = step
+			break
+
+	assert_false(reaction.is_empty(), "The real enemy-turn producer must emit an opportunity-attack reaction")
+	if reaction.is_empty():
+		return
+	assert_false(reaction.has("unit"), "A reaction step deliberately has no movement-unit field")
+	var description: String = battlefield._describe_step(reaction)
+	assert_engine_error_count(0, "Describing a real reaction step must not access a missing field")
+	assert_eq(
+		description,
+		tr("battle.log.reaction.hit") % [reactor.display_name, mover.display_name, reaction.damage]
+	)
+
+
 ## Paladin's doubled Bless (Stage 5 D4): step.doubled (only ever set true by
 ## BattleController.try_cast_spell()'s "bless" match arm when the CASTER is a
 ## promoted Paladin) gets its own distinct status line -- never the same text

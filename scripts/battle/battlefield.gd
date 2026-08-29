@@ -729,6 +729,8 @@ func _describe_step(step: Dictionary) -> String:
 	# comment on why it carries type "perk" rather than "spell".
 	if step.type == "perk":
 		return tr("battle.status.temporary_guard_applied") % step.caster.display_name
+	if step.type == "reaction":
+		return _describe_reaction_entry(step)
 	var mover_name: String = tr(SIDE_NAME_KEYS[step.unit.side])
 	return tr("battle.status.enemy_move") % mover_name
 
