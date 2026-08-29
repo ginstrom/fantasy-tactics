@@ -9,6 +9,10 @@ const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd"
 
 func before_each() -> void:
 	GameSession.reset()
+	GameManager.close_game_menu()
+	GameManager.route_context_id = ""
+	GameManager.unit_details_origin = ""
+	GameManager.add_member_return_party_id = ""
 	_deploy_warrior_party()
 
 
@@ -1145,6 +1149,94 @@ func test_escape_marks_input_handled_and_opens_the_game_menu() -> void:
 	)
 	assert_true(GameManager.is_game_menu_open())
 	assert_true(get_tree().paused)
+
+
+## Code-audit finding 2.2: Arrival and Send Party are dialogs, not merely
+## floating panels. These regressions use the real scene and Viewport input
+## path so they cover both the GUI controls and WorldMap._unhandled_input().
+func test_a_pushed_click_behind_arrival_does_not_change_the_route_or_selected_party() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map.party_selected = true
+	world_map._on_encounter_activated(GameSession.GOBLIN_CAMP_ID)
+	var selected_party_id := GameSession.selected_party_id
+	var route_before := GameSession.get_deployed_party_route()
+	_assert_modal_blocker_covers_viewport(world_map, "%ArrivalInputBlocker")
+
+	_push_world_map_mouse_click(world_map, Vector2i(1, 1))
+
+	assert_eq(GameSession.selected_party_id, selected_party_id)
+	assert_eq(GameSession.get_deployed_party_route(), route_before)
+
+
+func test_a_pushed_escape_closes_arrival_without_opening_the_game_menu() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_encounter_activated(GameSession.GOBLIN_CAMP_ID)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	_push_world_map_input(world_map, escape_event)
+
+	assert_false(world_map.get_node("%ArrivalPanel").visible)
+	assert_false(GameManager.is_game_menu_open())
+
+
+func test_a_pushed_click_behind_send_party_does_not_change_map_state() -> void:
+	_deploy_second_party_at(Vector2i(1, 1))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map.party_selected = true
+	world_map._on_information_panel_send_party_requested(GameSession.GOBLIN_CAMP_ID)
+	var selected_party_id := GameSession.selected_party_id
+	var route_before := GameSession.get_deployed_party_route()
+	_assert_modal_blocker_covers_viewport(world_map, "%SendPartyInputBlocker")
+
+	_push_world_map_mouse_click(world_map, Vector2i(3, 0))
+
+	assert_eq(GameSession.selected_party_id, selected_party_id)
+	assert_eq(GameSession.get_deployed_party_route(), route_before)
+
+
+func test_a_pushed_escape_closes_send_party_without_opening_the_game_menu() -> void:
+	_deploy_second_party_at(Vector2i(1, 1))
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	world_map._on_information_panel_send_party_requested(GameSession.GOBLIN_CAMP_ID)
+	var escape_event := InputEventAction.new()
+	escape_event.action = "ui_cancel"
+	escape_event.pressed = true
+
+	_push_world_map_input(world_map, escape_event)
+
+	assert_false(world_map.get_node("%SendPartyModal").visible)
+	assert_false(GameManager.is_game_menu_open())
+
+
+func _push_world_map_mouse_click(world_map: Node2D, tile_pos: Vector2i) -> void:
+	var click_event := InputEventMouseButton.new()
+	click_event.button_index = MOUSE_BUTTON_LEFT
+	click_event.pressed = true
+	click_event.position = world_map.board.global_position + Vector2(tile_pos) * WorldMapScript.TILE_SIZE + Vector2(32, 32)
+	_push_world_map_input(world_map, click_event)
+
+
+func _push_world_map_input(world_map: Node2D, event: InputEvent) -> void:
+	if get_tree().current_scene != null:
+		get_tree().unload_current_scene()
+	var gut_layer := _hide_gut_debug_panel()
+	world_map.get_viewport().push_input(event, true)
+	if gut_layer != null:
+		gut_layer.visible = true
+
+
+func _assert_modal_blocker_covers_viewport(world_map: Node2D, path: String) -> void:
+	var blocker: Control = world_map.get_node(path)
+	assert_true(blocker.visible)
+	assert_eq(blocker.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(blocker.get_global_rect().position, Vector2.ZERO)
+	assert_eq(blocker.get_global_rect().size, world_map.get_viewport().get_visible_rect().size)
 
 
 func test_update_hover_route_sets_the_route_when_selected() -> void:

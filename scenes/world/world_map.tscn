@@ -85,6 +85,18 @@ layout_mode = 2
 autowrap_mode = 3
 text = "world_map.hint"
 
+[node name="ArrivalInputBlocker" type="ColorRect" parent="HUD"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0)
+
 [node name="ArrivalPanel" type="PanelContainer" parent="HUD"]
 unique_name_in_owner = true
 visible = false
@@ -130,6 +142,18 @@ text = "world_map.arrival.withdraw"
 unique_name_in_owner = true
 layout_mode = 2
 text = "world_map.arrival.cancel"
+
+[node name="SendPartyInputBlocker" type="ColorRect" parent="HUD"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0)
 
 [node name="SendPartyModal" type="PanelContainer" parent="HUD"]
 unique_name_in_owner = true
