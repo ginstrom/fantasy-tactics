@@ -249,6 +249,39 @@ func _valid_manifest(scenarios: Array = []) -> Dictionary:
 	return {"manifest_version": 1, "scenarios": scenarios}
 
 
+func test_manifest_round_trip_preserves_numeric_tutorial_ids_and_crystal_tiers() -> void:
+	GameSession.create_party()
+	var snapshot: Dictionary = GameSession.export_campaign_snapshot()
+	snapshot.tutorial_progress = {"101": true}
+	snapshot.mana_crystals = {3: 4}
+	snapshot.parties[0].carry.mana_crystals = {2: 1}
+	_write_manifest(_valid_manifest([
+		{
+			"id": "numeric_keys",
+			"name_key": "debug.numeric_keys",
+			"category": "Campaign",
+			"description": "Exercises numeric key persistence.",
+			"launch": {"scene": "encampment"},
+			"campaign_snapshot": snapshot,
+		},
+	]))
+
+	var load_result := DebugScenarios.load_scenarios(TEST_MANIFEST_PATH)
+	var loaded_scenario := DebugScenarios.get_scenario("numeric_keys")
+	var apply_result := DebugScenarios.apply("numeric_keys")
+
+	assert_true(load_result.ok, str(load_result.errors))
+	assert_true(loaded_scenario.campaign_snapshot.tutorial_progress.has("101"))
+	assert_false(loaded_scenario.campaign_snapshot.tutorial_progress.has(101))
+	assert_eq(loaded_scenario.campaign_snapshot.mana_crystals, {3: 4})
+	assert_eq(loaded_scenario.campaign_snapshot.parties[0].carry.mana_crystals, {2: 1})
+	assert_true(apply_result.ok, str(apply_result.errors))
+	assert_true(GameSession.tutorial_progress.has("101"))
+	assert_false(GameSession.tutorial_progress.has(101))
+	assert_eq(GameSession.mana_crystals, {3: 4})
+	assert_eq(GameSession.get_selected_party().carry.mana_crystals, {2: 1})
+
+
 func test_load_scenarios_preserves_source_order() -> void:
 	_write_manifest(_valid_manifest())
 

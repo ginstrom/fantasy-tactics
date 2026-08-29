@@ -35,6 +35,16 @@ consequence. Campaign state persists the current objective, completed
 objective ids, unlocked authored encounters, final-victory state, and
 post-victory free-play state. It is versioned and owned by `GameSession`.
 
+### Snapshot dictionary-key policy
+
+JSON parses every object key as a string. Snapshot persistence therefore
+preserves string keys globally, including numeric-only IDs in present or
+future namespaces. The sole documented numeric-key maps are the campaign-bank
+`mana_crystals` and each party carry's `mana_crystals`; their integer tier
+keys are restored and validated only by `CampaignSnapshot` at those schema
+boundaries. A non-integer or duplicate normalized tier rejects the complete
+import without mutating `GameSession`.
+
 Authored objectives never respawn or reopen when encounter vacancies refill.
 After final victory, clearly labelled repeatable free play may fill vacancies,
 but it never changes completed objectives or replays the victory screen.

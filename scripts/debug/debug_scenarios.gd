@@ -18,6 +18,7 @@ const SUPPORTED_MANIFEST_VERSION := 1
 const ALLOWED_LAUNCH_SCENES: Array[String] = [
 	"settlement", "encampment", "party_manager", "parties", "world_map", "battlefield", "stores",
 ]
+const CampaignSnapshot := preload("res://scripts/save/campaign_snapshot.gd")
 
 static var _scenarios: Array[Dictionary] = []
 
@@ -152,24 +153,23 @@ static func _validate_scenario_entry(raw: Variant, seen_ids: Dictionary, index: 
 			"category": String(entry.category),
 			"description": String(entry.description),
 			"launch": {"scene": String((launch as Dictionary).scene)},
-			"campaign_snapshot": (snapshot as Dictionary).duplicate(true),
+			"campaign_snapshot": CampaignSnapshot.normalize_json_keyed_maps(snapshot as Dictionary),
 		},
 	}
 
 
-## Undoes JSON's lossy number/key conversions (same gotcha SaveRepository.
-## _normalize_json_value() fixes for save files -- Godot's JSON parser hands
-## back float for every number and stringifies every Dictionary key), so
-## "manifest_version": 1 parses back as an int and an embedded
-## campaign_snapshot's int-keyed dictionaries (e.g. mana_crystals) round-trip
-## intact for the canonical snapshot import path Step 2 feeds them into.
+## Restores JSON's lossy numeric values so manifest_version and embedded
+## snapshot scalar fields retain their integer types. JSON dictionary keys are
+## deliberately kept as strings: DebugScenarios has no snapshot-schema
+## context, so CampaignSnapshot alone restores its documented mana_crystals
+## tier maps while every other numeric-only ID remains a String.
 static func _normalize_json_value(value: Variant) -> Variant:
 	if value is float and is_finite(value) and floor(value) == value:
 		return int(value)
 	if value is Dictionary:
 		var normalized_dict: Dictionary = {}
 		for key in (value as Dictionary).keys():
-			normalized_dict[_normalize_json_key(key)] = _normalize_json_value(value[key])
+			normalized_dict[key] = _normalize_json_value(value[key])
 		return normalized_dict
 	if value is Array:
 		var normalized_array: Array = []
@@ -177,12 +177,6 @@ static func _normalize_json_value(value: Variant) -> Variant:
 			normalized_array.append(_normalize_json_value(item))
 		return normalized_array
 	return value
-
-
-static func _normalize_json_key(key: Variant) -> Variant:
-	if key is String and key.is_valid_int():
-		return int(key)
-	return key
 
 
 static func _duplicate_scenario(scenario: Dictionary) -> Dictionary:
@@ -212,4 +206,3 @@ static func apply(scenario_id: String) -> Dictionary:
 	if not import_result.ok:
 		return {"ok": false, "errors": [String(import_result.error)]}
 	return {"ok": true, "errors": []}
-

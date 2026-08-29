@@ -261,6 +261,7 @@ func test_round_trip_preserves_int_valued_numeric_fields() -> void:
 func test_round_trip_preserves_int_keyed_mana_crystal_tiers() -> void:
 	var repository := _repository()
 	var written_session := _populated_session()
+	written_session.mana_crystals = {3: 4}
 
 	repository.save_campaign(written_session)
 	var loaded_session: Node = GameSessionScript.new()
@@ -274,6 +275,40 @@ func test_round_trip_preserves_int_keyed_mana_crystal_tiers() -> void:
 		carry.mana_crystals.get(1, 0), 3,
 		"An int-keyed lookup must work after a real JSON round trip, not just a plain dictionary equality check"
 	)
+	assert_eq(loaded_session.mana_crystals, {3: 4})
+	assert_eq(loaded_session.mana_crystals.get(3, 0), 4)
+
+
+func test_round_trip_preserves_numeric_only_tutorial_ids_as_string_keys() -> void:
+	var repository := _repository()
+	var written_session := _populated_session()
+	written_session.tutorial_progress = {"101": true}
+
+	repository.save_campaign(written_session)
+	var loaded_session: Node = GameSessionScript.new()
+	autofree(loaded_session)
+	var result := repository.load_campaign(loaded_session)
+
+	assert_true(result.ok, result.get("error", ""))
+	assert_true(loaded_session.tutorial_progress.has("101"))
+	assert_false(loaded_session.tutorial_progress.has(101))
+	assert_true(typeof(loaded_session.tutorial_progress.keys()[0]) == TYPE_STRING)
+
+
+func test_load_rejects_a_non_numeric_crystal_tier_without_mutating_the_target_session() -> void:
+	var repository := _repository()
+	var invalid_session := _populated_session()
+	invalid_session.mana_crystals = {"tier_one": 3}
+	assert_true(repository.save_campaign(invalid_session).ok)
+	var target_session := _populated_session()
+	var before: Dictionary = target_session.export_campaign_snapshot()
+
+	var result := repository.load_campaign(target_session)
+
+	assert_false(result.ok)
+	assert_eq(result.status, SaveRepositoryScript.LoadStatus.INVALID_SNAPSHOT)
+	assert_string_contains(result.error, "mana_crystals contains a non-integer tier")
+	assert_eq(target_session.export_campaign_snapshot(), before)
 
 
 ## The highest-risk conversion path in the save format: a party's
