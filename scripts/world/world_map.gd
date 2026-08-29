@@ -83,11 +83,13 @@ var pending_arrival_encounter_id: String = ""
 @onready var campaign_objective_banner: PanelContainer = %CampaignObjectiveBanner
 @onready var hint_label: Label = %Hint
 @onready var arrival_panel: PanelContainer = %ArrivalPanel
+@onready var arrival_input_blocker: ColorRect = %ArrivalInputBlocker
 @onready var enter_button: Button = %EnterButton
 ## Send Party modal (Stage 5 D5, docs/designs/world-map-and-encounters.md's
 ## "Future multi-party model") -- see _open_send_party_modal()'s own doc
 ## comment.
 @onready var send_party_modal: PanelContainer = %SendPartyModal
+@onready var send_party_input_blocker: ColorRect = %SendPartyInputBlocker
 @onready var send_party_list: VBoxContainer = %SendPartyList
 @onready var send_party_empty_label: Label = %SendPartyEmptyLabel
 
@@ -114,6 +116,9 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _handle_visible_modal_input(event):
+		return
+
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		GameManager.open_game_menu()
@@ -156,6 +161,30 @@ func _unhandled_input(event: InputEvent) -> void:
 			]
 		)
 	_handle_tile_click(tile_pos)
+
+
+## Arrival and Send Party are modal decisions: while either one is visible,
+## no World Map hover, route, tile, or pause-menu input may run behind it.
+## The full-screen blockers in world_map.tscn claim ordinary GUI mouse input;
+## this guard remains the input authority for events which reach this node
+## (including keyboard Escape and synthetic/test viewport input).
+func _handle_visible_modal_input(event: InputEvent) -> bool:
+	if not arrival_panel.visible and not send_party_modal.visible:
+		return false
+
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		if arrival_panel.visible:
+			_close_arrival_panel()
+		else:
+			_close_send_party_modal()
+		return true
+
+	if event is InputEventMouse:
+		get_viewport().set_input_as_handled()
+		return true
+
+	return false
 
 
 func get_legal_moves() -> Array[Vector2i]:
@@ -567,6 +596,7 @@ func _arrivable_encounter_at(pos: Vector2i) -> String:
 ## Cancel below decide what happens next.
 func _on_encounter_activated(encounter_id: String) -> void:
 	pending_arrival_encounter_id = encounter_id
+	arrival_input_blocker.visible = true
 	arrival_panel.visible = true
 	# Battle-party tie-break (Stage 5 D5): Enter stays visible but disabled
 	# whenever a DIFFERENT party already owns the single active battle (see
@@ -600,6 +630,7 @@ func _on_arrival_cancel_pressed() -> void:
 
 func _close_arrival_panel() -> void:
 	pending_arrival_encounter_id = ""
+	arrival_input_blocker.visible = false
 	arrival_panel.visible = false
 	_refresh_turn_controls()
 
@@ -875,6 +906,7 @@ func _on_information_panel_party_selected(party_id: String) -> void:
 func _on_information_panel_send_party_requested(encounter_id: String) -> void:
 	_send_party_target_encounter_id = encounter_id
 	_refresh_send_party_list()
+	send_party_input_blocker.visible = true
 	send_party_modal.visible = true
 
 
@@ -958,6 +990,7 @@ func _on_send_party_cancel_pressed() -> void:
 
 func _close_send_party_modal() -> void:
 	_send_party_target_encounter_id = ""
+	send_party_input_blocker.visible = false
 	send_party_modal.visible = false
 
 
