@@ -1171,6 +1171,14 @@ func test_enemy_playback_keeps_a_later_kill_victim_visible_during_the_first_move
 	)
 	assert_false(battlefield.grid.units.has(victim), "The synchronous rules model has already resolved the later killing attack")
 
+	var playback_frames := 0
+	while battlefield._enemy_turn_in_progress and playback_frames < 60:
+		await get_tree().process_frame
+		playback_frames += 1
+	var final_sprites: Array = battlefield.grid.unit_container.get_children().filter(func(child): return child is Sprite2D)
+	assert_eq(final_sprites.size(), 3, "The killing beat removes the victim only once that beat is displayed")
+	assert_false(battlefield._enemy_turn_in_progress, "The controlled playback must settle within the frame cap")
+
 
 func test_hud_round_label_and_action_points_label_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = _make_battlefield()

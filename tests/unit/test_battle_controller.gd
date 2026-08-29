@@ -2190,6 +2190,162 @@ func test_run_enemy_turn_moves_then_attacks_when_movement_closes_the_gap() -> vo
 	assert_eq(player_unit.health, 2)
 
 
+func test_enemy_move_playback_frame_uses_the_post_move_facing() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 0.3, "Short Sword"
+	)
+	var player_unit = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
+	)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	controller.run_enemy_turn()
+
+	var move_frame: Dictionary = controller.enemy_turn_playback_frames[0]
+	var mover_frame: Dictionary = move_frame.visible_units.filter(
+		func(unit): return unit.id == goblin.get_instance_id()
+	)[0]
+	assert_eq(mover_frame.grid_position, Vector2i(1, 0))
+	assert_eq(
+		mover_frame.facing,
+		Vector2i.LEFT,
+		"The move frame must show the direction of the final movement edge"
+	)
+	goblin.grid_position = Vector2i(5, 5)
+	goblin.set_facing(Vector2i.DOWN)
+	assert_eq(mover_frame.grid_position, Vector2i(1, 0), "Playback frames must not retain mutable unit positions")
+	assert_eq(mover_frame.facing, Vector2i.LEFT, "Playback frames must not retain mutable unit facing")
+
+
+func test_enemy_playback_frame_captures_its_own_visibility_projection() -> void:
+	var controller := _make_controller(6, 6)
+	var goblin = UnitScript.new(
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 0.3, "Short Sword"
+	)
+	var player_unit = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 2, 2, 0.6, "Sword"
+	)
+	controller.units = [goblin, player_unit]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+
+	controller.run_enemy_turn()
+
+	var move_frame: Dictionary = controller.enemy_turn_playback_frames[0]
+	assert_true(
+		move_frame.visible_tiles.has(player_unit.grid_position),
+		"A playback frame must retain the fog projection belonging to that beat"
+	)
+
+
+func test_enemy_playback_frame_keeps_a_stale_enemy_at_its_recorded_position() -> void:
+	var controller := _make_controller(1, 6)
+	var viewer = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER)
+	var enemy = UnitScript.new(Vector2i(0, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units = [viewer, enemy]
+	controller._refresh_battlefield_memory()
+	var obstruction = UnitScript.new(Vector2i(0, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY)
+	controller.units.append(obstruction)
+
+	var frame: Dictionary = controller._record_enemy_turn_playback_frame({}, enemy, Vector2i(0, 4), false)
+
+	assert_eq(frame.stale_enemy_markers.size(), 1)
+	assert_eq(frame.stale_enemy_markers[0].grid_position, Vector2i(0, 3))
+	enemy.grid_position = Vector2i(0, 5)
+	assert_eq(frame.stale_enemy_markers[0].grid_position, Vector2i(0, 3), "The frame owns a copied stale-marker position")
+
+
+func test_opportunity_reaction_playback_frame_keeps_a_surviving_mover_at_its_destination() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 3)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	controller._reaction_projection_destination = Vector2i(2, 0)
+	controller._pending_enemy_reaction_frames.clear()
+	controller.hit_roll = func() -> float: return 1.0
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_eq(controller.last_reaction_results.size(), 1)
+	assert_eq(controller._pending_enemy_reaction_frames.size(), 1)
+	var reaction_frame: Dictionary = controller._pending_enemy_reaction_frames[0]
+	var mover_frame: Array = reaction_frame.visible_units.filter(func(unit): return unit.id == mover.get_instance_id())
+	assert_eq(mover_frame.size(), 1)
+	assert_eq(mover_frame[0].grid_position, Vector2i(2, 0))
+
+
+func test_opportunity_reaction_playback_frame_omits_a_lethally_defeated_mover() -> void:
+	var controller := _make_controller(6, 6)
+	var mover = UnitScript.new(Vector2i(1, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 1)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 20, 1, 1, 1.0)
+	controller.units = [mover, reactor]
+	controller.selected_unit = mover
+	controller._reaction_projection_destination = Vector2i(2, 0)
+	controller._pending_enemy_reaction_frames.clear()
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 5
+
+	assert_true(controller.try_move_selected_unit(Vector2i(2, 0)))
+
+	assert_false(mover.is_alive())
+	assert_eq(controller._pending_enemy_reaction_frames.size(), 1)
+	var reaction_frame: Dictionary = controller._pending_enemy_reaction_frames[0]
+	assert_true(reaction_frame.visible_units.all(func(unit): return unit.id != mover.get_instance_id()))
+
+
+func test_enemy_turn_pairs_a_surviving_opportunity_reaction_with_its_playback_frame() -> void:
+	var controller := _make_controller(6, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 3)
+	var enemy = UnitScript.new(Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 1.0)
+	enemy.attack_min_range = 2
+	enemy.attack_max_range = 3
+	controller.units = [reactor, enemy]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 1
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps[0].type, "move")
+	assert_eq(steps[1].type, "reaction")
+	assert_eq(controller.enemy_turn_playback_frames.size(), steps.size())
+	assert_eq(controller.enemy_turn_playback_frames[0].step.type, "move")
+	assert_eq(controller.enemy_turn_playback_frames[1].step.type, "reaction")
+	var reaction_frame: Dictionary = controller.enemy_turn_playback_frames[1]
+	var enemy_frame: Array = reaction_frame.visible_units.filter(func(unit): return unit.id == enemy.get_instance_id())
+	assert_eq(enemy_frame.size(), 1)
+	assert_eq(enemy_frame[0].health, 2, "The reaction frame must include the resolved nonlethal damage")
+
+
+func test_enemy_turn_reaction_frame_omits_an_enemy_killed_while_moving_away() -> void:
+	var controller := _make_controller(6, 6)
+	var reactor = UnitScript.new(Vector2i(0, 0), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 6, 3)
+	var enemy = UnitScript.new(Vector2i(1, 0), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 1, 1, 1, 1.0)
+	enemy.attack_min_range = 2
+	enemy.attack_max_range = 3
+	controller.units = [reactor, enemy]
+	controller.active_side = BattleControllerScript.Side.ENEMY
+	controller.hit_roll = func() -> float: return 0.0
+	controller.crit_roll = func() -> float: return 1.0
+	controller.damage_roll = func(_minimum: int, _maximum: int) -> int: return 5
+
+	var steps: Array = controller.run_enemy_turn()
+
+	assert_eq(steps.size(), 2)
+	assert_eq(steps[0].type, "move")
+	assert_eq(steps[1].type, "reaction")
+	var reaction_frame: Dictionary = controller.enemy_turn_playback_frames[1]
+	assert_true(reaction_frame.visible_units.all(func(unit): return unit.id != enemy.get_instance_id()))
+
+
 func test_run_enemy_turn_breaks_target_ties_using_reading_order() -> void:
 	var controller := _make_controller(6, 6)
 	var goblin = UnitScript.new(Vector2i(3, 3), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 1)

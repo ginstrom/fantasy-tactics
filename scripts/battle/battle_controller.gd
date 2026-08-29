@@ -2271,37 +2271,71 @@ func run_enemy_turn() -> Array:
 
 
 func _record_enemy_turn_playback_frame(
-	step: Dictionary, projected_unit = null, projected_position: Vector2i = Vector2i.ZERO, append_frame: bool = true
+	step: Dictionary,
+	projected_unit = null,
+	projected_position: Vector2i = Vector2i.ZERO,
+	append_frame: bool = true,
+	projected_facing: Vector2i = Vector2i.ZERO
 ) -> Dictionary:
-	var stale_markers := get_stale_enemy_markers()
-	var stale_units: Dictionary = {}
-	var recorded_markers: Array[Dictionary] = []
-	for marker in stale_markers:
-		var stale_unit = marker.unit
-		stale_units[stale_unit] = true
-		recorded_markers.append({
-			"unit_id": stale_unit.get_instance_id(),
-			"grid_position": marker.position,
-			"visual_key": stale_unit.visual_key,
-		})
-	var visible_units: Array[Dictionary] = []
+	var projected_units: Array[Dictionary] = []
+	var visible_tiles: Dictionary = {}
+	var viewers: Array[Vector2i] = []
+	var blocking_tiles: Array[Vector2i] = []
 	for unit in units:
-		if stale_units.has(unit):
-			continue
 		var position: Vector2i = projected_position if unit == projected_unit else unit.grid_position
-		visible_units.append({
+		var projected_facing_value: Vector2i = (
+			projected_facing if unit == projected_unit and projected_facing != Vector2i.ZERO else unit.facing
+		)
+		var projected_record := {
+			"unit": unit,
 			"id": unit.get_instance_id(),
 			"side": unit.side,
 			"grid_position": position,
 			"health": unit.health,
 			"max_health": unit.max_health,
-			"facing": unit.facing,
+			"facing": projected_facing_value,
 			"visual_key": unit.visual_key,
+		}
+		projected_units.append(projected_record)
+		if unit.is_alive():
+			blocking_tiles.append(position)
+			if unit.side == Side.PLAYER:
+				viewers.append(position)
+	visible_tiles = grid.get_visible_tiles(viewers, blocking_tiles)
+
+	var stale_unit_ids: Dictionary = {}
+	var recorded_markers: Array[Dictionary] = []
+	for projected_record in projected_units:
+		var projected_unit_ref = projected_record.unit
+		if projected_record.side != Side.ENEMY or visible_tiles.has(projected_record.grid_position):
+			continue
+		var remembered_position = _last_known_enemy_positions.get(projected_unit_ref, null)
+		if remembered_position == null:
+			continue
+		stale_unit_ids[projected_record.id] = true
+		recorded_markers.append({
+			"unit_id": projected_record.id,
+			"grid_position": remembered_position,
+			"visual_key": projected_record.visual_key,
+		})
+	var visible_units: Array[Dictionary] = []
+	for projected_record in projected_units:
+		if stale_unit_ids.has(projected_record.id):
+			continue
+		visible_units.append({
+			"id": projected_record.id,
+			"side": projected_record.side,
+			"grid_position": projected_record.grid_position,
+			"health": projected_record.health,
+			"max_health": projected_record.max_health,
+			"facing": projected_record.facing,
+			"visual_key": projected_record.visual_key,
 		})
 	var frame := {
 		"step": step,
 		"visible_units": visible_units,
 		"stale_enemy_markers": recorded_markers,
+		"visible_tiles": visible_tiles.duplicate(),
 	}
 	if append_frame:
 		enemy_turn_playback_frames.append(frame)
@@ -2311,7 +2345,16 @@ func _record_enemy_turn_playback_frame(
 func draw_enemy_turn_playback_frame(frame_index: int) -> void:
 	if frame_index < 0 or frame_index >= enemy_turn_playback_frames.size():
 		return
-	_draw_units(enemy_turn_playback_frames[frame_index])
+	var frame: Dictionary = enemy_turn_playback_frames[frame_index]
+	_draw_units(frame)
+	_update_highlights(frame)
+
+
+func _projected_move_facing(unit, destination: Vector2i) -> Vector2i:
+	var is_blocked := func(pos: Vector2i) -> bool: return get_unit_at(pos) != null
+	var move_range: int = unit.action_points_remaining / MOVE_ACTION_POINT_COST
+	var path: Array[Vector2i] = grid.get_shortest_path(unit.grid_position, destination, move_range, is_blocked)
+	return path[-1] - path[-2] if path.size() >= 2 else unit.facing
 
 
 func _take_enemy_unit_actions(unit) -> Array:
@@ -2340,7 +2383,9 @@ func _take_enemy_unit_actions(unit) -> Array:
 		var move_step := {"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination}
 		_reaction_projection_destination = destination
 		_pending_enemy_reaction_frames = []
-		var move_frame := _record_enemy_turn_playback_frame(move_step, unit, destination, false)
+		var move_frame := _record_enemy_turn_playback_frame(
+			move_step, unit, destination, false, _projected_move_facing(unit, destination)
+		)
 		if destination != from and try_move_selected_unit(destination):
 			steps.append(move_step)
 			enemy_turn_playback_frames.append(move_frame)
@@ -2939,8 +2984,9 @@ func _add_highlight(tile: Vector2i, color: Color) -> void:
 ## an independent fog rule. Drawn first among highlight_container's children
 ## (see _update_highlights()) so selection/movement/attack highlights still
 ## render clearly on top of it.
-func _draw_stale_tile_overlay() -> void:
-	var visible_tiles := get_player_visible_tiles()
+func _draw_stale_tile_overlay(visible_tiles = null) -> void:
+	if visible_tiles == null:
+		visible_tiles = get_player_visible_tiles()
 	for y in grid.height:
 		for x in grid.width:
 			var tile := Vector2i(x, y)
@@ -2949,14 +2995,16 @@ func _draw_stale_tile_overlay() -> void:
 			_add_highlight(tile, STALE_TILE_OVERLAY_COLOR)
 
 
-func _update_highlights() -> void:
+func _update_highlights(playback_frame: Dictionary = {}) -> void:
 	if not is_inside_tree():
 		return
 
 	for child in highlight_container.get_children():
 		child.queue_free()
 
-	_draw_stale_tile_overlay()
+	_draw_stale_tile_overlay(playback_frame.get("visible_tiles", null))
+	if not playback_frame.is_empty():
+		return
 
 	if selected_unit != null:
 		var ring_margin := TILE_SIZE * 0.05

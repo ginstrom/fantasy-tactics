@@ -330,7 +330,6 @@ func _play_enemy_turn() -> void:
 	for step_index in steps.size():
 		var step: Dictionary = steps[step_index]
 		grid.draw_enemy_turn_playback_frame(step_index)
-		grid._update_highlights()
 		status.text = _describe_step(step)
 		if step.type == "attack":
 			_log_attack(step)
