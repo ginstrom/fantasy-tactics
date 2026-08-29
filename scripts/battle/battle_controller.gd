@@ -332,6 +332,12 @@ var _floating_text_pool: Array = []
 ## (a reaction is a side effect of a move, not the move's own primary
 ## result) rather than overwriting last_attack_result with it.
 var last_reaction_results: Array[Dictionary] = []
+## Immutable, battle-local presentation frames produced alongside the current
+## synchronous enemy-turn result list.  Simulation callers keep consuming
+## run_enemy_turn()'s Array return; only Battlefield consumes these frames.
+var enemy_turn_playback_frames: Array[Dictionary] = []
+var _pending_enemy_reaction_frames: Array[Dictionary] = []
+var _reaction_projection_destination: Vector2i = Vector2i.ZERO
 ## Last-known-position memory for battlefield visibility/staleness (Stage 5
 ## D2's "Battlefield visibility" row): Unit (enemy) -> Vector2i, the last
 ## tile the player actually saw that enemy occupy. Maintained exclusively by
@@ -1693,7 +1699,11 @@ func _trigger_opportunity_attacks_along_path(unit, path: Array[Vector2i]) -> voi
 			if grid.is_attack_adjacent(reactor.grid_position, to_tile):
 				continue
 			already_reacted.append(reactor)
-			last_reaction_results.append(_resolve_opportunity_attack(reactor, unit))
+			var reaction := _resolve_opportunity_attack(reactor, unit)
+			last_reaction_results.append(reaction)
+			_pending_enemy_reaction_frames.append(
+				_record_enemy_turn_playback_frame(reaction, unit, _reaction_projection_destination, false)
+			)
 			if not unit.is_alive():
 				return
 
@@ -2244,6 +2254,7 @@ func is_battle_lost() -> bool:
 
 func run_enemy_turn() -> Array:
 	var steps: Array = []
+	enemy_turn_playback_frames = []
 	# Battlefield locks player input before calling here. Enemy policy still
 	# reaches the rules exclusively through the public action methods, so let
 	# this synchronous controller-owned loop through and restore the lock before
@@ -2257,6 +2268,50 @@ func run_enemy_turn() -> Array:
 	input_locked = was_input_locked
 	selected_unit = null
 	return steps
+
+
+func _record_enemy_turn_playback_frame(
+	step: Dictionary, projected_unit = null, projected_position: Vector2i = Vector2i.ZERO, append_frame: bool = true
+) -> Dictionary:
+	var stale_markers := get_stale_enemy_markers()
+	var stale_units: Dictionary = {}
+	var recorded_markers: Array[Dictionary] = []
+	for marker in stale_markers:
+		var stale_unit = marker.unit
+		stale_units[stale_unit] = true
+		recorded_markers.append({
+			"unit_id": stale_unit.get_instance_id(),
+			"grid_position": marker.position,
+			"visual_key": stale_unit.visual_key,
+		})
+	var visible_units: Array[Dictionary] = []
+	for unit in units:
+		if stale_units.has(unit):
+			continue
+		var position: Vector2i = projected_position if unit == projected_unit else unit.grid_position
+		visible_units.append({
+			"id": unit.get_instance_id(),
+			"side": unit.side,
+			"grid_position": position,
+			"health": unit.health,
+			"max_health": unit.max_health,
+			"facing": unit.facing,
+			"visual_key": unit.visual_key,
+		})
+	var frame := {
+		"step": step,
+		"visible_units": visible_units,
+		"stale_enemy_markers": recorded_markers,
+	}
+	if append_frame:
+		enemy_turn_playback_frames.append(frame)
+	return frame
+
+
+func draw_enemy_turn_playback_frame(frame_index: int) -> void:
+	if frame_index < 0 or frame_index >= enemy_turn_playback_frames.size():
+		return
+	_draw_units(enemy_turn_playback_frames[frame_index])
 
 
 func _take_enemy_unit_actions(unit) -> Array:
@@ -2274,14 +2329,23 @@ func _take_enemy_unit_actions(unit) -> Array:
 		if get_legal_attack_targets(unit).has(target):
 			if try_attack_selected_unit(target.grid_position):
 				steps.append(last_attack_result)
+				_record_enemy_turn_playback_frame(last_attack_result)
 				steps.append_array(last_reaction_results)
+				for reaction in last_reaction_results:
+					_record_enemy_turn_playback_frame(reaction)
 				continue
 			break
 		var destination := _best_enemy_move(unit, target)
 		var from: Vector2i = unit.grid_position
+		var move_step := {"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination}
+		_reaction_projection_destination = destination
+		_pending_enemy_reaction_frames = []
+		var move_frame := _record_enemy_turn_playback_frame(move_step, unit, destination, false)
 		if destination != from and try_move_selected_unit(destination):
-			steps.append({"type": ENEMY_STEP_MOVE, "unit": unit, "from": from, "to": destination})
+			steps.append(move_step)
+			enemy_turn_playback_frames.append(move_frame)
 			steps.append_array(last_reaction_results)
+			enemy_turn_playback_frames.append_array(_pending_enemy_reaction_frames)
 			# An Attack of Opportunity triggered by this very move can defeat
 			# `unit` before it ever gets another action -- stop here rather
 			# than letting the loop drive a dead unit's phantom next move (see
@@ -2650,7 +2714,7 @@ func _draw_cover_markers() -> void:
 		terrain_container.add_child(label)
 
 
-func _draw_units() -> void:
+func _draw_units(playback_frame: Dictionary = {}) -> void:
 	# Mirrors _update_highlights()'s guard below: unit tests build a bare
 	# BattleController via script (not the battlefield scene), so it never
 	# enters the tree and its @onready containers are never resolved.
@@ -2674,16 +2738,20 @@ func _draw_units() -> void:
 	# never maintains an independent copy of that rule) is never drawn at its
 	# real, unknown-to-the-player current tile; _draw_stale_enemy_marker()
 	# below draws it at its last-known position instead.
-	var stale_markers: Array[Dictionary] = get_stale_enemy_markers()
-	var stale_units: Array = []
-	for marker in stale_markers:
-		stale_units.append(marker.unit)
-
-	var sorted_units: Array = units.duplicate()
+	var stale_markers: Array = []
+	var sorted_units: Array = []
+	if playback_frame.is_empty():
+		stale_markers.assign(get_stale_enemy_markers())
+		sorted_units.assign(units)
+	else:
+		for marker in playback_frame.stale_enemy_markers:
+			stale_markers.append({
+				"position": marker.grid_position,
+				"visual_key": marker.visual_key,
+			})
+		sorted_units.assign(playback_frame.visible_units)
 	sorted_units.sort_custom(func(a, b): return a.grid_position.y < b.grid_position.y)
 	for unit in sorted_units:
-		if stale_units.has(unit):
-			continue
 		var tile_origin: Vector2 = Vector2(unit.grid_position) * TILE_SIZE
 		var shadow_size := Vector2(TILE_SIZE * 0.6, TILE_SIZE * 0.22)
 		var shadow := ColorRect.new()
@@ -2728,7 +2796,7 @@ func _draw_units() -> void:
 		_add_facing_indicator(tile_origin, unit)
 
 	for marker in stale_markers:
-		_draw_stale_enemy_marker(marker.position, marker.unit)
+		_draw_stale_enemy_marker(marker.position, str(marker.visual_key))
 
 
 ## Last-known-position ghost (Stage 5 D2): the same catalog sprite as a real
@@ -2737,11 +2805,11 @@ func _draw_units() -> void:
 ## be outdated" rather than as a fresh, trustworthy sighting. No shadow/
 ## facing indicator: those are current-state cues this marker deliberately
 ## does not claim to have.
-func _draw_stale_enemy_marker(tile_pos: Vector2i, unit) -> void:
+func _draw_stale_enemy_marker(tile_pos: Vector2i, visual_key: String) -> void:
 	var tile_origin: Vector2 = Vector2(tile_pos) * TILE_SIZE
 	var sprite := Sprite2D.new()
 	sprite.name = "StaleMarker"
-	sprite.texture = SpriteCatalog.get_unit_texture(unit.visual_key)
+	sprite.texture = SpriteCatalog.get_unit_texture(visual_key)
 	sprite.scale = Vector2(4, 4)
 	sprite.modulate = STALE_UNIT_MODULATE
 	sprite.position = Vector2(

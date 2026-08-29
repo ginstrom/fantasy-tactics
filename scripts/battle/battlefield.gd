@@ -327,8 +327,9 @@ func _play_enemy_turn() -> void:
 	_set_enemy_turn_in_progress(true)
 	status.text = tr("battle.status.enemy_turn")
 	var steps: Array = grid.run_enemy_turn()
-	for step in steps:
-		grid._draw_units()
+	for step_index in steps.size():
+		var step: Dictionary = steps[step_index]
+		grid.draw_enemy_turn_playback_frame(step_index)
 		grid._update_highlights()
 		status.text = _describe_step(step)
 		if step.type == "attack":

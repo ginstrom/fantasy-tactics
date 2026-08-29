@@ -1135,6 +1135,43 @@ func test_enemy_turn_moves_are_not_logged() -> void:
 	assert_eq(battlefield.log_list.get_child_count(), 0, "A move-only enemy turn must not add any log line")
 
 
+func test_enemy_playback_keeps_a_later_kill_victim_visible_during_the_first_move_beat() -> void:
+	GameSession.reset()
+	var battlefield: Node2D = _make_battlefield()
+	battlefield.enemy_turn_beat_seconds = 0.1
+	add_child_autofree(battlefield)
+	for child in battlefield.grid.unit_container.get_children():
+		child.free()
+	for child in battlefield.grid.shadow_container.get_children():
+		child.free()
+	var mover = UnitScript.new(
+		Vector2i(3, 1), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 6, 3, 1, 1, 0.05, "Miss"
+	)
+	var finisher = UnitScript.new(
+		Vector2i(1, 2), Color.INDIAN_RED, BattleControllerScript.Side.ENEMY, 3, 3, 1, 1, 1.0, "Hit"
+	)
+	var victim = UnitScript.new(
+		Vector2i(1, 1), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 1, 1, 1, 0.0, "Sword"
+	)
+	var survivor = UnitScript.new(
+		Vector2i(0, 4), Color.CORNFLOWER_BLUE, BattleControllerScript.Side.PLAYER, 3, 3, 1, 1, 0.0, "Sword"
+	)
+	battlefield.grid.units = [mover, finisher, victim, survivor]
+	battlefield.grid.active_side = BattleControllerScript.Side.ENEMY
+	var hit_rolls: Array[float] = [0.99, 0.0]
+	battlefield.grid.hit_roll = func() -> float: return hit_rolls.pop_front()
+	battlefield.grid.crit_roll = func() -> float: return 1.0
+
+	battlefield._play_enemy_turn()
+
+	var rendered_sprites: Array = battlefield.grid.unit_container.get_children().filter(func(child): return child is Sprite2D)
+	assert_eq(
+		rendered_sprites.size(), 4,
+		"The first movement beat must draw the victim before the later enemy attack removes it"
+	)
+	assert_false(battlefield.grid.units.has(victim), "The synchronous rules model has already resolved the later killing attack")
+
+
 func test_hud_round_label_and_action_points_label_share_the_top_right_stack() -> void:
 	var battlefield: Node2D = _make_battlefield()
 	add_child_autofree(battlefield)
