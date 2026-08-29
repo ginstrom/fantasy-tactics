@@ -2,12 +2,20 @@ extends GutTest
 
 const CampaignSnapshot := preload("res://scripts/save/campaign_snapshot.gd")
 
+var _game_config_data_before: Dictionary
+
+
+func before_each() -> void:
+	_game_config_data_before = GameConfig._data.duplicate(true)
+
 
 ## Only the withdraw round-trip test below touches the live GameSession
 ## singleton -- every other test in this file exercises the CampaignSnapshot
 ## class in isolation. Reset unconditionally anyway so a future test added
 ## here can never leak session state into a later test file.
 func after_each() -> void:
+	GameConfig._data = _game_config_data_before.duplicate(true)
+	GameSession._load_balance_config()
 	GameSession.reset()
 
 
@@ -1339,6 +1347,29 @@ func test_rejects_an_out_of_range_mp_current_without_mutating_the_existing_sessi
 
 	assert_false(result.ok, "An mp_current above the class's mp_max must reject the whole import")
 	assert_eq(GameSession.adventurers, starting_adventurers, "A rejected import must never mutate the live session")
+
+
+## Snapshot MP validation must use GameConfig's live class cap, just as
+## GameSession does at runtime. The paired invalid import remains atomic.
+func test_import_uses_the_configured_cleric_mp_cap_and_rejects_a_higher_value_atomically() -> void:
+	GameConfig._data.cleric.mp_max = 4
+	GameSession._load_balance_config()
+	GameSession.reset()
+	GameSession.adventurers = [GameSession.get_default_cleric("cleric_001", "Cleric")]
+	var valid_snapshot := GameSession.export_campaign_snapshot()
+
+	assert_eq(valid_snapshot.adventurers[0].mp_current, 4)
+	var valid_result := GameSession.import_campaign_snapshot(valid_snapshot)
+	assert_true(valid_result.ok, valid_result.get("error", ""))
+	assert_eq(GameSession.get_current_mp("cleric_001"), 4)
+
+	var invalid_snapshot := valid_snapshot.duplicate(true)
+	invalid_snapshot.adventurers[0].mp_current = 5
+	var state_before := GameSession.export_campaign_snapshot()
+	var invalid_result := GameSession.import_campaign_snapshot(invalid_snapshot)
+
+	assert_false(invalid_result.ok, "MP above the configured cap must reject the whole import")
+	assert_eq(GameSession.export_campaign_snapshot(), state_before, "A rejected import must never mutate the live session")
 
 
 func test_rejects_a_negative_mp_current() -> void:

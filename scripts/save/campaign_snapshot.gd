@@ -736,9 +736,10 @@ static func _validate_mp_field(records: Array[Dictionary], field_name: String) -
 	for record in records:
 		var class_id := str(record.get("class", "warrior"))
 		var class_def: Dictionary = _GameSessionScript.CLASS_DEFINITIONS.get(class_id, {})
-		var class_mp_max := int(class_def.get("mp_max", 0))
-		if class_mp_max <= 0 or not record.has("mp_current"):
+		var default_mp_max := int(class_def.get("mp_max", 0))
+		if default_mp_max <= 0 or not record.has("mp_current"):
 			continue
+		var class_mp_max := GameConfig.get_int(class_id, "mp_max", default_mp_max)
 		var raw_mp: Variant = record.get("mp_current")
 		if not raw_mp is int:
 			return "%s entry %s has a non-int mp_current" % [field_name, record.get("id", "?")]
