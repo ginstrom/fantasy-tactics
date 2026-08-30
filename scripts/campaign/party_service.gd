@@ -81,7 +81,7 @@ func get_selected_party() -> Dictionary:
 	var party_index := _get_selected_party_index()
 	if party_index == -1:
 		return {}
-	return _gs.parties[party_index]
+	return _gs.parties[party_index].duplicate(true)
 
 
 func get_party(party_id: String) -> Dictionary:

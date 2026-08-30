@@ -1392,6 +1392,34 @@ func test_get_party_returns_a_safe_copy_and_empty_dictionary_for_an_unknown_id()
 	assert_eq(session.get_party("missing"), {})
 
 
+func test_get_selected_party_returns_a_deep_copy() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	var party: Dictionary = session.get_selected_party()
+	party.name = "Mutated"
+	party.metadata["note"] = "Mutated nested field"
+	party.carry.mana_crystals[1] = 99
+
+	assert_eq(session.parties[0].name, "Party 1")
+	assert_eq(session.parties[0].metadata, {})
+	assert_eq(session.parties[0].carry.mana_crystals, {})
+	var fresh_party: Dictionary = session.get_selected_party()
+	assert_eq(fresh_party.name, "Party 1")
+	assert_eq(fresh_party.metadata, {})
+	assert_eq(fresh_party.carry.mana_crystals, {})
+
+
+func test_assign_adventurer_to_selected_party_mutates_through_the_public_service() -> void:
+	var session: Node = GameSessionScript.new()
+	autofree(session)
+	session.create_party()
+
+	assert_true(session.assign_adventurer_to_selected_party(GameSessionScript.WARRIOR_ID))
+	assert_eq(session.get_selected_party().member_ids, [GameSessionScript.WARRIOR_ID])
+
+
 func test_get_adventurer_returns_a_safe_copy_and_empty_dictionary_for_an_unknown_id() -> void:
 	var session: Node = GameSessionScript.new()
 	autofree(session)
