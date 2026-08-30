@@ -57,6 +57,8 @@ var party_position: Vector2i = PARTY_START
 var party_selected: bool = false
 var hover_route: Array[Vector2i] = []
 var repathing: bool = false
+var _last_hover_tile := Vector2i.ZERO
+var _has_last_hover_tile := false
 ## The active-encounter instance id currently under the mouse, or "" when
 ## the cursor isn't over one (see _update_hovered_encounter()). Drives
 ## InformationPanel's Scout-intel preview (docs/plans/2026-08-18-core-loop-
@@ -203,6 +205,7 @@ func try_move_party(target: Vector2i) -> bool:
 		return false
 
 	party_position = target
+	_invalidate_hover_preview_cache()
 	return true
 
 
@@ -336,6 +339,11 @@ func get_route_destination() -> Vector2i:
 func cancel_route_setting() -> void:
 	hover_route = []
 	repathing = false
+	_invalidate_hover_preview_cache()
+
+
+func _invalidate_hover_preview_cache() -> void:
+	_has_last_hover_tile = false
 
 
 func _has_route_affordance() -> bool:
@@ -345,6 +353,10 @@ func _has_route_affordance() -> bool:
 
 
 func _update_hover_route(tile_pos: Vector2i) -> void:
+	if _has_last_hover_tile and tile_pos == _last_hover_tile:
+		return
+	_last_hover_tile = tile_pos
+	_has_last_hover_tile = true
 	if not _has_route_affordance() or not grid.is_in_bounds(tile_pos):
 		hover_route = []
 	else:
@@ -415,6 +427,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		GameSession.select_party(other_party_id)
 		party_selected = false
 		hover_route = []
+		_invalidate_hover_preview_cache()
 		repathing = false
 		party_position = GameSession.get_deployed_party_position()
 		# Stale-panel fix (independent review finding against Stage 5 D5's own
@@ -461,6 +474,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if tile_pos == party_position:
 		if not party_selected:
 			party_selected = true
+			_invalidate_hover_preview_cache()
 			_update_highlights()
 			_refresh_information_panel()
 			return
@@ -473,12 +487,14 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 				GameSession.clear_deployed_party_route()
 				repathing = false
 				hover_route = []
+				_invalidate_hover_preview_cache()
 				_draw_routes()
 				_update_highlights()
 			else:
 				# Reclicking a routed party must not discard it — it stays visible
 				# while a new one can be previewed/committed (see repathing).
 				repathing = true
+				_invalidate_hover_preview_cache()
 				return
 
 		if tile_pos == SETTLEMENT_POSITION:
@@ -488,6 +504,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 		if try_activate_current_tile():
 			party_selected = false
 			hover_route = []
+			_invalidate_hover_preview_cache()
 			_draw_markers()
 			_draw_routes()
 			_update_highlights()
@@ -496,6 +513,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 
 		party_selected = false
 		hover_route = []
+		_invalidate_hover_preview_cache()
 		_draw_routes()
 		_update_highlights()
 		_refresh_information_panel()
@@ -509,6 +527,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 			party_position = GameSession.get_deployed_party_position()
 			hover_route = []
 			repathing = false
+			_invalidate_hover_preview_cache()
 			_check_for_arrival()
 			_draw_markers()
 			_draw_routes()
@@ -520,6 +539,7 @@ func _handle_tile_click(tile_pos: Vector2i) -> void:
 	if not route.is_empty() and GameSession.set_deployed_party_route(route):
 		hover_route = []
 		repathing = false
+		_invalidate_hover_preview_cache()
 		_draw_markers()
 		_draw_routes()
 		_update_highlights()
@@ -572,6 +592,7 @@ func _check_for_arrival() -> void:
 		party_selected = false
 		hover_route = []
 		repathing = false
+		_invalidate_hover_preview_cache()
 		party_position = GameSession.get_deployed_party_position()
 		_on_encounter_activated(other_encounter_id)
 		return
@@ -595,6 +616,7 @@ func _arrivable_encounter_at(pos: Vector2i) -> String:
 ## the arrival panel instead of entering battle directly -- Enter/Withdraw/
 ## Cancel below decide what happens next.
 func _on_encounter_activated(encounter_id: String) -> void:
+	_invalidate_hover_preview_cache()
 	pending_arrival_encounter_id = encounter_id
 	arrival_input_blocker.visible = true
 	arrival_panel.visible = true
@@ -629,6 +651,7 @@ func _on_arrival_cancel_pressed() -> void:
 
 
 func _close_arrival_panel() -> void:
+	_invalidate_hover_preview_cache()
 	pending_arrival_encounter_id = ""
 	arrival_input_blocker.visible = false
 	arrival_panel.visible = false
@@ -904,6 +927,7 @@ func _on_information_panel_party_selected(party_id: String) -> void:
 ## opens the modal itself, this screen owns that, the same signal-forwarding
 ## split every other InformationPanel action already uses.
 func _on_information_panel_send_party_requested(encounter_id: String) -> void:
+	_invalidate_hover_preview_cache()
 	_send_party_target_encounter_id = encounter_id
 	_refresh_send_party_list()
 	send_party_input_blocker.visible = true
@@ -989,6 +1013,7 @@ func _on_send_party_cancel_pressed() -> void:
 
 
 func _close_send_party_modal() -> void:
+	_invalidate_hover_preview_cache()
 	_send_party_target_encounter_id = ""
 	send_party_input_blocker.visible = false
 	send_party_modal.visible = false

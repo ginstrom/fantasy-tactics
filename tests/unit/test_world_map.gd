@@ -7,6 +7,13 @@ const GameSessionScript := preload("res://scripts/autoload/game_session.gd")
 const ContentCatalogScript := preload("res://scripts/content/content_catalog.gd")
 
 
+class HoverRouteDrawSpy extends WorldMapScript:
+	var draw_route_call_count := 0
+
+	func _draw_routes() -> void:
+		draw_route_call_count += 1
+
+
 func before_each() -> void:
 	GameSession.reset()
 	GameManager.close_game_menu()
@@ -1255,6 +1262,113 @@ func test_update_hover_route_is_empty_when_not_selected() -> void:
 	world_map._update_hover_route(Vector2i(2, 0))
 
 	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+
+func test_hover_preview_redraws_only_when_the_tile_or_preview_context_changes() -> void:
+	var world_map := HoverRouteDrawSpy.new()
+	world_map.grid = GridScript.new(WorldMapScript.GRID_WIDTH, WorldMapScript.GRID_HEIGHT)
+	autofree(world_map)
+	var start := Vector2i(1, 1)
+	var first_target := Vector2i(3, 1)
+	var second_target := Vector2i(3, 2)
+	world_map.party_position = start
+	world_map._handle_tile_click(start)
+
+	world_map._update_hover_route(first_target)
+
+	assert_eq(world_map.draw_route_call_count, 1)
+	assert_eq(world_map.hover_route, [Vector2i(2, 1), first_target])
+
+	world_map._update_hover_route(first_target)
+
+	assert_eq(
+		world_map.draw_route_call_count, 1,
+		"Repeated motion within one tile must retain the correct preview without rebuilding route nodes"
+	)
+
+	world_map._update_hover_route(second_target)
+
+	assert_eq(world_map.draw_route_call_count, 2, "Motion to a new tile must redraw the preview")
+	assert_eq(world_map.hover_route, [Vector2i(2, 1), Vector2i(3, 1), second_target])
+
+	# Mirrors the existing right-click transition without requiring a scene's
+	# modal nodes in this route-draw spy.
+	world_map.cancel_route_setting()
+	world_map.party_selected = false
+	world_map._draw_routes()
+	assert_eq(world_map.draw_route_call_count, 3, "Cancel must still clear the rendered preview")
+	assert_eq(world_map.hover_route, [] as Array[Vector2i])
+
+	world_map._handle_tile_click(start)
+	world_map._update_hover_route(second_target)
+
+	assert_eq(
+		world_map.draw_route_call_count, 4,
+		"Reselecting must invalidate the previous tile cache so the live preview returns"
+	)
+	assert_eq(world_map.hover_route, [Vector2i(2, 1), Vector2i(3, 1), second_target])
+
+
+func test_moving_the_party_invalidates_the_cached_hover_tile() -> void:
+	var world_map := HoverRouteDrawSpy.new()
+	world_map.grid = GridScript.new(WorldMapScript.GRID_WIDTH, WorldMapScript.GRID_HEIGHT)
+	autofree(world_map)
+	var start := Vector2i(1, 1)
+	var target := Vector2i(3, 1)
+	world_map.party_position = start
+	world_map._handle_tile_click(start)
+	world_map._update_hover_route(target)
+
+	assert_true(world_map.try_move_party(Vector2i(2, 1)))
+	world_map._update_hover_route(target)
+
+	assert_eq(
+		world_map.draw_route_call_count, 2,
+		"Moving the party must redraw when the pointer remains on the same tile"
+	)
+	assert_eq(world_map.hover_route, [target])
+
+
+func test_hover_preview_reuses_scene_nodes_on_one_tile_and_rebuilds_after_a_transition() -> void:
+	var world_map: Node2D = WorldMapScene.instantiate()
+	add_child_autofree(world_map)
+	var start: Vector2i = world_map.party_position
+	var first_target := start + Vector2i(2, 0)
+	var second_target := start + Vector2i(0, 2)
+	world_map._handle_tile_click(start)
+	world_map._update_hover_route(first_target)
+	await get_tree().process_frame
+	var routes: Node = world_map.get_node("Board/Routes")
+	var first_preview_node_id := routes.get_child(0).get_instance_id()
+	assert_eq(routes.get_child_count(), 4, "Setup: the first preview must render its route nodes")
+
+	world_map._update_hover_route(first_target)
+	await get_tree().process_frame
+
+	assert_eq(
+		routes.get_child(0).get_instance_id(), first_preview_node_id,
+		"Repeated motion within a tile must preserve the already-rendered preview nodes"
+	)
+	assert_eq(routes.get_child_count(), 4)
+
+	world_map._update_hover_route(second_target)
+	await get_tree().process_frame
+
+	assert_ne(routes.get_child(0).get_instance_id(), first_preview_node_id)
+	assert_eq(routes.get_child_count(), 4, "A new tile must replace the route preview")
+
+	var right_click := InputEventMouseButton.new()
+	right_click.button_index = MOUSE_BUTTON_RIGHT
+	right_click.pressed = true
+	world_map._unhandled_input(right_click)
+	await get_tree().process_frame
+	assert_eq(routes.get_child_count(), 0, "Cancel must clear the preview route nodes")
+
+	world_map._handle_tile_click(start)
+	world_map._update_hover_route(second_target)
+	await get_tree().process_frame
+
+	assert_eq(routes.get_child_count(), 4, "Reselecting must render the live preview again")
 
 
 func test_hover_preview_does_not_update_after_a_route_is_committed() -> void:
