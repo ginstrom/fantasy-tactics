@@ -246,6 +246,34 @@ for the underlying `BattleController` logic.
 | Godot exits immediately with a display/rendering error | No display available | Run under `xvfb-run` |
 | A new scene/UI state you added isn't captured | `screenshot_tour.gd`'s step list wasn't updated | Add a `{"name": ..., "action": ...}` entry to `_build_steps()` in `scripts/tools/screenshot_tour.gd` — see that file's own header comment for the convention |
 
+## Refresh the README screenshots
+
+### Steps
+
+From the repository root, run:
+
+```
+make readme-screenshots
+```
+
+Like the full screenshot tour, this requires a real or virtual display. On a
+display-less machine, run `xvfb-run make readme-screenshots`.
+
+The command reuses the full, stateful tour so later screens receive the same
+campaign setup as `make screenshots`, but it saves only the representative
+Start Menu, Encampment, World Map, and Battlefield frames.
+
+### Verification
+
+- `docs/images/readme/` contains `start-menu.png`, `encampment.png`,
+  `world-map.png`, and `battlefield.png`.
+- The terminal prints `[screenshot_tour] done: 4 screenshots in <dir>`.
+
+### Troubleshooting
+
+Use the display/rendering troubleshooting in
+[Capture a screenshot of every known scene/state](#capture-a-screenshot-of-every-known-scenestate).
+
 ## Run the headless battle simulator
 
 Plays N full battles with no human input — `BattleBot` controls the

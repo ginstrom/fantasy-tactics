@@ -6,25 +6,39 @@ extends Node
 ## then the tree is given a couple of frames to render before the shot is
 ## taken, so actions can be anything from a scene change to a state mutation
 ## that only changes what's already on screen (e.g. opening a submenu).
+## Pass a step-name-to-filename manifest to run() to execute the same stateful
+## tour while saving only a named subset with stable output filenames.
 
 const FRAMES_TO_SETTLE := 2
 
 var _out_dir: String
 
 
-func run(out_dir: String) -> void:
+func run(out_dir: String, capture_manifest: Dictionary = {}) -> void:
 	_out_dir = out_dir
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 
 	var steps := _build_steps()
+	var step_names: Array[String] = []
+	for step in steps:
+		step_names.append(step.name)
+	for requested_step in capture_manifest:
+		if not step_names.has(requested_step):
+			push_error("[screenshot_tour] unknown capture step: %s" % requested_step)
+			get_tree().quit(1)
+			return
+
+	var capture_count := 0
 	for index in steps.size():
 		var step: Dictionary = steps[index]
 		print("[screenshot_tour] %d/%d %s" % [index + 1, steps.size(), step.name])
 		step.action.call()
 		await _settle()
-		_capture(index, step.name)
+		if capture_manifest.is_empty() or capture_manifest.has(step.name):
+			_capture(index, step.name, capture_manifest)
+			capture_count += 1
 
-	print("[screenshot_tour] done: %d screenshots in %s" % [steps.size(), _out_dir])
+	print("[screenshot_tour] done: %d screenshots in %s" % [capture_count, _out_dir])
 	get_tree().quit()
 
 
@@ -134,7 +148,13 @@ func _queue_recruitment_candidate_selection() -> void:
 	get_tree().process_frame.connect(_select_first_recruitment_candidate, CONNECT_ONE_SHOT)
 
 
-func _capture(index: int, name: String) -> void:
-	var path := _out_dir.path_join("%02d_%s.png" % [index + 1, name])
+func _capture_filename(index: int, name: String, capture_manifest: Dictionary) -> String:
+	if capture_manifest.has(name):
+		return capture_manifest[name]
+	return "%02d_%s.png" % [index + 1, name]
+
+
+func _capture(index: int, name: String, capture_manifest: Dictionary = {}) -> void:
+	var path := _out_dir.path_join(_capture_filename(index, name, capture_manifest))
 	var image := get_tree().root.get_texture().get_image()
 	image.save_png(path)

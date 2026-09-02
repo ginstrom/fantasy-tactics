@@ -6,7 +6,7 @@ OUTPUT_DIR ?=
 CAMPAIGN_SEED ?= 42
 CAMPAIGN_RUNS ?= 10
 
-.PHONY: help editor play test check screenshots simulate scenario campaign-sim campaign-sim-sweep
+.PHONY: help editor play test check screenshots readme-screenshots simulate scenario campaign-sim campaign-sim-sweep
 
 help:
 	@echo "make editor             Open the Godot editor"
@@ -14,6 +14,7 @@ help:
 	@echo "make test               Run automated tests"
 	@echo "make check              Run the current validation suite"
 	@echo "make screenshots        Capture a screenshot of every scene/state into ./screenshots"
+	@echo "make readme-screenshots Capture representative README images into docs/images/readme"
 	@echo "make simulate           Play N headless battles and log outcomes (RUNS=20 make simulate)"
 	@echo "make scenario           Run a deterministic scenario (SCENARIO=... SEED=1 ITERATIONS=20)"
 	@echo "make campaign-sim       Run the documented representative campaign seed set (4, 9, 10, 12, 14) and report balance telemetry"
@@ -36,6 +37,10 @@ check: test
 screenshots:
 	godot --path . --rendering-driver opengl3 --position=-3000,-3000 \
 		-s scripts/tools/screenshot_tour_main.gd -- --outdir=$(CURDIR)/screenshots
+
+readme-screenshots:
+	godot --path . --rendering-driver opengl3 --position=-3000,-3000 \
+		-s scripts/tools/readme_screenshots_main.gd -- --outdir=$(CURDIR)/docs/images/readme
 
 simulate:
 	godot --headless -s scripts/tools/battle_sim_main.gd -- --runs=$(RUNS)
