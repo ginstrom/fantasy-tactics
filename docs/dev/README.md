@@ -25,11 +25,15 @@ verify it worked, that's a bug in the doc — fix it rather than guessing.
 
 ## Repository-wide prerequisites
 
-- **Godot 4.7.1** (stable), available on `PATH` as `godot`. Confirm with:
+- **Godot 4.7.2** (stable), available on `PATH` as `godot`. On macOS with
+  Homebrew, install it with `brew install --cask godot`. Confirm with:
   ```
   godot --version
   ```
-  Expected output starts with `4.7.1.stable`.
+  Expected output starts with `4.7.2.stable`.
+- After the first checkout or a clean removal of `.godot/`, initialize the
+  project import and global class cache with `godot --headless --import --path .`
+  before running the test suite.
 - All commands below are run from the repository root — the directory
   containing `project.godot`.
 - Prefer the `make` targets in [`../../Makefile`](../../Makefile) over
